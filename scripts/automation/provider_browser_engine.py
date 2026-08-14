@@ -32,7 +32,13 @@ from pathlib import Path
 from typing import Any, Optional
 
 OMNI_BASE = os.environ.get("OMNIROUTE_BASE_URL", "http://localhost:20128").rstrip("/")
-OMNI_DASHBOARD = OMNI_BASE
+
+PROVIDER_URLS = {
+    "openrouter": "https://openrouter.ai/keys",
+    "windsurf": "https://codeium.com/profile",
+    "gh": "https://github.com/settings/tokens",
+    "cl": "https://console.anthropic.com/settings/keys"
+}
 
 SECRET_NAME_PATTERNS = re.compile(
     r"(password|passwd|token|secret|api[_-]?key|authorization|cookie|"
@@ -105,7 +111,7 @@ def build_provider_url(provider: str) -> str:
     slug = provider.strip().strip("/")
     if slug.startswith("http://") or slug.startswith("https://"):
         return slug
-    return f"{OMNI_DASHBOARD}/dashboard/providers/{slug}"
+    return PROVIDER_URLS.get(provider, f"https://{provider}.com")
 
 def _require_live_service_guard() -> None:
     # This module does not own/control the service. This guard is documentary

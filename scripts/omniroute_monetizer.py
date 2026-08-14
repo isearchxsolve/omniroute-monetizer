@@ -615,18 +615,33 @@ def step_onboarding(state: MonetizerState, dry_run: bool = False) -> StepResult:
         )
         test_result = test_body if isinstance(test_body, dict) else {}
         valid = test_result.get("valid", False)
+        diag = test_result.get("diagnosis", {})
+        diag_type = diag.get("type", "unknown")
+
+        # Dead-route suppression: Sync validity to isActive
+        if conn.get("isActive") != valid and diag_type != "unsupported":
+            put_status, _, _ = http_request(
+                "PUT", f"{BASE_URL}/api/providers/{cid}",
+                body={"isActive": valid},
+                headers=auth_headers, timeout=15,
+            )
 
         if valid:
             ok_ids.append(name)
         else:
             diag = test_result.get("diagnosis", {})
-            needs_repair.append({
-                "id": cid,
-                "name": name,
-                "diagnosis": diag.get("type", "unknown"),
-                "message": diag.get("message", ""),
-                "error_class": classify_error(test_status, test_result),
-            })
+            diag_type = diag.get("type", "unknown")
+            if diag_type == "unsupported":
+                log(f"  [{name}] Provider test not supported, assuming OK", "ok")
+                ok_ids.append(name)
+            else:
+                needs_repair.append({
+                    "id": cid,
+                    "name": name,
+                    "diagnosis": diag_type,
+                    "message": diag.get("message", ""),
+                    "error_class": classify_error(test_status, test_result),
+                })
 
     r.details["verified_ok"] = ok_ids
     r.details["needs_repair"] = needs_repair

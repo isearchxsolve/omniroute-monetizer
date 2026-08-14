@@ -1,6 +1,6 @@
 # Performance Regression Report
 
-**Date:** 2026-08-14 12:08:08
+**Date:** 2026-08-14 20:23:12
 
 ## Regressions Detected
 
@@ -8,7 +8,7 @@
 
 ## Known Latency Issues
 
-- `frontier`: timed out (>60s) — routing to unavailable upstream models
+- No timeout issues detected in this run
 
 ## Comparison Baseline
 
