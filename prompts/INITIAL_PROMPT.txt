@@ -1,0 +1,129 @@
+MASTER MONETIZER — IMPLEMENT V1
+
+You are the implementation agent for the OmniRoute Monetizer.
+
+Read:
+- AGENTS.md
+- docs/ARCHITECTURE.md
+- docs/MASTER_MONETIZER_V1_SPEC.md
+- D:\omniroute-phase-a\AGENTS.md
+- D:\omniroute-phase-a\CODEX_HANDOFF.md
+- D:\omniroute-phase-a\automation\*
+- D:\omniroute-phase-a\registry\*
+- D:\omniroute-phase-a\results\*
+- supplied omniroute_full_setup.py
+
+MISSION
+Turn the accumulated Phase-A work into ONE canonical, idempotent, end-to-end
+master setup.
+
+CRITICAL:
+The running OmniRoute service on port 20128 is your live dependency.
+NEVER stop, restart, reinstall, remove, kill, or rebind it.
+If a change would require restart, defer it and record it.
+
+Use the current master setup script as SOURCE MATERIAL, not authoritative code.
+Remove hard-coded secrets and stale model assumptions.
+
+IMPLEMENT:
+1. runtime/preflight
+2. secure management auth
+3. provider/account/credential/model/route normalization
+4. API-first onboarding/repair
+5. minimal live verification
+6. preserve routing:
+   - frontier (Frontier-only)
+   - auto/pro-coding
+   - auto/pro-reasoning
+   - auto/pro-chat
+   - other verified useful aliases
+7. Zed integration
+8. Codex integration
+9. Claude Code integration
+10. PERFORMANCE ENGINEERING
+11. acceptance tests
+12. final sanitized report
+
+IDEMPOTENCY:
+Do not destroy/recreate healthy resources. Converge on repeated runs.
+
+PROMOTION:
+No concrete route enters VERIFIED pool without live verification.
+
+OUTPUTS:
+- scripts/omniroute_monetizer.py
+- docs/IMPLEMENTATION_PLAN.md
+- docs/STATE_MACHINE.md
+- docs/PROVIDER_POLICY.md
+- MONETIZER_FINAL_STATUS.md
+- DEFERRED_ACTIONS.md
+
+Finish with MONETIZER_READY or MONETIZER_BLOCKED.
+
+
+PERFORMANCE ENGINEERING
+
+Treat OmniRoute latency and throughput as first-class objectives.
+
+Baseline first, then optimize non-disruptively:
+- /v1/models
+- auto/pro-coding
+- auto/pro-reasoning
+- auto/pro-chat
+- frontier
+- routing/provider selection
+- retry/timeout amplification
+- connection reuse
+- caching/discovery repetition
+- concurrency/queueing
+- CPU/memory/storage behavior
+
+You may improve the software freely, but you MUST NOT restart/stop/reinstall/
+kill/rebind the live OmniRoute service on port 20128.
+
+If a performance improvement requires a restart, defer it and record it in
+DEFERRED_ACTIONS.md.
+
+Create:
+- PERFORMANCE_BASELINE.md
+- PERFORMANCE_OPTIMIZATIONS.md
+- PERFORMANCE_REGRESSION_REPORT.md
+
+GENERALIZED BROWSER / DOM AUTOMATION — MANDATORY
+
+The Phase-A project contains existing:
+- omniroute_ui_diagnostic_v10.py
+- omniroute_provider_recovery_v11_smoketested.py
+- omniroute_manual_provider_handoff_v12.py
+
+Do not discard them.
+
+Implement a reusable browser automation layer in:
+- scripts/automation/provider_browser_engine.py
+- scripts/automation/provider_automation_orchestrator.py
+
+The engine must:
+1. Use API-first repair/verification.
+2. Use Playwright only when UI interaction is actually required.
+3. Discover provider DOM structure and safe controls.
+4. Support provider-specific adapters without duplicating the whole engine.
+5. Automate safe navigation/re-auth/refresh actions.
+6. Stop for MFA/CAPTCHA/consent/manual credential generation.
+7. Never bypass security controls.
+8. Never log secrets or input values.
+9. After human handoff, re-test through the management API.
+10. Produce sanitized browser artifacts.
+
+Do NOT restart/stop/kill/rebind OmniRoute.
+
+Before declaring complete, demonstrate the browser engine against at least one
+real provider UI flow or produce a clear evidence-backed reason why the live
+flow is blocked by required human authentication.
+
+
+Before browser-automation implementation, synchronize the real Phase-A evidence
+into the Monetizer workspace using:
+scripts/sync_phase_a_assets.ps1
+
+This copies automation/, registry/, results/, AGENTS.md and CODEX_HANDOFF.md as
+evidence. Do not copy runtime secrets/databases.

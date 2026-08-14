@@ -1,0 +1,286 @@
+{
+  "total": 69,
+  "ok": [
+    "agy",
+    "ainative",
+    "amazon-q",
+    "antigravity",
+    "api-airforce",
+    "bazaarlink",
+    "blackbox",
+    "brave-search",
+    "codex",
+    "friendliai",
+    "kilocode",
+    "kimi-coding",
+    "novita",
+    "nvidia",
+    "opencode",
+    "openrouter",
+    "sambanova",
+    "xai"
+  ],
+  "fail": [
+    {
+      "name": "yi",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "wandb",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "vllm",
+      "diag": "upstream_unavailable",
+      "msg": "Invalid outbound URL:"
+    },
+    {
+      "name": "upstage",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "stability-ai",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "llamafile",
+      "diag": "upstream_unavailable",
+      "msg": "Invalid outbound URL:"
+    },
+    {
+      "name": "lm-studio",
+      "diag": "upstream_unavailable",
+      "msg": "Invalid outbound URL:"
+    },
+    {
+      "name": "databricks",
+      "diag": "upstream_error",
+      "msg": "Missing base URL"
+    },
+    {
+      "name": "bytez",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "byteplus",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "baichuan",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "aws-polly",
+      "diag": "upstream_error",
+      "msg": "Missing AWS accessKeyId"
+    },
+    {
+      "name": "ant-ling",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "360ai",
+      "diag": "unsupported",
+      "msg": "Provider test not supported"
+    },
+    {
+      "name": "together",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "siliconflow",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "segmind",
+      "diag": "unsupported",
+      "msg": "Provider test not supported"
+    },
+    {
+      "name": "scaleway",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "recraft",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "piapi",
+      "diag": "unsupported",
+      "msg": "Provider test not supported"
+    },
+    {
+      "name": "perplexity",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "ovhcloud",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "openai",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "nebius",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "moonshot",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "modal",
+      "diag": "upstream_unavailable",
+      "msg": "Invalid outbound URL:"
+    },
+    {
+      "name": "mistral",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "minimax",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "hyperbolic",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "huggingface",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "groq",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "gitlab",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "fireworks",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "elevenlabs",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "deepseek",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "deepinfra",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "cohere",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "chutes",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "cerebras",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "cartesia",
+      "diag": "unsupported",
+      "msg": "Provider test not supported"
+    },
+    {
+      "name": "baseten",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "baidu",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "azure-openai",
+      "diag": "upstream_error",
+      "msg": "Missing base URL"
+    },
+    {
+      "name": "azure-ai",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "assemblyai",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "anthropic",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "alibaba",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "ai21",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "agentrouter",
+      "diag": "upstream_auth_error",
+      "msg": "Invalid API key"
+    },
+    {
+      "name": "xai-oauth",
+      "id": "a2eced8e-0b95-43e4-b71f-80ec92d68369",
+      "auth_type": "oauth",
+      "diagnosis": "upstream_error",
+      "message": "API returned 402",
+      "fix_status": "provider_ui_not_found"
+    },
+    {
+      "name": "cline",
+      "id": "c8a7f56f-1753-483a-b593-5fdcf83b1dc2",
+      "auth_type": "oauth",
+      "diagnosis": "runtime_error",
+      "message": "Local CLI runtime is not installed",
+      "fix_status": "provider_ui_not_found"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+[
+  {
+    "name": "xai-oauth",
+    "id": "a2eced8e-0b95-43e4-b71f-80ec92d68369",
+    "auth_type": "oauth",
+    "valid": false,
+    "diagnosis": "upstream_error",
+    "verification": {
+      "valid": false,
+      "error": "API returned 402",
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "upstream_error",
+        "source": "upstream",
+        "message": "API returned 402",
+        "code": "402"
+      },
+      "latencyMs": 535,
+      "statusCode": 402,
+      "runtime": null,
+      "testedAt": "2026-08-12T23:42:10.266Z",
+      "http_status": 200
+    },
+    "message": "API returned 402",
+    "fix_status": "provider_ui_not_found",
+    "oauth_refresh_status": 200,
+    "ui_diagnostics": "",
+    "final_valid": false,
+    "final_verification": {
+      "valid": false,
+      "error": "API returned 402",
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "upstream_error",
+        "source": "upstream",
+        "message": "API returned 402",
+        "code": "402"
+      },
+      "latencyMs": 497,
+      "statusCode": 402,
+      "runtime": null,
+      "testedAt": "2026-08-12T23:42:35.857Z",
+      "http_status": 200
+    }
+  },
+  {
+    "name": "cline",
+    "id": "c8a7f56f-1753-483a-b593-5fdcf83b1dc2",
+    "auth_type": "oauth",
+    "valid": false,
+    "diagnosis": "runtime_error",
+    "verification": {
+      "valid": false,
+      "error": "Local CLI runtime is not installed",
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "runtime_error",
+        "source": "local",
+        "message": "Local CLI runtime is not installed",
+        "code": "not_found"
+      },
+      "latencyMs": 9,
+      "statusCode": null,
+      "runtime": {
+        "installed": false,
+        "runnable": false,
+        "command": "cline",
+        "commandPath": null,
+        "reason": "not_found",
+        "runtimeMode": "auto",
+        "requiresBinary": true,
+        "diagnosis": {
+          "type": "runtime_error",
+          "source": "local",
+          "message": "Local CLI runtime is not installed",
+          "code": "not_found"
+        },
+        "error": "Local CLI runtime is not installed"
+      },
+      "testedAt": "2026-08-12T23:42:14.850Z",
+      "http_status": 200
+    },
+    "message": "Local CLI runtime is not installed",
+    "fix_status": "provider_ui_not_found",
+    "oauth_refresh_status": 422,
+    "ui_diagnostics": "",
+    "final_valid": false,
+    "final_verification": {
+      "valid": false,
+      "error": "Local CLI runtime is not installed",
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "runtime_error",
+        "source": "local",
+        "message": "Local CLI runtime is not installed",
+        "code": "not_found"
+      },
+      "latencyMs": 9,
+      "statusCode": null,
+      "runtime": {
+        "installed": false,
+        "runnable": false,
+        "command": "cline",
+        "commandPath": null,
+        "reason": "not_found",
+        "runtimeMode": "auto",
+        "requiresBinary": true,
+        "diagnosis": {
+          "type": "runtime_error",
+          "source": "local",
+          "message": "Local CLI runtime is not installed",
+          "code": "not_found"
+        },
+        "error": "Local CLI runtime is not installed"
+      },
+      "testedAt": "2026-08-12T23:42:37.460Z",
+      "http_status": 200
+    }
+  }
+]

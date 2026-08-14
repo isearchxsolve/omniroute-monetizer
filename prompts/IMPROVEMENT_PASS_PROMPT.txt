@@ -1,0 +1,48 @@
+MASTER MONETIZER — FORENSIC IMPROVEMENT PASS
+
+Review the implemented V1 against the project evidence and live OmniRoute state.
+
+Find:
+- security problems
+- stale assumptions
+- idempotency failures
+- destructive operations
+- provider identity mistakes
+- routing-tier leakage
+- false verification claims
+- Zed/Codex/Claude configuration mistakes
+- missing acceptance tests
+
+CRITICAL:
+NEVER stop/restart/remove/reinstall/kill the running OmniRoute service.
+It is your live dependency.
+
+You may improve everything else.
+
+For each change:
+- explain the reason
+- make the smallest robust change
+- test it
+- keep it only if the test passes
+
+Return:
+- IMPROVEMENTS_MADE.md
+- final diff summary
+- remaining risks
+- MONETIZER_READY / MONETIZER_BLOCKED
+
+
+PERFORMANCE REVIEW
+
+Also review the implementation for:
+- unnecessary /v1/models calls
+- slow catalog/discovery paths
+- routing duplication
+- retry amplification
+- avoidable timeout waits
+- missing connection reuse
+- cache opportunities
+- storage/query inefficiency
+- client-side latency overhead
+
+Measure before/after where feasible. Do not restart the live OmniRoute service.
