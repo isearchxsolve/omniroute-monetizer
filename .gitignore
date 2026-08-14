@@ -43,3 +43,5 @@ evidence/automation/.env.local.bak
 evidence/automation/.env.local.save
 evidence/automation/.env.local.old
 evidence/automation/.env.local.tmp
+scratch/MonkeyCode/
+
