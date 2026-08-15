@@ -164,9 +164,9 @@ User:   Bearer
 Pass:   <api_token>
 ```
 
-To inject credentials from the CLI / automation scripts:
+To inject your real TokenRouter key:
 ```powershell
-cmdkey /generic:"zed:url=https://api.tokenrouter.com/v1" /user:"Bearer" /pass:"sk-tokenrouter-free"
+cmdkey /generic:"zed:url=https://api.tokenrouter.com/v1" /user:"Bearer" /pass:"<YOUR_REAL_TOKENROUTER_API_KEY>"
 ```
 
 ---
