@@ -57,7 +57,7 @@ To achieve 100% autonomous key recovery without human-in-the-loop blockage:
 ### Cascade & Combo Schema (`PUT /api/combos/:id`)
 - Target model schema:
   `{"id": "<uuid>", "kind": "model", "model": "<model_name>", "providerId": "<provider_id>", "weight": 0}`
-- **Performance Invariant:** Place ultra-low latency verified models (e.g. `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`, ~2.1s TTFT) as **Priority #1** in all combos (`frontier`, `auto/best-coding`, `auto/best-reasoning`, `auto/best-chat`, `fusion-coder`) to eliminate client timeouts while cascading to higher-tier models.
+- **Performance Invariant:** Place ultra-low latency, tool-call verified models (e.g. `nvidia/nemotron-3-super-120b-a12b`, `nvidia/nemotron-nano-12b-v2-vl`, ~2.1-3.5s TTFT) as **Priority #1** in all combos (`frontier`, `auto/best-coding`, `auto/best-reasoning`, `auto/best-chat`, `fusion-coder`, `kimi-coding`, `moonshotai/kimi-k3-free`) to eliminate client timeouts while cascading to higher-tier models.
 
 ---
 
@@ -65,8 +65,22 @@ To achieve 100% autonomous key recovery without human-in-the-loop blockage:
 
 ### Zed Editor (`%APPDATA%/Zed/settings.json`)
 - `language_models.openai_compatible.OmniRoute.api_url: "http://localhost:20128/v1"`
-- `default_model: "auto/best-coding"`
-- Populated model list: `auto/best-coding`, `frontier`, `fusion-coder`, `auto/best-reasoning`, `auto/best-chat`, `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`, `nvidia/nemotron-nano-12b-v2-vl`.
+- `language_models.openai_compatible.TokenRouter.api_url: "https://api.tokenrouter.com/v1"`
+- `default_model: "kimi-coding"` or `"auto/best-coding"`
+- Populated model list: `kimi-coding`, `moonshotai/kimi-k3-free`, `auto/best-coding`, `frontier`, `fusion-coder`, `auto/best-reasoning`, `auto/best-chat`, `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`, `nvidia/nemotron-nano-12b-v2-vl`.
+
+### Windows Credential Manager Injection Pattern (Zed)
+- Zed on Windows discovers credentials from Windows Credential Manager under `target=zed:url=<api_url>`.
+- Injected automatically via:
+  `cmdkey /generic:"zed:url=<api_url>" /user:"Bearer" /pass:"<api_key>"`
+- Example: `cmdkey /generic:"zed:url=https://api.tokenrouter.com/v1" /user:"Bearer" /pass:"sk-tokenrouter-free"`
+
+### Zed Agent Tool Calling Standard
+- Zed Agent attaches `tools` schema with `tool_choice: "auto"` to all chat turns.
+- **Rule:** Never use models that reject `tool_choice: "auto"` (e.g. `llama-3.1-nemotron-nano-vl-8b-v1` which throws 400) as solitary heads in coding/agent cascades. Ensure `nvidia/nemotron-3-super-120b-a12b` or `nvidia/nemotron-nano-12b-v2-vl` are present to handle tool execution payloads.
+
+### VS Code Integration (`%APPDATA%/Code/User/settings.json`)
+- `github.copilot.chat.customEndpoints` configured for both TokenRouter and OmniRoute.
 
 ### Codex CLI (`~/.codex/config.toml`)
 - Configured with OmniRoute base URL and verified model aliases.
