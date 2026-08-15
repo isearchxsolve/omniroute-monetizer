@@ -21,25 +21,53 @@ If a change requires a restart:
 
 ---
 
-## Master Architecture: Three-Tier Credential Resolution
+## Master Architecture: The Solution & Resolution Architecture
 
-To achieve 100% autonomous key recovery without human-in-the-loop blockage:
+To achieve end-to-end autonomous key retrieval and restoration from provider dashboards without manual intervention, the automation architecture uses three complementary mechanisms:
 
-### Tier 1: Zero-DOM Fast-Path Harvester (`scripts/automation/cli_token_harvester.py`)
-- Automatically extracts active developer credentials from local CLI and tool runtimes:
-  - GitHub CLI (`gh auth token` / `~/.config/gh/hosts.yml`)
-  - Zed IDE settings (`%APPDATA%/Zed/settings.json`)
-  - Codex configurations (`~/.codex/config.json`, `~/.codex/config.toml`)
-  - Environment variables (`OPENROUTER_API_KEY`, `NVIDIA_API_KEY`, `OPENCODE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GITHUB_TOKEN`, `CEREBRAS_API_KEY`, `COHERE_API_KEY`, `GROK_API_KEY`)
-- Validates live connectivity and hot-injects into OmniRoute via `PUT /api/providers/{id}`.
+### Resolution 1: Automated "Create New Key" Flow (Bypasses Key Masking)
+Because dashboards hide existing keys (sk-...****), the browser automation must execute the New Key Generation Lifecycle:
 
-### Tier 2: Autonomous "Create New Key" Lifecycle (`scripts/automation/provider_key_adapters.py`)
-- Solves the **Key Masking Problem** (`sk-...****`): Provider dashboards hide existing keys; the automation executes the "Create New Key" dialog flow.
-- Generates unique key names (`omniroute-monetizer-[timestamp]`), submits forms, intercepts single-reveal plaintext secret tokens from DOM popups, and commits to OmniRoute.
-- Supported Adapters: OpenRouter (`openrouter.ai/keys`), Anthropic Console (`console.anthropic.com`), GitHub Tokens (`github.com/settings/tokens`).
+```mermaid
+sequenceDiagram
+    participant Bot as Playwright Engine
+    participant Dash as Provider Dashboard (/keys)
+    participant Omni as OmniRoute API (:20128)
+    Bot->>Dash: Navigate to /keys
+    Bot->>Dash: Click "Create New Key" / "Generate Token"
+    Bot->>Dash: Fill Name: "omniroute-auto-[timestamp]"
+    Bot->>Dash: Click "Confirm / Submit"
+    Dash-->>Bot: Display Modal with Plaintext Secret
+    Bot->>Bot: Extract plaintext key from DOM
+    Bot->>Omni: PUT /api/providers/{id} with new key
+    Omni->>Omni: Test & Verify Connection
+    Bot->>Dash: Close modal / delete older expired keys
+```
+- **DOM Action:** Locate and click Create New Key / Generate Token.
+- **Form Fill:** Auto-populate key metadata (name: "omniroute-monetizer", optional budget limits).
+- **Capture:** Intercept the single-reveal plaintext key string from the post-creation modal popup.
+- **Auto-Inject:** Post the newly minted key straight to PUT /api/providers/{id} in OmniRoute.
 
-### Tier 3: Session Persistence Engine (`storage_state.json`)
-- Uses Playwright persistent context (`state/browser_profile/`) and exports/restores `storage_state.json` to sustain authenticated dashboard sessions 24/7 without `/sign-in` redirects.
+### Resolution 2: Persistent Session State (storageState)
+To prevent `/sign-in` redirects across automated cycles:
+Playwright’s persistent context stores session cookies, indexedDB, and localStorage in `state/browser_profile/`.
+We can export/import `storage_state.json`, ensuring the browser remains logged into provider dashboards (GitHub, Anthropic, OpenRouter) 24/7.
+
+### Resolution 3: Local CLI & Runtime Token Extraction (Zero-DOM Fast Path)
+Before loading a heavy web browser, the automation checks local system credential stores where developer tools already store active tokens:
+
+| Provider | Local CLI / Token Location | Extraction Method |
+| :--- | :--- | :--- |
+| GitHub | `~/.config/gh/hosts.yml` / Windows Credential Manager | Run `gh auth token` |
+| Qoder | `C:\Users\Admin\.qoder\bin\qodercli` | Direct token export via CLI |
+| Zed | `%APPDATA%\Zed\settings.json` | JSON config extraction |
+| Codex | `~/.codex/config.json` | Token inspection |
+| Env Vars | `os.environ` (OPENROUTER_API_KEY, etc.) | Direct injection to OmniRoute API |
+
+### What We Implement Now:
+- **Targeted Key-Generation Adapters:** Build the automated Create New Key DOM sequences for OpenRouter, Anthropic, and GitHub.
+- **CLI Token Harvest:** Auto-sync local CLI tokens (`gh auth token`, Qoder, Zed) into OmniRoute provider configs.
+- **OmniRoute Hot-Reload:** Instantly update all 51 connections and populate the core routing combos (auto/pro-coding, auto/pro-reasoning, frontier) with verified live models.
 
 ---
 
@@ -109,6 +137,10 @@ To achieve 100% autonomous key recovery without human-in-the-loop blockage:
    - **Mandatory Rule:**
      - NEVER report a credential as harvested or extracted unless verified with a successful authenticated 200 OK directly against the external provider's upstream endpoint.
      - If blocked by a missing account/session, state the exact authentication wall immediately and truthfully. Never disguise a local proxy fallback (OmniRoute) as a successful external cloud service retrieval.
+8. **WINDOWS SESSION 0 GUI ISOLATION (No Interactive Playwright Handoffs):**
+   - NEVER expect a user to interact with a GUI (like Google OAuth) spawned by a background IDE Python script using `headless=False`. 
+   - Background service tasks on Windows execute in isolated Session 0. Any browser windows spawned are physically invisible to the user's interactive desktop.
+   - If human-in-the-loop interaction is required for OAuth bypass, the script MUST be executed by the user manually in their own Command Prompt (Session 1), OR use the dedicated `browser_subagent` (which transmits VNC screenshots to the UI).
 
 ---
 

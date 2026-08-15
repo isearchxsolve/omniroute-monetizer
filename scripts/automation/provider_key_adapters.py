@@ -1,288 +1,148 @@
-#!/usr/bin/env python3
-"""
-Provider Key Creation Adapters for OmniRoute Monetizer.
-
-Executes autonomous Playwright DOM automation to create new API keys
-and tokens directly on provider dashboards, capturing single-reveal
-plaintext keys and injecting them into OmniRoute.
-
-Supported Provider Adapters:
-- OpenRouterKeyAdapter (https://openrouter.ai/keys)
-- AnthropicKeyAdapter (https://console.anthropic.com/settings/keys)
-- GitHubTokenAdapter (https://github.com/settings/tokens)
-"""
-
-from __future__ import annotations
-
-import json
+import asyncio
 import os
-import re
-import time
-from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-from playwright.sync_api import BrowserContext, Page, sync_playwright
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
+import datetime
+from playwright.async_api import async_playwright, Page, BrowserContext
 
-BASE_URL = os.environ.get("OMNIROUTE_BASE_URL", "http://localhost:20128").rstrip("/")
-if BASE_URL.endswith("/v1"):
-    BASE_URL = BASE_URL[:-3].rstrip("/")
-PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "").strip() or "Keross@321"
-
-STATE_DIR = Path(__file__).resolve().parents[2] / "state"
-PROFILE_DIR = STATE_DIR / "browser_profile"
-STORAGE_STATE_FILE = STATE_DIR / "browser_profile" / "storage_state.json"
-
-SECRET_PATTERNS = re.compile(
-    r"(sk-or-v1-[a-f0-9]{64}|sk-ant-[a-zA-Z0-9_\-]{40,}|nvapi-[a-zA-Z0-9_\-]{40,}|gho_[a-zA-Z0-9]{36,}|ghp_[a-zA-Z0-9]{36,}|sk-[a-zA-Z0-9]{32,})",
-    re.I,
-)
-
-
-@dataclass
-class KeyCreationResult:
-    provider: str
-    success: bool = False
-    key_extracted: bool = False
-    key_preview: str = ""
-    injected_to_omniroute: bool = False
-    elapsed_seconds: float = 0.0
-    error: str = ""
-    details: Dict[str, Any] = field(default_factory=dict)
-
-
-def sanitize_text(text: str) -> str:
-    """Mask any secret tokens before logging."""
-    return SECRET_PATTERNS.sub("[REDACTED_SECRET]", text or "")
-
-
-class BaseKeyAdapter:
-    provider_name: str = "generic"
-    dashboard_url: str = ""
-
-    def __init__(self, context: BrowserContext, omniroute_client: Optional[Any] = None):
+class ProviderKeyAdapter:
+    def __init__(self, context: BrowserContext, page: Page):
         self.context = context
-        self.omniroute = omniroute_client
+        self.page = page
+        self.timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        self.key_name = f"omniroute-auto-{self.timestamp}"
 
-    def generate_key_name(self) -> str:
-        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-        return f"omniroute-monetizer-{ts}"
+    async def _wait_for_login(self, target_url: str, login_indicator: str):
+        print(f"Checking session state for {target_url}...")
+        await self.page.goto(target_url, wait_until="domcontentloaded")
+        
+        content = await self.page.content()
+        if login_indicator in content.lower():
+            print(f"[!] Authentication Wall Detected on {target_url}.")
+            print("Session missing or expired. Cannot proceed without manual login.")
+            return False
+        return True
 
-    def run_creation_flow(self, page: Page) -> Tuple[bool, Optional[str], str]:
-        """Override in subclasses. Returns (success, raw_key, message)."""
-        raise NotImplementedError
+class GitHubAdapter(ProviderKeyAdapter):
+    async def generate_key(self) -> str:
+        target_url = "https://github.com/settings/tokens/new"
+        
+        # Note: GitHub tokens often require sudo mode (password re-entry) even with active sessions.
+        # This is a simplified adapter assuming session is valid and sudo mode is not active.
+        await self.page.goto(target_url, wait_until="domcontentloaded")
+        
+        content = await self.page.content()
+        if "sign in" in content.lower():
+            print("[!] GitHub Authentication Wall Detected.")
+            return None
+            
+        print("Executing GitHub 'Create New Token' flow...")
+        try:
+            # Fill Note
+            await self.page.fill("input#oauth_access_description", self.key_name)
+            
+            # Check 'repo' scope as an example
+            await self.page.check("input#repo")
+            
+            # Click Generate token
+            await self.page.click("button:has-text('Generate token')")
+            
+            # Extract Token
+            await self.page.wait_for_selector("code#new-oauth-token")
+            token_el = await self.page.query_selector("code#new-oauth-token")
+            token = await token_el.inner_text()
+            return token.strip()
+        except Exception as e:
+            print(f"GitHub Adapter Error: {e}")
+            return None
 
+class AnthropicAdapter(ProviderKeyAdapter):
+    async def generate_key(self) -> str:
+        target_url = "https://console.anthropic.com/settings/keys"
+        
+        if not await self._wait_for_login(target_url, "sign in"):
+            return None
+            
+        print("Executing Anthropic 'Create New Key' flow...")
+        try:
+            await self.page.click("button:has-text('Create Key')")
+            await self.page.fill("input[name='name']", self.key_name)
+            await self.page.click("button:has-text('Create')")
+            
+            # Wait for modal and extract key
+            # Assuming key is presented in an input or pre element
+            await self.page.wait_for_selector("input[value^='sk-ant']")
+            key_el = await self.page.query_selector("input[value^='sk-ant']")
+            token = await key_el.get_attribute("value")
+            
+            # Close modal
+            await self.page.click("button:has-text('Done')")
+            return token.strip()
+        except Exception as e:
+            print(f"Anthropic Adapter Error: {e}")
+            return None
 
-class OpenRouterKeyAdapter(BaseKeyAdapter):
-    provider_name = "openrouter"
-    dashboard_url = "https://openrouter.ai/keys"
+class OpenRouterAdapter(ProviderKeyAdapter):
+    async def generate_key(self) -> str:
+        target_url = "https://openrouter.ai/keys"
+        
+        if not await self._wait_for_login(target_url, "sign in"):
+            return None
+            
+        print("Executing OpenRouter 'Create New Key' flow...")
+        try:
+            await self.page.click("button:has-text('Create Key')")
+            await self.page.fill("input[placeholder='Key Name']", self.key_name)
+            await self.page.click("button:has-text('Create')")
+            
+            # Extract key
+            await self.page.wait_for_selector("input[value^='sk-or-']")
+            key_el = await self.page.query_selector("input[value^='sk-or-']")
+            token = await key_el.get_attribute("value")
+            return token.strip()
+        except Exception as e:
+            print(f"OpenRouter Adapter Error: {e}")
+            return None
 
-    def run_creation_flow(self, page: Page) -> Tuple[bool, Optional[str], str]:
-        print(f"[*] Navigating to OpenRouter keys dashboard: {self.dashboard_url}")
-        page.goto(self.dashboard_url, wait_until="domcontentloaded", timeout=25000)
-        time.sleep(2)
+async def main(provider: str):
+    user_data_dir = os.path.abspath("state/browser_profile")
+    os.makedirs(user_data_dir, exist_ok=True)
+    
+    print(f"Initializing Tier 2 Playwright Engine for {provider}...")
+    
+    async with async_playwright() as p:
+        context = await p.chromium.launch_persistent_context(
+            user_data_dir,
+            headless=True,
+        )
+        
+        page = context.pages[0] if context.pages else await context.new_page()
+        
+        adapter = None
+        if provider == "github":
+            adapter = GitHubAdapter(context, page)
+        elif provider == "anthropic":
+            adapter = AnthropicAdapter(context, page)
+        elif provider == "openrouter":
+            adapter = OpenRouterAdapter(context, page)
+        else:
+            print(f"Unknown provider: {provider}")
+            await context.close()
+            return
 
-        # Check if redirected to sign-in
-        if "sign-in" in page.url or "login" in page.url:
-            return False, None, f"Redirected to auth gateway: {page.url}"
-
-        # Locate "Create Key" button
-        create_btn = None
-        for selector in [
-            'button:has-text("Create Key")',
-            'button:has-text("Create key")',
-            'button:has-text("Create a key")',
-            'button:has-text("New Key")',
-            'button:has-text("Add Key")',
-            '[data-testid="create-key-button"]',
-        ]:
-            loc = page.locator(selector).first
-            if loc.count() > 0 and loc.is_visible():
-                create_btn = loc
-                break
-
-        if not create_btn:
-            # Check if there is an existing keys list or input
-            return False, None, "Could not find 'Create Key' button on page"
-
-        print("[*] Clicking 'Create Key' button...")
-        create_btn.click()
-        time.sleep(1.5)
-
-        # Fill key name
-        key_name = self.generate_key_name()
-        input_loc = page.locator('input[type="text"], input[name="name"], input[placeholder*="Key"]').first
-        if input_loc.count() > 0 and input_loc.is_visible():
-            input_loc.fill(key_name)
-            time.sleep(0.5)
-
-        # Submit creation dialog
-        submit_btn = page.locator('button[type="submit"], button:has-text("Create"), button:has-text("Confirm")').first
-        if submit_btn.count() > 0 and submit_btn.is_visible():
-            submit_btn.click()
-            time.sleep(2)
-
-        # Search DOM for the generated sk-or-v1- key
-        page_text = page.content()
-        match = re.search(r'(sk-or-v1-[a-f0-9]{64})', page_text)
-        if match:
-            extracted_key = match.group(1)
-            # Dismiss modal
-            close_btn = page.locator('button:has-text("Close"), button:has-text("Done"), button:has-text("Copy")').first
-            if close_btn.count() > 0 and close_btn.is_visible():
-                try:
-                    close_btn.click()
-                except Exception:
-                    pass
-            return True, extracted_key, "Successfully created and extracted OpenRouter key"
-
-        return False, None, "Key creation submitted but plaintext key not found in DOM response"
-
-
-class AnthropicKeyAdapter(BaseKeyAdapter):
-    provider_name = "anthropic"
-    dashboard_url = "https://console.anthropic.com/settings/keys"
-
-    def run_creation_flow(self, page: Page) -> Tuple[bool, Optional[str], str]:
-        print(f"[*] Navigating to Anthropic console: {self.dashboard_url}")
-        page.goto(self.dashboard_url, wait_until="domcontentloaded", timeout=25000)
-        time.sleep(2)
-
-        if "login" in page.url or "auth" in page.url:
-            return False, None, f"Redirected to login: {page.url}"
-
-        create_btn = page.locator('button:has-text("Create Key"), button:has-text("Generate Key")').first
-        if create_btn.count() == 0 or not create_btn.is_visible():
-            return False, None, "Could not find 'Create Key' button on Anthropic dashboard"
-
-        create_btn.click()
-        time.sleep(1)
-
-        key_name = self.generate_key_name()
-        input_loc = page.locator('input[type="text"]').first
-        if input_loc.count() > 0 and input_loc.is_visible():
-            input_loc.fill(key_name)
-
-        submit_btn = page.locator('button:has-text("Create"), button[type="submit"]').first
-        if submit_btn.count() > 0:
-            submit_btn.click()
-            time.sleep(2)
-
-        page_text = page.content()
-        match = re.search(r'(sk-ant-[a-zA-Z0-9_\-]{40,})', page_text)
-        if match:
-            return True, match.group(1), "Successfully created and extracted Anthropic key"
-
-        return False, None, "Submitted Anthropic creation dialog but key string not found"
-
-
-class GitHubTokenAdapter(BaseKeyAdapter):
-    provider_name = "github"
-    dashboard_url = "https://github.com/settings/tokens"
-
-    def run_creation_flow(self, page: Page) -> Tuple[bool, Optional[str], str]:
-        print(f"[*] Navigating to GitHub tokens: {self.dashboard_url}")
-        page.goto(self.dashboard_url, wait_until="domcontentloaded", timeout=25000)
-        time.sleep(2)
-
-        if "login" in page.url:
-            return False, None, f"Redirected to GitHub login: {page.url}"
-
-        # If logged in, generate new token
-        gen_btn = page.locator('button:has-text("Generate new token"), a:has-text("Generate new token")').first
-        if gen_btn.count() > 0 and gen_btn.is_visible():
-            return True, None, "Found GitHub generate token entrypoint"
-
-        return False, None, "GitHub token settings accessible"
-
-
-class ProviderKeyManager:
-    """Orchestrates browser-based key creation across supported providers."""
-
-    ADAPTERS = {
-        "openrouter": OpenRouterKeyAdapter,
-        "anthropic": AnthropicKeyAdapter,
-        "github": GitHubTokenAdapter,
-    }
-
-    def __init__(self, profile_dir: Path = PROFILE_DIR, headless: bool = True):
-        self.profile_dir = profile_dir
-        self.profile_dir.mkdir(parents=True, exist_ok=True)
-        self.headless = headless
-
-    def create_key(self, provider_slug: str) -> KeyCreationResult:
-        adapter_cls = self.ADAPTERS.get(provider_slug.lower())
-        if not adapter_cls:
-            return KeyCreationResult(
-                provider=provider_slug,
-                error=f"No key creation adapter available for provider '{provider_slug}'",
-            )
-
-        start_time = time.time()
-        print(f"[*] Starting autonomous key creation for {provider_slug}...")
-
-        with sync_playwright() as p:
-            context = p.chromium.launch_persistent_context(
-                user_data_dir=str(self.profile_dir),
-                headless=self.headless,
-                args=[
-                    "--no-first-run",
-                    "--no-default-browser-check",
-                    "--disable-blink-features=AutomationControlled",
-                ],
-                viewport={"width": 1280, "height": 800},
-            )
-
-            # Try restoring storage_state if exists
-            page = context.pages[0] if context.pages else context.new_page()
-            adapter = adapter_cls(context)
-
-            try:
-                success, raw_key, msg = adapter.run_creation_flow(page)
-                elapsed = time.time() - start_time
-
-                # Save persistent storage state
-                try:
-                    STORAGE_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-                    context.storage_state(path=str(STORAGE_STATE_FILE))
-                except Exception:
-                    pass
-
-                context.close()
-
-                preview = f"{raw_key[:6]}...{raw_key[-4:]}" if raw_key and len(raw_key) > 10 else ""
-                return KeyCreationResult(
-                    provider=provider_slug,
-                    success=success,
-                    key_extracted=bool(raw_key),
-                    key_preview=preview,
-                    elapsed_seconds=round(elapsed, 2),
-                    error="" if success else msg,
-                    details={"message": msg, "extracted": bool(raw_key)},
-                )
-            except Exception as e:
-                try:
-                    context.close()
-                except Exception:
-                    pass
-                elapsed = time.time() - start_time
-                return KeyCreationResult(
-                    provider=provider_slug,
-                    success=False,
-                    elapsed_seconds=round(elapsed, 2),
-                    error=sanitize_text(str(e)),
-                )
-
+        if adapter:
+            key = await adapter.generate_key()
+            if key:
+                print(f"Successfully generated new key: {key[:6]}...{key[-4:]}")
+                # Note: Integration with OmniRoute PUT /api/providers/{id} goes here
+            else:
+                print("Key generation failed or aborted due to authentication wall.")
+                
+        await context.close()
 
 if __name__ == "__main__":
-    import sys
-    target = sys.argv[1] if len(sys.argv) > 1 else "openrouter"
-    mgr = ProviderKeyManager(headless=True)
-    res = mgr.create_key(target)
-    print(f"\n[+] Result for {target}:")
-    print(f"    Success: {res.success}")
-    print(f"    Key Extracted: {res.key_extracted}")
-    if res.key_preview:
-        print(f"    Key Preview: {res.key_preview}")
-    if res.error:
-        print(f"    Message: {res.error}")
+    if len(sys.argv) > 1:
+        target = sys.argv[1].lower()
+        asyncio.run(main(target))
+    else:
+        print("Usage: python provider_key_adapters.py [github|anthropic|openrouter]")
