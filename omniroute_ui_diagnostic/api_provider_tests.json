@@ -1,0 +1,728 @@
+[
+  {
+    "provider": "kimi-coding",
+    "id": "f2655ae1-fabb-4c81-ba6b-ac7f21e73d3c",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "local",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 0,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:22.430Z"
+    }
+  },
+  {
+    "provider": "kilocode",
+    "id": "73aae217-6f03-41f2-bbc6-22db7b82e219",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "local",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 0,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:24.711Z"
+    }
+  },
+  {
+    "provider": "grok-cli",
+    "id": "414a9dff-c750-4e3b-890f-f93c4c906c76",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "local",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 0,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:24.762Z"
+    }
+  },
+  {
+    "provider": "clinepass",
+    "id": "47307fe9-c513-4957-8db2-69275efad86a",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "local",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 0,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:24.828Z"
+    }
+  },
+  {
+    "provider": "kiro",
+    "id": "5ec58a27-49c5-4ec8-9b99-d219c1edf80e",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "local",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 1,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:24.898Z"
+    }
+  },
+  {
+    "provider": "amazon-q",
+    "id": "f76e4db5-55ed-4fe6-93c3-418445ae862a",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "local",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 0,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:24.988Z"
+    }
+  },
+  {
+    "provider": "github",
+    "id": "a0b9e60a-2316-47b5-bd1a-d6ba30ea0f4d",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 578,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:25.601Z"
+    }
+  },
+  {
+    "provider": "trae",
+    "id": "ad3b1ec6-3f17-4b7b-8388-0002e5c3d8b7",
+    "http_status": 200,
+    "result": {
+      "valid": false,
+      "error": "Provider test not supported",
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "unsupported",
+        "source": "validation",
+        "message": "Provider test not supported",
+        "code": "unsupported"
+      },
+      "latencyMs": 0,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:25.662Z"
+    }
+  },
+  {
+    "provider": "windsurf",
+    "id": "179e4825-1e03-47de-accc-c6cb611a195c",
+    "http_status": 200,
+    "result": {
+      "valid": false,
+      "error": "Provider test not supported",
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "unsupported",
+        "source": "validation",
+        "message": "Provider test not supported",
+        "code": "unsupported"
+      },
+      "latencyMs": 0,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:25.694Z"
+    }
+  },
+  {
+    "provider": "qoder",
+    "id": "e217f911-6909-4ec8-83d4-9558457f57c2",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 24130,
+      "statusCode": null,
+      "runtime": {
+        "installed": true,
+        "runnable": true,
+        "version": "1.1.18",
+        "command": "C:\\Users\\Admin\\.qoder\\bin\\qodercli\\qodercli.exe",
+        "commandPath": "C:\\Users\\Admin\\.qoder\\bin\\qodercli\\qodercli.exe",
+        "reason": null,
+        "runtimeMode": "auto",
+        "requiresBinary": true
+      },
+      "testedAt": "2026-08-14T12:17:49.858Z"
+    }
+  },
+  {
+    "provider": "xai-oauth",
+    "id": "a2eced8e-0b95-43e4-b71f-80ec92d68369",
+    "http_status": 200,
+    "result": {
+      "valid": false,
+      "error": "API returned 402",
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "upstream_error",
+        "source": "upstream",
+        "message": "API returned 402",
+        "code": "402"
+      },
+      "latencyMs": 402,
+      "statusCode": 402,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:50.279Z"
+    }
+  },
+  {
+    "provider": "ainative",
+    "id": "811ba58f-c9ea-44b4-b882-221584692b4d",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": "Provider accepted the key but is rate limited (429)",
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 3190,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:53.514Z"
+    }
+  },
+  {
+    "provider": "opencode",
+    "id": "7dee12ea-c18d-499e-b25f-3873ccca25c4",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 935,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:54.478Z"
+    }
+  },
+  {
+    "provider": "zai-web",
+    "id": "1504cdce-6851-4d99-975e-a3a89e338d80",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 357,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:54.863Z"
+    }
+  },
+  {
+    "provider": "lmarena",
+    "id": "a0e46e4e-aaa2-4656-ae6a-a2146c9835fd",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 696,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:55.582Z"
+    }
+  },
+  {
+    "provider": "antigravity",
+    "id": "5b6bb68a-472c-4824-aa71-b8593a643e22",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 319,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:55.937Z"
+    }
+  },
+  {
+    "provider": "agy",
+    "id": "c0338023-1b55-463d-9caa-0e38aa5a4bfe",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 622,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:56.583Z"
+    }
+  },
+  {
+    "provider": "agnes",
+    "id": "96564651-fd1d-4ece-b80f-800ab1c512d0",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 377,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:57.000Z"
+    }
+  },
+  {
+    "provider": "aion",
+    "id": "fa5d2a96-deec-4a8f-ab00-155763929880",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 819,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:57.843Z"
+    }
+  },
+  {
+    "provider": "alibaba",
+    "id": "6116ca06-f7c9-4c91-82bc-43aade21e5cb",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 636,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:58.499Z"
+    }
+  },
+  {
+    "provider": "cerebras",
+    "id": "b533b28a-24d3-481f-ac5a-f0b9a562c55e",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 688,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:59.220Z"
+    }
+  },
+  {
+    "provider": "cloudflare-ai",
+    "id": "9b8e973a-75d8-4b5c-95b7-1241c24d0479",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 713,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:17:59.975Z"
+    }
+  },
+  {
+    "provider": "cline",
+    "id": "c8a7f56f-1753-483a-b593-5fdcf83b1dc2",
+    "http_status": 200,
+    "result": {
+      "valid": false,
+      "error": "Local CLI runtime is not installed",
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "runtime_error",
+        "source": "local",
+        "message": "Local CLI runtime is not installed",
+        "code": "not_found"
+      },
+      "latencyMs": 11,
+      "statusCode": null,
+      "runtime": {
+        "installed": false,
+        "runnable": false,
+        "command": "cline",
+        "commandPath": null,
+        "reason": "not_found",
+        "runtimeMode": "auto",
+        "requiresBinary": true,
+        "diagnosis": {
+          "type": "runtime_error",
+          "source": "local",
+          "message": "Local CLI runtime is not installed",
+          "code": "not_found"
+        },
+        "error": "Local CLI runtime is not installed"
+      },
+      "testedAt": "2026-08-14T12:18:00.029Z"
+    }
+  },
+  {
+    "provider": "codex",
+    "id": "db2f61d1-a5cb-422b-8275-f2a21e82f0f7",
+    "http_status": 200,
+    "result": {
+      "valid": false,
+      "error": "Refresh token expired. Please re-authenticate this account.",
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "reauth_required",
+        "source": "oauth",
+        "message": "Refresh token expired. Please re-authenticate this account.",
+        "code": "reauth_required"
+      },
+      "latencyMs": 0,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:18:00.062Z"
+    }
+  },
+  {
+    "provider": "cohere",
+    "id": "4a1b2609-3d1f-41bc-8bd5-3e3e4baedaad",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 537,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:18:00.629Z"
+    }
+  },
+  {
+    "provider": "openai",
+    "id": "44010c8f-5730-43da-8db0-97461fe4fb80",
+    "http_status": 200,
+    "result": {
+      "valid": false,
+      "error": "Invalid API key",
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "upstream_auth_error",
+        "source": "upstream",
+        "message": "Invalid API key",
+        "code": "auth_failed"
+      },
+      "latencyMs": 464,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:18:01.115Z"
+    }
+  },
+  {
+    "provider": "opencode-zen",
+    "id": "e2675454-4db3-423a-9af3-c346d3c91444",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 1411,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:18:02.552Z"
+    }
+  },
+  {
+    "provider": "openrouter",
+    "id": "49aa144d-9005-4968-a6cd-a36e8a2e947f",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 204,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:18:02.784Z"
+    }
+  },
+  {
+    "provider": "nvidia",
+    "id": "574246f2-1cdf-48ad-83b6-2ca1b541f8e4",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 374,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:18:03.190Z"
+    }
+  },
+  {
+    "provider": "nara",
+    "id": "e0f2b1d9-2e8b-4e79-8b55-449ae9366476",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 910,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:18:04.124Z"
+    }
+  },
+  {
+    "provider": "qoder",
+    "id": "b2fe293d-41dc-4c70-83d6-0da0a834f279",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 21599,
+      "statusCode": null,
+      "runtime": {
+        "installed": true,
+        "runnable": true,
+        "version": "1.1.18",
+        "command": "C:\\Users\\Admin\\.qoder\\bin\\qodercli\\qodercli.exe",
+        "commandPath": "C:\\Users\\Admin\\.qoder\\bin\\qodercli\\qodercli.exe",
+        "reason": null,
+        "runtimeMode": "auto",
+        "requiresBinary": true
+      },
+      "testedAt": "2026-08-14T12:18:25.742Z"
+    }
+  },
+  {
+    "provider": "antigravity",
+    "id": "e00b5169-9c18-41c8-9c5a-44305771d578",
+    "http_status": 200,
+    "result": {
+      "valid": true,
+      "error": null,
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "ok",
+        "source": "upstream",
+        "message": null,
+        "code": null
+      },
+      "latencyMs": 319,
+      "statusCode": null,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:18:28.146Z"
+    }
+  },
+  {
+    "provider": "xai-oauth",
+    "id": "3be84526-7924-4cec-bc95-eaec6bb8f604",
+    "http_status": 200,
+    "result": {
+      "valid": false,
+      "error": "API returned 402",
+      "warning": null,
+      "refreshed": false,
+      "diagnosis": {
+        "type": "upstream_error",
+        "source": "upstream",
+        "message": "API returned 402",
+        "code": "402"
+      },
+      "latencyMs": 403,
+      "statusCode": 402,
+      "runtime": null,
+      "testedAt": "2026-08-14T12:18:28.572Z"
+    }
+  }
+]

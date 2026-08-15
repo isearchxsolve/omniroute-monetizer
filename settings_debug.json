@@ -1,0 +1,610 @@
+{
+    "cli_default_open_behavior": "existing_window",
+    "agent": {
+        "default_profile": "write",
+        "sandbox_permissions": {
+            "allow_unsandboxed": true,
+            "warn_ntfs_grants": false
+        },
+        "tool_permissions": {
+            "tools": {
+                "skill": {
+                    "default": "allow"
+                },
+                "copy_path": {
+                    "default": "allow"
+                },
+                "delete_path": {
+                    "always_allow": [
+                        {
+                            "pattern": "^timeofmylife/LIFE_ARCHIVE/00_RAW/"
+                        },
+                        {
+                            "pattern": "^D:/omniroute-monetizer/"
+                        }
+                    ]
+                },
+                "terminal": {
+                    "default": "allow",
+                    "always_allow": [
+                        {
+                            "pattern": "^git\\b"
+                        }
+                    ]
+                }
+            }
+        },
+        "default_model": {
+            "effort": "low",
+            "enable_thinking": true,
+            "provider": "opencode",
+            "model": "free/nemotron-3-ultra-free"
+        },
+        "favorite_models": [],
+        "model_parameters": []
+    },
+    "language_models": {
+        "openai_compatible": {
+            "OmniRoute": {
+                "api_url": "http://localhost:20128/v1",
+                "available_models": [
+                    {
+                        "name": "frontier",
+                        "display_name": "Frontier (OmniRoute)",
+                        "max_tokens": 200000
+                    }
+                ]
+            },
+            "nvidia": {
+                "api_url": "https://integrate.api.nvidia.com/v1",
+                "available_models": [
+                    {
+                        "name": "z-ai/glm-5.2",
+                        "display_name": "GLM 5.2 (NVIDIA free)",
+                        "max_tokens": 128000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": false,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "nvidia/nemotron-3-ultra-550b-a55b",
+                        "display_name": "Nemotron 3 Ultra 550B (NVIDIA free)",
+                        "max_tokens": 128000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": false,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    }
+                ]
+            },
+            "OmniRoute_Clone_1": {
+                "api_url": "http://localhost:20128/v1",
+                "available_models": [
+                    {
+                        "name": "agy/claude-sonnet-4-6",
+                        "display_name": "Claude Sonnet (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "antigravity/claude-sonnet-4-6",
+                        "display_name": "Claude Sonnet (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "agy/gemini-3.6-flash-high",
+                        "display_name": "Gemini 3.6 Flash (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "nvidia/gpt-oss-20b",
+                        "display_name": "GPT-OSS 20B (NVIDIA)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "auto/coding:free",
+                        "display_name": "Auto Combo (Free)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "auto/best-coding",
+                        "display_name": "Auto Best Coding",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    }
+                ],
+                "api_key": "sk-2daf4dd6d1e45047-53255c-89ec5ddf"
+            },
+            "OmniRoute_Clone_2": {
+                "api_url": "http://localhost:20128/v1",
+                "available_models": [
+                    {
+                        "name": "agy/claude-sonnet-4-6",
+                        "display_name": "Claude Sonnet (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "antigravity/claude-sonnet-4-6",
+                        "display_name": "Claude Sonnet (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "agy/gemini-3.6-flash-high",
+                        "display_name": "Gemini 3.6 Flash (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "nvidia/gpt-oss-20b",
+                        "display_name": "GPT-OSS 20B (NVIDIA)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "auto/coding:free",
+                        "display_name": "Auto Combo (Free)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "auto/best-coding",
+                        "display_name": "Auto Best Coding",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    }
+                ],
+                "api_key": "sk-2daf4dd6d1e45047-53255c-89ec5ddf"
+            },
+            "OmniRoute_Clone_3": {
+                "api_url": "http://localhost:20128/v1",
+                "available_models": [
+                    {
+                        "name": "agy/claude-sonnet-4-6",
+                        "display_name": "Claude Sonnet (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "antigravity/claude-sonnet-4-6",
+                        "display_name": "Claude Sonnet (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "agy/gemini-3.6-flash-high",
+                        "display_name": "Gemini 3.6 Flash (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "nvidia/gpt-oss-20b",
+                        "display_name": "GPT-OSS 20B (NVIDIA)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "auto/coding:free",
+                        "display_name": "Auto Combo (Free)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "auto/best-coding",
+                        "display_name": "Auto Best Coding",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    }
+                ],
+                "api_key": "sk-2daf4dd6d1e45047-53255c-89ec5ddf"
+            },
+            "OmniRoute_Clone_4": {
+                "api_url": "http://localhost:20128/v1",
+                "available_models": [
+                    {
+                        "name": "agy/claude-sonnet-4-6",
+                        "display_name": "Claude Sonnet (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "antigravity/claude-sonnet-4-6",
+                        "display_name": "Claude Sonnet (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "agy/gemini-3.6-flash-high",
+                        "display_name": "Gemini 3.6 Flash (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "nvidia/gpt-oss-20b",
+                        "display_name": "GPT-OSS 20B (NVIDIA)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "auto/coding:free",
+                        "display_name": "Auto Combo (Free)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "auto/best-coding",
+                        "display_name": "Auto Best Coding",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    }
+                ],
+                "api_key": "sk-2daf4dd6d1e45047-53255c-89ec5ddf"
+            },
+            "OmniRoute_Clone_5": {
+                "api_url": "http://localhost:20128/v1",
+                "available_models": [
+                    {
+                        "name": "agy/claude-sonnet-4-6",
+                        "display_name": "Claude Sonnet (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "antigravity/claude-sonnet-4-6",
+                        "display_name": "Claude Sonnet (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "agy/gemini-3.6-flash-high",
+                        "display_name": "Gemini 3.6 Flash (Antigravity)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "nvidia/gpt-oss-20b",
+                        "display_name": "GPT-OSS 20B (NVIDIA)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "auto/coding:free",
+                        "display_name": "Auto Combo (Free)",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    },
+                    {
+                        "name": "auto/best-coding",
+                        "display_name": "Auto Best Coding",
+                        "max_tokens": 200000,
+                        "max_output_tokens": 32000,
+                        "max_completion_tokens": 1000000,
+                        "capabilities": {
+                            "tools": true,
+                            "images": true,
+                            "parallel_tool_calls": false,
+                            "prompt_cache_key": false,
+                            "chat_completions": true,
+                            "interleaved_reasoning": false,
+                            "max_tokens_parameter": false
+                        }
+                    }
+                ],
+                "api_key": "sk-2daf4dd6d1e45047-53255c-89ec5ddf"
+            }
+        }
+    },
+    "ui_font_size": 16,
+    "buffer_font_size": 15,
+    "theme": {
+        "mode": "dark",
+        "light": "One Light",
+        "dark": "One Dark"
+    }
+}

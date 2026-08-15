@@ -1,0 +1,27 @@
+--- debug_backup.json	2026-08-14 16:08:49.156422900 +0530
++++ actual_settings_debug.json	2026-08-14 16:08:05.883479500 +0530
+@@ -28,7 +28,7 @@
+     "default_model": {
+       "enable_thinking": false,
+       "provider": "OmniRoute",
+-      "model": "auto/frontier"
++      "model": "auto/pro-coding"
+     },
+     "favorite_models": [],
+     "model_parameters": []
+@@ -609,7 +609,7 @@
+             }
+           },
+           {
+-            "name": "auto/frontier",
++            "name": "frontier",
+             "display_name": "[Frontier] OmniRoute Frontier Chain",
+             "max_tokens": 128000,
+             "max_output_tokens": 32768,
+@@ -1889,4 +1889,4 @@
+     "light": "One Light",
+     "dark": "One Dark"
+   }
+-}
+\ No newline at end of file
++}

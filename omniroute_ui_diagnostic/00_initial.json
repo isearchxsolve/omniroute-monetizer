@@ -1,0 +1,37 @@
+{
+  "url": "http://localhost:20128/login",
+  "title": "OmniRoute — AI Gateway for Multi-Provider LLMs",
+  "bodyText": "Skip to content\nhub\nOmniRoute\nSign in\n\nEnter your password to continue\n\nPassword\n\nDefault password: CHANGEME (unless INITIAL_PASSWORD was set)\n\nContinue\nForgot password?\nUnified AI API Proxy\n\nRoute requests to multiple AI providers through a single endpoint. Load balancing, failover, and usage tracking built in.\n\nswap_horiz\nMulti-Provider\n\nOpenAI, Anthropic, Google, and more\n\nspeed\nLoad Balancing\n\nDistribute requests intelligently\n\nanalytics\nUsage Tracking\n\nMonitor costs and tokens",
+  "htmlLength": 634776,
+  "links": [
+    {
+      "text": "Skip to content",
+      "href": "http://localhost:20128/login#main-content"
+    },
+    {
+      "text": "Forgot password?",
+      "href": "http://localhost:20128/forgot-password"
+    }
+  ],
+  "buttons": [
+    {
+      "text": "Continue",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "inline-flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-1"
+    }
+  ],
+  "inputs": [
+    {
+      "tag": "INPUT",
+      "type": "password",
+      "name": "",
+      "id": "_r_0_",
+      "placeholder": "Enter your password to continue",
+      "aria": "",
+      "cls": "w-full py-2 px-3 text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-control placeholder-text-muted/60 focus:ring-1 focus:ring-accent/30 foc"
+    }
+  ]
+}

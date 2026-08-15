@@ -1,0 +1,165 @@
+[
+  {
+    "tag": "DIV",
+    "text": "IDE Providers\n1/3\nplay_arrow\nTest All\n\nEditors with built-in AI subscription. Use the provider page to import credentials directly from the IDE keychain.\n\nCursor IDE\ninfo\nNo connections\nplay_arrow\nTest\nTrae\n1 Error (ERR)\n* 2m ago\nplay_arrow\nTest\nZed IDE\nNo connections\nplay_arrow\nTest",
+    "cls": "flex flex-col gap-4",
+    "id": "",
+    "data": {},
+    "buttons": [
+      {
+        "text": "play_arrow\nTest All",
+        "aria": "Test All",
+        "title": "Test All"
+      },
+      {
+        "text": "play_arrow\nTest",
+        "aria": "",
+        "title": "Expand test"
+      },
+      {
+        "text": "",
+        "aria": "Disable provider",
+        "title": "Disable provider"
+      },
+      {
+        "text": "play_arrow\nTest",
+        "aria": "",
+        "title": "Expand test"
+      },
+      {
+        "text": "play_arrow\nTest",
+        "aria": "",
+        "title": "Expand test"
+      }
+    ]
+  },
+  {
+    "tag": "DIV",
+    "text": "Cursor IDE\ninfo\nNo connections\nplay_arrow\nTest\nTrae\n1 Error (ERR)\n* 2m ago\nplay_arrow\nTest\nZed IDE\nNo connections\nplay_arrow\nTest",
+    "cls": "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-3",
+    "id": "",
+    "data": {},
+    "buttons": [
+      {
+        "text": "play_arrow\nTest",
+        "aria": "",
+        "title": "Expand test"
+      },
+      {
+        "text": "",
+        "aria": "Disable provider",
+        "title": "Disable provider"
+      },
+      {
+        "text": "play_arrow\nTest",
+        "aria": "",
+        "title": "Expand test"
+      },
+      {
+        "text": "play_arrow\nTest",
+        "aria": "",
+        "title": "Expand test"
+      }
+    ]
+  },
+  {
+    "tag": "DIV",
+    "text": "Trae\n1 Error (ERR)\n* 2m ago\nplay_arrow\nTest",
+    "cls": "flex flex-col h-full",
+    "id": "provider-trae",
+    "data": {},
+    "buttons": [
+      {
+        "text": "",
+        "aria": "Disable provider",
+        "title": "Disable provider"
+      },
+      {
+        "text": "play_arrow\nTest",
+        "aria": "",
+        "title": "Expand test"
+      }
+    ]
+  },
+  {
+    "tag": "A",
+    "text": "Trae\n1 Error (ERR)\n* 2m ago\nplay_arrow\nTest",
+    "cls": "group flex-1 flex flex-col focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary/60",
+    "id": "",
+    "data": {},
+    "buttons": [
+      {
+        "text": "",
+        "aria": "Disable provider",
+        "title": "Disable provider"
+      },
+      {
+        "text": "play_arrow\nTest",
+        "aria": "",
+        "title": "Expand test"
+      }
+    ]
+  },
+  {
+    "tag": "DIV",
+    "text": "Trae\n1 Error (ERR)\n* 2m ago\nplay_arrow\nTest",
+    "cls": "bg-surface border border-border rounded-card shadow-sm p-3 h-full flex flex-col hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer hover:border-primary/40",
+    "id": "",
+    "data": {},
+    "buttons": [
+      {
+        "text": "",
+        "aria": "Disable provider",
+        "title": "Disable provider"
+      },
+      {
+        "text": "play_arrow\nTest",
+        "aria": "",
+        "title": "Expand test"
+      }
+    ]
+  },
+  {
+    "tag": "DIV",
+    "text": "Trae\n1 Error (ERR)\n* 2m ago\nplay_arrow\nTest",
+    "cls": "flex flex-col gap-2 h-full",
+    "id": "",
+    "data": {},
+    "buttons": [
+      {
+        "text": "",
+        "aria": "Disable provider",
+        "title": "Disable provider"
+      },
+      {
+        "text": "play_arrow\nTest",
+        "aria": "",
+        "title": "Expand test"
+      }
+    ]
+  },
+  {
+    "tag": "DIV",
+    "text": "Trae",
+    "cls": "flex items-start gap-3 min-w-0",
+    "id": "",
+    "data": {},
+    "buttons": []
+  },
+  {
+    "tag": "H3",
+    "text": "Trae",
+    "cls": "text-sm font-semibold leading-snug flex-1 min-w-0",
+    "id": "",
+    "data": {},
+    "buttons": []
+  },
+  {
+    "tag": "SPAN",
+    "text": "Trae",
+    "cls": "block break-words ",
+    "id": "",
+    "data": {},
+    "buttons": []
+  }
+]

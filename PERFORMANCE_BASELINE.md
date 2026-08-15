@@ -1,50 +1,38 @@
 # Performance Baseline
 
-**Date:** 2026-08-14 20:23:12
+**Date:** 2026-08-15 09:51:53
 **OmniRoute:** v3.8.49 on http://localhost:20128
 
 ## Baseline Measurements
 
 ### auto/best-chat
-- Min: 4.921s
-- Max: 5.063s
-- Avg: 4.992s
+- Min: 2.235s
+- Max: 2.297s
+- Avg: 2.266s
 - Runs: 2
 
 ### auto/best-coding
-- Min: 5.453s
-- Max: 15.422s
-- Avg: 10.438s
+- Min: 2.156s
+- Max: 2.234s
+- Avg: 2.195s
 - Runs: 2
 
-### auto/pro-coding
-- Min: 10.218s
-- Max: 10.218s
-- Avg: 10.218s
-- Runs: 1
-
 ### auto/pro-reasoning
-- Min: 4.328s
-- Max: 4.719s
-- Avg: 4.523s
+- Min: 2.156s
+- Max: 2.172s
+- Avg: 2.164s
 - Runs: 2
 
 ### mgmt_login
-- Min: 2.704s
-- Max: 3.593s
-- Avg: 3.148s
+- Min: 2.531s
+- Max: 2.578s
+- Avg: 2.554s
 - Runs: 2
 
 ### root
-- Min: 6.172s
-- Max: 7.329s
-- Avg: 6.568s
-- Runs: 3
-
-### v1_models
-- Min: 9.844s
-- Max: 10.829s
-- Avg: 10.386s
+- Min: 4.157s
+- Max: 10.453s
+- Avg: 6.261s
 - Runs: 3
 
 ## Notes

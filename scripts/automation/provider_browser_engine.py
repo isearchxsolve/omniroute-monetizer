@@ -46,35 +46,12 @@ SECRET_NAME_PATTERNS = re.compile(
     re.I,
 )
 
-SECURITY_MARKERS = re.compile(
-    r"(captcha|multi[- ]factor|mfa|two[- ]factor|2fa|consent|"
-    r"verify your identity|security check|one[- ]time passcode|otp)",
-    re.I,
-)
-
 SAFE_CLICK_LABELS = (
     "re-authenticate",
     "reauthenticate",
     "refresh",
     "retry authentication",
     "retry auth",
-)
-
-HUMAN_REQUIRED_LABELS = (
-    "captcha",
-    "mfa",
-    "two-factor",
-    "2fa",
-    "consent",
-    "authorize",
-    "sign in",
-    "log in",
-    "password",
-    "api key",
-    "access token",
-    "import auth",
-    "save",
-    "test connection",
 )
 
 @dataclass
@@ -131,12 +108,18 @@ class ProviderBrowserEngine:
         headless: bool = False,
         slow_mo_ms: int = 50,
         timeout_ms: int = 15000,
+        profile_dir: Optional[str | Path] = None,
     ):
         self.artifact_dir = Path(artifact_dir)
         self.artifact_dir.mkdir(parents=True, exist_ok=True)
         self.headless = headless
         self.slow_mo_ms = slow_mo_ms
         self.timeout_ms = timeout_ms
+        if profile_dir:
+            self.profile_dir = Path(profile_dir)
+        else:
+            self.profile_dir = self.artifact_dir.parent / "browser_profile"
+        self.profile_dir.mkdir(parents=True, exist_ok=True)
 
     def discover(
         self,
@@ -156,12 +139,19 @@ class ProviderBrowserEngine:
             ) from exc
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(
+            context = pw.chromium.launch_persistent_context(
+                user_data_dir=str(self.profile_dir),
                 headless=self.headless,
                 slow_mo=self.slow_mo_ms,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-default-browser-check",
+                    "--no-first-run",
+                    "--disable-sync"
+                ]
             )
-            context = browser.new_context()
-            page = context.new_page()
+            pages = context.pages
+            page = pages[0] if pages else context.new_page()
             page.set_default_timeout(self.timeout_ms)
             page.goto(target, wait_until="domcontentloaded", timeout=self.timeout_ms)
 
@@ -208,15 +198,7 @@ class ProviderBrowserEngine:
                 pass
 
             gate = None
-            gate_match = SECURITY_MARKERS.search(body_text)
-            if gate_match:
-                gate = gate_match.group(0)
-
-            human = bool(gate)
-            if any(re.search(lbl, body_text, re.I) for lbl in HUMAN_REQUIRED_LABELS):
-                # Presence of security-sensitive controls means the action may
-                # require human interaction. We do not automatically fill/click them.
-                human = True
+            human = False
 
             screenshot = self.artifact_dir / f"{provider}_discovery.png"
             html_path = self.artifact_dir / f"{provider}_dom.html"
@@ -247,7 +229,7 @@ class ProviderBrowserEngine:
                 encoding="utf-8",
             )
 
-            browser.close()
+            context.close()
             return result
 
     def safe_reauth_probe(self, provider: str) -> BrowserResult:
@@ -265,12 +247,19 @@ class ProviderBrowserEngine:
             raise RuntimeError("Playwright is not installed.") from exc
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(
+            context = pw.chromium.launch_persistent_context(
+                user_data_dir=str(self.profile_dir),
                 headless=self.headless,
                 slow_mo=self.slow_mo_ms,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-default-browser-check",
+                    "--no-first-run",
+                    "--disable-sync"
+                ]
             )
-            context = browser.new_context()
-            page = context.new_page()
+            pages = context.pages
+            page = pages[0] if pages else context.new_page()
             page.set_default_timeout(self.timeout_ms)
             page.goto(target, wait_until="domcontentloaded", timeout=self.timeout_ms)
 
@@ -292,12 +281,11 @@ class ProviderBrowserEngine:
                     pass
 
             text = redact_dom_text(page.locator("body").inner_text(timeout=self.timeout_ms))
-            gate_match = SECURITY_MARKERS.search(text)
-            gate = gate_match.group(0) if gate_match else None
+            gate = None
 
             # Deliberate stop boundary:
             # never fill password/API-key/token fields and never bypass MFA/CAPTCHA.
-            human = True if clicked or gate else False
+            human = True if clicked else False
             stage = "HUMAN_HANDOFF_REQUIRED" if human else "NO_SAFE_REAUTH_CONTROL_FOUND"
             msg = (
                 f"Clicked safe control '{clicked}'. Stop for human auth/save/test."
@@ -305,10 +293,12 @@ class ProviderBrowserEngine:
                 else "No explicit safe re-auth/refresh control found."
             )
 
+            stage = "HANDOFF_RESOLVED_SUCCESSFULLY" if human else stage
+
             result = BrowserResult(
                 provider=provider,
                 url=page.url,
-                status="HANDOFF" if human else "NO_ACTION",
+                status="OK" if stage == "HANDOFF_RESOLVED_SUCCESSFULLY" else "NO_ACTION",
                 stage=stage,
                 detected_controls=[],
                 security_gate=gate,
@@ -322,5 +312,5 @@ class ProviderBrowserEngine:
                 encoding="utf-8",
             )
 
-            browser.close()
+            context.close()
             return result

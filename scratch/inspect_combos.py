@@ -1,20 +1,12 @@
-import sqlite3
+import requests
 import json
-import sys
+import uuid
 
-sys.stdout.reconfigure(encoding='utf-8')
+BASE_URL = "http://localhost:20128"
+s = requests.Session()
+login_res = s.post(f"{BASE_URL}/api/auth/login", json={"password": "Keross@321"})
+print("Login status:", login_res.status_code)
 
-db_path = r"C:\Users\Admin\.omniroute\storage.sqlite"
-conn = sqlite3.connect(db_path)
-cursor = conn.cursor()
-
-print("\n--- combos ---")
-try:
-    cursor.execute("SELECT id, name, data FROM combos")
-    rows = cursor.fetchall()
-    for r in rows:
-        data = json.loads(r[2])
-        models = data.get('models', [])
-        print(f"Combo: {r[1]} ({r[0]}) -> {len(models)} models")
-except Exception as e:
-    print(e)
+combos_res = s.get(f"{BASE_URL}/api/combos")
+combos_data = combos_res.json()
+print("Combos data:", json.dumps(combos_data, indent=2))

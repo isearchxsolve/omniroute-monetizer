@@ -1,0 +1,1332 @@
+[
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings/require-login",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/login",
+    "method": "POST"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-metrics",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/discovery/results",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings/proxies/assignments?scope=combo",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/combos",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/combos/metrics",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings/compression",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings/proxy",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings/proxy",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/v1/providers/clinepass/models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-models?provider=clinepass",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/keys",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/clinepass/param-filters",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/clinepass/interception-rules",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/clinepass/cc-alias",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings/proxy?resolve=47307fe9-c513-4957-8db2-69275efad86a",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-models?provider=clinepass",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/models/alias",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings/proxy",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-models?provider=trae",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/keys",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/v1/providers/trae/models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings/proxy",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings/proxy",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/degradation?summary=true",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/auth/csrf",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/health/ping",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/token-health",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/synced-available-models",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers/expiration",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/sync/cloud",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/system/env/repair",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/provider-nodes",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/providers",
+    "method": "GET"
+  },
+  {
+    "status": 200,
+    "url": "http://localhost:20128/api/settings/proxy",
+    "method": "GET"
+  }
+]

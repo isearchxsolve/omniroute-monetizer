@@ -1,0 +1,722 @@
+{
+  "url": "http://localhost:20128/dashboard/providers/openrouter",
+  "title": "OmniRoute — AI Gateway for Multi-Provider LLMs",
+  "bodyText": "Skip to content\nSkip to content\nchevron_left\nOmniRoute\nv3.8.49\nsearch\nhome\nHome\nDashboard overview\nOMNIPROXY\npush_pin\nexpand_more\napi\nEndpoints\nYour AI connection URLs\nvpn_key\nAPI Keys\nManage API keys and access\ndns\nProviders\nManage AI providers\ndeployed_code\nEmbedded Services\nManage local proxy services\nlayers\nCombos\nGroup providers for failover\naccount_tree\nCombo Studio\nLive routing cascade\ntune\nProvider Quota\nTrack provider usage limits\npie_chart\nQuota Sharing\nShare provider quotas across keys\nCOMPRESSION CONTEXT\nsettings\nCompression Settings\nGlobal defaults\nhub\nEngine Combos\nCombine compression engines\ncompress\nCaveman\nPrompt compression\nfilter_alt\nRTK\nOutput filtering\ntable_rows\nHeadroom\nTabular compaction\ncontent_copy\nSession Dedup\nCross-turn deduplication\narchive\nCCR\nRetrieve markers\npsychology\nLLMLingua\nSemantic pruning\ncompress\nLite\nFast whitespace cleanup\nspeed\nAggressive\nSummary and aging\nbolt\nUltra\nHeuristic pruning\ngrain\nOmniGlyph\nContext as images\nmonitoring\nCompression Studio\nLive engine cascade\nblock\nExclusions\nPer-model/endpoint bypass\nTOOLS\nterminal\nCLI Code\nCode tools pointing to OmniRoute\nsmart_toy\nCLI Agents\nAutonomous CLI agents\ndevice_hub\nACP Agents\nCLIs spawned by OmniRoute\ncloud\nCloud Agents\nManage cloud-based agents\nlink\nAgent Bridge\nIntercept IDE agent traffic\nnetwork_check\nTraffic Inspector\nMonitor LLM calls + debug any HTTPS traffic\ntravel_explore\nDiscovery\nScan providers for free access\nINTEGRATIONS\napi\nAPI Endpoints\nExpose custom endpoints\nwebhook\nWebhooks\nGet notified of events\ndns\nProxy\nHTTP proxy settings\nANALYTICS\npush_pin\nexpand_more\nCOSTS\npush_pin\nexpand_more\nMONITORING\npush_pin\nexpand_more\nDEV TOOLS\npush_pin\nexpand_more\nAGENTIC FEATURES\npush_pin\nexpand_more\nOTHER FEATURES\npush_pin\nexpand_more\nCONFIGURATION\npush_pin\nexpand_more\nHELP\npush_pin\nexpand_more\ncloud_off\nSync off\nrestart_alt\nRestart\npower_settings_new\nShutdown\nOpenRouter\nsearch\nQuick nav\nCtrl+K\nEN\nexpand_more\ndark_mode\nerror\n3\nlogout\nDashboard\n›\nProviders\n›\nOpenrouter",
+  "htmlLength": 702199,
+  "links": [
+    {
+      "text": "Skip to content",
+      "href": "http://localhost:20128/dashboard/providers/openrouter#main-content"
+    },
+    {
+      "text": "Skip to content",
+      "href": "http://localhost:20128/dashboard/providers/openrouter#main-content"
+    },
+    {
+      "text": "OmniRoute\nv3.8.49",
+      "href": "http://localhost:20128/home"
+    },
+    {
+      "text": "home\nHome\nDashboard overview",
+      "href": "http://localhost:20128/home"
+    },
+    {
+      "text": "api\nEndpoints\nYour AI connection URLs",
+      "href": "http://localhost:20128/dashboard/endpoint"
+    },
+    {
+      "text": "vpn_key\nAPI Keys\nManage API keys and access",
+      "href": "http://localhost:20128/dashboard/api-manager"
+    },
+    {
+      "text": "dns\nProviders\nManage AI providers",
+      "href": "http://localhost:20128/dashboard/providers"
+    },
+    {
+      "text": "deployed_code\nEmbedded Services\nManage local proxy services",
+      "href": "http://localhost:20128/dashboard/providers/services"
+    },
+    {
+      "text": "layers\nCombos\nGroup providers for failover",
+      "href": "http://localhost:20128/dashboard/combos"
+    },
+    {
+      "text": "account_tree\nCombo Studio\nLive routing cascade",
+      "href": "http://localhost:20128/dashboard/combos/live"
+    },
+    {
+      "text": "tune\nProvider Quota\nTrack provider usage limits",
+      "href": "http://localhost:20128/dashboard/quota"
+    },
+    {
+      "text": "pie_chart\nQuota Sharing\nShare provider quotas across keys",
+      "href": "http://localhost:20128/dashboard/costs/quota-share"
+    },
+    {
+      "text": "settings\nCompression Settings\nGlobal defaults",
+      "href": "http://localhost:20128/dashboard/context/settings"
+    },
+    {
+      "text": "hub\nEngine Combos\nCombine compression engines",
+      "href": "http://localhost:20128/dashboard/context/combos"
+    },
+    {
+      "text": "compress\nCaveman\nPrompt compression",
+      "href": "http://localhost:20128/dashboard/context/caveman"
+    },
+    {
+      "text": "filter_alt\nRTK\nOutput filtering",
+      "href": "http://localhost:20128/dashboard/context/rtk"
+    },
+    {
+      "text": "table_rows\nHeadroom\nTabular compaction",
+      "href": "http://localhost:20128/dashboard/context/headroom"
+    },
+    {
+      "text": "content_copy\nSession Dedup\nCross-turn deduplication",
+      "href": "http://localhost:20128/dashboard/context/session-dedup"
+    },
+    {
+      "text": "archive\nCCR\nRetrieve markers",
+      "href": "http://localhost:20128/dashboard/context/ccr"
+    },
+    {
+      "text": "psychology\nLLMLingua\nSemantic pruning",
+      "href": "http://localhost:20128/dashboard/context/llmlingua"
+    },
+    {
+      "text": "compress\nLite\nFast whitespace cleanup",
+      "href": "http://localhost:20128/dashboard/context/lite"
+    },
+    {
+      "text": "speed\nAggressive\nSummary and aging",
+      "href": "http://localhost:20128/dashboard/context/aggressive"
+    },
+    {
+      "text": "bolt\nUltra\nHeuristic pruning",
+      "href": "http://localhost:20128/dashboard/context/ultra"
+    },
+    {
+      "text": "grain\nOmniGlyph\nContext as images",
+      "href": "http://localhost:20128/dashboard/context/omniglyph"
+    },
+    {
+      "text": "monitoring\nCompression Studio\nLive engine cascade",
+      "href": "http://localhost:20128/dashboard/compression/studio"
+    },
+    {
+      "text": "block\nExclusions\nPer-model/endpoint bypass",
+      "href": "http://localhost:20128/dashboard/compression/exclusions"
+    },
+    {
+      "text": "terminal\nCLI Code\nCode tools pointing to OmniRoute",
+      "href": "http://localhost:20128/dashboard/cli-code"
+    },
+    {
+      "text": "smart_toy\nCLI Agents\nAutonomous CLI agents",
+      "href": "http://localhost:20128/dashboard/cli-agents"
+    },
+    {
+      "text": "device_hub\nACP Agents\nCLIs spawned by OmniRoute",
+      "href": "http://localhost:20128/dashboard/acp-agents"
+    },
+    {
+      "text": "cloud\nCloud Agents\nManage cloud-based agents",
+      "href": "http://localhost:20128/dashboard/cloud-agents"
+    },
+    {
+      "text": "link\nAgent Bridge\nIntercept IDE agent traffic",
+      "href": "http://localhost:20128/dashboard/tools/agent-bridge"
+    },
+    {
+      "text": "network_check\nTraffic Inspector\nMonitor LLM calls + debug any HTTPS traffic",
+      "href": "http://localhost:20128/dashboard/tools/traffic-inspector"
+    },
+    {
+      "text": "travel_explore\nDiscovery\nScan providers for free access",
+      "href": "http://localhost:20128/dashboard/discovery"
+    },
+    {
+      "text": "api\nAPI Endpoints\nExpose custom endpoints",
+      "href": "http://localhost:20128/dashboard/api-endpoints"
+    },
+    {
+      "text": "webhook\nWebhooks\nGet notified of events",
+      "href": "http://localhost:20128/dashboard/webhooks"
+    },
+    {
+      "text": "dns\nProxy\nHTTP proxy settings",
+      "href": "http://localhost:20128/dashboard/system/proxy"
+    },
+    {
+      "text": "Skip to content",
+      "href": "http://localhost:20128/dashboard/providers/openrouter#main-content"
+    },
+    {
+      "text": "OmniRoutev3.8.49",
+      "href": "http://localhost:20128/home"
+    },
+    {
+      "text": "homeHomeDashboard overview",
+      "href": "http://localhost:20128/home"
+    },
+    {
+      "text": "apiEndpointsYour AI connection URLs",
+      "href": "http://localhost:20128/dashboard/endpoint"
+    },
+    {
+      "text": "vpn_keyAPI KeysManage API keys and access",
+      "href": "http://localhost:20128/dashboard/api-manager"
+    },
+    {
+      "text": "dnsProvidersManage AI providers",
+      "href": "http://localhost:20128/dashboard/providers"
+    },
+    {
+      "text": "deployed_codeEmbedded ServicesManage local proxy services",
+      "href": "http://localhost:20128/dashboard/providers/services"
+    },
+    {
+      "text": "layersCombosGroup providers for failover",
+      "href": "http://localhost:20128/dashboard/combos"
+    },
+    {
+      "text": "account_treeCombo StudioLive routing cascade",
+      "href": "http://localhost:20128/dashboard/combos/live"
+    },
+    {
+      "text": "tuneProvider QuotaTrack provider usage limits",
+      "href": "http://localhost:20128/dashboard/quota"
+    },
+    {
+      "text": "pie_chartQuota SharingShare provider quotas across keys",
+      "href": "http://localhost:20128/dashboard/costs/quota-share"
+    },
+    {
+      "text": "settingsCompression SettingsGlobal defaults",
+      "href": "http://localhost:20128/dashboard/context/settings"
+    },
+    {
+      "text": "hubEngine CombosCombine compression engines",
+      "href": "http://localhost:20128/dashboard/context/combos"
+    },
+    {
+      "text": "compressCavemanPrompt compression",
+      "href": "http://localhost:20128/dashboard/context/caveman"
+    },
+    {
+      "text": "filter_altRTKOutput filtering",
+      "href": "http://localhost:20128/dashboard/context/rtk"
+    },
+    {
+      "text": "table_rowsHeadroomTabular compaction",
+      "href": "http://localhost:20128/dashboard/context/headroom"
+    },
+    {
+      "text": "content_copySession DedupCross-turn deduplication",
+      "href": "http://localhost:20128/dashboard/context/session-dedup"
+    },
+    {
+      "text": "archiveCCRRetrieve markers",
+      "href": "http://localhost:20128/dashboard/context/ccr"
+    },
+    {
+      "text": "psychologyLLMLinguaSemantic pruning",
+      "href": "http://localhost:20128/dashboard/context/llmlingua"
+    },
+    {
+      "text": "compressLiteFast whitespace cleanup",
+      "href": "http://localhost:20128/dashboard/context/lite"
+    },
+    {
+      "text": "speedAggressiveSummary and aging",
+      "href": "http://localhost:20128/dashboard/context/aggressive"
+    },
+    {
+      "text": "boltUltraHeuristic pruning",
+      "href": "http://localhost:20128/dashboard/context/ultra"
+    },
+    {
+      "text": "grainOmniGlyphContext as images",
+      "href": "http://localhost:20128/dashboard/context/omniglyph"
+    },
+    {
+      "text": "monitoringCompression StudioLive engine cascade",
+      "href": "http://localhost:20128/dashboard/compression/studio"
+    },
+    {
+      "text": "blockExclusionsPer-model/endpoint bypass",
+      "href": "http://localhost:20128/dashboard/compression/exclusions"
+    },
+    {
+      "text": "terminalCLI CodeCode tools pointing to OmniRoute",
+      "href": "http://localhost:20128/dashboard/cli-code"
+    },
+    {
+      "text": "smart_toyCLI AgentsAutonomous CLI agents",
+      "href": "http://localhost:20128/dashboard/cli-agents"
+    },
+    {
+      "text": "device_hubACP AgentsCLIs spawned by OmniRoute",
+      "href": "http://localhost:20128/dashboard/acp-agents"
+    },
+    {
+      "text": "cloudCloud AgentsManage cloud-based agents",
+      "href": "http://localhost:20128/dashboard/cloud-agents"
+    },
+    {
+      "text": "linkAgent BridgeIntercept IDE agent traffic",
+      "href": "http://localhost:20128/dashboard/tools/agent-bridge"
+    },
+    {
+      "text": "network_checkTraffic InspectorMonitor LLM calls + debug any HTTPS traffic",
+      "href": "http://localhost:20128/dashboard/tools/traffic-inspector"
+    },
+    {
+      "text": "travel_exploreDiscoveryScan providers for free access",
+      "href": "http://localhost:20128/dashboard/discovery"
+    },
+    {
+      "text": "apiAPI EndpointsExpose custom endpoints",
+      "href": "http://localhost:20128/dashboard/api-endpoints"
+    },
+    {
+      "text": "webhookWebhooksGet notified of events",
+      "href": "http://localhost:20128/dashboard/webhooks"
+    },
+    {
+      "text": "dnsProxyHTTP proxy settings",
+      "href": "http://localhost:20128/dashboard/system/proxy"
+    },
+    {
+      "text": "Dashboard",
+      "href": "http://localhost:20128/dashboard"
+    },
+    {
+      "text": "Providers",
+      "href": "http://localhost:20128/dashboard/providers"
+    }
+  ],
+  "buttons": [
+    {
+      "text": "chevron_left",
+      "aria": "Collapse sidebar",
+      "title": "Collapse sidebar",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "rounded-md p-1 text-text-muted/50 transition-colors hover:bg-black/5 hover:text-text-muted dark:hover:bg-white/5"
+    },
+    {
+      "text": "OMNIPROXY\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "ANALYTICS\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "COSTS\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "MONITORING\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "DEV TOOLS\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "AGENTIC FEATURES\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "OTHER FEATURES\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "CONFIGURATION\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "HELP\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "cloud_off\nSync off",
+      "aria": "Remote settings sync status: Sync off",
+      "title": "Sync off",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-white/5 transition-colors cursor-pointer w-full"
+    },
+    {
+      "text": "restart_alt\nRestart",
+      "aria": "",
+      "title": "Restart",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center gap-2 rounded-lg font-medium transition-all text-amber-500 hover:bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 flex-1 min-w-"
+    },
+    {
+      "text": "power_settings_new\nShutdown",
+      "aria": "",
+      "title": "Shutdown",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center gap-2 rounded-lg font-medium transition-all text-red-500 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 flex-1 min-w-0 px-2 p"
+    },
+    {
+      "text": "OmniProxypush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Analyticspush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Costspush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Monitoringpush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Dev Toolspush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Agentic Featurespush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Other Featurespush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Configurationpush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Helppush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "cloud_offSync off",
+      "aria": "Remote settings sync status: Sync off",
+      "title": "Sync off",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-white/5 transition-colors cursor-pointer w-full"
+    },
+    {
+      "text": "restart_altRestart",
+      "aria": "",
+      "title": "Restart",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center gap-2 rounded-lg font-medium transition-all text-amber-500 hover:bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 flex-1 min-w-"
+    },
+    {
+      "text": "power_settings_newShutdown",
+      "aria": "",
+      "title": "Shutdown",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center gap-2 rounded-lg font-medium transition-all text-red-500 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 flex-1 min-w-0 px-2 p"
+    },
+    {
+      "text": "menu",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "text-text-main hover:text-primary transition-colors"
+    },
+    {
+      "text": "search\nQuick nav\nCtrl+K",
+      "aria": "Open quick navigation",
+      "title": "Quick navigation (⌘K / Ctrl+K)",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "hidden md:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-black/10 dark:border-white/10 bg-bg-subtle text-text-muted hover:text-text-main hover:bg-black/[0.04"
+    },
+    {
+      "text": "search",
+      "aria": "Open quick navigation",
+      "title": "",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "md:hidden p-2 rounded-lg text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+    },
+    {
+      "text": "EN\nexpand_more",
+      "aria": "",
+      "title": "English",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-text-main hover:bg-surface-hover transition-all border border-transparent hover:border-border"
+    },
+    {
+      "text": "dark_mode",
+      "aria": "Switch to dark mode",
+      "title": "Switch to dark mode",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center size-10 rounded-full text-text-muted hover:bg-black/5 hover:text-text-main transition-colors"
+    },
+    {
+      "text": "error\n3",
+      "aria": "",
+      "title": "Token refresh failures detected",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-surface/30 transition-colors"
+    },
+    {
+      "text": "logout",
+      "aria": "Logout",
+      "title": "Logout",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-red-500 hover:bg-red-500/10 transition-all"
+    }
+  ],
+  "inputs": [
+    {
+      "tag": "INPUT",
+      "type": "search",
+      "name": "",
+      "id": "_R_gn5vlb_",
+      "placeholder": "Search",
+      "aria": "Search",
+      "cls": "w-full px-3 text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-control placeholder-text-muted/60 focus:ring-1 focus:ring-accent/30 focus:bo"
+    },
+    {
+      "tag": "INPUT",
+      "type": "search",
+      "name": "",
+      "id": "_R_gp5vlb_",
+      "placeholder": "Search",
+      "aria": "Search",
+      "cls": "w-full px-3 text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-control placeholder-text-muted/60 focus:ring-1 focus:ring-accent/30 focus:bo"
+    }
+  ]
+}

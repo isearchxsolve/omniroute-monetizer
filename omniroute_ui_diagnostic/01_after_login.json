@@ -1,0 +1,470 @@
+{
+  "url": "http://localhost:20128/home",
+  "title": "OmniRoute — AI Gateway for Multi-Provider LLMs",
+  "bodyText": "Skip to content\nSkip to content\nchevron_left\nOmniRoute\nv3.8.49\nsearch\nhome\nHome\nDashboard overview\nOMNIPROXY\npush_pin\nexpand_more\nANALYTICS\npush_pin\nexpand_more\nCOSTS\npush_pin\nexpand_more\nMONITORING\npush_pin\nexpand_more\nDEV TOOLS\npush_pin\nexpand_more\nAGENTIC FEATURES\npush_pin\nexpand_more\nOTHER FEATURES\npush_pin\nexpand_more\nCONFIGURATION\npush_pin\nexpand_more\nHELP\npush_pin\nexpand_more\ncloud_off\nSync off\nrestart_alt\nRestart\npower_settings_new\nShutdown\nhome\nHome\n\nWelcome to OmniRoute\n\nsearch\nQuick nav\nCtrl+K\nEN\nexpand_more\ndark_mode\nerror\n3\nlogout\nHome\n\nKimi (Moonshot AI) is OmniRoute's founding Open Source Friend\n\nKimi K3 brings a 1M-token context window and frontier coding performance to OmniRoute at a fraction of the cost.\n\nGet Kimi Code\nopen_in_new\nPartner link\nclose",
+  "htmlLength": 661748,
+  "links": [
+    {
+      "text": "Skip to content",
+      "href": "http://localhost:20128/home#main-content"
+    },
+    {
+      "text": "Skip to content",
+      "href": "http://localhost:20128/home#main-content"
+    },
+    {
+      "text": "OmniRoute\nv3.8.49",
+      "href": "http://localhost:20128/home"
+    },
+    {
+      "text": "home\nHome\nDashboard overview",
+      "href": "http://localhost:20128/home"
+    },
+    {
+      "text": "Skip to content",
+      "href": "http://localhost:20128/home#main-content"
+    },
+    {
+      "text": "OmniRoutev3.8.49",
+      "href": "http://localhost:20128/home"
+    },
+    {
+      "text": "homeHomeDashboard overview",
+      "href": "http://localhost:20128/home"
+    },
+    {
+      "text": "Get Kimi Code\nopen_in_new",
+      "href": "https://www.kimi.com/code?aff=omniroute"
+    }
+  ],
+  "buttons": [
+    {
+      "text": "chevron_left",
+      "aria": "Collapse sidebar",
+      "title": "Collapse sidebar",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "rounded-md p-1 text-text-muted/50 transition-colors hover:bg-black/5 hover:text-text-muted dark:hover:bg-white/5"
+    },
+    {
+      "text": "OMNIPROXY\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "ANALYTICS\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "COSTS\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "MONITORING\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "DEV TOOLS\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "AGENTIC FEATURES\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "OTHER FEATURES\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "CONFIGURATION\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "HELP\npush_pin\nexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "cloud_off\nSync off",
+      "aria": "Remote settings sync status: Sync off",
+      "title": "Sync off",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-white/5 transition-colors cursor-pointer w-full"
+    },
+    {
+      "text": "restart_alt\nRestart",
+      "aria": "",
+      "title": "Restart",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center gap-2 rounded-lg font-medium transition-all text-amber-500 hover:bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 flex-1 min-w-"
+    },
+    {
+      "text": "power_settings_new\nShutdown",
+      "aria": "",
+      "title": "Shutdown",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center gap-2 rounded-lg font-medium transition-all text-red-500 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 flex-1 min-w-0 px-2 p"
+    },
+    {
+      "text": "OmniProxypush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Analyticspush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Costspush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Monitoringpush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Dev Toolspush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Agentic Featurespush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Other Featurespush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Configurationpush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "Helppush_pinexpand_more",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "DIV",
+      "cls": "flex items-center gap-0.5 px-2 py-1 rounded-md hover:bg-surface/30 transition-colors cursor-pointer group/header"
+    },
+    {
+      "text": "push_pin",
+      "aria": "",
+      "title": "Pin section open",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "p-0.5 rounded transition-all shrink-0 text-text-muted/30 opacity-0 group-hover/header:opacity-100 hover:text-text-muted/70"
+    },
+    {
+      "text": "cloud_offSync off",
+      "aria": "Remote settings sync status: Sync off",
+      "title": "Sync off",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg hover:bg-white/5 transition-colors cursor-pointer w-full"
+    },
+    {
+      "text": "restart_altRestart",
+      "aria": "",
+      "title": "Restart",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center gap-2 rounded-lg font-medium transition-all text-amber-500 hover:bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 flex-1 min-w-"
+    },
+    {
+      "text": "power_settings_newShutdown",
+      "aria": "",
+      "title": "Shutdown",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center gap-2 rounded-lg font-medium transition-all text-red-500 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40 flex-1 min-w-0 px-2 p"
+    },
+    {
+      "text": "menu",
+      "aria": "",
+      "title": "",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "text-text-main hover:text-primary transition-colors"
+    },
+    {
+      "text": "search\nQuick nav\nCtrl+K",
+      "aria": "Open quick navigation",
+      "title": "Quick navigation (⌘K / Ctrl+K)",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "hidden md:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-black/10 dark:border-white/10 bg-bg-subtle text-text-muted hover:text-text-main hover:bg-black/[0.04"
+    },
+    {
+      "text": "search",
+      "aria": "Open quick navigation",
+      "title": "",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "md:hidden p-2 rounded-lg text-text-muted hover:text-text-main hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+    },
+    {
+      "text": "EN\nexpand_more",
+      "aria": "",
+      "title": "English",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-text-main hover:bg-surface-hover transition-all border border-transparent hover:border-border"
+    },
+    {
+      "text": "dark_mode",
+      "aria": "Switch to dark mode",
+      "title": "Switch to dark mode",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center size-10 rounded-full text-text-muted hover:bg-black/5 hover:text-text-main transition-colors"
+    },
+    {
+      "text": "error\n3",
+      "aria": "",
+      "title": "Token refresh failures detected",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-surface/30 transition-colors"
+    },
+    {
+      "text": "logout",
+      "aria": "Logout",
+      "title": "Logout",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "flex items-center justify-center p-2 rounded-lg text-text-muted hover:text-red-500 hover:bg-red-500/10 transition-all"
+    },
+    {
+      "text": "close",
+      "aria": "Dismiss",
+      "title": "",
+      "disabled": false,
+      "tag": "BUTTON",
+      "cls": "text-text-muted transition-colors hover:text-text-main"
+    }
+  ],
+  "inputs": [
+    {
+      "tag": "INPUT",
+      "type": "search",
+      "name": "",
+      "id": "_r_7_",
+      "placeholder": "Search",
+      "aria": "Search",
+      "cls": "w-full px-3 text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-control placeholder-text-muted/60 focus:ring-1 focus:ring-accent/30 focus:bo"
+    },
+    {
+      "tag": "INPUT",
+      "type": "search",
+      "name": "",
+      "id": "_r_a_",
+      "placeholder": "Search",
+      "aria": "Search",
+      "cls": "w-full px-3 text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-control placeholder-text-muted/60 focus:ring-1 focus:ring-accent/30 focus:bo"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+[
+    {
+        "provider": "antigravity",
+        "model_id": "auto/claude-opus",
+        "full_id": "antigravity/auto/claude-opus"
+    },
+    {
+        "provider": "clinepass",
+        "model_id": "auto/claude-opus",
+        "full_id": "clinepass/auto/claude-opus"
+    },
+    {
+        "provider": "alibaba",
+        "model_id": "auto/claude-opus",
+        "full_id": "alibaba/auto/claude-opus"
+    },
+    {
+        "provider": "trae",
+        "model_id": "auto/claude-opus",
+        "full_id": "trae/auto/claude-opus"
+    },
+    {
+        "provider": "kiro",
+        "model_id": "auto/claude-opus",
+        "full_id": "kiro/auto/claude-opus"
+    },
+    {
+        "provider": "cerebras",
+        "model_id": "auto/claude-opus",
+        "full_id": "cerebras/auto/claude-opus"
+    },
+    {
+        "provider": "cloudflare-ai",
+        "model_id": "auto/claude-opus",
+        "full_id": "cloudflare-ai/auto/claude-opus"
+    },
+    {
+        "provider": "nara",
+        "model_id": "auto/claude-opus",
+        "full_id": "nara/auto/claude-opus"
+    },
+    {
+        "provider": "agnes",
+        "model_id": "auto/claude-opus",
+        "full_id": "agnes/auto/claude-opus"
+    },
+    {
+        "provider": "aion",
+        "model_id": "auto/claude-opus",
+        "full_id": "aion/auto/claude-opus"
+    },
+    {
+        "provider": "windsurf",
+        "model_id": "auto/claude-opus",
+        "full_id": "windsurf/auto/claude-opus"
+    },
+    {
+        "provider": "lmarena",
+        "model_id": "auto/claude-opus",
+        "full_id": "lmarena/auto/claude-opus"
+    },
+    {
+        "provider": "grok-cli",
+        "model_id": "auto/claude-opus",
+        "full_id": "grok-cli/auto/claude-opus"
+    },
+    {
+        "provider": "amazon-q",
+        "model_id": "auto/claude-opus",
+        "full_id": "amazon-q/auto/claude-opus"
+    }
+]
