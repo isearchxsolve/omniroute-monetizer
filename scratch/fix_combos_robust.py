@@ -1,7 +1,7 @@
 import requests, json, uuid
 BASE_URL = 'http://localhost:20128'
 s = requests.Session()
-s.post(f'{BASE_URL}/api/auth/login', json={'password': 'Keross@321'}, timeout=10)
+s.post(f'{BASE_URL}/api/auth/login', json={'password': '<REDACTED>'}, timeout=10)
 
 # 1. Fetch active providers
 resp = s.get(f'{BASE_URL}/api/providers', timeout=10)

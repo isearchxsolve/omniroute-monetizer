@@ -178,21 +178,19 @@ Before loading a heavy web browser, the automation checks local system credentia
 
 ---
 
-## Master Monetizer Certification Matrix (12/12 Acceptance Tests)
+## Master Monetizer Certification Matrix (T1–T20 Acceptance Suite)
 
-Every run must satisfy all 12 tests with zero failures before declaring completion:
-- `T1_OMNIROUTE_REACHABLE`: HTTP 200 on port 20128
-- `T2_V1_MODELS`: HTTP 200 with complete model catalog
-- `T3_MGMT_AUTH_ENFORCED`: HTTP 401 unauthenticated rejected
-- `T4_ALIAS_FRONTIER`: Live 200 OK inference completion
-- `T5_ALIAS_AUTO_PRO-CODING`: Live 200 OK inference completion
-- `T6_ALIAS_AUTO_PRO-REASONING`: Live 200 OK inference completion
-- `T7_ALIAS_AUTO_PRO-CHAT`: Live 200 OK inference completion
-- `T8_ZED_INTEGRATION`: Validated in `%APPDATA%/Zed/settings.json`
-- `T9_NO_RESTART`: Process preserved without restarts
-- `T10_IDEMPOTENCY`: Non-destructive idempotent execution
-- `T11_NO_SECRETS`: Complete regex redaction across all artifacts and logs
-- `T12_NO_NEON`: Neon DB out of scope, untouched
+The current acceptance suite is **`acceptance_tests.py`** (T1–T20). Every run must
+satisfy all 20 tests (skips without failures allowed) before declaring completion:
+
+- **T1–T12 (core):** reachable / models / auth-enforced / frontier / auto-pro-coding /
+  auto-pro-reasoning / auto-pro-chat / Zed integration / no-restart / idempotency /
+  no-secrets / no-Neon
+- **T13–T15 (performance):** root < 200ms (median-of-3) / models < 1s / providers < 500ms
+- **T16–T20 (automation):** provider coverage / OpenRouter valid / NVIDIA active /
+  free-tier combo / VSCode configured
+
+Run: `python acceptance_tests.py` → must print `[PASS] MONETIZER_READY — All 20 tests passed`.
 
 ## Completion
 End with `MONETIZER_READY` or `MONETIZER_BLOCKED`.

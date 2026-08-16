@@ -133,7 +133,7 @@
       "lastHealthCheckAt": "2026-08-14T11:40:07.539Z",
       "lastTested": "2026-08-14T12:17:11.242Z",
       "providerSpecificData": {
-        "clientId": "utCioJ-lgb18NXq7wO6ELHVzLWVhc3QtMQ",
+        "clientId": "<REDACTED>",
         "clientSecret": "<REDACTED>",
         "region": "us-east-1",
         "authMethod": "builder-id",
@@ -810,10 +810,10 @@
       "providerSpecificData": {
         "workspaceId": "b2680d7a-1ba1-40ec-8d5b-7cbe5dc995b4",
         "workspacePlanType": "free",
-        "chatgptUserId": "user-ZZyf3zhcXxl9Biube3EMAz5u",
+        "chatgptUserId": "<REDACTED>",
         "organizations": [
           {
-            "id": "org-EvcFTndMqS2ZSgMlO98err5p",
+            "id": "<REDACTED>",
             "is_default": true,
             "role": "owner",
             "title": "Personal"

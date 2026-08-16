@@ -4,7 +4,7 @@ import uuid
 
 BASE_URL = "http://localhost:20128"
 s = requests.Session()
-s.post(f"{BASE_URL}/api/auth/login", json={"password": "Keross@321"})
+s.post(f"{BASE_URL}/api/auth/login", json={"password": "<REDACTED>"})
 
 # Priority ordered target lists
 coding_targets = [

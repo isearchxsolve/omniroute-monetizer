@@ -250,8 +250,10 @@ class AcceptanceTestSuite:
             
             files_to_check = [
                 "MASTER_WORKLOG.md",
-                "COMPREHENSIVE_AUDIT_AND_FIXES.md",
-                "HANDOFF_PROMPT_PHASE2.md"
+                "POST_AUDIT_GAPS.md",
+                "POST_AUDIT_FIXES.md",
+                "archive/reports-2026-08-15/COMPREHENSIVE_AUDIT_AND_FIXES.md",
+                "archive/reports-2026-08-15/HANDOFF_PROMPT_PHASE2.md"
             ]
             
             import re

@@ -6,7 +6,7 @@ BASE_URL = "http://localhost:20128"
 V1_URL = f"{BASE_URL}/v1"
 
 s = requests.Session()
-login_res = s.post(f"{BASE_URL}/api/auth/login", json={"password": "Keross@321"})
+login_res = s.post(f"{BASE_URL}/api/auth/login", json={"password": "<REDACTED>"})
 print("Login status:", login_res.status_code)
 
 models_res = s.get(f"{BASE_URL}/api/models")

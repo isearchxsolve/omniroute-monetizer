@@ -624,7 +624,7 @@
             }
           }
         ],
-        "api_key": "sk-2daf4dd6d1e45047-53255c-89ec5ddf",
+        "api_key": "<REDACTED>",
         "frontier_chain": [
           "openrouter/openai/gpt-5.6-luna-pro-xhigh",
           "openrouter/openai/gpt-5.6-luna-pro:batch-xhigh",
@@ -1470,7 +1470,7 @@
             }
           }
         ],
-        "api_key": "sk-2daf4dd6d1e45047-53255c-89ec5ddf"
+        "api_key": "<REDACTED>"
       },
       "OmniRoute_Clone_2": {
         "api_url": "http://localhost:20128/v1",
@@ -1572,7 +1572,7 @@
             }
           }
         ],
-        "api_key": "sk-2daf4dd6d1e45047-53255c-89ec5ddf"
+        "api_key": "<REDACTED>"
       },
       "OmniRoute_Clone_3": {
         "api_url": "http://localhost:20128/v1",
@@ -1674,7 +1674,7 @@
             }
           }
         ],
-        "api_key": "sk-2daf4dd6d1e45047-53255c-89ec5ddf"
+        "api_key": "<REDACTED>"
       },
       "OmniRoute_Clone_4": {
         "api_url": "http://localhost:20128/v1",
@@ -1776,7 +1776,7 @@
             }
           }
         ],
-        "api_key": "sk-2daf4dd6d1e45047-53255c-89ec5ddf"
+        "api_key": "<REDACTED>"
       },
       "OmniRoute_Clone_5": {
         "api_url": "http://localhost:20128/v1",
@@ -1878,7 +1878,7 @@
             }
           }
         ],
-        "api_key": "sk-2daf4dd6d1e45047-53255c-89ec5ddf"
+        "api_key": "<REDACTED>"
       }
     }
   },

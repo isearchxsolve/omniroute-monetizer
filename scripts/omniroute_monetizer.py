@@ -68,8 +68,8 @@ if _raw_base.endswith("/v1"):
 BASE_URL = _raw_base or "http://localhost:20128"
 V1_URL = f"{BASE_URL}/v1"
 
-PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "").strip() or "Keross@321"
-API_KEY = os.environ.get("OMNIROUTE_API_KEY", "").strip() or "sk-2daf4dd6d1e45047-d60156-541a3aeb"
+PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "").strip() or "<REDACTED>"
+API_KEY = os.environ.get("OMNIROUTE_API_KEY", "").strip() or "<REDACTED>"
 
 # Canonical routing aliases required by spec
 REQUIRED_ALIASES = [
@@ -1444,13 +1444,13 @@ def generate_final_report(state: MonetizerState) -> str:
 
     report_text = "\n".join(report_lines)
 
-    # Save to project root
-    report_path = PROJECT_ROOT / "MONETIZER_FINAL_STATUS.md"
+    # Save to archive (superseded reports live in archive/, G8)
+    report_path = PROJECT_ROOT / "archive" / "reports-2026-08-15" / "MONETIZER_FINAL_STATUS.md"
     report_path.write_text(report_text, encoding="utf-8")
     log(f"Report saved: {report_path.relative_to(PROJECT_ROOT) if report_path.is_relative_to(PROJECT_ROOT) else report_path}", "ok")
 
     # Save deferred actions
-    deferred_path = PROJECT_ROOT / "DEFERRED_ACTIONS.md"
+    deferred_path = PROJECT_ROOT / "archive" / "reports-2026-08-15" / "DEFERRED_ACTIONS.md"
     deferred_lines = [
         "# Deferred Actions",
         "",

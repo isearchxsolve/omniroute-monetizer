@@ -4,7 +4,7 @@ import requests
 BASE = "http://127.0.0.1:20128"
 
 s = requests.Session()
-s.post(f"{BASE}/api/auth/login", json={"password": "Keross@321"}, timeout=15)
+s.post(f"{BASE}/api/auth/login", json={"password": "<REDACTED>"}, timeout=15)
 
 r = s.get(f"{BASE}/api/combos", timeout=15)
 data = r.json()

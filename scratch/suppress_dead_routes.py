@@ -2,7 +2,7 @@ import os
 import requests
 
 BASE_URL = "http://localhost:20128"
-PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "Keross@321")
+PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "<REDACTED>")
 
 def main():
     print("Logging into OmniRoute API...")

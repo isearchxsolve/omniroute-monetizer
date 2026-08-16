@@ -10,7 +10,7 @@ import sys
 import requests
 
 BASE = "http://127.0.0.1:20199"
-PASSWORD = "sandbox-test-password-2026"  # sandbox-only, not a live secret
+PASSWORD = "<REDACTED>"  # sandbox-only, not a live secret
 
 s = requests.Session()
 

@@ -7,7 +7,7 @@ import os
 BASE_URL = os.environ.get("OMNIROUTE_BASE_URL", "http://localhost:20128").rstrip("/")
 if BASE_URL.endswith("/v1"):
     BASE_URL = BASE_URL[:-3].rstrip("/")
-PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "Keross@321")
+PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "<REDACTED>")
 
 def main():
     print("=== OmniRoute Optimizer: Dead Route Suppression ===")

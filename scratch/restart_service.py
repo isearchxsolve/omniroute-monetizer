@@ -16,7 +16,7 @@ import time
 import requests
 
 BASE_URL = "http://localhost:20128"
-PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "Keross@321")
+PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "<REDACTED>")
 LOG_PATH = r"C:\Users\Admin\.omniroute\logs\service-stderr.log"
 
 

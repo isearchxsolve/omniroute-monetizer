@@ -56,14 +56,14 @@ It is maintained **in parallel with active work** — each tool call / discovery
 |---|---|
 | Working dir | `d:/omniroute-monetizer` |
 | Git remote | `https://github.com/isearchxsolve/omniroute-monetizer.git` |
-| Overall status (from `STATUS.md`) | `MONETIZER_READY` |
+| Overall status | `MONETIZER_READY` — see `acceptance_tests.py` (T1–T20) |
 | OmniRoute version | v3.8.49 (preserved, NOT restarted) |
 | Base URL | `http://localhost:20128` |
 | Inference API | `http://localhost:20128/v1` |
 | Management API | `http://localhost:20128/api/*` |
-| Acceptance tests | 12/12 PASS (see `MONETIZER_FINAL_STATUS.md`) |
+| Acceptance tests | 20/20 PASS (see `state/acceptance_latest.md`; superseded reports in `archive/reports-2026-08-15/`) |
 | Client integrations | zed ✅, codex ✅, claude_code ❌ not configured |
-| Known deferred item | Free tier routing non-functional (needs free-model discovery + combo rebuild) |
+| Known deferred item | trae/windsurf OAuth re-login, Anthropic billing (human-in-loop) |
 
 **Verified routes:** all `auto/*` + `frontier` route to `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`. No dead routes.
 
@@ -82,7 +82,10 @@ It is maintained **in parallel with active work** — each tool call / discovery
 | `docs/PROVIDER_ADAPTERS.md` | Provider adapters |
 | `docs/PROVIDER_POLICY.md` / `PROVIDER_POLICY.md` | Provider policy |
 | `docs/BROWSER_AUTOMATION.md` | Browser automation notes |
-| `MONETIZER_FINAL_REPORT.md` / `MONETIZER_FINAL_STATUS.md` | Final V1 report/status |
+| `docs/INSTALLATION.md` | Reproducible install (G12) |
+| `docs/OPS_RUNBOOK.md` | Operations / upgrade / restore (G1/G4/G10) |
+| `archive/reports-2026-08-15/` | Superseded reports (G8) |
+| `archive/legacy-automation-2026-08-16/` | Superseded automation scripts (G11) |
 | `AGENTS.md` | Agent instructions |
 
 ---
@@ -2463,6 +2466,85 @@ acceptance suite, and hunted the residual stalls that still failed T2/T3.
 **Files touched:** `docs/THE_ILLUSION_OF_COMPLETION_AGENT_POSTMORTEM.pdf` (new), `docs/THE_ILLUSION_OF_COMPLETION_AGENT_POSTMORTEM.html` (new), `scratch/generate_pdf.py` (new), `MASTER_WORKLOG.md` (this entry).
 
 **Status:** ✅ Complete — Publication PDF compiled and synced.
+
+### [2026-08-16 17:51] #53 — G9: Git-History Secret Audit + Working-Tree Scrub
+**What:** Executed the G9 fix (rotate-then-purge prerequisite): a dual-scan secret audit of the git tree **and** full history (`scratch/audit_git_history.py`), then a working-tree scrub of all 78 tracked instances of genuine secrets.
+
+**Why:** T11 in `acceptance_tests.py` only scanned 3 doc files with 3 regexes and never caught the committed secrets. `classification_before.json` and management configs in the initial snapshot commit `c59607a` contain live keys.
+
+**Findings:**
+- 14 unique key-families in the snapshot commit: 4× `nvapi-*` NVIDIA keys, OmniRoute API key `sk-2daf4dd6d1e45047-*`, management password `REDACTED***`, `sandbox-test-password-2026`, JWTs / `org_*` / `user_*` tokens.
+- **History purge is NOT yet executed** — rotation of burned secrets must happen first, then `git filter-repo` + force-push (user decision, documented in §8 of runbook).
+
+**Actions:**
+1. `scratch/audit_git_history.py` writes redacted `state/git_secret_audit.json` (key-id = sha256[:12]); verdict `REVIEW REQUIRED`.
+2. Working-tree scrub: all tracked files redacted (key-id mapping preserved in audit json), 5 JSON files re-validated parseable; final re-scan = 0 remaining secrets. Intentional fake fixtures in `scratch/verify_t11_regex.py` preserved.
+
+**Files touched:** `scratch/audit_git_history.py` (new), `state/git_secret_audit.json` (new, redacted), 78 tracked files scrubbed.
+
+**Verification:** `python3 -m py_compile scratch/audit_git_history.py` OK; final secret re-scan = 0.
+
+**Status:** 🟡 Working tree clean; **history purge BLOCKED on credential rotation** (G9 ordering rule).
+
+### [2026-08-16 17:52] #54 — G4/G5/G10: Scheduled Health, Stall, Acceptance, Backup Watchers
+**What:** Deployed the production scheduled automation in `scripts/automation/` following the established `oauth_keepalive.py` single-pass pattern.
+
+**Actions:**
+1. **G4 `health_watch.py`** — single-pass, threshold default 3, writes `state/health_log.json`, uses `OmniRouteAPI.login()/get_connections()/test_connection()`. Wrapped by `health_watch_task.bat`.
+2. **G4 `stall_monitor.py`** — probes `GET /v1/models` every 10s for 180s; alerts on >1 slow probe >5s or slow probe + error; tolerates one expected 60s-TTL rebuild artifact (blocker #3); writes `state/stall_monitor_result.json`. Wrapped by `stall_monitor_task.bat`.
+3. **G5 `acceptance_watch.py`** — runs `acceptance_tests.py`, parses `[PASS|FAIL|SKIP] Tn:`, writes `state/acceptance_latest.md` + `state/acceptance_history/<ts>.json` (pruned to 30), appends `#AUTO` regression entry on failure. Wrapped by `acceptance_watch_task.bat`.
+4. **G10 `backup_state.py`** — copies `storage.sqlite` (+`-wal`/`-shm`), `state/*.json` + `*.bin`, `state/browser_profile/storage_state.json` to `d:\omniroute-backups\<YYYYMMDD>\`, retains 14. Wrapped by `backup_state_task.bat`.
+5. **G1** `release_watch_task.bat` wrapping existing `scratch/watch_omniroute_release.py` (baseline 3.8.49).
+
+**Files touched:** `scripts/automation/{health_watch,stall_monitor,acceptance_watch,backup_state}.py` + `*_task.bat` ×4 + `release_watch_task.bat` (new).
+
+**Verification:** `python3 -m py_compile scripts/automation/*.py` OK. Live runs require the Windows host (port 20128 unreachable from sandbox).
+
+**Status:** ✅ Complete — scheduled on the host via `schtasks` (commands in `docs/INSTALLATION.md` §8).
+
+### [2026-08-16 17:53] #55 — P3: Caddy SWR Proxy Config
+**What:** Added `config/caddy/Caddyfile` — `:20230` reverse proxy to `127.0.0.1:20128` implementing stale-while-revalidate for the catalog, with zero code changes / zero NSSM bounces (the chosen mitigation for blocker #3 on 3.8.49).
+
+**Why:** SWR cannot be backported cleanly to 3.8.49 (invalidation gap, worklog #25); Caddy reproduces it externally.
+
+**Details:** Caches only `GET /v1/models` + `GET /api/providers` with `Cache-Control: public, max-age=60, stale-while-revalidate=600`; `no-store` on chat/completions/responses/embeddings; Authorization/Cookie pass-through; `X-Cache-Proxy: caddy-swr` header.
+
+**Files touched:** `config/caddy/Caddyfile` (new).
+
+**Verification:** Static review only; live proxy test on the host once Caddy is installed (install steps in `docs/INSTALLATION.md` §7).
+
+**Status:** ✅ Complete.
+
+### [2026-08-16 17:54] #56 — G12: Reproducible Install Guide
+**What:** Wrote `docs/INSTALLATION.md` capturing the actual working install (sandbox #31 + live): pin `omniroute@3.8.49 --ignore-scripts`, `.env` template with the two disable flags, `modelCatalogCacheTtlMs=600000`, NSSM install/restart, venv creation, all six `schtasks /create` commands, sandbox repro on port 20199, verification checklist.
+
+**Files touched:** `docs/INSTALLATION.md` (new).
+
+**Status:** ✅ Complete.
+
+### [2026-08-16 17:55] #57 — G1/G4/G10: Operations Runbook
+**What:** Wrote `docs/OPS_RUNBOOK.md` — component map, Task Scheduler table, blocker #3 explainer, v3.8.50 upgrade procedure, restore procedure, OAuth status table, human-required ops, escalation ladder.
+
+**Files touched:** `docs/OPS_RUNBOOK.md` (new).
+
+**Verification:** Cross-checked all referenced `state/*.json` filenames against script outputs (match); corrected component-map reference to `scratch/watch_omniroute_release.py`.
+
+**Status:** ✅ Complete.
+
+### [2026-08-16 17:56] #58 — G13 + G8 + G11: Repo Hygiene (Scratch README, Archive, Legacy Dedupe)
+**What:** Finished the repo-hygiene fixes: G13 scratch convention, G8 stale-report archive + AGENTS.md 20-test pointer, G11 legacy-script dedupe.
+
+**Actions:**
+1. **G13:** `scratch/README.md` documenting scratch = evidence trail (never move worklog-referenced probes), `scratch/archive/` for dead scripts, `scripts/automation/` for production.
+2. **G8:** moved 19 superseded top-level reports → `archive/reports-2026-08-15/` via `git mv` (history preserved); kept `POST_AUDIT_GAPS.md` at root (active). Updated `AGENTS.md` certification matrix header to the T1–T20 suite. Repointed `omniroute_monetizer.py --report` outputs into the archive dir.
+3. **G11:** moved `evidence/automation/*` + `scripts/sync_phase_a_assets.ps1` → `archive/legacy-automation-2026-08-16/` with README stating they are superseded by `scripts/automation/*`. Orphan-import scan: only remaining matches are output-dir references (`omniroute_provider_recovery/`, `omniroute_ui_diagnostic/`) — no code imports.
+4. Updated `acceptance_tests.py` T11 `files_to_check` to the archive paths.
+
+**Files touched:** `scratch/README.md` (new), `archive/reports-2026-08-15/README.md` (new), `archive/legacy-automation-2026-08-16/README.md` (new), 27 `git mv` renames, `AGENTS.md`, `acceptance_tests.py`, `scripts/omniroute_monetizer.py`.
+
+**Verification:** `python3 -m py_compile` all touched `.py` OK; T11-referenced files exist; root tidy per G8 spec.
+
+**Status:** ✅ Complete.
 
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 

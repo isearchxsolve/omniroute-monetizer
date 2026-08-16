@@ -17,7 +17,7 @@ def main():
             pwd = page.locator('input[type="password"]').first
             pwd.wait_for(state="visible", timeout=5000)
             print("Found password input. Logging in...", flush=True)
-            pwd.fill('Keross@321')
+            pwd.fill('<REDACTED>')
             
             # Click Continue
             continue_btn = page.locator('button:has-text("Continue")').first

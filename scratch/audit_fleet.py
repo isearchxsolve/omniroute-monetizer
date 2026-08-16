@@ -4,7 +4,7 @@ import time
 
 BASE_URL = "http://localhost:20128"
 s = requests.Session()
-s.post(f"{BASE_URL}/api/auth/login", json={"password": "Keross@321"})
+s.post(f"{BASE_URL}/api/auth/login", json={"<REDACTED>"})
 
 conns = s.get(f"{BASE_URL}/api/providers").json().get("connections", [])
 print(f"Total connections to audit: {len(conns)}")

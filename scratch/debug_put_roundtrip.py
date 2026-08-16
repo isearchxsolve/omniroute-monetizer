@@ -16,7 +16,7 @@ con = sqlite3.connect("file:" + db.replace("\\", "/") + "?mode=ro", uri=True)
 cur = con.cursor()
 
 s = requests.Session()
-s.post(f"{BASE}/api/auth/login", json={"password": "Keross@321"}, timeout=15)
+s.post(f"{BASE}/api/auth/login", json={"password": "<REDACTED>"}, timeout=15)
 
 # Step 1: prove a no-op GET->PUT round-trip works on one combo
 name, cid = "auto/pro-coding", OLD_COMBOS["auto/pro-coding"]

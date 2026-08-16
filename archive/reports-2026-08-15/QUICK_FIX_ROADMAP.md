@@ -45,7 +45,7 @@ curl -X POST "https://integrate.api.nvidia.com/v1/chat/completions" \
 
 **2.1 Set Environment Variable (PowerShell)**
 ```powershell
-$env:OMNIROUTE_PASSWORD="Keross@321"
+$env:OMNIROUTE_PASSWORD="<REDACTED>"
 $env:NVIDIA_API_KEY="nvapi-<new-key-from-step-1.2>"  # Replace with actual key
 
 # Verify it's set
@@ -70,7 +70,7 @@ C:/Users/Admin/AppData/Local/Programs/Python/Python311/python.exe d:\omniroute-m
 
 **3.1 Test Direct Model Call**
 ```powershell
-$env:OMNIROUTE_PASSWORD="Keross@321"
+$env:OMNIROUTE_PASSWORD="<REDACTED>"
 
 C:/Users/Admin/AppData/Local/Programs/Python/Python311/python.exe d:\omniroute-monetizer\scratch\test_model_direct.py
 ```
@@ -93,7 +93,7 @@ C:/Users/Admin/AppData/Local/Programs/Python/Python311/python.exe d:\omniroute-m
 ### PHASE 4: Re-run Tier 3 Optimizer (5 minutes)
 
 ```powershell
-$env:OMNIROUTE_PASSWORD="Keross@321"
+$env:OMNIROUTE_PASSWORD="<REDACTED>"
 
 C:/Users/Admin/AppData/Local/Programs/Python/Python311/python.exe d:\omniroute-monetizer\scripts\automation\combo_optimizer.py
 ```

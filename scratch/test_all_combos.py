@@ -4,7 +4,7 @@ import time
 
 BASE_URL = "http://localhost:20128"
 V1_URL = f"{BASE_URL}/v1"
-API_KEY = "sk-2daf4dd6d1e45047-d60156-541a3aeb"
+API_KEY = "<REDACTED>"
 
 headers = {
     "Authorization": f"Bearer {API_KEY}",

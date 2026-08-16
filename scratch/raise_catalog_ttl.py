@@ -9,7 +9,7 @@ BASE = "http://localhost:20128"
 pw = os.environ.get("OMNIROUTE_PASSWORD", "").strip()
 if not pw:
     # fall back to the same default the other scratch scripts use
-    pw = "Keross@321"
+    pw = "<REDACTED>"
 
 s = requests.Session()
 r = s.post(f"{BASE}/api/auth/login", json={"password": pw}, timeout=10)

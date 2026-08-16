@@ -4,7 +4,7 @@ import uuid
 
 BASE_URL = "http://localhost:20128"
 s = requests.Session()
-login_res = s.post(f"{BASE_URL}/api/auth/login", json={"password": "Keross@321"})
+login_res = s.post(f"{BASE_URL}/api/auth/login", json={"password": "<REDACTED>"})
 print("Login status:", login_res.status_code)
 
 # Fetch all available models from /api/models

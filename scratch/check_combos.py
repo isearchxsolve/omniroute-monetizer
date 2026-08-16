@@ -1,7 +1,7 @@
 import requests, json, base64
 
 BASE_URL = 'http://localhost:20128'
-auth_str = base64.b64encode(b":Keross@321").decode()
+auth_str = base64.b64encode(b":<REDACTED>").decode()
 headers = {
     "Authorization": f"Basic {auth_str}",
     "Content-Type": "application/json"

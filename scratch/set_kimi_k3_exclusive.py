@@ -3,7 +3,7 @@ import uuid
 import json
 
 s = requests.Session()
-s.post('http://localhost:20128/api/auth/login', json={'password': 'Keross@321'})
+s.post('http://localhost:20128/api/auth/login', json={'password': '<REDACTED>'})
 res = s.get('http://localhost:20128/api/combos').json()
 combos = res if isinstance(res, list) else res.get('combos', [])
 kimi_combo = [c for c in combos if isinstance(c, dict) and c.get('name') == 'kimi-coding'][0]

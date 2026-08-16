@@ -4,7 +4,7 @@ import uuid
 
 BASE_URL = "http://localhost:20128"
 s = requests.Session()
-s.post(f"{BASE_URL}/api/auth/login", json={"password": "Keross@321"})
+s.post(f"{BASE_URL}/api/auth/login", json={"password": "<REDACTED>"})
 
 # Let's inspect /api/combos in detail
 combos_res = s.get(f"{BASE_URL}/api/combos")

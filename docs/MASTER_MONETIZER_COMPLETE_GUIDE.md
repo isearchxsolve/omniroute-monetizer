@@ -23,7 +23,7 @@ The **OmniRoute Monetizer** is an automated, idempotent orchestration framework 
 ## 2. End-to-End Chronological Actions & Root Cause Analyses (RCA)
 
 ### Phase 1: Authentication & Dashboard Investigation
-- **Issue**: API requests returned `401 Authentication Required` when attempting to query `/api/combos` with legacy password `Keross@321`.
+- **Issue**: API requests returned `401 Authentication Required` when attempting to query `/api/combos` with legacy password `<REDACTED>`.
 - **RCA**: OmniRoute's authentication middleware hashes passwords using bcrypt in the SQLite `key_value` table (`settings:password`). Local dashboard bypasses authentication on localhost, but direct REST API calls require specific headers or direct SQLite management.
 - **Resolution**: Implemented direct SQLite database management and automated token extraction to bypass network auth blocks idempotently.
 

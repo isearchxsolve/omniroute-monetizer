@@ -6,7 +6,7 @@ print the diagnosis, and set isActive=false ONLY on confirmed failures.
 import requests
 
 BASE_URL = "http://localhost:20128"
-PASSWORD = "Keross@321"
+PASSWORD = "<REDACTED>"
 
 # (id-prefix, provider, identity) — the 6 broken connections still active
 SUSPECTS = [

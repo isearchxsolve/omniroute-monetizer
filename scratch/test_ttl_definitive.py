@@ -18,7 +18,7 @@ BASE = "http://127.0.0.1:20199"
 s = requests.Session()
 
 def login():
-    r = s.post(BASE + "/api/auth/login", json={"password": "sandbox-test-password-2026"}, timeout=60)
+    r = s.post(BASE + "/api/auth/login", json={"password": "<REDACTED>"}, timeout=60)
     print("login:", r.status_code)
 
 def set_ttl(ms):

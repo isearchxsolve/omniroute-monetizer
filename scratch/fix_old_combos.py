@@ -17,7 +17,7 @@ con = sqlite3.connect("file:" + db.replace("\\", "/") + "?mode=ro", uri=True)
 cur = con.cursor()
 
 s = requests.Session()
-s.post(f"{BASE}/api/auth/login", json={"password": "Keross@321"}, timeout=15)
+s.post(f"{BASE}/api/auth/login", json={"password": "<REDACTED>"}, timeout=15)
 
 def convert_entry(e, idx, combo_name):
     """Convert old-schema entry {name, weight, priority} to new schema."""

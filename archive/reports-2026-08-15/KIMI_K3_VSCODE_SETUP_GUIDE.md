@@ -58,7 +58,7 @@ Add the custom endpoint definitions under `github.copilot.chat.customEndpoints`:
         {
             "name": "OmniRoute (Kimi K3 & Frontier)",
             "vendor": "customendpoint",
-            "apiKey": "sk-2daf4dd6d1e45047-d60156-541a3aeb",
+            "apiKey": "<REDACTED>",
             "apiType": "chat-completions",
             "models": [
                 {

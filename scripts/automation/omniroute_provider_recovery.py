@@ -23,7 +23,7 @@ _raw_base = os.environ.get("OMNIROUTE_BASE_URL", "http://localhost:20128").rstri
 if _raw_base.endswith("/v1"):
     _raw_base = _raw_base[:-3].rstrip("/")
 BASE_URL = _raw_base or "http://localhost:20128"
-PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "Keross@321")
+PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "<REDACTED>")
 OUT = Path(os.environ.get("OMNIROUTE_RECOVERY_DIR", "omniroute_provider_recovery"))
 OUT.mkdir(parents=True, exist_ok=True)
 

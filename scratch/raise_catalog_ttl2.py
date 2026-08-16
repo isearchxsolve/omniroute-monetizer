@@ -21,7 +21,7 @@ for f in glob.glob(os.path.join(CHUNK_DIR, "*.js")):
         print("READER:", os.path.basename(f), "...", m.group(0)[:400].replace("\n", " "), "...\n")
 
 print("########## settings update ##########")
-pw = os.environ.get("OMNIROUTE_PASSWORD", "").strip() or "Keross@321"
+pw = os.environ.get("OMNIROUTE_PASSWORD", "").strip() or "<REDACTED>"
 sess = requests.Session()
 r = sess.post("http://localhost:20128/api/auth/login", json={"password": pw}, timeout=10)
 print("login:", r.status_code)

@@ -7,7 +7,7 @@ import requests
 BASE = os.environ.get("OMNIROUTE_BASE_URL", "http://localhost:20128").rstrip("/")
 if BASE.endswith("/v1"):
     BASE = BASE[:-3]
-PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "Keross@321")
+PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "<REDACTED>")
 
 s = requests.Session()
 r = s.post(f"{BASE}/api/auth/login", json={"password": PASSWORD}, timeout=15)

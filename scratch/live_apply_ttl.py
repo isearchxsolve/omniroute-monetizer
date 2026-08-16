@@ -20,7 +20,7 @@ BACKUP = os.path.join("d:\\omniroute-monetizer", "state",
                       "live_cache_config_backup_" +
                       datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".json")
 
-pw = os.environ.get("OMNIROUTE_PASSWORD", "").strip() or "Keross@321"
+pw = os.environ.get("OMNIROUTE_PASSWORD", "").strip() or "<REDACTED>"
 
 s = requests.Session()
 r = s.post(f"{BASE}/api/auth/login", json={"password": pw}, timeout=15)

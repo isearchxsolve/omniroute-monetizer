@@ -10,7 +10,7 @@ import requests
 from playwright.sync_api import sync_playwright
 
 BASE_URL = "http://localhost:20128"
-PASSWORD = "Keross@321"
+PASSWORD = "<REDACTED>"
 
 # provider slug -> the page to open
 SLUGS = sys.argv[1:] or ["xai-oauth", "codex", "antigravity", "kilocode"]

@@ -4,7 +4,7 @@ import time
 import requests
 
 BASE = "http://localhost:20128"
-PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "Keross@321")
+PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "<REDACTED>")
 
 s = requests.Session()
 r = s.post(f"{BASE}/api/auth/login", json={"password": PASSWORD}, timeout=10)

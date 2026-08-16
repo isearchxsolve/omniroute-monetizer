@@ -5,7 +5,7 @@ BASE = "http://127.0.0.1:20128"
 UUID = "574246f2-1cdf-48ad-83b6-2ca1b541f8e4"
 
 s = requests.Session()
-r = s.post(f"{BASE}/api/auth/login", json={"password": "Keross@321"}, timeout=15)
+r = s.post(f"{BASE}/api/auth/login", json={"password": "<REDACTED>"}, timeout=15)
 r.raise_for_status()
 print("login ok")
 

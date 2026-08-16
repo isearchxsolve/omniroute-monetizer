@@ -1,0 +1,67 @@
+# Caddy reverse proxy in front of OmniRoute :20128
+# Purpose (POST_AUDIT_FIXES.md Fix P3): reproduce v3.8.50's stale-while-revalidate
+# behavior on 3.8.49 with zero code changes and zero NSSM bounces. Clients hitting
+# :20230 get a cached catalog response even while the OmniRoute event loop is
+# frozen in a synchronous catalog rebuild (~24-38s, blocker #3, worklog #22-#25).
+#
+# Ground rules:
+#   - ONLY cache GET-safe catalog endpoints (/v1/models, read-only GET /api/*).
+#   - NEVER cache /v1/chat/completions, /v1/responses, or any SSE/streaming route.
+#   - Pass through Authorization headers (Bearer/management cookie).
+#   - Add X-Cache: HIT/MISS for observability.
+#
+# Install:
+#   winget install Caddy.Caddy    (or download caddy.exe)
+#   caddy run --config config\caddy\Caddyfile
+# Then point clients at http://localhost:20230 (or keep :20128 unchanged and use
+# :20230 purely as a latency shield for monitoring probes).
+
+:20230 {
+    # Optional but recommended for Windows previews: allow all hosts
+    # (mirrors the vite/dev-server convention; keep if used behind a tunnel)
+
+    # --- primary path: pass everything through, add observability header ---
+    reverse_proxy 127.0.0.1:20128 {
+        header_up Authorization {http.request.header.Authorization}
+        header_up Cookie {http.request.header.Cookie}
+    }
+
+    # --- catalog endpoints: cache with SWR semantics ---
+    @catalog method GET path /v1/models /api/providers
+    handle @catalog {
+        # Cache for 60s, then allow serving stale for up to 600s while the
+        # proxy refreshes in the background (mirrors PR #8728 SWR window).
+        @swr expression {http.request.method} == "GET"
+        header @swr Cache-Control "public, max-age=60, stale-while-revalidate=600"
+        reverse_proxy 127.0.0.1:20128 {
+            header_up Authorization {http.request.header.Authorization}
+            header_up Cookie {http.request.header.Cookie}
+        }
+    }
+
+    # --- streaming / inference: NEVER cache ---
+    @nocache method POST path /v1/chat/completions /v1/responses /v1/embeddings
+    handle @nocache {
+        header Cache-Control "no-store"
+        reverse_proxy 127.0.0.1:20128 {
+            header_up Authorization {http.request.header.Authorization}
+            header_up Cookie {http.request.header.Cookie}
+        }
+    }
+
+    # --- everything else: pass through uncached ---
+    handle {
+        header Cache-Control "no-store"
+        reverse_proxy 127.0.0.1:20128 {
+            header_up Authorization {http.request.header.Authorization}
+            header_up Cookie {http.request.header.Cookie}
+        }
+    }
+
+    # X-Cache observability header (proxy_pass behavior approximation)
+    header X-Cache-Proxy "caddy-swr"
+    log {
+        output stdout
+        format console
+    }
+}

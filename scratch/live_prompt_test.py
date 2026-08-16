@@ -5,7 +5,7 @@ import time
 URL = 'http://localhost:20128/v1/chat/completions'
 HEADERS = {
     'Content-Type': 'application/json',
-    'Authorization': 'Bearer sk-2daf4dd6d1e45047-d60156-541a3aeb'
+    'Authorization': 'Bearer <REDACTED>'
 }
 
 def test_prompt(model, prompt):

@@ -206,7 +206,7 @@ class OmniRouteInjector:
 def autonomous_provider_pipeline(provider_meta, mailbox_config, omniroute_pw):
     slug = provider_meta["slug"]
     email_address = f"bot-{slug}-{int(time.time())}@{mailbox_config['domain']}"
-    password = "MasterAutoSecurePassword2026!"
+    "<REDACTED>"
 
     # 1. Register account
     registrar = AccountRegistrar(provider_meta["signup_url"])
