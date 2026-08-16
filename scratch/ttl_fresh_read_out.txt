@@ -1,0 +1,12 @@
+﻿file length: 39166
+
+=== expiresAt / cacheTTL usage ===
+  @ 17529: r(let[e,o]of Object.entries(i))t.set(e,o);return t}function l(e,t){let i={body:t.body,headers:t.headers,status:t.status,expiresAt:Date.now()+t.cacheTTL};return u.set(e,i),i}async function d(e,t,i){let a,d,m,g,h,y,{corsHeaders:b,diagnosticHe
+  @ 17965: ?"1":"0",y="true"===d.searchParams.get("configuredOnly")?"1":"0",`${m}|${h}|${g}|${y}`),A=Date.now(),C=u.get(_);if(C&&C.expiresAt>A)return new Response(C.body,{status:C.status,headers:s(b,C.headers,v)});if(C&&200===C.status&&A-C.expiresAt<=
+  @ 18074: _);if(C&&C.expiresAt>A)return new Response(C.body,{status:C.status,headers:s(b,C.headers,v)});if(C&&200===C.status&&A-C.expiresAt<=3e4)return!function(e,t,i){if(p.has(e))return;let o=new Promise((o,r)=>{setTimeout(()=>{var n,a;(n=i,a=t,c++,
+
+=== cacheTTL assignment/consumption ===
+  @ 17552: eturn t}function l(e,t){let i={body:t.body,headers:t.headers,status:t.status,expiresAt:Date.now()+t.cacheTTL};return u.set(e,i),i}async function d(e,t,i){let a,d,m,g,h,y,{corsHeaders:b,diagnosticHeade
+  @ 20434: delCatalogCacheTtlMs??Q.CATALOG_CACHE_TTL_MS_DEFAULT}catch{}return{body:i,headers:o,status:t.status,cacheTTL:r}}async function et(t,i={}){let o=(0,$.getCatalogDiagnosticsHeaders)({request:t});try{let 
+
+=== stale/expiry checks ===

@@ -1,0 +1,221 @@
+﻿[+] browser login submitted
+
+========================================================================
+PAGE: http://localhost:20128/dashboard/providers/xai-oauth
+========================================================================
+  found 229 interactive controls:
+    <a> Skip to content
+    <a> Skip to content
+    <button> chevron_left
+    <a> OmniRoute v3.8.49
+    <a> home Home Dashboard overview
+    <div> OMNIPROXY push_pin expand_more
+    <button> push_pin
+    <a> api Endpoints Your AI connection URLs
+    <a> vpn_key API Keys Manage API keys and access
+    <a> dns Providers Manage AI providers
+    <a> deployed_code Embedded Services Manage local proxy services
+    <a> layers Combos Group providers for failover
+    <a> account_tree Combo Studio Live routing cascade
+    <a> tune Provider Quota Track provider usage limits
+    <a> pie_chart Quota Sharing Share provider quotas across keys
+    <a> settings Compression Settings Global defaults
+    <a> hub Engine Combos Combine compression engines
+    <a> compress Caveman Prompt compression
+    <a> filter_alt RTK Output filtering
+    <a> table_rows Headroom Tabular compaction
+    <a> content_copy Session Dedup Cross-turn deduplication
+    <a> archive CCR Retrieve markers
+    <a> psychology LLMLingua Semantic pruning
+    <a> compress Lite Fast whitespace cleanup
+    <a> speed Aggressive Summary and aging
+    <a> bolt Ultra Heuristic pruning
+    <a> grain OmniGlyph Context as images
+    <a> monitoring Compression Studio Live engine cascade
+    <a> block Exclusions Per-model/endpoint bypass
+    <a> terminal CLI Code Code tools pointing to OmniRoute
+    <a> smart_toy CLI Agents Autonomous CLI agents
+    <a> device_hub ACP Agents CLIs spawned by OmniRoute
+    <a> cloud Cloud Agents Manage cloud-based agents
+    <a> link Agent Bridge Intercept IDE agent traffic
+    <a> network_check Traffic Inspector Monitor LLM calls + debug any HTTPS traffic
+    <a> travel_explore Discovery Scan providers for free access
+    <a> api API Endpoints Expose custom endpoints
+    <a> webhook Webhooks Get notified of events
+    <a> dns Proxy HTTP proxy settings
+    <div> ANALYTICS push_pin expand_more
+    <button> push_pin
+    <div> COSTS push_pin expand_more
+    <button> push_pin
+    <div> MONITORING push_pin expand_more
+    <button> push_pin
+    <div> DEV TOOLS push_pin expand_more
+    <button> push_pin
+    <div> AGENTIC FEATURES push_pin expand_more
+    <button> push_pin
+    <div> OTHER FEATURES push_pin expand_more
+    <button> push_pin
+    <div> CONFIGURATION push_pin expand_more
+    <button> push_pin
+    <div> HELP push_pin expand_more
+    <button> push_pin
+    <button> cloud_off Sync off
+    <button> restart_alt Restart
+    <button> power_settings_new Shutdown
+    <a> Skip to content
+    <a> OmniRoutev3.8.49
+    <a> homeHomeDashboard overview
+    <div> OmniProxypush_pinexpand_more
+    <button> push_pin
+    <a> apiEndpointsYour AI connection URLs
+    <a> vpn_keyAPI KeysManage API keys and access
+    <a> dnsProvidersManage AI providers
+    <a> deployed_codeEmbedded ServicesManage local proxy services
+    <a> layersCombosGroup providers for failover
+    <a> account_treeCombo StudioLive routing cascade
+    <a> tuneProvider QuotaTrack provider usage limits
+    <a> pie_chartQuota SharingShare provider quotas across keys
+    <a> settingsCompression SettingsGlobal defaults
+    <a> hubEngine CombosCombine compression engines
+    <a> compressCavemanPrompt compression
+    <a> filter_altRTKOutput filtering
+    <a> table_rowsHeadroomTabular compaction
+    <a> content_copySession DedupCross-turn deduplication
+    <a> archiveCCRRetrieve markers
+    <a> psychologyLLMLinguaSemantic pruning
+    <a> compressLiteFast whitespace cleanup
+    <a> speedAggressiveSummary and aging
+    <a> boltUltraHeuristic pruning
+    <a> grainOmniGlyphContext as images
+    <a> monitoringCompression StudioLive engine cascade
+    <a> blockExclusionsPer-model/endpoint bypass
+    <a> terminalCLI CodeCode tools pointing to OmniRoute
+    <a> smart_toyCLI AgentsAutonomous CLI agents
+    <a> device_hubACP AgentsCLIs spawned by OmniRoute
+    <a> cloudCloud AgentsManage cloud-based agents
+    <a> linkAgent BridgeIntercept IDE agent traffic
+    <a> network_checkTraffic InspectorMonitor LLM calls + debug any HTTPS traffic
+    <a> travel_exploreDiscoveryScan providers for free access
+    <a> apiAPI EndpointsExpose custom endpoints
+    <a> webhookWebhooksGet notified of events
+    <a> dnsProxyHTTP proxy settings
+    <div> Analyticspush_pinexpand_more
+    <button> push_pin
+    <div> Costspush_pinexpand_more
+    <button> push_pin
+    <div> Monitoringpush_pinexpand_more
+    <button> push_pin
+    <div> Dev Toolspush_pinexpand_more
+    <button> push_pin
+    <div> Agentic Featurespush_pinexpand_more
+    <button> push_pin
+    <div> Other Featurespush_pinexpand_more
+    <button> push_pin
+    <div> Configurationpush_pinexpand_more
+    <button> push_pin
+    <div> Helppush_pinexpand_more
+    <button> push_pin
+    <button> cloud_offSync off
+    <button> restart_altRestart
+    <button> power_settings_newShutdown
+    <button> menu
+    <button> search Quick nav Ctrl+K
+    <button> search
+    <button> EN expand_more
+    <button> dark_mode
+    <button> error 1
+    <button> logout
+    <a> Dashboard
+    <a> Providers
+    <a> arrow_back Back to Providers
+    <a> xAI OAuth (Grok) open_in_new
+    <button> vpn_lock Provider Proxy
+    <button> swap_horiz Distribute Proxies
+    <button> play_arrow Test All
+    <button> swap_vert Reorder
+    <button> add Add
+    <button> All
+    <button> Active
+    <button> Error
+    <button> Banned
+    <button> Credits Exhausted
+    <button> keyboard_arrow_up [DISABLED]
+    <button> keyboard_arrow_down
+    <button> shield Unprotected
+    <button> visibility Quota
+    <button> vpn_lock Proxy On
+    <button> key Connection
+    <button> refresh Retest [DISABLED]
+    <button> token Token Short [DISABLED]
+    <button> (aria:Enable connection)
+    <button> passkey
+    <button> edit
+    <button> vpn_lock
+    <button> delete
+    <button> keyboard_arrow_up
+    <button> keyboard_arrow_down
+    <button> shield Unprotected
+    <button> visibility Quota
+    <button> vpn_lock Proxy On
+    <button> key Connection
+    <button> refresh Retest [DISABLED]
+    <button> token Token Short [DISABLED]
+    <button> (aria:Enable connection)
+    <button> passkey
+    <button> edit
+    <button> vpn_lock
+    <button> delete
+    <button> keyboard_arrow_up
+    <button> keyboard_arrow_down
+    <button> shield Unprotected
+    <button> visibility Quota
+    <button> vpn_lock Proxy On
+    <button> key Connection
+    <button> refresh Retest [DISABLED]
+    <button> token Token Short [DISABLED]
+    <button> (aria:Enable connection)
+    <button> passkey
+    <button> edit
+    <button> vpn_lock
+    <button> delete
+    <button> keyboard_arrow_up
+    <button> keyboard_arrow_down [DISABLED]
+    <button> shield Unprotected
+    <button> visibility Quota
+    <button> vpn_lock Proxy On
+    <button> key Connection
+    <button> refresh Retest [DISABLED]
+    <button> token Token Short [DISABLED]
+    <button> (aria:Enable connection)
+    <button> passkey
+    <button> edit
+    <button> vpn_lock
+    <button> delete
+    <button> download Import from /models [DISABLED]
+    <button> All
+    <button> Visible only
+    <button> Hidden only
+    <button> All
+    <button> Free only
+    <button> Paid only
+    <button> sort Free first
+    <button> science Test all models
+    <button> visibility All [DISABLED]
+    <button> visibility_off Hide all
+    <button> content_copy
+    <button> play_circle
+    <button> visibility
+    <button> tune Compatibility
+    <button> content_copy
+    <button> play_circle
+    <button> visibility
+    <button> tune Compatibility
+    <button> content_copy
+    <button> play_circle
+    <button> visibility
+    <button> tune Compatibility
+    <button> content_copy
+    <button> play_circle
+    <button> visibility
+    <button> tune Compatibility
+    <button> content_copy

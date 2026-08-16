@@ -1,0 +1,38 @@
+﻿scanned 8789 files; files with '.modelCatalogCacheTtlMs' property-access: 7
+======================================================================
+
+### _0dfofzt._.js @ 20331 (len=39166)
+..t,...i}})}}async function ee(e){let t=await et(e),i=await t.text(),o={};t.headers.forEach((e,t)=>{o[t]=e});let r=Q.CATALOG_CACHE_TTL_MS_DEFAULT;try{let e=await (0,f.getDatabaseSettings)();r=e.cache?.modelCatalogCacheTtlMs??Q.CATALOG_CACHE_TTL_MS_DEFAULT}catch{}return{body:i,headers:o,status:t.status,cacheTTL:r}}async function et(t,i={}){let o=(0,$.getCatal
+----------------------------------------
+
+### _10gz1jg._.js @ 19115 (len=37950)
+..t,...i}})}}async function ee(e){let t=await et(e),i=await t.text(),o={};t.headers.forEach((e,t)=>{o[t]=e});let r=Q.CATALOG_CACHE_TTL_MS_DEFAULT;try{let e=await (0,f.getDatabaseSettings)();r=e.cache?.modelCatalogCacheTtlMs??Q.CATALOG_CACHE_TTL_MS_DEFAULT}catch{}return{body:i,headers:o,status:t.status,cacheTTL:r}}async function et(t,i={}){let o=(0,P.getCatal
+----------------------------------------
+
+### _177w922._.js @ 10837 (len=20030)
+ptCacheEnabled),void 0!==s.promptCacheStrategy&&(o.promptCacheStrategy=s.promptCacheStrategy),void 0!==s.alwaysPreserveClientCache&&(o.alwaysPreserveClientCache=s.alwaysPreserveClientCache),void 0!==s.modelCatalogCacheTtlMs&&(o.modelCatalogCacheTtlMs=s.modelCatalogCacheTtlMs),(0,n.updateDatabaseSettings)({cache:o}),void 0!==s.idempotencyWindowMs&&await (0,i.
+----------------------------------------
+
+### _177w922._.js @ 10864 (len=20030)
+promptCacheStrategy&&(o.promptCacheStrategy=s.promptCacheStrategy),void 0!==s.alwaysPreserveClientCache&&(o.alwaysPreserveClientCache=s.alwaysPreserveClientCache),void 0!==s.modelCatalogCacheTtlMs&&(o.modelCatalogCacheTtlMs=s.modelCatalogCacheTtlMs),(0,n.updateDatabaseSettings)({cache:o}),void 0!==s.idempotencyWindowMs&&await (0,i.updateSettings)({idempotenc
+----------------------------------------
+
+### _177w922._.js @ 10889 (len=20030)
+romptCacheStrategy=s.promptCacheStrategy),void 0!==s.alwaysPreserveClientCache&&(o.alwaysPreserveClientCache=s.alwaysPreserveClientCache),void 0!==s.modelCatalogCacheTtlMs&&(o.modelCatalogCacheTtlMs=s.modelCatalogCacheTtlMs),(0,n.updateDatabaseSettings)({cache:o}),void 0!==s.idempotencyWindowMs&&await (0,i.updateSettings)({idempotencyWindowMs:s.idempotencyWi
+----------------------------------------
+
+### _17s8hnj._.js @ 13714 (len=32549)
+..t,...i}})}}async function ee(e){let t=await et(e),i=await t.text(),o={};t.headers.forEach((e,t)=>{o[t]=e});let r=Y.CATALOG_CACHE_TTL_MS_DEFAULT;try{let e=await (0,f.getDatabaseSettings)();r=e.cache?.modelCatalogCacheTtlMs??Y.CATALOG_CACHE_TTL_MS_DEFAULT}catch{}return{body:i,headers:o,status:t.status,cacheTTL:r}}async function et(t,i={}){let o=(0,F.getCatal
+----------------------------------------
+
+### _1gqxt8d._.js @ 22130 (len=40965)
+..t,...i}})}}async function ee(e){let t=await et(e),i=await t.text(),o={};t.headers.forEach((e,t)=>{o[t]=e});let n=Q.CATALOG_CACHE_TTL_MS_DEFAULT;try{let e=await (0,f.getDatabaseSettings)();n=e.cache?.modelCatalogCacheTtlMs??Q.CATALOG_CACHE_TTL_MS_DEFAULT}catch{}return{body:i,headers:o,status:t.status,cacheTTL:n}}async function et(t,i={}){let o=(0,L.getCatal
+----------------------------------------
+
+### src_app_(dashboard)_dashboard_settings_1hgf3i5._.js @ 575 (len=3318)
+e)(null);(0,e.useEffect)(()=>{let b=!0;return fetch("/api/settings/cache-config").then(a=>{if(!a.ok)throw Error(`Cache config API returned ${a.status}`);return a.json()}).then(a=>{if(!b)return;let d=a.modelCatalogCacheTtlMs??1500,e="number"==typeof d&&Number.isFinite(d)?String(d):String(1500);c(e),j(e)}).catch(c=>{console.error("Failed to load cache config:"
+----------------------------------------
+
+### src_app_(dashboard)_dashboard_settings_1hgf3i5._.js @ 1230 (len=3318)
+method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({modelCatalogCacheTtlMs:d})});if(!b.ok)throw Error(`Cache config API returned ${b.status}`);let e=await b.json(),f=String(e.modelCatalogCacheTtlMs??d);c(f),j(f),p({type:"success",text:a("cacheConfigSaveSuccess")})}catch(b){console.error("Failed to save cache config:",b),p({type:"err
+----------------------------------------

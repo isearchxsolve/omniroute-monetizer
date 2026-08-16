@@ -1,0 +1,2 @@
+﻿assignment/export occurrences of 'getDatabaseSettings': 0
+======================================================================

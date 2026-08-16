@@ -5,21 +5,35 @@ Build and maintain the master end-to-end OmniRoute Monetizer.
 
 ---
 
-## CRITICAL SAFETY RULE (NON-NEGOTIABLE)
-**OMNIROUTE IS A LIVE DEPENDENCY OF THE AGENT.**
-
-NEVER stop, restart, remove, reinstall, kill, rebind, or replace the running
-OmniRoute service/process on port 20128.
-
-You may inspect it and use supported `/api` management calls.
-
-If a change requires a restart:
-1. Do not execute it.
-2. Record it in `DEFERRED_ACTIONS.md`.
-3. Continue all safe work.
-4. Report the deferred action.
+## ENGINEERING PHILOSOPHY (The Fact Basis of All Software Engineering)
+> From 23 years as a system architect watching systems break at every point, every day:
+>
+> **Software engineering is not about intelligence or skills — it is about DISCIPLINE.**
+> Discipline means maintaining principles backed by evidence — well-established principles, not clever guesses.
+>
+> The method, in order:
+> 1. **Start with a SHALLOW investigation** — zoom out, eliminate the obvious 99% in minutes.
+> 2. **Then slowly go deeper** — only after the shallow sweep fails.
+> 3. **Incremental addition of artifacts** — take the messy state you created in the original system and replay it ONE BY ONE onto a fresh install, shallow-investigating after each addition. The artifact that re-triggers the bug is the culprit.
+>
+> This shallow → incremental → evidence method is the fact basis of all software engineering. Every rule in this file is an instance of it. Follow it blindly.
 
 ---
+
+## MANDATORY DOCUMENTATION RULE (ALL SESSIONS)
+**`MASTER_WORKLOG.md` is the single source of truth for all session activity.**
+
+1. **Every action, finding, fix, decision, and verification MUST be appended** to
+   `MASTER_WORKLOG.md` in the Session Log as a numbered entry (`### [YYYY-MM-DD HH:MM] #N — TITLE`)
+   using the template in that file. Log on the go, incrementally — never batch at the end.
+2. **When resuming work**, read `MASTER_WORKLOG.md` first to restore context before doing anything else.
+3. **Secrets rule:** never log tokens, passwords, or API keys — redact everything (matches T11).
+4. **Failure honesty:** log failures with the actual error output; never mark broken work as done.
+5. When the todo list changes, reflect it in the entry.
+6. `MASTER_WORKLOG.md` lives at the repo root and supersedes ad-hoc report files for session history.
+   One-off findings may still get dedicated reports, but every such report must be referenced from the worklog.
+
+
 
 ## Master Architecture: The Solution & Resolution Architecture
 
@@ -117,6 +131,8 @@ Before loading a heavy web browser, the automation checks local system credentia
 
 ## Critical Anti-Patterns & Past Failures (DO NOT REPEAT)
 
+> **FIRST PRINCIPLE — SHALLOW INVESTIGATION BEFORE DEEP DIVE:** ~99% of problems are hidden in plain sight as complete obvious things that deep-diving misses, because a deep dive zooms IN while the answer requires zooming OUT. An experienced engineer handed a broken system does a SHALLOW investigation first — a few minutes of zoomed-out checks (is it running? right version? right port? right config? obvious flag/env var? recent change? known issue?) — because that eliminates the 99% fast. Only after the shallow sweep proves the cause is NOT among the obvious 99% do you commit to a deep dive. This saves hours-to-days. Never open with a 10-hour deep dive.
+
 1. **RESPECT THE ABSTRACTION LAYER (No DB Hacking):**
    - NEVER write scripts that directly modify `storage.sqlite` (e.g., deleting rate limits or scraping audit logs) to fix provider errors.
    - ALWAYS use OmniRoute's native REST APIs or management scripts. Directly manipulating the DB corrupts state and bypasses business logic.
@@ -141,6 +157,24 @@ Before loading a heavy web browser, the automation checks local system credentia
    - NEVER expect a user to interact with a GUI (like Google OAuth) spawned by a background IDE Python script using `headless=False`. 
    - Background service tasks on Windows execute in isolated Session 0. Any browser windows spawned are physically invisible to the user's interactive desktop.
    - If human-in-the-loop interaction is required for OAuth bypass, the script MUST be executed by the user manually in their own Command Prompt (Session 1), OR use the dedicated `browser_subagent` (which transmits VNC screenshots to the UI).
+9. **NO RUNTIME-ONLY GRINDING (External-Source Triangulation is MANDATORY):**
+   - NEVER spend hours grinding on runtime-only debugging (logs, minified chunks, local measurements) in isolation.
+   - After establishing your OWN evidence (logs, timings, reproduction), you MUST immediately triangulate with external sources BEFORE deep local debugging. Follow this order, eyes closed, every time:
+     1. **Own evidence** — app logs, latency measurements, process state, reproduction.
+     2. **GitHub** — search the upstream repo's Issues, PRs, Discussions, and release notes for the exact symptom text. Maintainers' own root-cause analysis beats any local guess.
+     3. **Stack Overflow** — use the official Stack Exchange API (`https://api.stackexchange.com/2.3/search/advanced?...&site=stackoverflow&filter=withbody`); direct stackoverflow.com search URLs are CAPTCHA-walled for automated fetches.
+     4. **Blind web search** — search Google/DuckDuckGo/Bing with the ACTUAL issue text (exact symptom strings, error messages, config keys). Individual developers frequently publish fixes in blogs, forums, gists, and Reddit threads long before anything reaches formal channels — this is well-grounded software-engineering reality, not a nice-to-have.
+   - Practical endpoints that work from automation: DuckDuckGo HTML (`https://html.duckduckgo.com/html/?q=...`), Bing (`https://www.bing.com/search?q=...`), Stack Exchange API 2.3. Google and direct SO search pages return CAPTCHA walls.
+   - **"Merged" ≠ "released":** always distinguish a branch merge from actual package publication (check `npm view <pkg> dist-tags --json`). A fix merged into an unreleased branch is NOT installable.
+   - **Read the maintainers' reasoning before proposing local patches:** upstream issue discussions may document invalidation gaps or constraints that make an obvious-looking hotfix unsafe (e.g., raising a cache TTL without reliable invalidation = correctness regression).
+   - Log every external source consulted in `MASTER_WORKLOG.md` (issue/PR numbers, SO question IDs, search queries + results, including "no results found" — negative results are evidence too).
+10. **SANDBOX-FIRST, FRESH-STATE ENGINEERING (No Grinding in the Mess):**
+    - When a system is found deeply screwed up, the FIRST step is NEVER to grind for hours debugging inside the mess. Instead, follow these first-principles engineering stages, in order:
+      1. **Fresh-state reproduction:** do a clean fresh install of the EXACT same version in an isolated sandbox (separate directory, separate port, separate data dir — e.g., OmniRoute: `DATA_DIR` + `PORT` env vars). Reproduce the issue there. If it does NOT reproduce fresh, the problem is accumulated state/config, not the software — that alone is the diagnosis.
+      2. **Incremental artifact replay:** copy the existing artifacts/state (configs, DB, credentials store, settings) onto the fresh sandbox ONE BY ONE, re-testing after each addition, until the issue reappears. The artifact that re-triggers the bug is the culprit.
+      3. **Backup, then touch production:** only after the fix is proven in the sandbox with real artifacts — take a complete byte-for-byte backup of the live system (install dir, data dir, DB, configs), THEN apply the fix to production, with a one-command restore path.
+    - Never modify the live system without a verified sandbox reproduction AND a complete backup. The sandbox must never collide with live services (different ports/paths).
+    - Log each stage's outcome in `MASTER_WORKLOG.md`.
 
 ---
 

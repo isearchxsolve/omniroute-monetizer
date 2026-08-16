@@ -1,0 +1,2 @@
+﻿scanned 8789 files; files mentioning getDatabaseSettings: 122
+======================================================================

@@ -1,0 +1,21 @@
+﻿
+======================================================================
+src_shared_0p0h6qs._.js  (len=27650)
+
+--- offset 26390 ---
+min(1).max(100)}),cache:a.z.object({semanticCacheEnabled:a.z.boolean(),semanticCacheMaxSize:a.z.number().int().min(10).max(1e3),semanticCacheTTL:a.z.number().int().min(6e4),promptCacheEnabled:a.z.boolean(),promptCacheStrategy:a.z.literal("auto").or(a.z.literal("system-only")).or(a.z.literal("manual")),alwaysPreserveClientCache:a.z.literal("auto").or(a.z.literal("always")).or(a.z.literal("never")),modelCatalogCacheTtlMs:a.z.number().int().min(500).max(6e5)}),retention:a.z.object({quotaSnapshots:a.z.number().int().min(1).max(3650),compressionAnalytics:a.z.number().int().min(1).max(365),mcpAudit:a.z.number().int().min
+---
+
+======================================================================
+src_shared_1mmftfa._.js  (len=27959)
+
+--- offset 26699 ---
+min(1).max(100)}),cache:a.z.object({semanticCacheEnabled:a.z.boolean(),semanticCacheMaxSize:a.z.number().int().min(10).max(1e3),semanticCacheTTL:a.z.number().int().min(6e4),promptCacheEnabled:a.z.boolean(),promptCacheStrategy:a.z.literal("auto").or(a.z.literal("system-only")).or(a.z.literal("manual")),alwaysPreserveClientCache:a.z.literal("auto").or(a.z.literal("always")).or(a.z.literal("never")),modelCatalogCacheTtlMs:a.z.number().int().min(500).max(6e5)}),retention:a.z.object({quotaSnapshots:a.z.number().int().min(1).max(3650),compressionAnalytics:a.z.number().int().min(1).max(365),mcpAudit:a.z.number().int().min
+---
+
+======================================================================
+src_shared_1z-n08e._.js  (len=89831)
+
+--- offset 45625 ---
+min(1).max(100)}),cache:i.z.object({semanticCacheEnabled:i.z.boolean(),semanticCacheMaxSize:i.z.number().int().min(10).max(1e3),semanticCacheTTL:i.z.number().int().min(6e4),promptCacheEnabled:i.z.boolean(),promptCacheStrategy:i.z.literal("auto").or(i.z.literal("system-only")).or(i.z.literal("manual")),alwaysPreserveClientCache:i.z.literal("auto").or(i.z.literal("always")).or(i.z.literal("never")),modelCatalogCacheTtlMs:i.z.number().int().min(500).max(6e5)}),retention:i.z.object({quotaSnapshots:i.z.number().int().min(1).max(3650),compressionAnalytics:i.z.number().int().min(1).max(365),mcpAudit:i.z.number().int().min
+---

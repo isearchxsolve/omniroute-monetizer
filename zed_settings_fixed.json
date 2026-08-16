@@ -1,0 +1,41 @@
+{
+    "cli_default_open_behavior": "existing_window",
+    "agent": {
+        "default_profile": "write",
+        "sandbox_permissions": {
+            "allow_unsandboxed": true,
+            "warn_ntfs_grants": false
+        },
+        "tool_permissions": {
+            "tools": {}
+        },
+        "default_model": {
+            "enable_thinking": false,
+            "provider": "tokenrouter",
+            "model": "moonshotai/kimi-k3-free"
+        },
+        "favorite_models": [],
+        "model_parameters": []
+    },
+    "language_models": {
+        "openai_compatible": {
+            "TokenRouter": {
+                "api_url": "https://api.tokenrouter.com/v1",
+                "available_models": [
+                    {
+                        "name": "moonshotai/kimi-k3-free",
+                        "display_name": "Kimi K3 Free (TokenRouter)",
+                        "max_tokens": 128000
+                    }
+                ]
+            }
+        }
+    },
+    "ui_font_size": 16,
+    "buffer_font_size": 15,
+    "theme": {
+        "mode": "dark",
+        "light": "One Light",
+        "dark": "One Dark"
+    }
+}

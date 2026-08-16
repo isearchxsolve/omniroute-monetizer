@@ -1,0 +1,42 @@
+﻿
+======================================================================
+src_lib_0-68-jc._.js  (len=18739)
+
+--- occurrence 1 @ offset 14748 ---
+equency:["autoBackupFrequency"],keepLastNBackups:["keepLastNBackups"]},cache:{semanticCacheEnabled:["semanticCacheEnabled"],semanticCacheMaxSize:["semanticCacheMaxSize"],semanticCacheTTL:["semanticCacheTTL"],promptCacheEnabled:["promptCacheEnabled"],promptCacheStrategy:["promptCacheStrategy"],alwaysPreserveClientCache:["alwaysPreserveClientCache"],modelCatalogCacheTtlMs:["modelCatalogCacheTtlMs"]},retention:{quotaSnapshots:["quotaSnapshots"],compressionAnalytics:["compressionAnalytics"],mcpAudit:["mcpAudit"],a2aEvents:["a2aEvents"],callLogs:["callLogs"],usageHistory:["usageHistory"],memoryEntr
+
+--- occurrence 2 @ offset 14773 ---
+ency"],keepLastNBackups:["keepLastNBackups"]},cache:{semanticCacheEnabled:["semanticCacheEnabled"],semanticCacheMaxSize:["semanticCacheMaxSize"],semanticCacheTTL:["semanticCacheTTL"],promptCacheEnabled:["promptCacheEnabled"],promptCacheStrategy:["promptCacheStrategy"],alwaysPreserveClientCache:["alwaysPreserveClientCache"],modelCatalogCacheTtlMs:["modelCatalogCacheTtlMs"]},retention:{quotaSnapshots:["quotaSnapshots"],compressionAnalytics:["compressionAnalytics"],mcpAudit:["mcpAudit"],a2aEvents:["a2aEvents"],callLogs:["callLogs"],usageHistory:["usageHistory"],memoryEntries:["memoryEntries"],dom
+
+======================================================================
+src_01lpegw._.js  (len=35727)
+
+--- occurrence 1 @ offset 5066 ---
+equency:["autoBackupFrequency"],keepLastNBackups:["keepLastNBackups"]},cache:{semanticCacheEnabled:["semanticCacheEnabled"],semanticCacheMaxSize:["semanticCacheMaxSize"],semanticCacheTTL:["semanticCacheTTL"],promptCacheEnabled:["promptCacheEnabled"],promptCacheStrategy:["promptCacheStrategy"],alwaysPreserveClientCache:["alwaysPreserveClientCache"],modelCatalogCacheTtlMs:["modelCatalogCacheTtlMs"]},retention:{quotaSnapshots:["quotaSnapshots"],compressionAnalytics:["compressionAnalytics"],mcpAudit:["mcpAudit"],a2aEvents:["a2aEvents"],callLogs:["callLogs"],usageHistory:["usageHistory"],memoryEntr
+
+--- occurrence 2 @ offset 5091 ---
+ency"],keepLastNBackups:["keepLastNBackups"]},cache:{semanticCacheEnabled:["semanticCacheEnabled"],semanticCacheMaxSize:["semanticCacheMaxSize"],semanticCacheTTL:["semanticCacheTTL"],promptCacheEnabled:["promptCacheEnabled"],promptCacheStrategy:["promptCacheStrategy"],alwaysPreserveClientCache:["alwaysPreserveClientCache"],modelCatalogCacheTtlMs:["modelCatalogCacheTtlMs"]},retention:{quotaSnapshots:["quotaSnapshots"],compressionAnalytics:["compressionAnalytics"],mcpAudit:["mcpAudit"],a2aEvents:["a2aEvents"],callLogs:["callLogs"],usageHistory:["usageHistory"],memoryEntries:["memoryEntries"],dom
+
+======================================================================
+src_16zh_cy._.js  (len=19734)
+
+--- occurrence 1 @ offset 5646 ---
+equency:["autoBackupFrequency"],keepLastNBackups:["keepLastNBackups"]},cache:{semanticCacheEnabled:["semanticCacheEnabled"],semanticCacheMaxSize:["semanticCacheMaxSize"],semanticCacheTTL:["semanticCacheTTL"],promptCacheEnabled:["promptCacheEnabled"],promptCacheStrategy:["promptCacheStrategy"],alwaysPreserveClientCache:["alwaysPreserveClientCache"],modelCatalogCacheTtlMs:["modelCatalogCacheTtlMs"]},retention:{quotaSnapshots:["quotaSnapshots"],compressionAnalytics:["compressionAnalytics"],mcpAudit:["mcpAudit"],a2aEvents:["a2aEvents"],callLogs:["callLogs"],usageHistory:["usageHistory"],memoryEntr
+
+--- occurrence 2 @ offset 5671 ---
+ency"],keepLastNBackups:["keepLastNBackups"]},cache:{semanticCacheEnabled:["semanticCacheEnabled"],semanticCacheMaxSize:["semanticCacheMaxSize"],semanticCacheTTL:["semanticCacheTTL"],promptCacheEnabled:["promptCacheEnabled"],promptCacheStrategy:["promptCacheStrategy"],alwaysPreserveClientCache:["alwaysPreserveClientCache"],modelCatalogCacheTtlMs:["modelCatalogCacheTtlMs"]},retention:{quotaSnapshots:["quotaSnapshots"],compressionAnalytics:["compressionAnalytics"],mcpAudit:["mcpAudit"],a2aEvents:["a2aEvents"],callLogs:["callLogs"],usageHistory:["usageHistory"],memoryEntries:["memoryEntries"],dom
+
+======================================================================
+[root-of-the-server]__0-_6pjr._.js  (len=20877)
+
+--- occurrence 1 @ offset 5722 ---
+equency:["autoBackupFrequency"],keepLastNBackups:["keepLastNBackups"]},cache:{semanticCacheEnabled:["semanticCacheEnabled"],semanticCacheMaxSize:["semanticCacheMaxSize"],semanticCacheTTL:["semanticCacheTTL"],promptCacheEnabled:["promptCacheEnabled"],promptCacheStrategy:["promptCacheStrategy"],alwaysPreserveClientCache:["alwaysPreserveClientCache"],modelCatalogCacheTtlMs:["modelCatalogCacheTtlMs"]},retention:{quotaSnapshots:["quotaSnapshots"],compressionAnalytics:["compressionAnalytics"],mcpAudit:["mcpAudit"],a2aEvents:["a2aEvents"],callLogs:["callLogs"],usageHistory:["usageHistory"],memoryEntr
+
+--- occurrence 2 @ offset 5747 ---
+ency"],keepLastNBackups:["keepLastNBackups"]},cache:{semanticCacheEnabled:["semanticCacheEnabled"],semanticCacheMaxSize:["semanticCacheMaxSize"],semanticCacheTTL:["semanticCacheTTL"],promptCacheEnabled:["promptCacheEnabled"],promptCacheStrategy:["promptCacheStrategy"],alwaysPreserveClientCache:["alwaysPreserveClientCache"],modelCatalogCacheTtlMs:["modelCatalogCacheTtlMs"]},retention:{quotaSnapshots:["quotaSnapshots"],compressionAnalytics:["compressionAnalytics"],mcpAudit:["mcpAudit"],a2aEvents:["a2aEvents"],callLogs:["callLogs"],usageHistory:["usageHistory"],memoryEntries:["memoryEntries"],dom
+
+======================================================================
+src_09m654j._.js  (len=104274)
+
+--- occurrence 1 @ offset 18357 ---
+e.i(792509);let o={logs:{detailedLogsEnabled:!1,callLogPipelineEnabled:!1,maxDetailSizeKb:10,ringBufferSize:500},backup:{autoBackupEnabled:!1,autoBackupFrequency:"never",keepLastNBackups:5},cache:{semanticCacheEnabled:!0,semanticCacheMaxSize:100,semanticCacheTTL:18e5,promptCacheEnabled:!0,promptCacheStrategy:"auto",alwaysPreserveClientCache:"auto",modelCatalogCacheTtlMs:6e4},retention:{quotaSnapshots:7,compressionAnalytics:30,mcpAudit:30,a2aEvents:30,callLogs:30,usageHistory:30,memoryEntries:30,domainCostHistory:30,compressionCacheStats:30,xpAuditLog:30,compressionRunTelemetry:30,autoCleanupEn

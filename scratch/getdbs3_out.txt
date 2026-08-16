@@ -1,0 +1,10 @@
+﻿e.s registrations of getDatabaseSettings: 2
+
+### REG src_lib_1-mn3ek._.js @ 5031
+[r,s,g,v,R,ed]=eK.then?(await eK)():eK,e.s(["addCustomHost",()=>el.addCustomHost,"addCustomModel",()=>g.addCustomModel,"addGroupPermission",()=>ee.addGroupPermission,"addKeyToGroup",()=>ee.addKeyToGroup,"addParamToBlocklist",()=>eB.addParamToBlocklist,"addProxyToScopePool",()=>M.addProxyToScopePool,
+
+### REG src_lib_localDb_ts_11n2jj9._.js @ 1313
+[r,i,g,v,R,ed]=eL.then?(await eL)():eL,e.s(["addCustomHost",()=>el.addCustomHost,"addCustomModel",()=>g.addCustomModel,"addGroupPermission",()=>ee.addGroupPermission,"addKeyToGroup",()=>ee.addKeyToGroup,"addParamToBlocklist",()=>eB.addParamToBlocklist,"addProxyToScopePool",()=>x.addProxyToScopePool,
+
+
+getCatalogDiagnosticsHeaders defs: 0

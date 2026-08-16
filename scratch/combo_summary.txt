@@ -1,0 +1,49 @@
+0 | name: None | id: None | models: 0 | desc: Verified Live Fleet Cascade for auto/asian-flagships
+1 | name: fusion-coder | id: 2cae44de | models: 5 | desc: Verified Live Fusion Coder Cascade
+     - nvidia/nemotron-3-super-120b-a12b | provider: nvidia | kind: model
+     - nvidia/nemotron-nano-12b-v2-vl | provider: nvidia | kind: model
+     - ainative/kimi-k3 | provider: ainative | kind: model
+     - moonshotai/kimi-k3 | provider: openrouter | kind: model
+2 | name: None | id: None | models: 0 | desc: Verified Live Fleet Cascade for auto/pro-coding
+3 | name: None | id: None | models: 0 | desc: Verified Live Fleet Cascade for Frontier Max
+4 | name: None | id: None | models: 0 | desc: Verified Live Fleet Cascade for auto/free-chat
+5 | name: auto/pro-reasoning | id: f23f3d3c | models: 6 | desc: Verified Live Pro Reasoning Cascade
+     - nvidia/llama-3.1-nemotron-nano-vl-8b-v1 | provider: nvidia | kind: model
+     - nvidia/nemotron-nano-12b-v2-vl | provider: nvidia | kind: model
+     - opencode/gpt-5.4-mini | provider: opencode | kind: model
+     - openrouter/auto | provider: openrouter | kind: model
+6 | name: auto/pro-chat | id: f13e7e40 | models: 5 | desc: Verified Live Pro Chat Cascade
+     - nvidia/llama-3.1-nemotron-nano-vl-8b-v1 | provider: nvidia | kind: model
+     - nvidia/nemotron-nano-12b-v2-vl | provider: nvidia | kind: model
+     - opencode/gpt-5.4-mini | provider: opencode | kind: model
+     - openrouter/auto | provider: openrouter | kind: model
+7 | name: auto/best-coding | id: a819dd1c | models: 5 | desc: Verified Live Best Coding Cascade
+     - nvidia/nemotron-3-super-120b-a12b | provider: nvidia | kind: model
+     - nvidia/nemotron-nano-12b-v2-vl | provider: nvidia | kind: model
+     - ainative/kimi-k3 | provider: ainative | kind: model
+     - moonshotai/kimi-k3 | provider: openrouter | kind: model
+8 | name: auto/best-reasoning | id: d7812773 | models: 5 | desc: Verified Live Best Reasoning Cascade
+     - nvidia/nemotron-3-super-120b-a12b | provider: nvidia | kind: model
+     - nvidia/nemotron-nano-12b-v2-vl | provider: nvidia | kind: model
+     - ainative/kimi-k3 | provider: ainative | kind: model
+     - moonshotai/kimi-k3 | provider: openrouter | kind: model
+9 | name: auto/best-chat | id: 191f5601 | models: 5 | desc: Verified Live Best Chat Cascade
+     - nvidia/nemotron-3-super-120b-a12b | provider: nvidia | kind: model
+     - nvidia/nemotron-nano-12b-v2-vl | provider: nvidia | kind: model
+     - ainative/kimi-k3 | provider: ainative | kind: model
+     - moonshotai/kimi-k3 | provider: openrouter | kind: model
+10 | name: frontier | id: 327e906d | models: 5 | desc: Verified Live Frontier Cascade
+     - nvidia/nemotron-3-super-120b-a12b | provider: nvidia | kind: model
+     - nvidia/nemotron-nano-12b-v2-vl | provider: nvidia | kind: model
+     - ainative/kimi-k3 | provider: ainative | kind: model
+     - moonshotai/kimi-k3 | provider: openrouter | kind: model
+11 | name: kimi-coding | id: 02cd73d6 | models: 5 | desc: 
+     - nvidia/nemotron-3-super-120b-a12b | provider: nvidia | kind: model
+     - nvidia/nemotron-nano-12b-v2-vl | provider: nvidia | kind: model
+     - ainative/kimi-k3 | provider: ainative | kind: model
+     - moonshotai/kimi-k3 | provider: openrouter | kind: model
+12 | name: moonshotai/kimi-k3-free | id: 2e642227 | models: 5 | desc: 
+     - nvidia/nemotron-3-super-120b-a12b | provider: nvidia | kind: model
+     - nvidia/nemotron-nano-12b-v2-vl | provider: nvidia | kind: model
+     - ainative/kimi-k3 | provider: ainative | kind: model
+     - moonshotai/kimi-k3 | provider: openrouter | kind: model

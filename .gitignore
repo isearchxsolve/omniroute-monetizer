@@ -45,3 +45,6 @@ evidence/automation/.env.local.old
 evidence/automation/.env.local.tmp
 scratch/MonkeyCode/
 
+
+# Windows reserved-name artifact from accidental redirect
+nul

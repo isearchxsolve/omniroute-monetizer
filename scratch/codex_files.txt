@@ -1,0 +1,39 @@
+﻿..codex-global-state.json.tmp-1786397835208-dd4c57c6-b9f7-4491-89d0-49212055d59f
+.codex-global-state.json
+.codex-global-state.json.bak
+.sandbox_migration
+auth.json
+auth.json.backup-2026-08-08
+cap_sid
+chrome-native-hosts-v2.json
+claude-cowork-import-history.json
+config - Copy (2).toml
+config - Copy (3).toml
+config - Copy (4).toml
+config - Copy.toml
+config.toml
+config.toml.backup-2026-08-08
+config.toml.backup-before-nvidia-desktop
+config.toml.before_nemotron_20260808_133441.bak
+external_agent_session_imports.json
+goals_1.sqlite
+history.jsonl
+installation_id
+logs_2.sqlite
+logs_2.sqlite-shm
+logs_2.sqlite-wal
+memories_1.sqlite
+model-catalog.json
+models.json
+models_cache.json
+nvidia.config.toml
+queue_1.sqlite
+queue_1.sqlite-shm
+queue_1.sqlite-wal
+sandbox.2026-08-04.log
+sandbox.2026-08-05.log
+session_index.jsonl
+state_5.sqlite
+thread_history_1.sqlite
+transcription-history.jsonl
+version.json

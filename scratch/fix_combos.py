@@ -1,49 +1,85 @@
-import requests, json, uuid
-BASE_URL = 'http://localhost:20128'
-s = requests.Session()
-s.post(f'{BASE_URL}/api/auth/login', json={'password': 'Keross@321'})
+#!/usr/bin/env python3
+"""Fix combos by replacing phantom models with proven-working model."""
+import sys, json
+sys.path.insert(0, 'd:\\omniroute-monetizer\\scripts\\automation')
+from omniroute_api import OmniRouteAPI, save_json, log
 
-# 1. Fetch available models
-resp = s.get(f'{BASE_URL}/api/models')
-all_models = resp.json().get('models', [])
-premium_models = []
+api = OmniRouteAPI()
+api.login()
 
-for m in all_models:
-    if m.get('available', True):
-        name = m.get('fullModel', '').lower()
-        if any(x in name for x in ['gpt-5', 'gpt-4o', 'sonnet', 'opus', 'glm-5', 'gemini-3']):
-            premium_models.append(m)
+# Find nvidia connection
+conns = api.get_connections()
+nvidia_conn = None
+for c in conns:
+    if c.get('provider') == 'nvidia' and c.get('isActive'):
+        nvidia_conn = c
+        break
 
-print(f"Found {len(premium_models)} premium models.")
+if not nvidia_conn:
+    log("ERROR: No active nvidia connection found", "err")
+    sys.exit(1)
 
-# 2. Fetch combos
-resp = s.get(f'{BASE_URL}/api/combos')
-combos = resp.json().get('combos', [])
+nvidia_id = nvidia_conn['id']
+model_name = 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1'
+log(f"Using model {model_name} from connection {nvidia_id[:8]}...", "ok")
 
-for c in combos:
-    c_name = c.get('name', '').lower()
-    c_id = c.get('id', '')
-    if 'frontier max' in c_name or 'fusion-coder' in c_name:
-        print(f"Updating combo: {c.get('name')} ({c_id})")
-        
-        existing = c.get('models', [])
-        existing_full_models = {f"{t.get('providerId')}/{t.get('model')}" for t in existing}
-        
-        for pm in premium_models:
-            full_model = f"{pm.get('provider')}/{pm.get('model')}"
-            if full_model not in existing_full_models:
-                existing.append({
-                    "id": str(uuid.uuid4()),
-                    "kind": "model",
-                    "model": pm.get('model'),
-                    "providerId": pm.get('provider'),
-                    "weight": 0
-                })
-                existing_full_models.add(full_model)
-                
-        # Update combo
-        c['models'] = existing
-        c['description'] = f"Updated by Agent with {len(existing)} premium models for parallel routing."
-        
-        put_resp = s.put(f"{BASE_URL}/api/combos/{c_id}", json=c)
-        print(f" -> PUT status {put_resp.status_code}")
+# Get current combos
+combos = api.get_combos()
+combo_map = {c['name']: c for c in combos if c.get('name')}
+
+# Combos to fix
+combos_to_fix = [
+    'frontier', 'auto/best-coding', 'auto/best-reasoning', 'auto/best-chat',
+    'auto/pro-coding', 'auto/pro-reasoning', 'auto/pro-chat',
+    'fusion-coder', 'kimi-coding', 'moonshotai/kimi-k3-free'
+]
+
+results = {}
+for combo_name in combos_to_fix:
+    if combo_name not in combo_map:
+        log(f"{combo_name}: NOT FOUND", "warn")
+        results[combo_name] = {'status': 'NOT_FOUND'}
+        continue
+    
+    combo = combo_map[combo_name]
+    combo_id = combo.get('id')
+    if not combo_id:
+        log(f"{combo_name}: NO ID (orphaned)", "warn")
+        results[combo_name] = {'status': 'NO_ID'}
+        continue
+    
+    # Create new model entry
+    new_models = [{
+        'id': f"{combo_name}_model_0",
+        'kind': 'model',
+        'model': model_name,
+        'providerId': nvidia_id,
+        'weight': 0,
+    }]
+    
+    # Build payload
+    payload = {
+        'name': combo_name,
+        'models': new_models,
+        'strategy': combo.get('strategy', 'priority'),
+        'description': combo.get('description', ''),
+        'retries': combo.get('retries', 3),
+        'retry_delay': combo.get('retry_delay', 1000),
+        'timeout': combo.get('timeout', 30000),
+    }
+    
+    # Update
+    log(f"Updating {combo_name}...", "info")
+    result = api.update_combo(combo_id, payload)
+    status = result.get('http_status')
+    
+    if status == 200:
+        log(f"  {combo_name}: HTTP {status} OK", "ok")
+        results[combo_name] = {'status': 'UPDATED', 'http_status': status}
+    else:
+        log(f"  {combo_name}: HTTP {status} FAILED", "err")
+        results[combo_name] = {'status': 'FAILED', 'http_status': status, 'error': str(result)[:300]}
+
+save_json('combo_fix_results.json', results)
+updated = sum(1 for r in results.values() if r.get('status') == 'UPDATED')
+print(f"\n[+] Fixed {updated}/{len(combos_to_fix)} combos with {model_name}")

@@ -1,0 +1,37 @@
+﻿
+======================================================================
+_0dfofzt._.js: 2 occurrences of getCatalogDiagnosticsHeaders
+  --- @ 19596 ---
+  ,Y=t([o,n,s,u,p,k,T,O,E,$,N,V,H,U,z,G,X,Q]);async function Z(e,t={}){let i=(0,$.getCatalogDiagnosticsHeaders)({request:e});try{let o={};try{o=await (0,p.getSettings)()}catch{}let r=await (0,G.getModelCatalogAuthRejection)(e,o,{...t,...i});if(r)return r}catch{}(0,G.isCcDiscoveryModelCatalogClient)(e)&&(0,K.incrementCcDiscoveryHitCount)();try{return await (0,Q.resolveCachedCatalogResponse)(e,{corsHeaders:t,diagnosticHeaders:i},ee)}catch(o){let e=o instanceof Error?o.message:Str
+  --- @ 20483 ---
+  dy:i,headers:o,status:t.status,cacheTTL:r}}async function et(t,i={}){let o=(0,$.getCatalogDiagnosticsHeaders)({request:t});try{let n={};try{n=await (0,p.getSettings)()}catch{}let s=await (0,G.getModelCatalogAuthRejection)(t,n,{...i,...o});if(s)return s;let{aliasToProviderId:f,providerIdToAlias:k}=(0,z.buildAliasMaps)(),K=new URL(t.url).searchParams.get("prefix"),J="alias"===K||"canonical"===K||"dual"===K?K:(0,j.getModelsCatalogPrefixMode)(),Q="canonical"!==J,Y="alias"!==J,Z=(
+
+======================================================================
+_10gz1jg._.js: 2 occurrences of getCatalogDiagnosticsHeaders
+  --- @ 18380 ---
+  ,Y=t([o,n,s,u,p,k,O,T,E,P,N,V,H,U,z,G,X,Q]);async function Z(e,t={}){let i=(0,P.getCatalogDiagnosticsHeaders)({request:e});try{let o={};try{o=await (0,p.getSettings)()}catch{}let r=await (0,G.getModelCatalogAuthRejection)(e,o,{...t,...i});if(r)return r}catch{}(0,G.isCcDiscoveryModelCatalogClient)(e)&&(0,K.incrementCcDiscoveryHitCount)();try{return await (0,Q.resolveCachedCatalogResponse)(e,{corsHeaders:t,diagnosticHeaders:i},ee)}catch(o){let e=o instanceof Error?o.message:Str
+  --- @ 19267 ---
+  dy:i,headers:o,status:t.status,cacheTTL:r}}async function et(t,i={}){let o=(0,P.getCatalogDiagnosticsHeaders)({request:t});try{let n={};try{n=await (0,p.getSettings)()}catch{}let s=await (0,G.getModelCatalogAuthRejection)(t,n,{...i,...o});if(s)return s;let{aliasToProviderId:f,providerIdToAlias:k}=(0,z.buildAliasMaps)(),K=new URL(t.url).searchParams.get("prefix"),J="alias"===K||"canonical"===K||"dual"===K?K:(0,j.getModelsCatalogPrefixMode)(),Q="canonical"!==J,Y="alias"!==J,Z=(
+
+======================================================================
+_17s8hnj._.js: 2 occurrences of getCatalogDiagnosticsHeaders
+  --- @ 12979 ---
+  ,J=t([o,n,s,u,p,k,T,O,E,F,V,j,D,U,K,W,X,Y]);async function Z(e,t={}){let i=(0,F.getCatalogDiagnosticsHeaders)({request:e});try{let o={};try{o=await (0,p.getSettings)()}catch{}let r=await (0,W.getModelCatalogAuthRejection)(e,o,{...t,...i});if(r)return r}catch{}(0,W.isCcDiscoveryModelCatalogClient)(e)&&(0,G.incrementCcDiscoveryHitCount)();try{return await (0,Y.resolveCachedCatalogResponse)(e,{corsHeaders:t,diagnosticHeaders:i},ee)}catch(o){let e=o instanceof Error?o.message:Str
+  --- @ 13866 ---
+  dy:i,headers:o,status:t.status,cacheTTL:r}}async function et(t,i={}){let o=(0,F.getCatalogDiagnosticsHeaders)({request:t});try{let n={};try{n=await (0,p.getSettings)()}catch{}let s=await (0,W.getModelCatalogAuthRejection)(t,n,{...i,...o});if(s)return s;let{aliasToProviderId:f,providerIdToAlias:k}=(0,K.buildAliasMaps)(),G=new URL(t.url).searchParams.get("prefix"),Q="alias"===G||"canonical"===G||"dual"===G?G:(0,N.getModelsCatalogPrefixMode)(),Y="canonical"!==Q,J="alias"!==Q,Z=(
+
+======================================================================
+_1gqxt8d._.js: 3 occurrences of getCatalogDiagnosticsHeaders
+  --- @ 7479 ---
+  {}return null}(o,n);e&&(s.pricing=e)}return s},"getCanonicalModelMetadata",0,h,"getCatalogDiagnosticsHeaders",0,function(e={}){var t,i;let n;return{"X-Request-Id":(t=e.request,i=e.requestId,m(i)||m(t?.headers.get("x-request-id"))||(0,o.randomUUID)()),"X-Model-Catalog-Version":(n=(0,p.getSyncStatus)()).lastSync?`${y}:${n.lastSync}`:`${y}:static`,...e.resolvedAlias?{"X-Model-Alias-Resolved":e.resolvedAlias}:{}}}]),i()}catch(e){i(e)}},!1),334178,e=>{"use strict";var t=e.i(769472
+  --- @ 21395 ---
+  ,J=t([o,r,l,u,p,M,O,T,I,L,V,j,H,U,z,K,q,Q]);async function Z(e,t={}){let i=(0,L.getCatalogDiagnosticsHeaders)({request:e});try{let o={};try{o=await (0,p.getSettings)()}catch{}let n=await (0,K.getModelCatalogAuthRejection)(e,o,{...t,...i});if(n)return n}catch{}(0,K.isCcDiscoveryModelCatalogClient)(e)&&(0,X.incrementCcDiscoveryHitCount)();try{return await (0,Q.resolveCachedCatalogResponse)(e,{corsHeaders:t,diagnosticHeaders:i},ee)}catch(o){let e=o instanceof Error?o.message:Str
+  --- @ 22282 ---
+  dy:i,headers:o,status:t.status,cacheTTL:n}}async function et(t,i={}){let o=(0,L.getCatalogDiagnosticsHeaders)({request:t});try{let r={};try{r=await (0,p.getSettings)()}catch{}let l=await (0,K.getModelCatalogAuthRejection)(t,r,{...i,...o});if(l)return l;let{aliasToProviderId:f,providerIdToAlias:M}=(0,z.buildAliasMaps)(),X=new URL(t.url).searchParams.get("prefix"),Y="alias"===X||"canonical"===X||"dual"===X?X:(0,N.getModelsCatalogPrefixMode)(),Q="canonical"!==Y,J="alias"!==Y,Z=(
+
+======================================================================
+_1ptnbf9._.js: 2 occurrences of getCatalogDiagnosticsHeaders
+  --- @ 12979 ---
+  ,J=t([o,n,s,u,p,k,T,O,E,F,V,j,D,U,K,W,X,Y]);async function Z(e,t={}){let i=(0,F.getCatalogDiagnosticsHeaders)({request:e});try{let o={};try{o=await (0,p.getSettings)()}catch{}let r=await (0,W.getModelCatalogAuthRejection)(e,o,{...t,...i});if(r)return r}catch{}(0,W.isCcDiscoveryModelCatalogClient)(e)&&(0,G.incrementCcDiscoveryHitCount)();try{return await (0,Y.resolveCachedCatalogResponse)(e,{corsHeaders:t,diagnosticHeaders:i},ee)}catch(o){let e=o instanceof Error?o.message:Str
+  --- @ 13866 ---
+  dy:i,headers:o,status:t.status,cacheTTL:r}}async function et(t,i={}){let o=(0,F.getCatalogDiagnosticsHeaders)({request:t});try{let n={};try{n=await (0,p.getSettings)()}catch{}let s=await (0,W.getModelCatalogAuthRejection)(t,n,{...i,...o});if(s)return s;let{aliasToProviderId:f,providerIdToAlias:k}=(0,K.buildAliasMaps)(),G=new URL(t.url).searchParams.get("prefix"),Q="alias"===G||"canonical"===G||"dual"===G?G:(0,N.getModelsCatalogPrefixMode)(),Y="canonical"!==Q,J="alias"!==Q,Z=(

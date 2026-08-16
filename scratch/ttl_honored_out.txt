@@ -1,0 +1,26 @@
+﻿login: 200
+
+=== baseline cache stats ===
+{'size': 0, 'maxSize': 50, 'bytes': 0, 'maxBytes': 2097152, 'hits': 0, 'misses': 0, 'evictions': 0, 'hitRate': 0}
+
+=== STEP 1: set TTL to 5000ms (5s) ===
+PUT TTL=5000: 200 {"ok":true}
+readback TTL: 5000
+
+=== STEP 2: first catalog request (expect MISS, populates cache) ===
+catalog: 200 in 1.696s
+stats: {'size': 0, 'maxSize': 50, 'bytes': 0, 'maxBytes': 2097152, 'hits': 0, 'misses': 0, 'evictions': 0, 'hitRate': 0}
+
+=== STEP 3: immediate second catalog request (expect HIT) ===
+catalog: 200 in 0.020s
+stats: {'size': 0, 'maxSize': 50, 'bytes': 0, 'maxBytes': 2097152, 'hits': 0, 'misses': 0, 'evictions': 0, 'hitRate': 0}
+
+=== STEP 4: wait 7s (> 5s TTL), then request (expect MISS if TTL honored) ===
+catalog: 200 in 0.019s
+stats: {'size': 0, 'maxSize': 50, 'bytes': 0, 'maxBytes': 2097152, 'hits': 0, 'misses': 0, 'evictions': 0, 'hitRate': 0}
+
+=== STEP 5: restore TTL to 600000 (10 min) ===
+PUT TTL=600000: 200 {"ok":true}
+readback TTL: 600000
+
+DONE

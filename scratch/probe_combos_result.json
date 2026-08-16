@@ -1,0 +1,474 @@
+{
+  "login_status": 200,
+  "has_cookie": true,
+  "combos_status": 200,
+  "combos_top_keys": [
+    "combos",
+    "total"
+  ],
+  "combo_count": 13,
+  "first_combo_keys": [
+    "models",
+    "strategy",
+    "description",
+    "retries",
+    "retry_delay",
+    "timeout",
+    "sortOrder",
+    "version"
+  ],
+  "first_combo_sample": null,
+  "first_combo": {
+    "models": [],
+    "strategy": "priority",
+    "description": "Verified Live Fleet Cascade for auto/asian-flagships",
+    "retries": 2,
+    "retry_delay": 300,
+    "timeout": 15000,
+    "sortOrder": 1,
+    "version": 2
+  },
+  "combo_ids": [
+    null,
+    "2cae44de-8aeb-4890-958d-9087849e0e45",
+    null,
+    null,
+    null,
+    "f23f3d3c-9ba1-47e0-b019-923f2d64d2d4",
+    "f13e7e40-b402-4699-8b6b-aa5bd24611d9",
+    "a819dd1c-e6d5-417e-8d18-77d6399fff2e",
+    "d7812773-a000-42e1-b436-ba5aabe2b7df",
+    "191f5601-61b4-4077-8c24-104883813937",
+    "327e906d-49a5-4057-8ece-0b8c7e54850b",
+    "02cd73d6-e809-44be-b0a1-1fa9dfe4fc5d",
+    "2e642227-70e7-4f2b-bac1-a92d7e60e079"
+  ],
+  "providers_status": 200,
+  "connection_total": 51,
+  "connection_count": 51,
+  "providers": {
+    "trae": [
+      {
+        "id": "ad3b1ec6-3f17-4b7b-8388-0002e5c3d8b7",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "github": [
+      {
+        "id": "a0b9e60a-2316-47b5-bd1a-d6ba30ea0f4d",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": false
+      }
+    ],
+    "kilocode": [
+      {
+        "id": "73aae217-6f03-41f2-bbc6-22db7b82e219",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": false
+      },
+      {
+        "id": "6f3af471-59c9-4370-9214-fcee7f8aaaa8",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "kimi-coding": [
+      {
+        "id": "f2655ae1-fabb-4c81-ba6b-ac7f21e73d3c",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": false
+      },
+      {
+        "id": "f1a76219-781c-4f2f-85b1-1261af52ec32",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "grok-cli": [
+      {
+        "id": "a6e1728a-fde7-4d13-a8fd-393133829a8e",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": false
+      },
+      {
+        "id": "414a9dff-c750-4e3b-890f-f93c4c906c76",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "amazon-q": [
+      {
+        "id": "d7534629-8e19-40e4-9090-a296704022f3",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": false
+      },
+      {
+        "id": "2248a0bf-72b8-41c8-b079-2d21cd41bb64",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      },
+      {
+        "id": "f76e4db5-55ed-4fe6-93c3-418445ae862a",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "clinepass": [
+      {
+        "id": "47307fe9-c513-4957-8db2-69275efad86a",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "active",
+        "has_apiKey": false
+      }
+    ],
+    "kiro": [
+      {
+        "id": "5ec58a27-49c5-4ec8-9b99-d219c1edf80e",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": false
+      }
+    ],
+    "antigravity": [
+      {
+        "id": "5b6bb68a-472c-4824-aa71-b8593a643e22",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": false
+      },
+      {
+        "id": "b727fc55-1a8c-44aa-942d-d48336ba611a",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      },
+      {
+        "id": "4b688ac0-67a6-4fea-9da2-73547aab7b94",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      },
+      {
+        "id": "4bb06b19-4481-4855-9e96-8899fddf543e",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      },
+      {
+        "id": "e00b5169-9c18-41c8-9c5a-44305771d578",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": false
+      },
+      {
+        "id": "7bbcc7ab-1c75-4e30-a20b-a63d4e6cf156",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "agy": [
+      {
+        "id": "c0338023-1b55-463d-9caa-0e38aa5a4bfe",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": false
+      },
+      {
+        "id": "a4809bf3-13c4-4e74-ae85-114ef6c83f66",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "codex": [
+      {
+        "id": "ba7c4740-ca83-45a3-9a55-1484d1aa6d2c",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": false
+      },
+      {
+        "id": "db2f61d1-a5cb-422b-8275-f2a21e82f0f7",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "lmarena": [
+      {
+        "id": "54efdf9f-8f7c-4c68-b461-12714e89c754",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": true
+      },
+      {
+        "id": "a0e46e4e-aaa2-4656-ae6a-a2146c9835fd",
+        "authType": "apikey",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "nvidia": [
+      {
+        "id": "574246f2-1cdf-48ad-83b6-2ca1b541f8e4",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": true
+      }
+    ],
+    "openrouter": [
+      {
+        "id": "49aa144d-9005-4968-a6cd-a36e8a2e947f",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "credits_exhausted",
+        "has_apiKey": true
+      }
+    ],
+    "alibaba": [
+      {
+        "id": "6116ca06-f7c9-4c91-82bc-43aade21e5cb",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": true
+      }
+    ],
+    "zai-web": [
+      {
+        "id": "1504cdce-6851-4d99-975e-a3a89e338d80",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": true
+      }
+    ],
+    "aion": [
+      {
+        "id": "fa5d2a96-deec-4a8f-ab00-155763929880",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": true
+      }
+    ],
+    "cloudflare-ai": [
+      {
+        "id": "9b8e973a-75d8-4b5c-95b7-1241c24d0479",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": true
+      }
+    ],
+    "ainative": [
+      {
+        "id": "811ba58f-c9ea-44b4-b882-221584692b4d",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "active",
+        "has_apiKey": true
+      }
+    ],
+    "opencode-zen": [
+      {
+        "id": "e2675454-4db3-423a-9af3-c346d3c91444",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": true
+      }
+    ],
+    "opencode": [
+      {
+        "id": "7dee12ea-c18d-499e-b25f-3873ccca25c4",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": true
+      }
+    ],
+    "nara": [
+      {
+        "id": "e0f2b1d9-2e8b-4e79-8b55-449ae9366476",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": true
+      }
+    ],
+    "agnes": [
+      {
+        "id": "96564651-fd1d-4ece-b80f-800ab1c512d0",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": true
+      }
+    ],
+    "cerebras": [
+      {
+        "id": "b533b28a-24d3-481f-ac5a-f0b9a562c55e",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": true
+      }
+    ],
+    "cohere": [
+      {
+        "id": "4a1b2609-3d1f-41bc-8bd5-3e3e4baedaad",
+        "authType": "apikey",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": true
+      }
+    ],
+    "friendliai": [
+      {
+        "id": "5c308db7-64a6-4c5f-b390-26098672fd93",
+        "authType": "apikey",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "windsurf": [
+      {
+        "id": "39458046-d0bf-4633-a96d-3addcfc5513d",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": false
+      },
+      {
+        "id": "179e4825-1e03-47de-accc-c6cb611a195c",
+        "authType": "oauth",
+        "isActive": true,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "xai-oauth": [
+      {
+        "id": "a2eced8e-0b95-43e4-b71f-80ec92d68369",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      },
+      {
+        "id": "b34d58dc-7870-44cb-ac64-f623c7a88505",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      },
+      {
+        "id": "55d5fae6-f585-4f57-bb90-7d81f4e050a4",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      },
+      {
+        "id": "3be84526-7924-4cec-bc95-eaec6bb8f604",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "deepseek": [
+      {
+        "id": "0b2d6fb0-49fa-437b-8975-886f0120d565",
+        "authType": "apikey",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "huggingface": [
+      {
+        "id": "983495e6-e08a-45e1-a399-e17227a1f34e",
+        "authType": "apikey",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "cline": [
+      {
+        "id": "c8a7f56f-1753-483a-b593-5fdcf83b1dc2",
+        "authType": "oauth",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "qoder": [
+      {
+        "id": "b2fe293d-41dc-4c70-83d6-0da0a834f279",
+        "authType": "apikey",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      },
+      {
+        "id": "e217f911-6909-4ec8-83d4-9558457f57c2",
+        "authType": "apikey",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": false
+      }
+    ],
+    "openai": [
+      {
+        "id": "44010c8f-5730-43da-8db0-97461fe4fb80",
+        "authType": "apikey",
+        "isActive": false,
+        "testStatus": "error",
+        "has_apiKey": true
+      }
+    ]
+  }
+}

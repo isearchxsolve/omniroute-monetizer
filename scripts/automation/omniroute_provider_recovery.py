@@ -164,6 +164,13 @@ def handle_browser_reauth(api: requests.Session, connection: dict[str, Any], pag
 
     if not clicked:
         result["status"] = "ui_control_not_found"
+        # BUGFIX: connection was pre-enabled above; if we can't find a re-auth
+        # control, revert to inactive so it doesn't stall the health-check cycle.
+        try:
+            api.put(f"{BASE_URL}/api/providers/{cid}", json={"isActive": False}, timeout=10)
+            log(f"  [!] Reverted pre-enabled {provider} to inactive (no UI control found)", "warn")
+        except Exception as e:
+            log(f"      Failed to revert: {e}")
         return result
 
     log("  Waiting for automated auth flow to complete (up to 15s)...")
@@ -184,8 +191,9 @@ def handle_browser_reauth(api: requests.Session, connection: dict[str, Any], pag
     # Revert isActive to False so this broken connection doesn't hang the server.
     log(f"  [!] Suppressing dead route {provider} to prevent server hang...", "warn")
     try:
-        s = getattr(api, "session", requests)
-        s.put(f"{BASE_URL}/api/providers/{cid}", json={"isActive": False}, timeout=5)
+        # BUGFIX: was getattr(api, "session", requests) which fell back to the
+        # unauthenticated requests module -> silent 401. Use the authed session.
+        api.put(f"{BASE_URL}/api/providers/{cid}", json={"isActive": False}, timeout=10)
     except Exception as e:
         log(f"      Failed to suppress: {e}")
 

@@ -1,0 +1,23 @@
+﻿login: 200
+
+=== Set TTL to 5000ms ===
+PUT TTL=5000: 200 {"ok":true}
+readback TTL: 5000
+
+=== Populate cache (MISS, slow) ===
+  [populate] catalog: 200 in 1.119s
+
+=== Immediate re-request (HIT, fast) ===
+  [immediate-hit] catalog: 200 in 0.122s
+
+=== Wait 40s (beyond 5s TTL + 30s stale window) ===
+=== Request after 40s ===
+  [after-40s] catalog: 200 in 1.516s
+
+=== VERDICT ===
+SLOW (1.516s) -> TTL=5000 was HONORED. Runtime reads raw DB TTL. Hotfix clamp is INERT.
+
+=== Restore TTL to 600000 ===
+PUT TTL=600000: 200 {"ok":true}
+readback TTL: 600000
+DONE

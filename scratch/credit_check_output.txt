@@ -1,0 +1,65 @@
+Tables: provider_connections, provider_nodes, key_value, combos, api_keys, db_meta, usage_history, sqlite_sequence, call_logs, proxy_logs, domain_fallback_chains, domain_budgets, domain_budget_reset_logs, domain_cost_history, domain_lockout_state, domain_circuit_breakers, semantic_cache, _omniroute_migrations, mcp_tool_audit, a2a_tasks, a2a_task_events, routing_decisions, combo_adaptation_state, proxy_registry, request_detail_logs, registered_keys, provider_key_limits, account_key_limits, model_combo_mappings, webhooks, quota_snapshots, memories, skills, skill_executions, version_manager, upstream_proxy_config, context_handoffs, memory_fts_data, memory_fts_idx, memory_fts_docsize, memory_fts_config, sync_tokens, files, batches, eval_runs, eval_suites, eval_cases, reasoning_cache, audit_log, model_capabilities, cache_metrics, compression_analytics, compression_cache_stats, compression_combos, compression_combo_assignments, hourly_usage_summary, daily_usage_summary, session_account_affinity, command_code_auth_sessions, tier_config, tier_assignments, leaderboard, user_levels, badge_definitions, user_badges, xp_audit_log, token_ledger, invite_tokens, community_servers, cloud_agent_credentials, session_model_history, middleware_hooks, middleware_logs, key_groups, group_model_permissions, key_group_members, relay_tokens, relay_rate_limits, relay_logs, free_proxies, webhook_deliveries, api_key_token_limits, api_key_token_counters, api_key_token_limit_reset_logs, discovery_results, plugins, quota_consumption, provider_plans, agent_bridge_state, agent_bridge_mappings, agent_bridge_bypass, inspector_custom_hosts, inspector_sessions, inspector_session_requests, memory_vec_meta, playground_presets, quota_pools, quota_allocations, quota_pool_connections, quota_groups, plugin_metrics, plugin_analytics, api_key_context_sources, model_intelligence, cli_access_tokens, quota_allocation_model_caps, provider_quota_reset_events, model_context_overrides, batch_item_checkpoints, proxy_assignments, proxy_scope_rotation, model_capability_overrides, free_proxy_sync_errors, reasoning_routing_rules, auto_candidate_overrides, proxy_subscriptions, memory_fts
+
+=== usage_history ===
+schema: [(0, 'id', 'INTEGER', 0, None, 1), (1, 'provider', 'TEXT', 0, None, 0), (2, 'model', 'TEXT', 0, None, 0), (3, 'connection_id', 'TEXT', 0, None, 0), (4, 'api_key_id', 'TEXT', 0, None, 0), (5, 'api_key_name', 'TEXT', 0, None, 0), (6, 'tokens_input', 'INTEGER', 0, '0', 0), (7, 'tokens_output', 'INTEGER', 0, '0', 0), (8, 'tokens_cache_read', 'INTEGER', 0, '0', 0), (9, 'tokens_cache_creation', 'INTEGER', 0, '0', 0), (10, 'tokens_reasoning', 'INTEGER', 0, '0', 0), (11, 'status', 'TEXT', 0, None, 0), (12, 'success', 'INTEGER', 0, '1', 0), (13, 'latency_ms', 'INTEGER', 0, '0', 0), (14, 'ttft_ms', 'INTEGER', 0, '0', 0), (15, 'error_code', 'TEXT', 0, None, 0), (16, 'timestamp', 'TEXT', 1, None, 0), (17, 'service_tier', 'TEXT', 0, "'standard'", 0), (18, 'combo_strategy', 'TEXT', 0, "'direct'", 0), (19, 'account_key', 'TEXT', 0, None, 0), (20, 'account_label', 'TEXT', 0, None, 0), (21, 'account_label_priority', 'INTEGER', 0, '0', 0), (22, 'endpoint', 'TEXT', 0, None, 0)]
+rows: [(1, 'nvidia', 'z-ai/glm-5.2', '574246f2-1cdf-48ad-83b6-2ca1b541f8e4', '11e17574-0e90-442d-8c70-9c98c27eb4ba', 'test', 0, 0, 0, 0, 0, '400', 0, 276158, 0, 'upstream_400', '2026-07-27T17:11:46.534Z', 'standard', 'direct', '["connection","nvidia","574246f2-1cdf-48ad-83b6-2ca1b541f8e4"]', 'nvidia', 2, None), (2, 'nvidia', 'llama-3.3-70b-instruct', '574246f2-1cdf-48ad-83b6-2ca1b541f8e4', '11e17574-0e90-442d-8c70-9c98c27eb4ba', 'test', 0, 0, 0, 0, 0, '404', 0, 682, 0, 'model_unavailable', '2026-07-27T17:29:56.684Z', 'standard', 'direct', '["connection","nvidia","574246f2-1cdf-48ad-83b6-2ca1b541f8e4"]', 'nvidia', 2, None), (3, 'nvidia', 'z-ai/glm-5.2', '574246f2-1cdf-48ad-83b6-2ca1b541f8e4', '11e17574-0e90-442d-8c70-9c98c27eb4ba', 'test', 22, 4, 0, 0, 0, '200', 1, 284703, 284703, None, '2026-07-27T17:34:40.741Z', 'standard', 'direct', '["connection","nvidia","574246f2-1cdf-48ad-83b6-2ca1b541f8e4"]', 'nvidia', 2, None), (4, 'nvidia', 'z-ai/glm-5.2', '574246f2-1cdf-48ad-83b6-2ca1b541f8e4', '11e17574-0e90-442d-8c70-9c98c27eb4ba', 'test', 0, 0, 0, 0, 0, '504', 0, 302499, 0, 'upstream_504', '2026-07-27T17:34:58.551Z', 'standard', 'direct', '["connection","nvidia","574246f2-1cdf-48ad-83b6-2ca1b541f8e4"]', 'nvidia', 2, None), (5, 'nvidia', 'z-ai/glm-5.1', '574246f2-1cdf-48ad-83b6-2ca1b541f8e4', '11e17574-0e90-442d-8c70-9c98c27eb4ba', 'test', 0, 0, 0, 0, 0, '410', 0, 124, 0, 'upstream_410', '2026-07-27T17:36:09.335Z', 'standard', 'direct', '["connection","nvidia","574246f2-1cdf-48ad-83b6-2ca1b541f8e4"]', 'nvidia', 2, None)]
+
+=== domain_lockout_state ===
+schema: [(0, 'identifier', 'TEXT', 0, None, 1), (1, 'attempts', 'TEXT', 1, None, 0), (2, 'locked_until', 'INTEGER', 0, None, 0)]
+rows: []
+
+=== combo_adaptation_state ===
+schema: [(0, 'id', 'INTEGER', 0, None, 1), (1, 'combo_id', 'TEXT', 1, None, 0), (2, 'provider_id', 'TEXT', 1, None, 0), (3, 'learned_score', 'REAL', 0, '0.5', 0), (4, 'request_count', 'INTEGER', 0, '0', 0), (5, 'success_count', 'INTEGER', 0, '0', 0), (6, 'avg_latency_ms', 'REAL', 0, None, 0), (7, 'last_failure_at', 'TEXT', 0, None, 0), (8, 'excluded_until', 'TEXT', 0, None, 0), (9, 'updated_at', 'TEXT', 0, "datetime('now')", 0)]
+rows: []
+
+=== quota_snapshots ===
+schema: [(0, 'id', 'INTEGER', 0, None, 1), (1, 'provider', 'TEXT', 1, None, 0), (2, 'connection_id', 'TEXT', 1, None, 0), (3, 'window_key', 'TEXT', 1, None, 0), (4, 'remaining_percentage', 'REAL', 0, None, 0), (5, 'is_exhausted', 'INTEGER', 0, '0', 0), (6, 'next_reset_at', 'TEXT', 0, None, 0), (7, 'window_duration_ms', 'INTEGER', 0, None, 0), (8, 'raw_data', 'TEXT', 0, None, 0), (9, 'created_at', 'TEXT', 1, "datetime('now')", 0)]
+rows: [(5666, 'xai-oauth', 'a2eced8e-0b95-43e4-b71f-80ec92d68369', 'weekly', 100.0, 0, '2026-08-19T00:00:00.000Z', None, None, '2026-08-12T10:04:28.357Z'), (5667, 'xai-oauth', 'a2eced8e-0b95-43e4-b71f-80ec92d68369', 'monthly', 100.0, 0, None, None, None, '2026-08-12T15:25:49.977Z'), (5668, 'xai-oauth', 'a2eced8e-0b95-43e4-b71f-80ec92d68369', 'weekly', 100.0, 0, '2026-08-19T00:00:00.000Z', None, None, '2026-08-12T15:54:31.069Z'), (5669, 'xai-oauth', 'a2eced8e-0b95-43e4-b71f-80ec92d68369', 'monthly', 100.0, 0, None, None, None, '2026-08-12T16:53:59.964Z'), (5670, 'xai-oauth', 'a2eced8e-0b95-43e4-b71f-80ec92d68369', 'weekly', 100.0, 0, '2026-08-19T00:00:00.000Z', None, None, '2026-08-12T16:59:50.650Z')]
+
+=== compression_cache_stats ===
+schema: [(0, 'id', 'INTEGER', 0, None, 1), (1, 'provider', 'TEXT', 1, None, 0), (2, 'model', 'TEXT', 1, "''", 0), (3, 'compression_mode', 'TEXT', 1, None, 0), (4, 'cache_control_present', 'INTEGER', 1, '0', 0), (5, 'estimated_cache_hit', 'INTEGER', 1, '0', 0), (6, 'tokens_saved_compression', 'INTEGER', 1, '0', 0), (7, 'tokens_saved_caching', 'INTEGER', 1, '0', 0), (8, 'net_savings', 'INTEGER', 1, '0', 0), (9, 'created_at', 'DATETIME', 0, 'CURRENT_TIMESTAMP', 0)]
+rows: []
+
+=== hourly_usage_summary ===
+schema: [(0, 'id', 'INTEGER', 0, None, 1), (1, 'provider', 'TEXT', 1, None, 0), (2, 'model', 'TEXT', 1, None, 0), (3, 'date_hour', 'TEXT', 1, None, 0), (4, 'total_requests', 'INTEGER', 1, '0', 0), (5, 'total_input_tokens', 'INTEGER', 1, '0', 0), (6, 'total_output_tokens', 'INTEGER', 1, '0', 0), (7, 'total_cost', 'REAL', 1, '0.0', 0), (8, 'created_at', 'TEXT', 1, "datetime('now')", 0)]
+rows: []
+
+=== daily_usage_summary ===
+schema: [(0, 'id', 'INTEGER', 0, None, 1), (1, 'provider', 'TEXT', 1, None, 0), (2, 'model', 'TEXT', 1, None, 0), (3, 'date', 'TEXT', 1, None, 0), (4, 'total_requests', 'INTEGER', 1, '0', 0), (5, 'total_input_tokens', 'INTEGER', 1, '0', 0), (6, 'total_output_tokens', 'INTEGER', 1, '0', 0), (7, 'total_cost', 'REAL', 1, '0.0', 0), (8, 'created_at', 'TEXT', 1, "datetime('now')", 0)]
+rows: []
+
+=== api_key_token_counters ===
+schema: [(0, 'limit_id', 'TEXT', 1, None, 1), (1, 'window_start', 'TEXT', 1, None, 2), (2, 'tokens_used', 'INTEGER', 1, '0', 0), (3, 'updated_at', 'TEXT', 1, "datetime('now')", 0)]
+rows: []
+
+=== quota_consumption ===
+schema: [(0, 'api_key_id', 'TEXT', 1, None, 1), (1, 'dimension_key', 'TEXT', 1, None, 2), (2, 'bucket_index', 'INTEGER', 1, None, 3), (3, 'consumed', 'REAL', 1, '0', 0), (4, 'updated_at', 'INTEGER', 1, None, 0)]
+rows: []
+
+=== agent_bridge_state ===
+schema: [(0, 'agent_id', 'TEXT', 0, None, 1), (1, 'dns_enabled', 'INTEGER', 1, '0', 0), (2, 'cert_trusted', 'INTEGER', 1, '0', 0), (3, 'setup_completed', 'INTEGER', 1, '0', 0), (4, 'last_started_at', 'TEXT', 0, None, 0), (5, 'last_error', 'TEXT', 0, None, 0)]
+rows: []
+
+=== quota_pools ===
+schema: [(0, 'id', 'TEXT', 0, None, 1), (1, 'connection_id', 'TEXT', 1, None, 0), (2, 'name', 'TEXT', 1, None, 0), (3, 'created_at', 'TEXT', 1, 'CURRENT_TIMESTAMP', 0), (4, 'group_id', 'TEXT', 0, None, 0)]
+rows: []
+
+=== quota_allocations ===
+schema: [(0, 'pool_id', 'TEXT', 1, None, 1), (1, 'api_key_id', 'TEXT', 1, None, 2), (2, 'weight', 'REAL', 1, None, 0), (3, 'cap_value', 'REAL', 0, None, 0), (4, 'cap_unit', 'TEXT', 0, None, 0), (5, 'policy', 'TEXT', 1, "'hard'", 0)]
+rows: []
+
+=== quota_pool_connections ===
+schema: [(0, 'pool_id', 'TEXT', 1, None, 1), (1, 'connection_id', 'TEXT', 1, None, 2), (2, 'created_at', 'TEXT', 1, "datetime('now')", 0)]
+rows: []
+
+=== quota_groups ===
+schema: [(0, 'id', 'TEXT', 0, None, 1), (1, 'name', 'TEXT', 1, None, 0), (2, 'created_at', 'TEXT', 1, "datetime('now')", 0)]
+rows: [('group-demo', 'GroupDemo', '2026-08-10 14:49:26')]
+
+=== quota_allocation_model_caps ===
+schema: [(0, 'pool_id', 'TEXT', 1, None, 1), (1, 'api_key_id', 'TEXT', 1, None, 2), (2, 'model', 'TEXT', 1, None, 3), (3, 'cap_value', 'REAL', 1, None, 0), (4, 'cap_unit', 'TEXT', 1, None, 0)]
+rows: []
+
+=== provider_quota_reset_events ===
+schema: [(0, 'id', 'INTEGER', 0, None, 1), (1, 'provider', 'TEXT', 1, None, 0), (2, 'connection_id', 'TEXT', 1, None, 0), (3, 'window_key', 'TEXT', 1, None, 0), (4, 'window_started_at', 'TEXT', 1, None, 0), (5, 'window_resets_at', 'TEXT', 1, None, 0), (6, 'observed_at', 'TEXT', 1, None, 0), (7, 'previous_remaining_percentage', 'REAL', 0, None, 0), (8, 'new_remaining_percentage', 'REAL', 0, None, 0), (9, 'previous_used_percentage', 'REAL', 0, None, 0), (10, 'new_used_percentage', 'REAL', 0, None, 0), (11, 'raw_data', 'TEXT', 0, None, 0), (12, 'created_at', 'TEXT', 1, "datetime('now')", 0)]
+rows: []

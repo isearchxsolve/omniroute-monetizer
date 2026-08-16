@@ -1,0 +1,41 @@
+{
+  "codex_auth": {
+    "auth_mode": "<str len=7>",
+    "OPENAI_API_KEY": "<NoneType>",
+    "tokens": {
+      "id_token": "<str len=1701>",
+      "access_token": "<str len=1750>",
+      "refresh_token": "<str len=196>",
+      "account_id": "<str len=36>"
+    },
+    "last_refresh": "<str len=30>"
+  },
+  "qoder_user": {
+    "format": "non-json",
+    "keys": [],
+    "bytes": 1132
+  },
+  "codex_config": {
+    "format": "non-json",
+    "keys": [
+      "model",
+      "model_reasoning_effort",
+      "model_verbosity",
+      "model_reasoning_summary",
+      "approval_policy",
+      "sandbox_mode",
+      "service_tier",
+      "notify",
+      "C",
+      "stream_reasoning_live",
+      "approval_policy",
+      "sandbox_mode",
+      "gpt-5.5",
+      "gpt-5.6-terra",
+      "gpt-5.6-sol",
+      "[projects.\"d",
+      "trust_level"
+    ],
+    "bytes": 6421
+  }
+}

@@ -1,0 +1,286 @@
+#!/usr/bin/env python3
+"""
+Shared OmniRoute management/inference API client for the Monetizer automation.
+
+Design rules (from AGENTS.md):
+- NEVER restart/stop/kill the OmniRoute service; only supported /api calls.
+- NEVER log secrets (keys, tokens, passwords, cookies). All logging is redacted.
+- Idempotent: repeated runs converge, never destroy healthy state.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import requests
+
+# Import ModelCatalogCache for /v1/models performance optimization
+try:
+    from model_cache import ModelCatalogCache
+except ImportError:
+    # Fallback if model_cache not available
+    ModelCatalogCache = None
+
+_raw_base = os.environ.get("OMNIROUTE_BASE_URL", "http://localhost:20128").rstrip("/")
+if _raw_base.endswith("/v1"):
+    _raw_base = _raw_base[:-3].rstrip("/")
+BASE_URL = _raw_base or "http://localhost:20128"
+API_URL = f"{BASE_URL}/api"
+V1_URL = f"{BASE_URL}/v1"
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+STATE_DIR = PROJECT_ROOT / "state"
+STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Initialize global model catalog cache (TTL 60s, disk persistence)
+_model_cache = None
+if ModelCatalogCache:
+    _model_cache = ModelCatalogCache(ttl_seconds=60, cache_file=STATE_DIR / "model_cache.json")
+
+SECRET_RE = re.compile(
+    r"(sk-[A-Za-z0-9_\-]{8,}|gh[opsu]_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9\-]{10,}|"
+    r"key-[A-Za-z0-9]{20,}|Bearer\s+[A-Za-z0-9_\-\.]{16,})",
+    re.I,
+)
+
+
+def redact(value: Any) -> str:
+    """Redact anything that looks like a secret in a string."""
+    s = str(value)
+    return SECRET_RE.sub("[REDACTED]", s)
+
+
+def mask_token(token: str) -> str:
+    if not token:
+        return "<empty>"
+    if len(token) <= 10:
+        return "[REDACTED]"
+    return f"{token[:6]}...{token[-4:]}"
+
+
+def log(msg: str, level: str = "info") -> None:
+    prefix = {"info": "[*]", "ok": "[+]", "warn": "[!]", "err": "[-]", "skip": "[~]"}.get(level, "[*]")
+    print(f"{prefix} {redact(msg)}", flush=True)
+
+
+def get_password() -> str:
+    """Management password from environment only (no hard-coded fallback)."""
+    return os.environ.get("OMNIROUTE_PASSWORD", "").strip()
+
+
+def get_api_key() -> str:
+    """Optional inference bearer key from environment only."""
+    return os.environ.get("OMNIROUTE_API_KEY", "").strip()
+
+
+class OmniRouteAPI:
+    """Session-based client for the OmniRoute management + inference APIs."""
+
+    def __init__(self, base_url: str = BASE_URL, password: Optional[str] = None):
+        self.base = base_url.rstrip("/")
+        if self.base.endswith("/v1"):
+            self.base = self.base[:-3].rstrip("/")
+        self.api = f"{self.base}/api"
+        self.v1 = f"{self.base}/v1"
+        self.session = requests.Session()
+        self._password = password if password is not None else get_password()
+        self._logged_in = False
+
+    # ------------------------------------------------------------------ auth
+    def login(self) -> bool:
+        if not self._password:
+            log("OMNIROUTE_PASSWORD not set; management calls will be skipped", "warn")
+            return False
+        r = self.session.post(
+            f"{self.api}/auth/login",
+            json={"password": self._password},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            log(f"Management login failed: HTTP {r.status_code}", "err")
+            return False
+        token = self.session.cookies.get("auth_token")
+        if not token:
+            try:
+                body = r.json()
+                token = body.get("token") or body.get("auth_token") or body.get("access_token")
+                if token:
+                    self.session.cookies.set("auth_token", token)
+            except Exception:
+                pass
+        self._logged_in = True
+        log("Management login OK", "ok")
+        return True
+
+    @property
+    def logged_in(self) -> bool:
+        return self._logged_in
+
+    def _ensure_login(self) -> None:
+        if not self._logged_in:
+            if not self.login():
+                raise RuntimeError("Not authenticated to OmniRoute management API")
+
+    # ------------------------------------------------------------- providers
+    def get_connections(self) -> List[Dict[str, Any]]:
+        self._ensure_login()
+        r = self.session.get(f"{self.api}/providers", timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        return data.get("connections", []) if isinstance(data, dict) else []
+
+    def update_connection(self, cid: str, patch: Dict[str, Any]) -> Dict[str, Any]:
+        """PUT /api/providers/{id} with a partial patch (e.g. apiKey, isActive)."""
+        self._ensure_login()
+        r = self.session.put(f"{self.api}/providers/{cid}", json=patch, timeout=20)
+        try:
+            body = r.json()
+        except Exception:
+            body = {"raw": redact(r.text[:500])}
+        return {"http_status": r.status_code, "body": body}
+
+    def test_connection(self, cid: str) -> Dict[str, Any]:
+        self._ensure_login()
+        try:
+            r = self.session.post(f"{self.api}/providers/{cid}/test", timeout=45)
+            try:
+                body = r.json()
+            except Exception:
+                body = {"raw": redact(r.text[:500])}
+            return {"http_status": r.status_code, "result": body}
+        except Exception as e:
+            return {"http_status": None, "result": {"valid": False, "error": f"{type(e).__name__}: {e}"}}
+
+    def refresh_connection(self, cid: str) -> Dict[str, Any]:
+        self._ensure_login()
+        try:
+            r = self.session.post(f"{self.api}/providers/{cid}/refresh", timeout=60)
+            try:
+                body = r.json()
+            except Exception:
+                body = {"raw": redact(r.text[:500])}
+            return {"http_status": r.status_code, "result": body}
+        except Exception as e:
+            return {"http_status": None, "result": {"error": f"{type(e).__name__}: {e}"}}
+
+    # ---------------------------------------------------------------- combos
+    def get_combos(self) -> List[Dict[str, Any]]:
+        self._ensure_login()
+        r = self.session.get(f"{self.api}/combos", timeout=60)
+        r.raise_for_status()
+        data = r.json()
+        return data.get("combos", []) if isinstance(data, dict) else []
+
+    def update_combo(self, combo_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """PUT /api/combos/{id}. Invalidate model cache after update."""
+        self._ensure_login()
+        r = self.session.put(f"{self.api}/combos/{combo_id}", json=payload, timeout=60)
+        
+        # Invalidate model cache if combo update succeeds (models may have changed)
+        if r.status_code == 200 and _model_cache:
+            _model_cache.invalidate()
+            log(f"Model cache invalidated after combo update", "ok")
+        
+        try:
+            body = r.json()
+        except Exception:
+            body = {"raw": redact(r.text[:500])}
+        return {"http_status": r.status_code, "body": body}
+
+    # ------------------------------------------------------------- inference
+    def list_models(self) -> List[Dict[str, Any]]:
+        """Get model catalog, with TTL caching to avoid 30-60s rebuilds."""
+        # Use cache if available to reduce latency from 30-60s to <100ms
+        if _model_cache:
+            try:
+                def fetch_fresh():
+                    headers = {}
+                    key = get_api_key()
+                    if key:
+                        headers["Authorization"] = f"Bearer {key}"
+                    r = requests.get(f"{self.v1}/models", headers=headers, timeout=120)
+                    r.raise_for_status()
+                    data = r.json()
+                    return data.get("data", []) if isinstance(data, dict) else []
+                
+                models = _model_cache.get_models(fetch_fn=fetch_fresh)
+                if models:
+                    return models
+            except Exception as e:
+                log(f"Cache fetch failed, falling back to direct: {e}", "warn")
+        
+        # Fallback: direct fetch without cache
+        headers = {}
+        key = get_api_key()
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+        # /v1/models returns the full catalog (~2.5k models) and can take 30-60s
+        r = requests.get(f"{self.v1}/models", headers=headers, timeout=120)
+        r.raise_for_status()
+        data = r.json()
+        return data.get("data", []) if isinstance(data, dict) else []
+
+    def chat_probe(self, model: str, timeout: int = 30) -> Dict[str, Any]:
+        """Minimal but VALID chat completion probe (per AGENTS.md: no tiny payloads)."""
+        headers = {"Content-Type": "application/json"}
+        key = get_api_key()
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "user", "content": "Reply with the single word: OK"}
+            ],
+            "max_tokens": 16,
+            "temperature": 0,
+        }
+        start = time.monotonic()
+        try:
+            r = requests.post(
+                f"{self.v1}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=timeout,
+            )
+            elapsed = round(time.monotonic() - start, 3)
+            try:
+                body = r.json()
+            except Exception:
+                body = {"raw": redact(r.text[:500])}
+            content = ""
+            if r.status_code == 200 and isinstance(body, dict):
+                try:
+                    content = body["choices"][0]["message"]["content"] or ""
+                except Exception:
+                    content = ""
+            return {
+                "model": model,
+                "http_status": r.status_code,
+                "latency": elapsed,
+                "ok": r.status_code == 200 and bool(content),
+                "response_model": body.get("model") if isinstance(body, dict) else None,
+                "content_preview": content[:80],
+                "error": None if r.status_code == 200 else redact(str(body))[:300],
+            }
+        except Exception as e:
+            return {
+                "model": model,
+                "http_status": None,
+                "latency": round(time.monotonic() - start, 3),
+                "ok": False,
+                "response_model": None,
+                "content_preview": "",
+                "error": f"{type(e).__name__}: {e}",
+            }
+
+
+def save_json(name: str, data: Any, subdir: Optional[str] = None) -> Path:
+    target_dir = STATE_DIR / subdir if subdir else STATE_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+    path = target_dir / name
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+    return path

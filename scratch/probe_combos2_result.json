@@ -1,0 +1,14 @@
+{
+  "type": "list",
+  "len": 13,
+  "first": {
+    "models": [],
+    "strategy": "priority",
+    "description": "Verified Live Fleet Cascade for auto/asian-flagships",
+    "retries": 2,
+    "retry_delay": 300,
+    "timeout": 15000,
+    "sortOrder": 1,
+    "version": 2
+  }
+}
