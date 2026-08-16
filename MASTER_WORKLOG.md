@@ -2174,4 +2174,30 @@ acceptance suite, and hunted the residual stalls that still failed T2/T3.
 **Files touched:** `scripts/automation/oauth_keepalive.py` (new), `scripts/automation/oauth_keepalive_task.bat` (new), `scratch/connection_health.py` (new), `scratch/test_native_refresh.py` (new), `scratch/test_refresh_failures.py` (new), `state/omniroute_password.txt` (new, gitignored), `logs/keepalive.log` (new), `state/keepalive_result.json` (new).
 **Status:** ✅ Keep-alive production-ready and scheduled. Remaining human actions (optional): (a) re-login trae/windsurf if you want those providers; (b) run the SYSTEM one-liner elevated for reboot-proof operation; (c) Anthropic billing decision (entry #35).
 
+### [2026-08-16 11:23] #37 — POST-AUDIT: Full workspace scan, gap analysis (P1–P8, G1–G14), detailed fixes documented
+**What:** User asked: "okay now you have the whole picture come up with gaps you identified both general and performance", then "document these gaps and next is to provide detailed fixes for those gaps as another document".
+**Why:** Fresh independent audit after reading `AGENTS.md` + `MASTER_WORKLOG.md` (#1–#36) and completing a full recursive workspace scan. Earlier audits (Phase 1, entry #4) predate entries #19–#36 (combo repair, TTL mitigation, session refresh, keygen, keep-alive), so a new post-audit snapshot was needed.
+**Findings:**
+- Workspace mapped fully: 48 top-level files; `scripts/` + `scripts/automation/` (22 files incl. production toolkit `omniroute_api.py`, `cli_token_harvester.py`, `model_cache.py`, `health_checker.py`, `provider_orchestrator.py`, `oauth_keepalive.py`); `scratch/` (~190 probe scripts + `scratch/MonkeyCode/` nested git checkout, gitignored); `state/` (~30 JSON + `browser_profile/`, `dom_recon/`, `browser_automation/`, gitignored secrets); `evidence/` (legacy automation v10–v12, registry api/catalog/models, results CSV/JSON); `omniroute_provider_recovery/` (~57 PNG + 2 JSON); `omniroute_ui_diagnostic/` (~100 files); `docs/`, `reports/`, `prompts/`, `logs/`, `artifacts/`.
+- Gap analysis produced 22 items — **8 performance (P1–P8)** and **14 general (G1–G14)**. Headline items:
+  - **P1** residual synchronous catalog rebuild: ~24–38s freeze every ~10.6 min (TTL raise is mitigation only; real fix in unreleased v3.8.50).
+  - **P2** pricing N+1 hog (#9685/#10055) latent and unmitigated in 3.8.49.
+  - **P3** no caching reverse proxy in front of :20128 — new fix path: SWR behavior can be reproduced on 3.8.49 via Caddy/Nginx with zero code changes, zero NSSM bounces.
+  - **P4** unexplained ~2.05s steady-state `/v1/models` vs 24ms warm cache hit.
+  - **P5** ~30 dead OAuth connections still resident in DB (suppressed `isActive=false`, never purged).
+  - **G2** dead `auto/zai` combo never deactivated (identified in #23, not executed).
+  - **G4/G5** "self-healing" deployed only ~40%: `health_checker.py`, `provider_orchestrator.py`, `watch_omniroute_release.py`, acceptance suite never scheduled; T16 never run.
+  - **G6** all 13 combos are NVIDIA-only; OpenRouter verified (363ms, #35) but routed into zero combos.
+  - **G9** secrets-in-git-history never audited (T11 scans working tree only; #19 retroactively redacted keys from the worklog).
+  - **G10** no recurring backup of `storage.sqlite`/`state/` (DB corrupted once already, #14–#18).
+  - **G8** ~25 stale top-level reports contradict current reality; AGENTS.md still certifies the old 12-test matrix vs `acceptance_tests.py`'s T1–T20.
+- Full list with evidence + priority order in `POST_AUDIT_GAPS.md`.
+**Actions taken:**
+- Created `POST_AUDIT_GAPS.md` — P1–P8 + G1–G14 with evidence references + priority table.
+- Created `POST_AUDIT_FIXES.md` — detailed ordered fixes: **G9** git-history secret audit (rotate-then-purge), **G14** DPAPI password vault for `state/omniroute_password.txt`, **P3** Caddy SWR proxy, **P4** residual-latency probe, **G2** `auto/zai` deactivation, **P5** supported API purge of dead OAuth rows, **G4+G5** Task Scheduler deployment of health/acceptance/release/stall watches, **G6** OpenRouter fallback cascade (sandbox-tested first), **G10** scheduled backups, **G8** archive stale docs + AGENTS.md 20-test pointer, **G1** v3.8.50 upgrade runbook, **G11** legacy script dedupe, **G12** `docs/INSTALLATION.md` reproducible install, **G13** scratch archive convention, **G7** human-decision docs (Anthropic billing, trae/windsurf re-login).
+- No project scripts run during this audit — read-only inspection + two new docs only.
+**Files touched:** `POST_AUDIT_GAPS.md` (new), `POST_AUDIT_FIXES.md` (new), `MASTER_WORKLOG.md` (this entry).
+**Verification:** Both documents saved at repo root; every gap cross-referenced to worklog evidence entries (#4, #14, #18, #21, #22, #23, #24, #25, #31, #32, #34, #35, #36) or observed in the workspace scan. T11 compliant — no secrets logged.
+**Status:** ✅ Done — gaps documented; fixes documented with verification criteria; execution pending user go-ahead.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
