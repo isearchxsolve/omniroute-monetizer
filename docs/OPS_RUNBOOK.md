@@ -45,6 +45,12 @@ the scheduled tasks below.
 | `release_watch.py` (scratch) | Task Scheduler | 30 min | `state\release_watch.json` | version ≥3.8.50 published |
 | `acceptance_watch.py` | Task Scheduler | 6 h | `state\acceptance_latest.md`, `state\acceptance_history\` | any FAIL |
 | `backup_state.py` | Task Scheduler | daily 02:00 | `logs\backup.log`, `d:\omniroute-backups\<date>\` | missing files |
+| `db_integrity_watch.py` | Task Scheduler | daily 02:30 | `state\db_integrity_report.json` | WAL > 8 MB / corrupt |
+| `purge_dead_connections.py` | Task Scheduler | daily 03:00 | `state\purge_report.json` | unsupported delete path |
+| `wire_openrouter_fallback.py` | Task Scheduler | daily 03:30 | `state\openrouter_fallback_report.json` | update failures |
+| `deactivate_zai_combo.py` | Task Scheduler | daily 03:45 | `state\zai_deactivation_report.json` | update failures |
+| `coverage_report.py --apply` | Task Scheduler | daily 04:00 | `state\coverage_report.json`, `logs\coverage_report.md` | coverage drop / new harvestable |
+| `residual_latency_probe.py` | Task Scheduler | 6 h | `state\residual_latency_report.json` | >1 stall / 5s+ in a pass |
 
 Registration commands are in `docs/INSTALLATION.md` §8.
 
@@ -60,6 +66,12 @@ Registration commands are in `docs/INSTALLATION.md` §8.
 | `OmniRoute ReleaseWatch` | `release_watch_task.bat` | alert when v3.8.50 ships |
 | `OmniRoute AcceptanceWatch` | `acceptance_watch_task.bat` | regression detection |
 | `OmniRoute DailyBackup` | `backup_state_task.bat` | nightly state backup |
+| `OmniRoute DbIntegrity` | `db_integrity_watch_task.bat` | read-only WAL/integrity check |
+| `OmniRoute PurgeDead` | `purge_dead_connections_task.bat` | purge dead connections (supported API) |
+| `OmniRoute WireFallback` | `wire_openrouter_fallback_task.bat` | OpenRouter weight-0 fallback entries |
+| `OmniRoute DeactivateZai` | `deactivate_zai_combo_task.bat` | deactivate dead auto/zai combo |
+| `OmniRoute CoverageReport` | `coverage_report_task.bat` | 295-provider coverage + worklist |
+| `OmniRoute ResidualLatency` | `residual_latency_probe_task.bat` | P4 latency characterization |
 
 Verify registration:
 

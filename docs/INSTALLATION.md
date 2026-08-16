@@ -180,6 +180,12 @@ schtasks /create /tn "OmniRoute StallMonitor"   /tr "d:\omniroute-monetizer\scri
 schtasks /create /tn "OmniRoute ReleaseWatch"   /tr "d:\omniroute-monetizer\scripts\automation\release_watch_task.bat"    /sc minute /mo 30
 schtasks /create /tn "OmniRoute AcceptanceWatch" /tr "d:\omniroute-monetizer\scripts\automation\acceptance_watch_task.bat" /sc hour /mo 6
 schtasks /create /tn "OmniRoute DailyBackup"    /tr "d:\omniroute-monetizer\scripts\automation\backup_state_task.bat"     /sc daily /st 02:00
+schtasks /create /tn "OmniRoute DbIntegrity"    /tr "d:\omniroute-monetizer\scripts\automation\db_integrity_watch_task.bat" /sc daily /st 02:30
+schtasks /create /tn "OmniRoute PurgeDead"      /tr "d:\omniroute-monetizer\scripts\automation\purge_dead_connections_task.bat" /sc daily /st 03:00
+schtasks /create /tn "OmniRoute WireFallback"   /tr "d:\omniroute-monetizer\scripts\automation\wire_openrouter_fallback_task.bat" /sc daily /st 03:30
+schtasks /create /tn "OmniRoute DeactivateZai"  /tr "d:\omniroute-monetizer\scripts\automation\deactivate_zai_combo_task.bat" /sc daily /st 03:45
+schtasks /create /tn "OmniRoute CoverageReport" /tr "d:\omniroute-monetizer\scripts\automation\coverage_report_task.bat" /sc daily /st 04:00
+schtasks /create /tn "OmniRoute ResidualLatency" /tr "d:\omniroute-monetizer\scripts\automation\residual_latency_probe_task.bat" /sc hour /mo 6
 ```
 
 ---

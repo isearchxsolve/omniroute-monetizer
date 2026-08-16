@@ -249,6 +249,28 @@ class FullE2EProviderAutomation:
         self.run_tier6_acceptance()
 
         elapsed = time.time() - start_time
+
+        # T16: write state/orchestrator_results.json with coverage_percent so the
+        # acceptance suite's T16 test has its data source (it reads this exact file).
+        try:
+            conns = self.api.get_connections()
+            active = sum(1 for c in conns if c.get("isActive", True))
+            total = max(len(conns), 1)
+            coverage = round(active / total * 100, 1)
+            or_res = {
+                "timestamp": dt.datetime.now().isoformat(),
+                "summary": {
+                    "coverage_percent": coverage,
+                    "active_connections": active,
+                    "total_connections": len(conns),
+                    "acceptance_passed": self.results.get("tiers", {}).get("tier6_acceptance", {}).get("passed", False),
+                },
+            }
+            save_json(STATE_DIR / "orchestrator_results.json", or_res)
+            log(f"T16 coverage: {coverage}% ({active}/{len(conns)})", "ok")
+        except Exception as e:
+            log(f"T16 coverage computation failed: {e}", "warn")
+
         self.results["summary"] = {
             "status": "COMPLETED",
             "duration_seconds": round(elapsed, 2),

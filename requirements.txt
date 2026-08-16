@@ -1,0 +1,10 @@
+# OmniRoute Monetizer automation Python dependencies (G12).
+# Install into the project venv:  pip install -r requirements.txt
+# Runtime environment: Python 3.11+ (Windows host runs the scheduled tasks).
+requests>=2.31,<3
+
+# Browser automation (Tier 2 DOM keygen) — optional but recommended.
+playwright>=1.40,<2
+
+# Standard library only for everything else (ctypes DPAPI vault, sqlite3, json,
+# pathlib, subprocess). No pinned CLI/token extractors outside the repo.

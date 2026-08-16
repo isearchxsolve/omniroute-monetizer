@@ -2546,6 +2546,31 @@ acceptance suite, and hunted the residual stalls that still failed T2/T3.
 
 **Status:** ✅ Complete.
 
+### [2026-08-16 18:16] #59 — Close All Remaining Gaps: P4/P5/P7/G2/G6/G12/G13/T16 + Coverage Classifier
+**What:** User requested: "close all gaps and achieve 100% automation zero human handoff all providers available 295 around needs to be configured and healthy." Closed every repo-side gap and produced the honest coverage classifier.
+
+**Findings (honest ceiling):**
+- 100% of ~295 is NOT achievable by automation: ~244 offerings have **no account/credentials** (signup, billing wall, MFA, paid plan). Guardrails forbid fabricating keys or bypassing CAPTCHA/risk-control (AGENTS.md anti-pattern #7). The automation runs up to that wall and reports it precisely.
+- Pre-existing gap: `full_e2e_provider_automation.py` wrote `full_e2e_automation_report.json` but T16 reads `state/orchestrator_results.json` — T16's data source was never produced.
+
+**Actions:**
+1. **P4** `scripts/automation/residual_latency_probe.py` + `_task.bat` — 20× `GET /v1/models` at 10s spacing, p50/p95/max, with/without auth → `state/residual_latency_report.json`.
+2. **P5** `scripts/automation/purge_dead_connections.py` + `_task.bat` — supported-API only; DELETE support probed on a **non-existent UUID** (no side effects); if unsupported → "no supported delete path" outcome (suppression retained). Never touches DB.
+3. **P7** `scripts/automation/db_integrity_watch.py` + `_task.bat` — read-only `immutable=1` `PRAGMA integrity_check`, WAL/SHM size thresholds → `state/db_integrity_report.json`.
+4. **G2** `scripts/automation/deactivate_zai_combo.py` + `_task.bat` — idempotent `auto/zai` deactivation via supported PUT.
+5. **G6** `scripts/automation/wire_openrouter_fallback.py` + `_task.bat` — weight-0 OpenRouter fallback entries into target combos, idempotent (no dup), real model from live catalog.
+6. **T16** fixed: orchestrator now writes `state/orchestrator_results.json` with `coverage_percent`.
+7. **G13** `scratch/archive/` created; moved 15 retracted/superseded probes (raise_catalog_ttl×2, find_pool_logic×8, nuke_rate_limits, fix_combos_robust, hardcode_combos, fix_auto_pro_coding, fix_pro_coding) — none worklog-referenced.
+8. **G12** `requirements.txt` pinning requests+playwright.
+9. **coverage_report.py** `scripts/automation/coverage_report.py` + `_task.bat` — classifies every catalog provider as VERIFIED / SUPPRESSED / HARVESTABLE / ACCOUNT_REQUIRED, computes honest coverage %, writes `state/coverage_report.json` + `logs/coverage_report.md` human-blocked worklist.
+10. **Docs:** `docs/INSTALLATION.md` §8 + `docs/OPS_RUNBOOK.md` tables updated with all 6 new tasks.
+
+**Files touched:** 6 new automation scripts + 6 new `_task.bat`, `requirements.txt`, `scratch/archive/` (15 renames + README), `full_e2e_provider_automation.py`, `docs/INSTALLATION.md`, `docs/OPS_RUNBOOK.md`, `MASTER_WORKLOG.md` (this entry).
+
+**Verification:** `python3 -m py_compile scripts/automation/*.py` OK; `coverage_report.py` runs offline (0% with no catalog/conns — correct); secret scan on all touched files CLEAN.
+
+**Status:** ✅ All repo-side gaps closed. **Host-side execution required** (scheduled tasks + live runs) — port 20128 unreachable from sandbox. **User-blocked:** G9 history purge (rotation), G7 (Anthropic billing / trae-windsurf OAuth re-login), and the ~244 ACCOUNT_REQUIRED offerings (human signup/billing by definition).
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
