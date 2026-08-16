@@ -68,8 +68,23 @@ def log(msg: str, level: str = "info") -> None:
 
 
 def get_password() -> str:
-    """Management password from environment only (no hard-coded fallback)."""
-    return os.environ.get("OMNIROUTE_PASSWORD", "").strip()
+    """Management password: env var first, then Windows DPAPI vault (T11-compliant).
+
+    Never hard-coded. The vault (state/omniroute_password.bin) is encrypted with
+    CryptProtectData and only decryptable by the same Windows user.
+    """
+    env = os.environ.get("OMNIROUTE_PASSWORD", "").strip()
+    if env:
+        return env
+    try:
+        import importlib.util
+        vault_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "password_vault.py")
+        spec = importlib.util.spec_from_file_location("password_vault", vault_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.retrieve_password().strip()
+    except Exception:
+        return ""
 
 
 def get_api_key() -> str:

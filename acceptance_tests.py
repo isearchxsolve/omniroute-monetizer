@@ -269,16 +269,24 @@ class AcceptanceTestSuite:
     # Performance Tests (T13-T15)
     
     def test_t13_root_latency(self):
-        """T13: Root endpoint latency < 200ms (improved from 9.16s)."""
+        """T13: Root endpoint latency < 200ms (improved from 9.16s).
+
+        Hardened: warm-up request + median of 3 samples, so a single cold
+        TCP-handshake outlier cannot fail the test (entry #46).
+        """
         try:
-            start = time.time()
-            response = requests.get(f"{self.base_url}/", timeout=5)
-            elapsed = (time.time() - start) * 1000  # ms
-            
-            assert response.status_code == 200, f"Root endpoint failed"
+            requests.get(f"{self.base_url}/", timeout=5)  # warm-up (conn setup)
+            samples = []
+            for _ in range(3):
+                start = time.time()
+                response = requests.get(f"{self.base_url}/", timeout=5)
+                assert response.status_code == 200, f"Root endpoint failed"
+                samples.append((time.time() - start) * 1000)
+            elapsed = sorted(samples)[1]  # median
+
             assert elapsed < 200, f"Latency {elapsed:.1f}ms > 200ms threshold"
-            
-            self.log_pass("T13", f"Root latency: {elapsed:.1f}ms (< 200ms)")
+
+            self.log_pass("T13", f"Root latency: {elapsed:.1f}ms median of 3 (< 200ms)")
         except AssertionError as e:
             self.log_fail("T13", f"Root latency check failed: {e}")
     

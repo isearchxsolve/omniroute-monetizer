@@ -21,7 +21,14 @@ crypt32 = ctypes.windll.crypt32
 kernel32 = ctypes.windll.kernel32
 
 def protect_data(plaintext: str) -> bytes:
-    """Encrypt a plaintext string using the current Windows user's DPAPI credentials."""
+    """Encrypt a plaintext string using Windows DPAPI at MACHINE scope.
+
+    Uses CRYPTPROTECT_LOCAL_MACHINE (0x4) so the blob is decryptable by any
+    local principal (SYSTEM services AND interactive users). This fixes the
+    cross-principal failure where a SYSTEM-written user-scoped blob could not
+    be decrypted by an interactive Admin session (and vice versa).
+    CRYPTPROTECT_UI_FORBIDDEN (0x1) suppresses any UI prompt.
+    """
     data_bytes = plaintext.encode("utf-8")
     blob_in = DATA_BLOB()
     blob_in.cbData = len(data_bytes)
@@ -30,8 +37,8 @@ def protect_data(plaintext: str) -> bytes:
     blob_out = DATA_BLOB()
     
     # CryptProtectData(pDataIn, szDataDescr, pOptionalEntropy, pvReserved, pPromptStruct, dwFlags, pDataOut)
-    # dwFlags = 0 (CRYPTPROTECT_UI_FORBIDDEN = 0x1)
-    flags = 0x1
+    # dwFlags = CRYPTPROTECT_UI_FORBIDDEN (0x1) | CRYPTPROTECT_LOCAL_MACHINE (0x4)
+    flags = 0x1 | 0x4
     res = crypt32.CryptProtectData(
         ctypes.byref(blob_in),
         "omniroute-monetizer-vault",
@@ -51,30 +58,33 @@ def protect_data(plaintext: str) -> bytes:
         kernel32.LocalFree(blob_out.pbData)
 
 def unprotect_data(encrypted_bytes: bytes) -> str:
-    """Decrypt ciphertext bytes using the current Windows user's DPAPI credentials."""
-    blob_in = DATA_BLOB()
-    blob_in.cbData = len(encrypted_bytes)
-    blob_in.pbData = ctypes.cast(ctypes.create_string_buffer(encrypted_bytes, len(encrypted_bytes)), ctypes.POINTER(ctypes.c_byte))
-    
-    blob_out = DATA_BLOB()
-    flags = 0x1
-    res = crypt32.CryptUnprotectData(
-        ctypes.byref(blob_in),
-        None,
-        None,
-        None,
-        None,
-        flags,
-        ctypes.byref(blob_out)
-    )
-    if not res:
-        raise OSError("CryptUnprotectData failed to decrypt data with Windows DPAPI.")
-    
-    try:
-        decrypted_bytes = ctypes.string_at(blob_out.pbData, blob_out.cbData)
-        return decrypted_bytes.decode("utf-8")
-    finally:
-        kernel32.LocalFree(blob_out.pbData)
+    """Decrypt ciphertext bytes using Windows DPAPI.
+
+    Tries MACHINE scope first (0x4), then falls back to USER scope (0x1) for
+    backward compatibility with legacy user-scoped blobs.
+    """
+    for flags in (0x1 | 0x4, 0x1):
+        blob_in = DATA_BLOB()
+        blob_in.cbData = len(encrypted_bytes)
+        blob_in.pbData = ctypes.cast(ctypes.create_string_buffer(encrypted_bytes, len(encrypted_bytes)), ctypes.POINTER(ctypes.c_byte))
+        
+        blob_out = DATA_BLOB()
+        res = crypt32.CryptUnprotectData(
+            ctypes.byref(blob_in),
+            None,
+            None,
+            None,
+            None,
+            flags,
+            ctypes.byref(blob_out)
+        )
+        if res:
+            try:
+                decrypted_bytes = ctypes.string_at(blob_out.pbData, blob_out.cbData)
+                return decrypted_bytes.decode("utf-8")
+            finally:
+                kernel32.LocalFree(blob_out.pbData)
+    raise OSError("CryptUnprotectData failed to decrypt data with Windows DPAPI (machine and user scope).")
 
 def store_password(password: str, vault_path: Path = None) -> Path:
     """Encrypt and store password in DPAPI vault."""
