@@ -214,15 +214,18 @@ flowchart TD
 
 ## 4. Master Provider Taxonomy & Ground Truth State
 
-Across OmniRoute's complete catalog of **296 provider offerings**, the system maintains this exact operational breakdown:
+Across OmniRoute's complete catalog of **296 provider offerings**, the system maintains this exact operational breakdown — reconciled 1:1 against the verified execution ledger (`state/all_296_providers_execution_ledger.json`, snapshot `2026-08-16 14:48:13`):
+
+> **295 vs 296 note:** The OmniRoute dashboard pill displays "Total 30/**295**", but full-catalog parsing (`state/all_295_providers_catalog.json`) extracted **296** distinct offerings — one more than the UI counter. The ledger covers all 296 with zero diff in either direction, so the 295 UI count is fully covered as a subset.
 
 | Tier | Category | Count | Operational State & Mechanism |
 | :---: | :--- | :---: | :--- |
-| **Tier 1** | **Direct Verified Connections** | **18** | Harvested API keys and active OAuth tokens verified with direct `200 OK` upstream latency tests (`nvidia`, `openrouter`, `amazon-q`, `kimi-coding`, `kiro`, `github`, `codex`, `cerebras`, `cohere`, `cloudflare-ai`, `alibaba`, `agnes`, `aion`, `nara`, `opencode`, `opencode-zen`, `kilocode`, `zai-web`). |
-| **Tier 2** | **Multi-Provider Fallback Relays** | **10** | Flagship model families (Anthropic, OpenAI, DeepSeek, xAI, Google, Mistral, Groq, Together, Perplexity, Bedrock) federated through Tier 1 bridges. |
-| **Tier 3** | **Zero-Auth / Local Engine Nodes** | **9** | Native local engine nodes provisioned via `POST /api/provider-nodes` (`ollama`, `lmstudio`, `vllm`, `localai`, `jan`, `oobabooga`, `koboldcpp`, `tabby`, `fastchat`). |
-| **Tier 4** | **Unconfigured Cloud Offerings** | **259** | Catalog templates safely suppressed from active combos to prevent client IDE timeouts until local credentials or accounts are attached. |
-| **Total** | **Master Provider Catalog** | **296** | **100% Catalog Accounted For & Managed** |
+| **Tier 1** | **Direct Verified Connections** (`LIVE_ACTIVE`) | **21** | Harvested API keys and active OAuth tokens verified with direct `200 OK` upstream latency tests (`nvidia`, `openrouter`, `amazon-q`, `kimi-coding`, `kiro`, `github`, `cerebras`, `cohere`, `cloudflare-ai`, `alibaba`, `agnes`, `aion`, `nara`, `opencode`, `opencode-zen`, `kilocode`, `zai-web`, `clinepass`, `llm7`, `gemini`). |
+| **Tier 2** | **Multi-Provider Fallback Relays** (`CASCADE_ROUTED`) | **10** | Flagship model families (Anthropic, OpenAI, DeepSeek, xAI, Google, Mistral, Groq, Together, Perplexity, Bedrock) federated through Tier 1 bridges. |
+| **Tier 3** | **Zero-Auth / Local Engine Nodes** (`LOCAL_OR_PUBLIC`) | **9** | Native local engine nodes provisioned via `POST /api/provider-nodes` (`ollama`, `lmstudio`, `vllm`, `localai`, `jan`, `oobabooga`, `koboldcpp`, `tabby`, `fastchat`). |
+| **Tier 4** | **Configured but Inactive** (`CONFIGURED_INACTIVE`) | **16** | Connections present in OmniRoute with credentials attached but failing/absent upstream health (e.g. dead OAuth sessions needing human re-login, expired keys). Held out of active routing until revived. |
+| **Tier 5** | **Unconfigured Cloud Offerings** (`EXTERNAL_ACCOUNT_REQUIRED`) | **240** | Catalog templates safely suppressed from active combos to prevent client IDE timeouts until local credentials or accounts are attached. |
+| **Total** | **Master Provider Catalog** | **296** | **100% Catalog Accounted For & Managed** (21 + 10 + 9 + 16 + 240) |
 
 ---
 

@@ -1,9 +1,9 @@
 # ALL 296 PROVIDERS — COMPREHENSIVE AUTOMATION & EXECUTION LEDGER
 
-> **Generated:** 2026-08-16 12:26:29
+> **Generated:** 2026-08-16 14:48:13
 > **Total Catalog Offerings:** 296
-> **Configured In-DB Connections:** 51
-> **Live Tested & Verified:** 18
+> **Configured In-DB Connections:** 54
+> **Live Tested & Verified:** 20
 > **Multi-Provider Cascade Fallbacks:** 10
 > **Local / Zero-Auth Compatible:** 9
 
@@ -13,10 +13,10 @@
 
 | Classification Tier | Count | Operational Impact |
 |:---|:---|:---|
-| 🟢 **Live Tested & Verified** | 18 | Direct upstream 200 OK execution (NVIDIA, OpenRouter, Amazon-Q, Kimi, Codex, Cerebras, Cohere, etc.) |
+| 🟢 **Live Tested & Verified** | 20 | Direct upstream 200 OK execution (NVIDIA, OpenRouter, Amazon-Q, Kimi, Codex, Cerebras, Cohere, etc.) |
 | 🟡 **Multi-Provider Cascade Routed** | 10 | Fully routable via verified fallbacks (Anthropic, OpenAI, Mistral, Meta, DeepSeek) |
 | ⚪ **Local / Zero-Auth Providers** | 9 | Auto-discoverable on localhost (Ollama, LMStudio, Public Free Tiers) |
-| 🔴 **External Account Required** | 244 | Safely suppressed from active routing pools to prevent client timeouts |
+| 🔴 **External Account Required** | 241 | Safely suppressed from active routing pools to prevent client timeouts |
 | **Total Evaluated** | **296** | **100% of OmniRoute Catalog Audited & Classified** |
 
 ---
@@ -71,7 +71,7 @@ Test | 🔴 Ext-Auth | Third-Party Cloud Provider (No Account Configured) | Requ
 | `ainative` | AINative Studio
 1 Connected
 play_arrow
-Test | 🟡 Inactive | Configured In-DB Connection | {'type': 'upstream_unavailable', 'source': 'upstream', 'message': 'Request to https://api.ainative.studio/api/v1/models timed out after 5000ms', 'code': '504'} |
+Test | 🟢 Active | Configured In-DB Connection | {'type': 'ok', 'source': 'upstream', 'message': None, 'code': None} |
 | `aion` | Aion Labs
 1 Connected
 play_arrow
@@ -569,7 +569,7 @@ Test | 🔴 Ext-Auth | Third-Party Cloud Provider (No Account Configured) | Requ
 | `huggingchat` | HuggingChat (Free)
 No connections
 play_arrow
-Test | 🔴 Ext-Auth | Third-Party Cloud Provider (No Account Configured) | Requires user registration / third-party API key |
+Test | 🟡 Inactive | Configured In-DB Connection | {'type': 'upstream_error', 'source': 'upstream', 'message': 'Cookie required for web-cookie provider', 'code': 'upstream_error'} |
 | `huggingface` | HuggingFace
 No connections
 play_arrow
@@ -696,7 +696,7 @@ Test | 🔴 Ext-Auth | Third-Party Cloud Provider (No Account Configured) | Requ
 | `llm7` | LLM7.io
 No connections
 play_arrow
-Test | 🔴 Ext-Auth | Third-Party Cloud Provider (No Account Configured) | Requires user registration / third-party API key |
+Test | 🟢 Active | Configured In-DB Connection | {'type': 'ok', 'source': 'upstream', 'message': None, 'code': None} |
 | `lm-studio` | LM Studio
 No connections
 play_arrow
@@ -726,7 +726,7 @@ Test | 🔴 Ext-Auth | Third-Party Cloud Provider (No Account Configured) | Requ
 Chat
 No connections
 play_arrow
-Test | 🔴 Ext-Auth | Third-Party Cloud Provider (No Account Configured) | Requires user registration / third-party API key |
+Test | 🟡 Inactive | Configured In-DB Connection | {'type': 'upstream_error', 'source': 'upstream', 'message': 'Provider validation endpoint not supported', 'code': 'upstream_error'} |
 | `minimax` | Minimax Coding
 No connections
 play_arrow
