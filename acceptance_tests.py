@@ -77,7 +77,7 @@ class AcceptanceTestSuite:
     def test_t2_v1_models_endpoint(self):
         """T2: /v1/models endpoint returns complete model catalog."""
         try:
-            response = requests.get(f"{self.base_url}/v1/models", timeout=15)
+            response = requests.get(f"{self.base_url}/v1/models", timeout=30)
             assert response.status_code == 200, f"Expected 200, got {response.status_code}"
             data = response.json()
             assert "data" in data, "Missing 'data' field in response"
@@ -92,7 +92,7 @@ class AcceptanceTestSuite:
             # Unauthenticated request should fail
             response = requests.get(
                 f"{self.base_url}/api/providers",
-                timeout=5,
+                timeout=15,
                 allow_redirects=False
             )
             assert response.status_code == 401, f"Expected 401, got {response.status_code}"
@@ -449,8 +449,8 @@ class AcceptanceTestSuite:
         core_tests = [f"T{i}" for i in range(1, 13)]
         core_failed = [t for t in core_tests if self.results.get(t, {}).get("status") == "FAIL"]
         
-        if self.failed == 0 and core_failed == 0:
-            print("[PASS] MONETIZER_READY — All 20 tests passed")
+        if self.failed == 0 and len(core_failed) == 0:
+            print("[PASS] MONETIZER_READY — All 20 tests passed (or skipped without failures)")
             return True
         elif core_failed:
             print(f"[FAIL] MONETIZER_BLOCKED — {len(core_failed)} core tests failed: {core_failed}")

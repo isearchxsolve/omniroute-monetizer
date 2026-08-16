@@ -64,9 +64,21 @@ def log(msg: str) -> None:
 
 
 def resolve_password() -> str:
+    # 1. Environment variable override
     pw = os.environ.get("OMNIROUTE_PASSWORD", "").strip()
     if pw:
         return pw
+    # 2. Windows DPAPI binary vault (primary secure store)
+    try:
+        from password_vault import retrieve_password
+        vault_bin = STATE_DIR / "omniroute_password.bin"
+        if vault_bin.exists():
+            pw = retrieve_password(vault_bin)
+            if pw:
+                return pw
+    except Exception:
+        pass
+    # 3. Fallback plaintext state file (legacy)
     try:
         if PW_FILE.exists():
             pw = PW_FILE.read_text(encoding="utf-8").strip()
@@ -74,7 +86,7 @@ def resolve_password() -> str:
                 return pw
     except Exception:
         pass
-    # bootstrap from existing scratch-script fallback literal (already on disk)
+    # 4. Bootstrap fallback from scratch script literal if present
     scratch = PROJECT_ROOT / "scratch"
     for name in ("raise_catalog_ttl.py", "live_apply_ttl.py"):
         p = scratch / name
@@ -87,7 +99,8 @@ def resolve_password() -> str:
         if m:
             pw = m.group(1)
             try:
-                PW_FILE.write_text(pw, encoding="utf-8")
+                from password_vault import store_password
+                store_password(pw)
             except Exception:
                 pass
             return pw
