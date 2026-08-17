@@ -31,6 +31,9 @@ MISSION_HINTS = {
     "ideation": "ideation",
     "emergentsh": "emergentsh",
     "oioi": "oioi",
+    "voice_agent_avatar": "avatar",
+    "voice-agent-clinic": "avatar",
+    "antigravity-kandover": "godshand",
 }
 
 
@@ -196,7 +199,8 @@ def render() -> None:
 CSV_PATH = Path(__file__).resolve().parent.parent / "state" / "usage_history.csv"
 CSV_HEADER = ("timestamp,meter_used_pct,turns_total,total_tokens,fresh_input_tokens,"
               "cached_input_tokens,output_tokens,reasoning_tokens,cache_hit_pct,"
-              "monetizer_tokens,neon_tokens,crypto_tokens,ases_tokens\n")
+              "monetizer_tokens,neon_tokens,crypto_tokens,ases_tokens,"
+              "avatar_tokens,godshand_tokens\n")
 
 
 def log_sample() -> None:
@@ -217,6 +221,8 @@ def log_sample() -> None:
         pm.get("neon", {}).get("total_tokens", 0),
         pm.get("crypto", {}).get("total_tokens", 0),
         pm.get("ases", {}).get("total_tokens", 0),
+        pm.get("avatar", {}).get("total_tokens", 0),
+        pm.get("godshand", {}).get("total_tokens", 0),
     ]
     new_file = not CSV_PATH.exists()
     CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -246,7 +252,9 @@ def main() -> None:
               + f" monetizer={pm.get('monetizer', {}).get('total_tokens', 0)}"
               + f" neon={pm.get('neon', {}).get('total_tokens', 0)}"
               + f" crypto={pm.get('crypto', {}).get('total_tokens', 0)}"
-              + f" ases={pm.get('ases', {}).get('total_tokens', 0)}")
+              + f" ases={pm.get('ases', {}).get('total_tokens', 0)}"
+              + f" avatar={pm.get('avatar', {}).get('total_tokens', 0)}"
+              + f" godshand={pm.get('godshand', {}).get('total_tokens', 0)}")
         return
     if not (args.watch or args.log):
         render()
