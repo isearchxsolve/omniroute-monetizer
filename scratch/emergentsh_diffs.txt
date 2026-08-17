@@ -1,0 +1,330 @@
+﻿======================================================================
+FILE: backend/app/api/projects.py
+  snap: 12377B  2026-08-06T20:27:09.006851
+  live: 11782B  2026-08-03T09:54:52
+  diff lines: 38
+  --- LIVE
+  +++ SNAPSHOT
+  @@ -3,6 +3,7 @@
+   from sqlalchemy import select, func, desc
+   from typing import List, Optional
+   from uuid import UUID
+  +from datetime import datetime
+   import math
+   
+   from backend.app.core.database import get_db
+  @@ -180,6 +181,13 @@
+       db: AsyncSession = Depends(get_db),
+       current_user: User = Depends(get_current_active_user),
+   ):
+  +    project_result = await db.execute(
+  +        select(Project).where(Project.id == project_id, Project.owner_id == current_user.id)
+  +    )
+  +    project = project_result.scalar_one_or_none()
+  +    if not project:
+  +        raise HTTPException(status_code=404, detail="Project not found")
+  +
+       result = await db.execute(
+           select(Conversation)
+           .where(Conversation.id == conversation_id, Conversation.project_id == project_id)
+  @@ -211,6 +219,13 @@
+       db: AsyncSession = Depends(get_db),
+       current_user: User = Depends(get_current_active_user),
+   ):
+  +    project_result = await db.execute(
+  +        select(Project).where(Project.id == project_id, Project.owner_id == current_user.id)
+  +    )
+  +    project = project_result.scalar_one_or_none()
+  +    if not project:
+  +        raise HTTPException(status_code=404, detail="Project not found")
+  +
+       result = await db.execute(
+           select(Conversation)
+           .where(Conversation.id == conversation_id, Conversation.project_id == project_id)
+======================================================================
+FILE: backend/app/services/nim_client.py
+  snap: 4678B  2026-08-06T18:56:41.443828
+  live: 4521B  2026-08-03T18:19:09
+  diff lines: 31
+  --- LIVE
+  +++ SNAPSHOT
+  @@ -79,7 +79,9 @@
+               "max_tokens": max_tokens,
+               "stream": stream,
+           }
+  -        resp = await self._client.post("/chat/completions", json=body)
+  +        # Keep requests relative to base_url.  A leading slash makes HTTPX drop
+  +        # the configured /v1 path and sends NIM requests to the wrong endpoint.
+  +        resp = await self._client.post("chat/completions", json=body)
+           resp.raise_for_status()
+           return resp.json()
+   
+  @@ -98,7 +100,7 @@
+               "max_tokens": max_tokens,
+               "stream": True,
+           }
+  -        async with self._client.stream("POST", "/chat/completions", json=body) as resp:
+  +        async with self._client.stream("POST", "chat/completions", json=body) as resp:
+               resp.raise_for_status()
+               async for line in resp.aiter_lines():
+                   if not line or not line.startswith("data:"):
+  @@ -120,7 +122,7 @@
+                       continue
+   
+       async def list_models(self) -> List[str]:
+  -        resp = await self._client.get("/models")
+  +        resp = await self._client.get("models")
+           resp.raise_for_status()
+           data = resp.json()
+           return [m["id"] for m in data.get("data", [])]
+======================================================================
+FILE: backend/code_generation.py
+  snap: 978B  2026-08-06T18:57:03.608682
+  live: 7222B  2026-08-02T17:53:06
+  diff lines: 35
+  --- LIVE
+  +++ SNAPSHOT
+  @@ -1 +1,31 @@
+  -from typing import Dict, List, Optional, Any, CallableList, Optional, Any, Callable, Dict, List, Optional, Any, Callable, Dict, List, Optional, Any, Callable, Dict, List, Optional, Any, Callable, Dic
+  +"""Compatibility entry point for EmergentSH code-generation runs.
+  +
+  +The executable pipeline lives in :mod:`backend.agent_pipeline`.  Keeping this
+  +small adapter preserves the historical module path while routing callers to
+  +the maintained implementation instead of leaving a corrupted generated file
+  +that cannot be imported.
+  +"""
+  +
+  +from __future__ import annotations
+  +
+  +from pathlib import Path
+  +from typing import Any, Union
+  +
+  +from .agent_pipeline import AgentPipeline, PipelineContext
+  +
+  +
+  +async def generate_project(
+  +    nim_client: Any,
+  +    prompt: str,
+  +    project_dir: Union[str, Path] = "",
+  +) -> PipelineContext:
+  +    """Run the standard generation pipeline for a non-empty project prompt."""
+  +    if not prompt or not prompt.strip():
+  +        raise ValueError("prompt must not be empty")
+  +    return await AgentPipeline(nim_client).run(
+  +        user_prompt=prompt.strip(),
+  +        project_dir=str(project_dir),
+  +    )
+  +
+  +
+  +__all__ = ["generate_project", "AgentPipeline", "PipelineContext"]
+======================================================================
+FILE: backend/requirements.txt
+  snap: 506B  2026-08-06T20:25:21.023797
+  live: 505B  2026-08-03T23:05:37.230952
+  diff lines: 0
+======================================================================
+FILE: backend/tests/test_nim_client.py
+  snap: 2710B  2026-08-06T19:03:19.281595
+  live: 4534B  2026-08-01T15:04:18
+  diff lines: 88
+  --- LIVE
+  +++ SNAPSHOT
+  @@ -1 +1,84 @@
+  -import asyncio, os, sys, pytest, unittest.mock; backend_app_path = os.path.join(os.path.dirname(__file__), '..', 'app'); sys.path.insert(0, backend_app_path); from services.nim_client import NIMClien
+  +from __future__ import annotations
+  +
+  +import json
+  +
+  +import httpx
+  +import pytest
+  +
+  +from backend.app.services.nim_client import AsyncNIMClient
+  +
+  +
+  +async def make_client(transport: httpx.MockTransport) -> AsyncNIMClient:
+  +    client = AsyncNIMClient(api_key="test-key", base_url="https://nim.test/v1")
+  +    await client.close()
+  +    client._client = httpx.AsyncClient(
+  +        base_url=client.base_url,
+  +        headers={
+  +            "Authorization": "Bearer test-key",
+  +            "Content-Type": "application/json",
+  +            "Accept": "application/json",
+  +        },
+  +        transport=transport,
+  +    )
+  +    return client
+  +
+  +
+  +def test_client_requires_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+  +    for name in ("NIM_API_KEY", "NVIDIA_API_KEY", "NGC_API_KEY"):
+  +        monkeypatch.delenv(name, raising=False)
+  +
+  +    with pytest.raises(ValueError, match="API key required"):
+  +        AsyncNIMClient()
+  +
+  +
+  +@pytest.mark.asyncio
+  +async def test_chat_completion_keeps_v1_base_path() -> None:
+  +    def handler(request: httpx.Request) -> httpx.Response:
+  +        assert request.url.path == "/v1/chat/completions"
+  +        assert request.headers["authorization"] == "Bearer test-key"
+  +        assert json.loads(request.content) == {
+  +            "model": "meta/llama-3.1-8b-instruct",
+  +            "messages": [{"role": "user", "content": "hi"}],
+  +            "temperature": 0.4,
+  +            "max_tokens": 4096,
+  +            "stream": False,
+  +        }
+  +        return httpx.Response(200, json={"id": "chat-1", "choices": []})
+  +
+  +    client = await make_client(httpx.MockTransport(handler))
+  +    try:
+  +        result = await client.chat_completion(
+  +            messages=[{"role": "user", "content": "hi"}]
+  +        )
+  +    finally:
+  +        await client.close()
+  +
+  +    assert result == {"id": "chat-1", "choices": []}
+  ... (28 more diff lines)
+======================================================================
+FILE: tests/test_nim_client.py
+  snap: 2354B  2026-08-08T01:58:39.644862
+  live: 2310B  2026-08-02T17:36:06
+  diff lines: 37
+  --- LIVE
+  +++ SNAPSHOT
+  @@ -26,7 +26,7 @@
+           "id": "chatcmpl-123",
+           "choices": [{"message": {"role": "assistant", "content": "Hello!"}}],
+       }
+  -    with patch.object(client, "_post", return_value=mock_response):
+  +    with patch.object(client, "_request_json", return_value=mock_response):
+           result = client.chat_completion(
+               messages=[{"role": "user", "content": "Hi"}]
+           )
+  @@ -36,21 +36,21 @@
+   def test_chat_completion_with_model():
+       client = NIMClient(api_key="test-key", base_url="https://api.nv.nvidia.com/v1")
+       mock_response = {"choices": [{"message": {"content": "OK"}}]}
+  -    with patch.object(client, "_post", return_value=mock_response) as mock_post:
+  +    with patch.object(client, "_request_json", return_value=mock_response) as mock_post:
+           client.chat_completion(
+               messages=[{"role": "user", "content": "Hi"}],
+               model="nvidia/llama-3.1-nim-405b",
+           )
+       call_args = mock_post.call_args
+  -    assert call_args[0][0] == "/chat/completions"
+  -    body = call_args[0][1]
+  +    assert call_args.args[0] == "/chat/completions"
+  +    body = call_args.kwargs.get("body", {})
+       assert body["model"] == "nvidia/llama-3.1-nim-405b"
+   
+   
+   def test_get_models_returns_list():
+       client = NIMClient(api_key="test-key", base_url="https://api.nv.nvidia.com/v1")
+       mock_response = {"data": [{"id": "model-1"}, {"id": "model-2"}]}
+  -    with patch.object(client, "_get", return_value=mock_response):
+  +    with patch.object(client, "_request_json", return_value=mock_response):
+           models = client.get_models()
+       assert models == ["model-1", "model-2"]
+   
+======================================================================
+FILE: src/ui/widgets/auth/auth_dialog.py
+  snap: 19600B  2026-08-06T04:37:20.984080
+  live: 19586B  2026-07-30T13:02:38.386156
+  diff lines: 11
+  --- LIVE
+  +++ SNAPSHOT
+  @@ -119,7 +119,7 @@
+           or_layout = QFormLayout(or_group)
+           
+           self._openrouter_key = QLineEdit()
+  -        self._openrouter_key.setPlaceholderText("sk-or-v1-...")
+  +        self._openrouter_key.setPlaceholderText("REDACTED_OPENROUTER_KEY...")
+           self._openrouter_key.setEchoMode(QLineEdit.EchoMode.Password)
+           or_layout.addRow("API Key:", self._openrouter_key)
+           
+======================================================================
+FILE: neon_architect.py
+  snap: 407384B  2026-08-06T16:38:08.089195
+  live: 399053B  2026-08-03T04:16:27.667386
+  diff lines: 11
+  --- LIVE
+  +++ SNAPSHOT
+  @@ -1239,8 +1239,6 @@
+   
+       def try_acquire(self) -> bool:
+           with self.lock:
+  -            self._refill()
+  -            self._prune()
+               self._refill()
+               self._prune()
+               waits = []
+======================================================================
+FILE: neon_architect_v4_7_mobile_env.py
+  snap: 533181B  2026-08-06T04:36:04.536423
+  live: 612718B  2026-08-05T02:00:24.886475
+  diff lines: 2467
+  --- LIVE
+  +++ SNAPSHOT
+  @@ -371,10 +371,10 @@
+       "nim_shared_rpm": 38.0,
+       "thinking_effort": "low",
+       "allow_medium_high_thinking": False,
+  -    "first_token_timeout_off": 120.0,
+  -    "first_token_timeout_low": 300.0,
+  -    "first_token_timeout_medium": 450.0,
+  -    "first_token_timeout_high": 600.0,
+  +    "first_token_timeout_off": 60.0,
+  +    "first_token_timeout_low": 150.0,
+  +    "first_token_timeout_medium": 240.0,
+  +    "first_token_timeout_high": 360.0,
+       "stream_content_timeout_off": 200.0,
+       "stream_content_timeout_low": 200.0,
+       "stream_content_timeout_medium": 220.0,
+  @@ -1402,23 +1402,6 @@
+           for _ in range(len(self.providers)):
+               p = self.current()
+               if p.available() and p.bucket.try_acquire():
+  -                # Advance the index now, on hand-out, not only when a
+  -                # provider is found unavailable. Previously self.index
+  -                # only ever moved inside the `else: self.rotate()`
+  -                # branch below ù meaning that with every provider
+  -                # healthy, next_available() always returned
+  -                # self.providers[self.index] unchanged, since nothing
+  -                # ever advanced it on a success path. Confirmed via
+  -                # simulation: 3 healthy providers, 6 consecutive calls,
+  -                # same provider returned every time. That's not a
+  -                # resilience bug (failure cooldown/permanent-disable
+  -                # still route around a broken provider correctly via
+  -                # this same loop) ù it's a load-spreading bug: capacity
+  -                # on 2 of 3 configured providers went completely unused
+  -                # under normal healthy operation, concentrating rate
+  -                # limits and cost on a single account instead of
+  -                # spreading across the pool as configured.
+  -                self.rotate()
+                   return p
+               self.rotate()
+           return None
+  @@ -1640,7 +1623,7 @@
+           low = raw.lower()
+           if ", content" in low or ", requirements" in low or ", risks" in low:
+               raw = raw.split(",", 1)[0]
+  -        if ":" in raw and not (len(raw) > 1 and raw[1] == ":" and sys.platform == "win32"):
+  +        if ":" in raw and not (raw[1] == ":" and sys.platform == "win32"):
+               # strip hallucinated keys like 'path: PLAN.md'
+               raw = raw.split(":", 1)[0] if len(raw.split(":", 1)[0]) > 2 else raw
+           if "," in raw:
+  @@ -1865,44 +1848,11 @@
+           re.S,
+       )
+       # A single "from X import Y[, Z...]" / "import X[, Y...]" line is
+  -    # normally one legitimate statement, no matter how long ù EXCEPT when
+  -    # the imported names repeat many times, which is the actual signature
+  -    # RC-2 identified: a model-corrupted write like "from datetime import
+  -    # datetime, timezone, ..." repeated 80x still matches this regex's
+  -    # grammar (comma-separated names, arbitrarily long), so it was exiting
+  -    # _looks_collapsed_source as "exempt" before length/newline checks
+  ... (2407 more diff lines)
