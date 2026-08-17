@@ -3360,6 +3360,21 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** Fully restart VS Code once more, then choose the `OmniRoute` / `auto/best-coding` entry if the existing chat session remains pinned to `qwen3.8-max-free`. The prior chat session can retain its old model selection even after config reorder.
 **Status:** ⚠️ Partial — local Agent route verified and selected as safe default; TokenRouter upstream overload remains an external limitation.
 
+### [2026-08-17 23:10] #96 — Bloodline status re-verified from state artifacts; fleet/pending status reported
+**What:** User asked for the current monetizer bloodline status (models unlocked by the last Codex fleet run) and overall fleet position.
+**Why:** Provide verified numbers from state artifacts, not claims, before resuming pending missions.
+**Findings (re-read from disk this session):**
+- `state\omniroute_model_forest.json`: **1,911 model entries across 33 distinct provider prefixes**.
+- `state\fleet_live_verified_routes.json` (generated 2026-08-17T14:11Z, standard chat-completion probe max_tokens=16): **20 direct HTTP-200 routes + 10 cascade HTTP-200 routes = 30 live-verified routes**.
+- `state\all_296_providers_execution_ledger.json`: 296 cataloged / 56 connected / 20 live-tested healthy / 10 multi-provider cascades / 227 unconfigured external (account-required).
+- Fleet position: monetizer DONE (bloodline supplying the model forest); crypto verified DONE (2,050 tests green after vitest exclude fix, #92); neon done-but-blocked pending one fresh live `flutter-fastapi` generation with `success=True`; ases checkpointed ~75%; pending wave = avatar, GODSHAND, oioi, emergentsh, ideation, ases-resume.
+- GODSHAND version audit conclusion: `D:\dev\antigravity-kandover` is canonical (notebooks, film artifacts, 5/5 local suites pass); `D:\god_ai\lasthelp\lasthelp\antigravity-kandover` holds newer engine code + unique `test_e2e_cinema_pipeline.py` to merge in; `D:\dev\antigravity-kandover - Copy` is stale/discardable. oioi media artifacts look placeholder/test-like (identical MP4 sizes, uniform 5.0s durations) — not yet proven monetizable.
+**Actions taken:** Read-only verification only; no state mutated.
+**Files touched:** `MASTER_WORKLOG.md` (this entry).
+**Verification:** PowerShell counts reproduced: forest 1,911/33; routes file keys `direct`=20, `cascade`=10 (note: an initial count attempt used wrong keys `direct_verified`/`cascade_verified` and returned 0 — corrected by reading the actual JSON schema).
+**Next step:** Execute GODSHAND rescue merge (lasthelp engine fixes → dev canonical), re-run 5 suites with ffmpeg PATH + `GODSHAND_KIT_ROOT` set, then wire GODSHAND/oioi missions and launch pending wave with meter headroom (52% remaining at last autopilot reading).
+**Status:** ✅ Done — status reported from verified artifacts; `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
