@@ -3503,6 +3503,18 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** Meter at ~40% = edge of TRIM/CRITICAL boundary. Remaining queued work: GODSHAND gap fixes (top 10 from #100 report). Recommend pausing fleet until meter resets or user confirms spend.
 **Status:** ✅ Avatar complete; `MONETIZER_READY`
 
+### [2026-08-18 00:41] #105 — GODSHAND gap-fix wave LAUNCHED (user-confirmed spend at ~40% meter)
+**Decision:** User confirmed spend despite meter at TRIM/CRITICAL boundary (~40% remaining). Mission = sequential three-phase fix wave per user's directive: (1) close the top-10 ranked gaps, (2) add verbose logging to mock test paths, (3) create deep-dive test cases with verbose logging.
+**What was built:**
+- New goal file `state/fleet_goals/godshand_gap_fixes.md` — three sequential phases derived from the ranked attack order in `GODSHAND_DEEP_DIVE_GAP_ANALYSIS.md` §3: E2 (real GPU smoke, refuse COMFY_MOCK) → A1/A3/A4 (pinned cu121 env + Comfy/custom-node SHAs) → B1/B2 (free-VRAM accounting + 2GB reserve) → C1/C2/C3 (assets.lock.json + SHA-256 verify) → E1/F1 (qc.py --shots-dir CLI contract) → E4 (qc.py --master, kill recursive run.py _qc_master) → H1 (no silent WAN→LTXV fallback) → B3/B4/B5 (T4 worker binding) → H2/F3/F4 (fatal evidence) → G1/G3/G5/G6 (4K disk/codec safety). Phase 2 = structured JSONL verbose logging on all mock paths. Phase 3 = deep-dive CPU test suite (hardware-contract, CLI-contract, fail-fast, determinism, mock-evidence meta-tests). Deliverable: `GODSHAND_GAP_FIX_REPORT.md`. Same hard constraints: no render, no secrets, append-only worklog, no evidence files touched.
+- Launcher wiring: new mission `godshandfix` → `D:\dev\antigravity-kandover` in `scratch/launch_codex_fleet.py`.
+**Launch:** `python launch_codex_fleet.py godshandfix` → spawned OK. Verified live: codex PID 9108 (started 00:40:53), thread `01a01122-58a7-7211-a716-d639c3f896c1`, turn.started in `godshandfix_events.jsonl`. `--skip-git-repo-check` from the #102 fix covered the trust gate.
+**Note:** codex PID 912 (started 22:41) is the Codex Desktop `app-server`, NOT a mission runner — left alone.
+**Budget watch:** est. 4–6M tokens; meter was ~40% at launch. Monitor via Codex Desktop live meter (authoritative) + `usage_tracker.py --sample`.
+**Files touched:** `state/fleet_goals/godshand_gap_fixes.md` (new), `scratch/launch_codex_fleet.py` (mission added), `MASTER_WORKLOG.md` (this entry).
+**Next step:** Monitor `godshandfix_events.jsonl` + `D:\dev\antigravity-kandover\FLEET_WORKLOG.md` for phase progress; verify final report against the 10-gap table on completion.
+**Status:** 🔄 godshandfix running; `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
