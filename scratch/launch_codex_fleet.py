@@ -34,8 +34,11 @@ LAUNCH_SPECS = Path(r"d:\omniroute-monetizer\state\launch_specs")
 
 # mission -> (project dir, goal file). ORDER = PRIORITY: monetizer is the
 # bloodline (supplies the model forest every other project consumes) -> first.
+# avatar = #1 revenue candidate (named customer: clinics) per 2026-08-17
+# YouTube-transcript analysis (worklog #90-92).
 MISSIONS = {
     "monetizer":  (r"d:\omniroute-monetizer",           "monetizer_master.md"),
+    "avatar":     (r"D:\god_ai\voice_agent_avatar\voice-agent-clinic", "avatar_voice_agent_clinic.md"),
     "ideation":   (r"d:\ideation_to_prototype",        "nvidia-1_ideation_to_prototype.md"),
     "emergentsh": (r"d:\emergentsh_latest",            "nvidia-2_emergentsh_latest.md"),
     "neon":       (r"d:\neon_unified",                 "alibaba_neon_unified.md"),
