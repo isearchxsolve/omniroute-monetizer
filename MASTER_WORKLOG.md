@@ -3212,6 +3212,26 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 
 **Status:** ✅ All 4 missions on-track. MONETIZER_READY
 
+### [2026-08-17 19:25] #84 — POWER CUT at ~17:33: fleet killed, work saved via emergency git checkpoints, fleet RELAUNCHED 19:22
+
+**Incident:** user reported battery at 6 minutes. Emergency response: git-committed all 4 projects immediately — omniroute-monetizer `0ab6b29` (110 files, +6,825), neon_unified `41ca27a` (24 files, +1,200), crypto-trader `90d2c60` (63 files, +77,385), ases_v3_1 `b7d4f01` (10,273 files). Created `scratch/resume_fleet_after_powercut.ps1`. Power died ~17:33 (event streams stopped 17:33:00-17:33:25).
+
+**Recovery:** power back ~19:20. Fleet relaunched 19:22 (`monetizer neon crypto ases`), 4 fresh codex processes confirmed alive. Agents resume from their committed FLEET_WORKLOG.md files (goal files mandate reading existing worklog first) — no work restarts from zero. Cost: one fresh context-load per agent (ramp-up price of the cut; cached-input discount rebuilds within first turns).
+
+**Status:** ✅ Fleet recovered and running. MONETIZER_READY
+
+### [2026-08-17 19:35] #85 — Meter 81% post-relaunch; all 4 resumed from worklogs; monetizer hit OmniRoute management-plane stall, triangulated per playbook
+
+**Meter:** 81% weekly left (98→94→91→87→81; the 87→81 drop includes the one-time relaunch cost of 4 fresh context loads after the power cut — now paid). Remaining budget ≈ 15+ h of 4-agent steady-state runtime.
+
+**Post-relaunch status (all agents resumed from committed FLEET_WORKLOG.md, none restarted from zero):**
+- **monetizer (step 14):** found OmniRoute management plane stalled (root responsive, management login not returning). Followed anti-pattern #9 correctly: external triangulation BEFORE runtime deep-dive (GitHub diegosouzapw/OmniRoute, public omni-providers API docs, OpenCode plugin docs); lead = catalog cache/compaction behavior; will retry shallow health endpoints after saturation window. No DB hacking, no forced state changes.
+- **neon (step 5):** re-established symbol inventory (TodoTool @ neon_architect.py:4503, v5 alias @ 4489); re-verifying 1,130-test baseline.
+- **crypto (step 7):** resumed preserving pre-cut dirty worktree; `.env` untouched per constraints; validating runtime-safety changes next.
+- **ases (step 13):** honest correction logged (requirements.txt lives in agent_service/, not root); moving to Selenium QA contract.
+
+**Status:** ✅ Fleet healthy post-recovery. MONETIZER_READY
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
