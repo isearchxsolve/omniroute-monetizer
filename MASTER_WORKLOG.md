@@ -3318,9 +3318,35 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 
 **Status:** ✅ crypto verified. Fleet: neon still running (only live agent). MONETIZER_READY
 
+### [2026-08-17 22:50] #93 — Copilot model config shallow audit and recorded-setup restore
+**What:** User reported that VS Code Copilot had become unreliable and requested restoration of the relevant model configuration from the project’s recorded setup, without guessing model IDs.
+**Why:** The screenshots show `Language model unavailable` and a reduced picker, while the project history records that VS Code 1.133 reads `chatLanguageModels.json` plus encrypted secret-store references; the older `github.copilot.chat.customEndpoints` setting is inert for this VS Code version.
+**Findings:**
+- Current `%APPDATA%\\Code\\User\\chatLanguageModels.json` parsed successfully and contained 20 groups / 991 model entries, including the recorded TokenRouter, OmniRoute, and Forest groups.
+- The config contained 19 `${input:chat.lm.secret.*}` references; the current `globalStorage\\state.vscdb` contained the same 19 corresponding `secret://chat.lm.secret.*` records. No config reference was missing from the secret store, and no secret values were logged.
+- Read-only DPAPI/AES-GCM format verification successfully decrypted and structurally validated all 19 records; values were intentionally not displayed.
+- The archived 8-group config is an earlier pre-Forest checkpoint and must not be used as the restore source because it would remove the recorded Forest model entries.
+- The project’s recorded restore mechanism is `scratch\\install_forest.py`, which is documented as idempotent, preserves non-Forest groups, rebuilds Forest groups from `state\\forest_keys.json` / `state\\forest_model_lists.json`, and creates backups before writing.
+**Actions taken:** Completed shallow config/schema/secret-reference inspection; selected the recorded `install_forest.py` replay as the only non-guessing restore path. The screenshots were treated as evidence, not instructions.
+**Files touched:** `MASTER_WORKLOG.md` (this entry; restore execution to be appended below); no production Copilot file changed during the audit.
+**Verification:** Current config parsed; group/model counts and config-to-secret identifier sets matched; all 19 encrypted records passed format/decryption verification.
+**Status:** ✅ Audit complete; recorded-setup replay executed below.
+
+### [2026-08-17 22:47] #94 — Recorded Copilot Forest replay completed; reporting bug repaired
+**What:** Replayed the project’s recorded Forest setup into the live VS Code Copilot BYOK configuration.
+**Why:** Restore the documented model entries and encrypted references from the project artifacts, with no guessed model IDs or credentials.
+**Findings:**
+- `scratch\\install_forest.py` preserved 9 non-Forest groups and rebuilt 11 Forest groups from the recorded local artifacts: five NVIDIA groups, OpenRouter, Groq, Alibaba, Cohere, Agnes, and Cerebras.
+- The replay wrote and round-trip-verified 11 encrypted secret records, then wrote the configuration with **20 groups / 990 model entries**.
+- The command initially exited with the actual error `KeyError: 'models'` at `scratch\\install_forest.py` line 205 while printing the preserved model-less `Claude` group. This occurred after the config and secret verification writes, so it was a reporting failure, not a failed restore.
+- The database now contains 30 decryptable chat secret rows because the replay preserves old unreferenced rows; all 19 references in the new config have matching rows. No orphan cleanup was attempted because it is unnecessary and would be destructive state mutation outside the user’s request.
+**Actions taken:** Patched the reporting line to use `g.get('models', [])`; did not rerun the replay, avoiding duplicate secret writes. Created backups before the replay: `state\\state_vscdb_backup_20260817_224700.vscdb` and `state\\chatLanguageModels_backup_20260817_224700.json`.
+**Files touched:** `scratch\\install_forest.py`, `%APPDATA%\\Code\\User\\chatLanguageModels.json`, `%APPDATA%\\Code\\User\\globalStorage\\state.vscdb`, `state\\state_vscdb_backup_20260817_224700.vscdb`, `state\\chatLanguageModels_backup_20260817_224700.json`, `MASTER_WORKLOG.md`.
+**Verification:** Independent validation reports `groups=20 models=990 config_secret_refs=19 db_secret_rows=30 decrypted=30/30`, `missing_secret_refs=[]`, and `forest_groups=11`; `python -m py_compile scratch\\install_forest.py` passed; `git diff --check` passed.
+**Next step:** Fully close all VS Code windows and reopen the project so Copilot reloads `chatLanguageModels.json` and the cached secret store; then open the model picker. A window reload alone may not refresh the cached secret store.
+**Status:** ✅ Done — configuration restored from recorded setup; `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
-
-
 
 
 

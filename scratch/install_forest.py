@@ -202,7 +202,7 @@ def main() -> int:
     n_models = sum(len(g.get("models", [])) for g in verify)
     print(f"\nchatLanguageModels.json: {len(verify)} groups, {n_models} total models")
     for g in verify:
-        print(f"  - {g['name']}: {len(g['models'])}")
+        print(f"  - {g['name']}: {len(g.get('models', []))}")
 
     print(
         f"\nFOREST INSTALLED: {total_models} new forest models across "
