@@ -47,7 +47,7 @@ for fn in ("omniroute_provider_recovery/connections_before.json",):
     p = os.path.join(ROOT, fn)
     if os.path.exists(p):
         data = json.load(open(p, encoding="utf-8"))
-        conns = data.get("connections", data if isinstance(data, list) else [])
+        conns = data if isinstance(data, list) else data.get("connections", [])
         seen = set()
         for c in conns:
             prov = c.get("provider")
