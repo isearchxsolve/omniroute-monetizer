@@ -3563,6 +3563,17 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step (queued wave 2):** (1) notebook cell rewiring onto the fail-closed blocks, (2) fix `render_motion()` truncation, (3) update stale ROOT fallback paths in the two test scripts. Needs meter headroom or user confirmation.
 **Status:** ✅ Full CPU suite green; `MONETIZER_READY`
 
+### [2026-08-18 01:15] #109 — Free fixes done: stale ROOT paths patched, GODSHAND_KIT_ROOT permanent; token spend HALTED for tonight
+**What (zero tokens):**
+- Patched `comprehensive_smoke_test.py` + `edge_case_integration_test.py`: ROOT fallback now tries both `C:\dev` and `D:\dev\antigravity-kandover\GODSHAND_MASTER\GODSHAND_MASTER\kit` (repo's actual home).
+- Set `GODSHAND_KIT_ROOT` as a permanent user env var (belt-and-suspenders).
+- Verified BOTH scripts pass with the env var REMOVED from the session — the fallback alone works: comprehensive smoke PASS, edge-case 36/0.
+**Decision (user-approved "your take"):** halt token spend at ~32% meter. Wave 2 (notebook cell rewiring + `render_motion()` truncation fix) deferred to the next meter window (>60%). Rationale: notebook editing terra can't execute is the most token-expensive work; dying mid-rewire would leave notebooks half-edited — worst state.
+**Tonight's final ledger:** GODSHAND total 14.75M tokens (analysis 4.4M + fixes 10.3M); avatar 5.3M; fleet total 65.1M / 610 turns. GODSHAND state: 10 fail-closed building blocks + 58 CPU tests green + verbose JSONL logging + honest residue list. Remaining for Kaggle readiness: notebook rewiring (wave 2), `render_motion()` truncation, then the real GPU run.
+**Files touched:** `comprehensive_smoke_test.py`, `edge_case_integration_test.py` (fallback paths), user env vars (PATH + GODSHAND_KIT_ROOT), `MASTER_WORKLOG.md` (this entry).
+**Next step:** When meter resets: launch wave-2 mission (tight 1-phase goal: rewire both notebooks onto the tested blocks + restore `render_motion()` body, verified by edge-case test A7).
+**Status:** ✅ Night's work closed; `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
