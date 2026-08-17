@@ -29,7 +29,23 @@ if not ctypes.windll.shell32.IsUserAnAdmin():
     sys.exit(2)
 
 import requests  # noqa: E402
-import rookiepy  # noqa: E402
+
+# Prefer the maintained fork (rookie-cookies) which supports Chrome v20 App-Bound
+# encryption on Windows; fall back to the archived rookiepy.
+try:
+    import rookie_cookies as _rc
+    _BACKEND = "rookie-cookies"
+except ImportError:
+    _rc = None
+try:
+    import rookiepy as _rp
+except ImportError:
+    _rp = None
+if _rc is None and _rp is None:
+    print("ERROR: neither rookie-cookies nor rookiepy is installed.")
+    sys.exit(3)
+if _rc is None:
+    _BACKEND = "rookiepy"
 
 TARGETS = {
     "chatgpt-web": {
@@ -102,11 +118,14 @@ def main() -> int:
 
     # 1. extract
     all_domains = sorted({d for t in TARGETS.values() for d in t["domains"]})
-    print("extracting cookies for:", all_domains)
+    print(f"extracting cookies for: {all_domains} (backend={_BACKEND})")
     try:
-        cookies = rookiepy.chrome(domains=all_domains)
+        if _BACKEND == "rookie-cookies":
+            cookies = _rc.chrome(all_domains)
+        else:
+            cookies = _rp.chrome(domains=all_domains)
     except Exception as e:
-        print("rookiepy FAILED:", type(e).__name__, str(e)[:300])
+        print(f"{_BACKEND} FAILED:", type(e).__name__, str(e)[:300])
         return 1
     print(f"got {len(cookies)} cookies total")
 
@@ -156,7 +175,7 @@ def main() -> int:
         primary = got.get("__Secure-next-auth.session-token") or got.get("auth_token") or got.get("zed.session")
         store[f"browser_session:{slug}"] = {
             "value": primary, "all": got,
-            "harvested_at": "2026-08-18", "source": "rookiepy-elevated",
+            "harvested_at": "2026-08-18", "source": f"{_BACKEND}-elevated",
             "upstream_verified": verifications.get(slug, {}).get("verified", False),
         }
     json.dump(store, open(KEYS_PATH, "w", encoding="utf-8"), indent=2)
