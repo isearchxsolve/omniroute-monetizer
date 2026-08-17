@@ -3547,6 +3547,22 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step (queued):** wave 2 = notebook cell rewiring (both notebooks onto the new fail-closed blocks) + install ffmpeg on the test host to unblock the media suite. Wait for meter reset or user confirmation.
 **Status:** ✅ godshandfix wave 1 complete (partial-honest); `MONETIZER_READY`
 
+### [2026-08-18 01:05] #108 — ffmpeg unblocked: full GODSHAND CPU suite now GREEN (zero tokens spent)
+**Problem from #107:** full CPU suite blocked — `ffmpeg` not on PATH (2 pass / 3 fail / 1 GPU-skip).
+**Shallow investigation:** `winget list` showed FFmpeg 9.0 (Gyan.FFmpeg) ALREADY INSTALLED — just not on PATH. No download needed.
+**Fix:**
+- Located binary: `C:\Users\Admin\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-9.0-full_build\bin\` (ffmpeg.exe + ffprobe.exe, both verified `-version` OK).
+- Added bin dir to **user PATH permanently** via `[Environment]::SetEnvironmentVariable` (survives reboots; new shells pick it up).
+- Second blocker found: `comprehensive_smoke_test.py` / `edge_case_integration_test.py` default `ROOT` to a stale `C:\Users\Admin\Downloads\...` path with a `C:\dev` fallback — repo actually lives at `D:\dev`. Both honor `GODSHAND_KIT_ROOT` env var; set it to `D:\dev\antigravity-kandover\GODSHAND_MASTER\GODSHAND_MASTER\kit` for the runs. (Permanent fix = update the fallback path in the two scripts — queued, trivial.)
+**Verified results (all on CPU, zero meter cost):**
+- `comprehensive_smoke_test.py` → **PASS** (all 10 test groups incl. full pipeline integration)
+- `edge_case_integration_test.py` → **36 passed, 0 failed**
+- `test_gap_fixes.py` (terra's new suite) → **11/11 OK**
+**Residual honest note:** the `render_motion()` truncation defect (found in #107) still exists — edge-case test A7 documents it; it's a wave-2 fix item, not an environment issue.
+**Files touched:** user PATH (registry), `MASTER_WORKLOG.md` (this entry). No repo files modified.
+**Next step (queued wave 2):** (1) notebook cell rewiring onto the fail-closed blocks, (2) fix `render_motion()` truncation, (3) update stale ROOT fallback paths in the two test scripts. Needs meter headroom or user confirmation.
+**Status:** ✅ Full CPU suite green; `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
