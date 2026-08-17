@@ -1,0 +1,1183 @@
+{
+  "antigravity-kandover": {
+    "live": "D:\\dev\\antigravity-kandover",
+    "snapshot": "D:\\god_ai\\lasthelp\\lasthelp\\antigravity-kandover",
+    "live_exists": true,
+    "snapshot_exists": true,
+    "only_lasthelp": [
+      "test_e2e_cinema_pipeline.py"
+    ],
+    "only_live": [],
+    "differs": [
+      {
+        "file": "GODSHAND_MASTER/GODSHAND_MASTER/kit/src/vram_governor.py",
+        "live_size": 7352,
+        "snap_size": 7468,
+        "snap_mtime": 1786135621.4287796
+      },
+      {
+        "file": "edge_case_integration_test.py",
+        "live_size": 21552,
+        "snap_size": 21546,
+        "snap_mtime": 1786032664.4499173
+      },
+      {
+        "file": "logs/cinema4k.log",
+        "live_size": 7935,
+        "snap_size": 7921,
+        "snap_mtime": 1785331345.5216444
+      },
+      {
+        "file": "logs/comprehensive.log",
+        "live_size": 3988,
+        "snap_size": 3988,
+        "snap_mtime": 1785331534.7719247
+      },
+      {
+        "file": "logs/edge_case.log",
+        "live_size": 5906,
+        "snap_size": 5906,
+        "snap_mtime": 1785331385.1852267
+      },
+      {
+        "file": "neon_architect.py",
+        "live_size": 380235,
+        "snap_size": 388256,
+        "snap_mtime": 1786014488.1251745
+      },
+      {
+        "file": "selftest_quick_wrapper.py",
+        "live_size": 269,
+        "snap_size": 269,
+        "snap_mtime": 1785970866.1891954
+      },
+      {
+        "file": "test_gpu_throttle_oom.py",
+        "live_size": 11325,
+        "snap_size": 11504,
+        "snap_mtime": 1786272726.5690005
+      },
+      {
+        "file": "test_vram_governor.py",
+        "live_size": 13226,
+        "snap_size": 13427,
+        "snap_mtime": 1786272685.7929356
+      }
+    ],
+    "identical_count": 242,
+    "only_live_count": 22
+  },
+  "ases_v3_1": {
+    "live": "C:\\god_ai\\ases_v3_1",
+    "snapshot": "D:\\god_ai\\lasthelp\\lasthelp\\ases_v3_1",
+    "live_exists": true,
+    "snapshot_exists": true,
+    "only_lasthelp": [
+      ".coverage",
+      "tests/test_ases_e2e_integration.py"
+    ],
+    "only_live": [],
+    "differs": [
+      {
+        "file": ".github/workflows/tdd-gates.yml",
+        "live_size": 2157,
+        "snap_size": 2335,
+        "snap_mtime": 1785971029.5393271
+      },
+      {
+        "file": "AGENTS.md",
+        "live_size": 4874,
+        "snap_size": 3288,
+        "snap_mtime": 1785971014.9378016
+      },
+      {
+        "file": "Dockerfile",
+        "live_size": 745,
+        "snap_size": 549,
+        "snap_mtime": 1785228176.0
+      },
+      {
+        "file": "README.md",
+        "live_size": 10243,
+        "snap_size": 8234,
+        "snap_mtime": 1785971023.1515028
+      },
+      {
+        "file": "agent_service/auth.py",
+        "live_size": 6199,
+        "snap_size": 7198,
+        "snap_mtime": 1786282131.5526338
+      },
+      {
+        "file": "agent_service/config.py",
+        "live_size": 2129,
+        "snap_size": 708,
+        "snap_mtime": 1785971034.9869099
+      },
+      {
+        "file": "agent_service/design_ab_tester.py",
+        "live_size": 9550,
+        "snap_size": 9269,
+        "snap_mtime": 1785971036.7570024
+      },
+      {
+        "file": "agent_service/design_agent.py",
+        "live_size": 23955,
+        "snap_size": 20679,
+        "snap_mtime": 1785971037.2308292
+      },
+      {
+        "file": "agent_service/design_regenerator.py",
+        "live_size": 10955,
+        "snap_size": 17924,
+        "snap_mtime": 1785971037.6437552
+      },
+      {
+        "file": "agent_service/failure_classifier.py",
+        "live_size": 16918,
+        "snap_size": 16886,
+        "snap_mtime": 1785971039.4348707
+      },
+      {
+        "file": "agent_service/interaction_reviewer.py",
+        "live_size": 46944,
+        "snap_size": 25780,
+        "snap_mtime": 1785971040.960986
+      },
+      {
+        "file": "agent_service/job_queue.py",
+        "live_size": 3278,
+        "snap_size": 3511,
+        "snap_mtime": 1785971042.736892
+      },
+      {
+        "file": "agent_service/main.py",
+        "live_size": 12164,
+        "snap_size": 12163,
+        "snap_mtime": 1786029250.0792394
+      },
+      {
+        "file": "agent_service/observability.py",
+        "live_size": 9867,
+        "snap_size": 9608,
+        "snap_mtime": 1785971046.2169254
+      },
+      {
+        "file": "agent_service/requirements.txt",
+        "live_size": 1037,
+        "snap_size": 984,
+        "snap_mtime": 1785971030.504282
+      },
+      {
+        "file": "agent_service/sandbox.py",
+        "live_size": 17982,
+        "snap_size": 15553,
+        "snap_mtime": 1785971049.943165
+      },
+      {
+        "file": "agent_service/static_reviewer.py",
+        "live_size": 21289,
+        "snap_size": 21287,
+        "snap_mtime": 1785971053.415811
+      },
+      {
+        "file": "agent_service/vector_memory.py",
+        "live_size": 12353,
+        "snap_size": 11983,
+        "snap_mtime": 1785971056.5441985
+      },
+      {
+        "file": "coverage.xml",
+        "live_size": 280196,
+        "snap_size": 268449,
+        "snap_mtime": 1786273815.74515
+      },
+      {
+        "file": "database/init.sql",
+        "live_size": 15399,
+        "snap_size": 12743,
+        "snap_mtime": 1781977282.0
+      },
+      {
+        "file": "docker-compose.dev.yml",
+        "live_size": 2670,
+        "snap_size": 2321,
+        "snap_mtime": 1785971027.5381832
+      },
+      {
+        "file": "docker-compose.yml",
+        "live_size": 15902,
+        "snap_size": 15500,
+        "snap_mtime": 1785971028.003904
+      },
+      {
+        "file": "htmlcov/class_index.html",
+        "live_size": 88535,
+        "snap_size": 88486,
+        "snap_mtime": 1786273813.25281
+      },
+      {
+        "file": "htmlcov/function_index.html",
+        "live_size": 335323,
+        "snap_size": 326485,
+        "snap_mtime": 1786273813.2275991
+      },
+      {
+        "file": "htmlcov/index.html",
+        "live_size": 28550,
+        "snap_size": 28545,
+        "snap_mtime": 1786273812.927043
+      },
+      {
+        "file": "htmlcov/status.json",
+        "live_size": 19783,
+        "snap_size": 19783,
+        "snap_mtime": 1786273812.9370403
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_adaptation_loop_py.html",
+        "live_size": 89950,
+        "snap_size": 88983,
+        "snap_mtime": 1786133779.993376
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_agent_loop_py.html",
+        "live_size": 411459,
+        "snap_size": 404774,
+        "snap_mtime": 1786273810.043124
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_architect_agent_py.html",
+        "live_size": 106427,
+        "snap_size": 104833,
+        "snap_mtime": 1786133780.3389103
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_auth_py.html",
+        "live_size": 45707,
+        "snap_size": 45270,
+        "snap_mtime": 1786273810.079102
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_autoscaler_py.html",
+        "live_size": 50296,
+        "snap_size": 49759,
+        "snap_mtime": 1786273810.1172152
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_billing_py.html",
+        "live_size": 74532,
+        "snap_size": 73693,
+        "snap_mtime": 1786273810.1674082
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_canary_deployer_py.html",
+        "live_size": 72886,
+        "snap_size": 72377,
+        "snap_mtime": 1786133780.5883305
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_chaos_replay_py.html",
+        "live_size": 73353,
+        "snap_size": 72575,
+        "snap_mtime": 1786133780.6433008
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_clarifier_agent_py.html",
+        "live_size": 54857,
+        "snap_size": 53798,
+        "snap_mtime": 1786273810.2083855
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_config_py.html",
+        "live_size": 21364,
+        "snap_size": 12099,
+        "snap_mtime": 1786133936.3595142
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_db_py.html",
+        "live_size": 65488,
+        "snap_size": 64767,
+        "snap_mtime": 1786273810.2633984
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_debug_agent_py.html",
+        "live_size": 142045,
+        "snap_size": 140469,
+        "snap_mtime": 1786133780.8185782
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_dependency_debugger_py.html",
+        "live_size": 71432,
+        "snap_size": 70569,
+        "snap_mtime": 1786273810.3253586
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_design_ab_tester_py.html",
+        "live_size": 78212,
+        "snap_size": 76493,
+        "snap_mtime": 1786273810.3893223
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_design_agent_py.html",
+        "live_size": 155493,
+        "snap_size": 128251,
+        "snap_mtime": 1786273810.5848203
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_design_regenerator_py.html",
+        "live_size": 97521,
+        "snap_size": 135254,
+        "snap_mtime": 1786273810.742811
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_differential_tester_py.html",
+        "live_size": 98767,
+        "snap_size": 97775,
+        "snap_mtime": 1786133781.1915224
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_ejima_agent_py.html",
+        "live_size": 108122,
+        "snap_size": 106200,
+        "snap_mtime": 1786133781.3034534
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_enhanced_static_review_py.html",
+        "live_size": 159124,
+        "snap_size": 155616,
+        "snap_mtime": 1786133781.4987383
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_failure_classifier_py.html",
+        "live_size": 127856,
+        "snap_size": 126064,
+        "snap_mtime": 1786273810.9296944
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_gpu_autoscaler_py.html",
+        "live_size": 58491,
+        "snap_size": 57698,
+        "snap_mtime": 1786133781.6842208
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_hybrid_memory_py.html",
+        "live_size": 139312,
+        "snap_size": 138249,
+        "snap_mtime": 1786133781.830967
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_interaction_reviewer_py.html",
+        "live_size": 294365,
+        "snap_size": 151504,
+        "snap_mtime": 1786273811.1306374
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_interface_cache_py.html",
+        "live_size": 55017,
+        "snap_size": 54429,
+        "snap_mtime": 1786273811.1726758
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_iteration_journal_py.html",
+        "live_size": 124994,
+        "snap_size": 123597,
+        "snap_mtime": 1786273811.2796116
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_job_queue_py.html",
+        "live_size": 33414,
+        "snap_size": 33905,
+        "snap_mtime": 1786273811.3061364
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_knowledge_graph_py.html",
+        "live_size": 76983,
+        "snap_size": 76281,
+        "snap_mtime": 1786273811.367994
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_main_py.html",
+        "live_size": 99765,
+        "snap_size": 98795,
+        "snap_mtime": 1786273811.4433851
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_mobile_stacks_py.html",
+        "live_size": 91583,
+        "snap_size": 87281,
+        "snap_mtime": 1786133782.5091462
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_model_router_py.html",
+        "live_size": 134862,
+        "snap_size": 133506,
+        "snap_mtime": 1786133782.620076
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_models_py.html",
+        "live_size": 13346,
+        "snap_size": 13216,
+        "snap_mtime": 1786133782.632068
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_mutant_tester_py.html",
+        "live_size": 109350,
+        "snap_size": 108369,
+        "snap_mtime": 1786273811.5503178
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_observability_py.html",
+        "live_size": 83653,
+        "snap_size": 80311,
+        "snap_mtime": 1786273811.633835
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_parallel_coder_py.html",
+        "live_size": 120187,
+        "snap_size": 118346,
+        "snap_mtime": 1786273811.7513113
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_parser_py.html",
+        "live_size": 31321,
+        "snap_size": 30852,
+        "snap_mtime": 1786273811.7882879
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_perf_budget_py.html",
+        "live_size": 65916,
+        "snap_size": 65042,
+        "snap_mtime": 1786273811.8471467
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_prompt_optimizer_py.html",
+        "live_size": 130944,
+        "snap_size": 128791,
+        "snap_mtime": 1786133783.0107968
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_redis_cache_py.html",
+        "live_size": 46182,
+        "snap_size": 45790,
+        "snap_mtime": 1786273811.8835697
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_refactorer_agent_py.html",
+        "live_size": 180586,
+        "snap_size": 178508,
+        "snap_mtime": 1786133783.1756933
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_research_agent_py.html",
+        "live_size": 141337,
+        "snap_size": 139621,
+        "snap_mtime": 1786133783.2916193
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_sandbox_py.html",
+        "live_size": 139494,
+        "snap_size": 120259,
+        "snap_mtime": 1786273811.9903202
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_sbom_gate_py.html",
+        "live_size": 114609,
+        "snap_size": 113163,
+        "snap_mtime": 1786273812.1365361
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_scheduler_py.html",
+        "live_size": 58316,
+        "snap_size": 57760,
+        "snap_mtime": 1786273812.1898913
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_security_agent_py.html",
+        "live_size": 146478,
+        "snap_size": 144053,
+        "snap_mtime": 1786133783.5929406
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_self_healer_py.html",
+        "live_size": 121753,
+        "snap_size": 120087,
+        "snap_mtime": 1786133783.677887
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_semantic_differ_py.html",
+        "live_size": 91119,
+        "snap_size": 90390,
+        "snap_mtime": 1786273812.264846
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_speculative_exec_py.html",
+        "live_size": 40860,
+        "snap_size": 40676,
+        "snap_mtime": 1786273812.3028252
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_static_reviewer_py.html",
+        "live_size": 171692,
+        "snap_size": 168835,
+        "snap_mtime": 1786273812.5765202
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_telemetry_mesh_py.html",
+        "live_size": 80224,
+        "snap_size": 79750,
+        "snap_mtime": 1786273812.6480162
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_testid_validator_py.html",
+        "live_size": 79608,
+        "snap_size": 78303,
+        "snap_mtime": 1786273812.7169738
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_tools_py.html",
+        "live_size": 14491,
+        "snap_size": 14265,
+        "snap_mtime": 1786273812.7379615
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_topology_py.html",
+        "live_size": 78089,
+        "snap_size": 76630,
+        "snap_mtime": 1786133784.2493632
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_trace_health_py.html",
+        "live_size": 82083,
+        "snap_size": 81496,
+        "snap_mtime": 1786133784.3139758
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_tree_search_py.html",
+        "live_size": 104121,
+        "snap_size": 103155,
+        "snap_mtime": 1786133784.3879285
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_vector_memory_py.html",
+        "live_size": 87617,
+        "snap_size": 84096,
+        "snap_mtime": 1786273812.8091147
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_visual_reviewer_py.html",
+        "live_size": 80645,
+        "snap_size": 79230,
+        "snap_mtime": 1786273812.8730748
+      },
+      {
+        "file": "htmlcov/z_42b4d4bec1311339_worker_py.html",
+        "live_size": 56187,
+        "snap_size": 55238,
+        "snap_mtime": 1786273812.91605
+      },
+      {
+        "file": "neon_architect.py",
+        "live_size": 380235,
+        "snap_size": 388256,
+        "snap_mtime": 1786014488.108184
+      },
+      {
+        "file": "pytest.ini",
+        "live_size": 1152,
+        "snap_size": 1111,
+        "snap_mtime": 1785083438.0
+      },
+      {
+        "file": "tests/test_integration_e2e.py",
+        "live_size": 23554,
+        "snap_size": 23852,
+        "snap_mtime": 1786058936.6384614
+      },
+      {
+        "file": "tests/test_smoke_gate.py",
+        "live_size": 4927,
+        "snap_size": 5166,
+        "snap_mtime": 1786273667.333505
+      }
+    ],
+    "identical_count": 154,
+    "only_live_count": 25
+  },
+  "crypto-trader-v1_1": {
+    "live": "C:\\god_ai\\crypto-trader-v1_1",
+    "snapshot": "D:\\god_ai\\lasthelp\\lasthelp\\crypto-trader-v1_1",
+    "live_exists": true,
+    "snapshot_exists": true,
+    "only_lasthelp": [
+      "crypto-trader-v1_1.zip",
+      "server/eslint.config.mjs",
+      "server/tsconfig.json",
+      "solana_hybrid_sniper_ultra/ml/model - Copy.pkl",
+      "solana_hybrid_sniper_ultra/ml/predict - Copy.py",
+      "solana_hybrid_sniper_ultra/ml/train - Copy.py",
+      "solana_hybrid_sniper_ultra/ml/training_data - Copy.csv",
+      "tests/test_crypto_trader_e2e.test.ts",
+      "{"
+    ],
+    "only_live": [],
+    "differs": [
+      {
+        "file": ".env.example",
+        "live_size": 6170,
+        "snap_size": 3419,
+        "snap_mtime": 1785969990.0892587
+      },
+      {
+        "file": ".heartbeat",
+        "live_size": 13,
+        "snap_size": 13,
+        "snap_mtime": 1786078263.3756633
+      },
+      {
+        "file": "AGENTS.md",
+        "live_size": 2890,
+        "snap_size": 2125,
+        "snap_mtime": 1785971113.5484233
+      },
+      {
+        "file": "README.md",
+        "live_size": 5286,
+        "snap_size": 981,
+        "snap_mtime": 1785971117.8666353
+      },
+      {
+        "file": "candidates.csv",
+        "live_size": 13835,
+        "snap_size": 2186,
+        "snap_mtime": 1785225464.0
+      },
+      {
+        "file": "diff.txt",
+        "live_size": 4292,
+        "snap_size": 2145,
+        "snap_mtime": 1785971121.720064
+      },
+      {
+        "file": "discovery.txt",
+        "live_size": 76754,
+        "snap_size": 38376,
+        "snap_mtime": 1785971122.1627867
+      },
+      {
+        "file": "entries.txt",
+        "live_size": 28470,
+        "snap_size": 14234,
+        "snap_mtime": 1785971122.6005144
+      },
+      {
+        "file": "jupiter_diff.txt",
+        "live_size": 21785,
+        "snap_size": 21776,
+        "snap_mtime": 1785971123.0300083
+      },
+      {
+        "file": "last_scan.json",
+        "live_size": 387,
+        "snap_size": 391,
+        "snap_mtime": 1786078208.4935558
+      },
+      {
+        "file": "live-runner.js",
+        "live_size": 21500,
+        "snap_size": 20715,
+        "snap_mtime": 1782631710.0
+      },
+      {
+        "file": "logs/app.log",
+        "live_size": 53102235,
+        "snap_size": 843953,
+        "snap_mtime": 1786893162.3898842
+      },
+      {
+        "file": "neon_architect.py",
+        "live_size": 380235,
+        "snap_size": 388256,
+        "snap_mtime": 1786014488.1391644
+      },
+      {
+        "file": "package-lock.json",
+        "live_size": 389429,
+        "snap_size": 433671,
+        "snap_mtime": 1786000764.4649763
+      },
+      {
+        "file": "package.json",
+        "live_size": 5182,
+        "snap_size": 5166,
+        "snap_mtime": 1786000763.5607617
+      },
+      {
+        "file": "routes_diff.txt",
+        "live_size": 355986,
+        "snap_size": 177992,
+        "snap_mtime": 1785971125.5218914
+      },
+      {
+        "file": "server/advanced_filters.ts",
+        "live_size": 3378,
+        "snap_size": 3838,
+        "snap_mtime": 1786027660.5682535
+      },
+      {
+        "file": "server/beast-exit.test.ts",
+        "live_size": 13775,
+        "snap_size": 8194,
+        "snap_mtime": 1785479716.0
+      },
+      {
+        "file": "server/beast-safety.test.ts",
+        "live_size": 18594,
+        "snap_size": 10620,
+        "snap_mtime": 1785478762.0
+      },
+      {
+        "file": "server/composite-scorer.test.ts",
+        "live_size": 5239,
+        "snap_size": 5099,
+        "snap_mtime": 1785477186.0
+      },
+      {
+        "file": "server/composite-scorer.ts",
+        "live_size": 5139,
+        "snap_size": 222,
+        "snap_mtime": 1785476974.0
+      },
+      {
+        "file": "server/index.ts",
+        "live_size": 8328,
+        "snap_size": 5370,
+        "snap_mtime": 1782631710.0
+      },
+      {
+        "file": "server/jupiter.test.ts",
+        "live_size": 14057,
+        "snap_size": 14103,
+        "snap_mtime": 1786102784.7163846
+      },
+      {
+        "file": "server/jupiter.ts",
+        "live_size": 49096,
+        "snap_size": 48870,
+        "snap_mtime": 1786014488.2520938
+      },
+      {
+        "file": "server/lib/newMintGate.ts",
+        "live_size": 3670,
+        "snap_size": 3678,
+        "snap_mtime": 1786078421.0255196
+      },
+      {
+        "file": "server/logger.ts",
+        "live_size": 2903,
+        "snap_size": 2127,
+        "snap_mtime": 1782631710.0
+      },
+      {
+        "file": "server/main.integration.test.ts",
+        "live_size": 12594,
+        "snap_size": 12423,
+        "snap_mtime": 1785083868.0
+      },
+      {
+        "file": "server/newMintGate.test.ts",
+        "live_size": 7688,
+        "snap_size": 5632,
+        "snap_mtime": 1785479922.0
+      },
+      {
+        "file": "server/observability.test.ts",
+        "live_size": 4235,
+        "snap_size": 2493,
+        "snap_mtime": 1785556648.0
+      },
+      {
+        "file": "server/observability.ts",
+        "live_size": 4500,
+        "snap_size": 4415,
+        "snap_mtime": 1786027855.9901044
+      },
+      {
+        "file": "server/provider-circuit-breaker.test.ts",
+        "live_size": 7564,
+        "snap_size": 3118,
+        "snap_mtime": 1785556648.0
+      },
+      {
+        "file": "server/provider-circuit-breaker.ts",
+        "live_size": 7261,
+        "snap_size": 7423,
+        "snap_mtime": 1786025373.6556368
+      },
+      {
+        "file": "server/risk-engine.test.ts",
+        "live_size": 8353,
+        "snap_size": 2287,
+        "snap_mtime": 1785556648.0
+      },
+      {
+        "file": "server/risk-engine.ts",
+        "live_size": 8016,
+        "snap_size": 8223,
+        "snap_mtime": 1786025294.832433
+      },
+      {
+        "file": "server/routes.ts",
+        "live_size": 482310,
+        "snap_size": 480105,
+        "snap_mtime": 1786015124.7173772
+      },
+      {
+        "file": "server/runtime-hooks.ts",
+        "live_size": 3719,
+        "snap_size": 2951,
+        "snap_mtime": 1782638168.0
+      },
+      {
+        "file": "server_diff.txt",
+        "live_size": 12008,
+        "snap_size": 6003,
+        "snap_mtime": 1785971126.4431498
+      },
+      {
+        "file": "solana_hybrid_sniper_ultra/data/real_world_stress.json",
+        "live_size": 24711,
+        "snap_size": 1722,
+        "snap_mtime": 1786280626.9898393
+      },
+      {
+        "file": "solana_hybrid_sniper_ultra/utils/risk_manager.py",
+        "live_size": 14374,
+        "snap_size": 14673,
+        "snap_mtime": 1786279943.6570716
+      },
+      {
+        "file": "temp.json",
+        "live_size": 60244,
+        "snap_size": 30121,
+        "snap_mtime": 1785971132.0782506
+      },
+      {
+        "file": "tests/smoke.test.ts",
+        "live_size": 3824,
+        "snap_size": 3204,
+        "snap_mtime": 1785216628.0
+      },
+      {
+        "file": "trades.json",
+        "live_size": 4064,
+        "snap_size": 2031,
+        "snap_mtime": 1785971132.5089831
+      },
+      {
+        "file": "trades_clean.txt",
+        "live_size": 2034,
+        "snap_size": 2031,
+        "snap_mtime": 1785971127.7915194
+      },
+      {
+        "file": "trades_raw.txt",
+        "live_size": 2031,
+        "snap_size": 2028,
+        "snap_mtime": 1785971128.2942083
+      },
+      {
+        "file": "tsc_err.txt",
+        "live_size": 232,
+        "snap_size": 115,
+        "snap_mtime": 1785971128.7926433
+      },
+      {
+        "file": "tx.json",
+        "live_size": 84000,
+        "snap_size": 41999,
+        "snap_mtime": 1785971133.398092
+      },
+      {
+        "file": "vitest.config.ts",
+        "live_size": 867,
+        "snap_size": 769,
+        "snap_mtime": 1785216412.0
+      }
+    ],
+    "identical_count": 367,
+    "only_live_count": 107
+  },
+  "neon_unified": {
+    "live": "D:\\neon_unified",
+    "snapshot": "D:\\god_ai\\lasthelp\\lasthelp\\neon_unified",
+    "live_exists": true,
+    "snapshot_exists": true,
+    "only_lasthelp": [
+      "DONE.md",
+      "RESIDUAL_RISKS.md",
+      "audit_tokenbucket.py",
+      "fix_openai.py",
+      "fix_success.py",
+      "tests/test_neon_unified_e2e.py"
+    ],
+    "only_live": [],
+    "differs": [
+      {
+        "file": "README.md",
+        "live_size": 17032,
+        "snap_size": 13954,
+        "snap_mtime": 1785971255.8931775
+      },
+      {
+        "file": "UNIFIED.md",
+        "live_size": 5165,
+        "snap_size": 3787,
+        "snap_mtime": 1785971258.0230608
+      },
+      {
+        "file": "generation_core.py",
+        "live_size": 66392,
+        "snap_size": 63480,
+        "snap_mtime": 1785971260.9599147
+      },
+      {
+        "file": "neon_architect.py",
+        "live_size": 641222,
+        "snap_size": 641572,
+        "snap_mtime": 1786014488.0722055
+      },
+      {
+        "file": "neon_architect_v5.py",
+        "live_size": 643861,
+        "snap_size": 628271,
+        "snap_mtime": 1785971262.0035944
+      },
+      {
+        "file": "oiioii_engineering.py",
+        "live_size": 31083,
+        "snap_size": 32971,
+        "snap_mtime": 1785971262.4949386
+      },
+      {
+        "file": "qa_self_heal.py",
+        "live_size": 10417,
+        "snap_size": 59273,
+        "snap_mtime": 1785971263.397316
+      },
+      {
+        "file": "sdlc_wrapper.py",
+        "live_size": 28056,
+        "snap_size": 29271,
+        "snap_mtime": 1785971263.8575974
+      },
+      {
+        "file": "sdlc_wrapper_full.py",
+        "live_size": 21525,
+        "snap_size": 60806,
+        "snap_mtime": 1785971264.3343003
+      },
+      {
+        "file": "smoke_test.py",
+        "live_size": 5374,
+        "snap_size": 5222,
+        "snap_mtime": 1786023302.9166813
+      }
+    ],
+    "identical_count": 9,
+    "only_live_count": 266
+  },
+  "emergentsh": {
+    "live": "C:\\god_ai\\emergentsh",
+    "snapshot": "D:\\god_ai\\lasthelp\\lasthelp\\emergentsh",
+    "live_exists": true,
+    "snapshot_exists": true,
+    "only_lasthelp": [
+      ".env",
+      "=6.6.0",
+      "backend/tests/__init__.py",
+      "backend/tests/test_code_generation.py",
+      "preview_apps/test_app_e2e/index.html",
+      "pytest.ini",
+      "server.log",
+      "tests/__init__.py",
+      "tests/test_e2e_emergentsh.py"
+    ],
+    "only_live": [],
+    "differs": [
+      {
+        "file": "backend/app/api/projects.py",
+        "live_size": 11782,
+        "snap_size": 12377,
+        "snap_mtime": 1786028229.0068514
+      },
+      {
+        "file": "backend/app/services/nim_client.py",
+        "live_size": 4521,
+        "snap_size": 4678,
+        "snap_mtime": 1786022801.4438279
+      },
+      {
+        "file": "backend/code_generation.py",
+        "live_size": 7222,
+        "snap_size": 978,
+        "snap_mtime": 1786022823.6086824
+      },
+      {
+        "file": "backend/nim_client.py",
+        "live_size": 6756,
+        "snap_size": 2682,
+        "snap_mtime": 1786028157.7887096
+      },
+      {
+        "file": "backend/requirements.txt",
+        "live_size": 505,
+        "snap_size": 506,
+        "snap_mtime": 1786028121.023797
+      },
+      {
+        "file": "backend/tests/test_nim_client.py",
+        "live_size": 4534,
+        "snap_size": 2710,
+        "snap_mtime": 1786023199.281595
+      },
+      {
+        "file": "neon_architect.py",
+        "live_size": 399053,
+        "snap_size": 407384,
+        "snap_mtime": 1786014488.0891945
+      },
+      {
+        "file": "neon_architect_v4_7_mobile_env.py",
+        "live_size": 612718,
+        "snap_size": 533181,
+        "snap_mtime": 1785971164.5364227
+      },
+      {
+        "file": "src/ui/widgets/auth/auth_dialog.py",
+        "live_size": 19586,
+        "snap_size": 19600,
+        "snap_mtime": 1785971240.9840803
+      },
+      {
+        "file": "tests/test_nim_client.py",
+        "live_size": 2310,
+        "snap_size": 2354,
+        "snap_mtime": 1786134519.6448624
+      }
+    ],
+    "identical_count": 262,
+    "only_live_count": 91688
+  },
+  "voice_agent_avatar": {
+    "live": "D:\\god_ai\\voice_agent_avatar",
+    "snapshot": "D:\\god_ai\\lasthelp\\lasthelp\\voice_agent_avatar",
+    "live_exists": true,
+    "snapshot_exists": true,
+    "only_lasthelp": [
+      "voice-agent-clinic/pytest.ini",
+      "voice-agent-clinic/server.log",
+      "voice-agent-clinic/tests/test_voice_agent_e2e.py",
+      "voice-agent-clinic/ws_test.html"
+    ],
+    "only_live": [],
+    "differs": [
+      {
+        "file": "voice-agent-clinic/agent/engines/avatar.py",
+        "live_size": 3769,
+        "snap_size": 4239,
+        "snap_mtime": 1786273204.487262
+      },
+      {
+        "file": "voice-agent-clinic/agent/engines/tts.py",
+        "live_size": 7731,
+        "snap_size": 8097,
+        "snap_mtime": 1786273204.1855679
+      },
+      {
+        "file": "voice-agent-clinic/agent/main_unified.py",
+        "live_size": 19472,
+        "snap_size": 19937,
+        "snap_mtime": 1786273224.9869199
+      },
+      {
+        "file": "voice-agent-clinic/config_free.py",
+        "live_size": 11179,
+        "snap_size": 11663,
+        "snap_mtime": 1786273171.697098
+      },
+      {
+        "file": "voice-agent-clinic/websocket_bridge.py",
+        "live_size": 22779,
+        "snap_size": 30589,
+        "snap_mtime": 1786274483.2602544
+      }
+    ],
+    "identical_count": 75,
+    "only_live_count": 2
+  },
+  "ai_video_monetizer": {
+    "live": "D:\\god_ai\\ai_video_monetizer",
+    "snapshot": "D:\\god_ai\\lasthelp\\lasthelp\\ai_video_monetizer",
+    "live_exists": true,
+    "snapshot_exists": true,
+    "only_lasthelp": [
+      ".env",
+      "logs/automation_20260806.log",
+      "logs/automation_20260807.log",
+      "logs/automation_20260808.log",
+      "logs/automation_20260809.log",
+      "logs/gumroad_sales.jsonl",
+      "logs/manychat_conversions.jsonl",
+      "server.log",
+      "tests/test_e2e_integration.py"
+    ],
+    "only_live": [],
+    "differs": [
+      {
+        "file": "ENV_CONFIGURATION_GUIDE.md",
+        "live_size": 14220,
+        "snap_size": 14189,
+        "snap_mtime": 1785970836.4128296
+      },
+      {
+        "file": "pytest.ini",
+        "live_size": 212,
+        "snap_size": 491,
+        "snap_mtime": 1786135322.2418756
+      },
+      {
+        "file": "scripts/guided_setup.py",
+        "live_size": 15484,
+        "snap_size": 15515,
+        "snap_mtime": 1786032642.3913548
+      },
+      {
+        "file": "scripts/populate_sheet.py",
+        "live_size": 5460,
+        "snap_size": 5478,
+        "snap_mtime": 1786032642.395353
+      },
+      {
+        "file": "scripts/test_google_connection.py",
+        "live_size": 4424,
+        "snap_size": 4684,
+        "snap_mtime": 1786032642.3993502
+      },
+      {
+        "file": "scripts/webhook_server.py",
+        "live_size": 8115,
+        "snap_size": 8363,
+        "snap_mtime": 1786283247.4194622
+      },
+      {
+        "file": "tests/test_webhook_server.py",
+        "live_size": 8937,
+        "snap_size": 9319,
+        "snap_mtime": 1786135296.9542482
+      }
+    ],
+    "identical_count": 36,
+    "only_live_count": 1
+  }
+}
