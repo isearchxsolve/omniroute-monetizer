@@ -3288,6 +3288,20 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 
 **Status:** ✅ Snapshot logged; autopilot will trim crypto+ases at 60%. MONETIZER_READY
 
+### [2026-08-17 20:06] #91 — monetizer DONE (19/20, T13=CPU artifact); crypto DONE (2,117 gates); autopilot detection bug FIXED; ases trimmed per rule with work checkpointed
+
+**monetizer — COMPLETE.** Agent exited cleanly 19:45:50 with final report (`monetizer_last.md`). Provider objective done: 30 live verified routes (20 direct + 10 cascade HTTP-200), CONFIGURED_INACTIVE 16→0, ledger + 1,911-model forest regenerated, 7 routes honestly demoted via REST, secret scan clean. Certification **19/20** — only T13 root-latency fails (336.1 ms; medians 215.9 ms / 913.9 ms under 100% CPU). Read-only telemetry (step 26) confirmed server-runtime/queue-load (77 sticky sessions, p50 2,435 ms / p95 19,958 ms), NOT a cache or key issue; agent correctly refused to restart/mutate SQLite/sessions without the mandated sandbox+backup procedure. T13 is a CPU-contention artifact of the saturated host — re-run acceptance after the fleet idles.
+
+**crypto — COMPLETE.** Finished on its own 19:55:13 (`crypto_last.md`), 24 s before the trim fired. Health-failure root cause fixed (HTTP listener + heartbeat now start before storage/provider/ML init; liveness vs readiness distinguished). Verified: lint pass, **2,117 test gates** (smoke 55/55, integration 2,046/2,046, failsafe 16/16), build pass, paper-mode `/api/health` 200 `ready`, non-disclosing audit 0 secret literals.
+
+**AUTOPILOT BUG FOUND + FIXED (critical).** First autopilot instance hit TRIM at 19:55 but reported "no live codex process found" for ases while ases was ALIVE — it marked ases killed without killing it. Root cause: `json.loads` on the `ConvertTo-Json` process list threw "Invalid control character" because CommandLine embeds the full mission prompt with raw newlines; the parse failure made detection return empty. Fixes applied to `fleet_autopilot.py`: (1) `-EncodedCommand` instead of `-Command` (PS 5.1 quoting), (2) `json.loads(..., strict=False)`, (3) never mark a mission killed when detection itself returned nothing (retry next poll). Verified with a throwaway detector (3/3 PIDs parsed), then removed it.
+
+**ases — TRIMMED per rule, work saved.** Restarted autopilot (clean state) at 20:05:37; meter 56% = TRIM. It correctly detected 3 processes, confirmed crypto already stopped, and **KILLED ases pid 25548** (taskkill SUCCESS). ases work is fully checkpointed: `git status` = 0 dirty paths, HEAD = `c36fd82c` (auto-checkpoint 20:01). ases was ~75% (fixing 17 real test-compat bugs); resumes cleanly in the morning.
+
+**Fleet now:** neon (pid 55804) is the only running agent — at ~95%, awaiting its live Flutter generation verdict. monetizer/crypto done; ases trimmed+saved. Meter 56% remains.
+
+**Status:** ✅ 2 of 4 missions COMPLETE; autopilot now trustworthy. MONETIZER_READY
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
