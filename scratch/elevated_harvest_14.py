@@ -1,9 +1,17 @@
-"""ELEVATED-ONLY harvest: extract v20 app-bound session cookies for chatgpt-web,
-grok-web, zed-hosted from REAL Chrome via rookiepy, verify upstream, inject into OmniRoute.
+"""ELEVATED-ONLY harvest v2: ALL Chrome profiles, OmniRoute-matching credential
+formats and verification endpoints.
 
-MUST be run from an ELEVATED PowerShell (rookiepy requires admin for Chrome v130+
-app-bound encryption).
+Corrections vs v1 (from OmniRoute source inspection):
+- chatgpt-web: verify via GET https://chatgpt.com/api/auth/session (needs
+  accessToken in JSON) — NOT /backend-api/models (that needs a Bearer token).
+  Inject the bare reassembled __Secure-next-auth.session-token value.
+- grok-web: needs grok.com `sso` + `sso-rw` cookies (buildGrokCookieHeader),
+  NOT x.com auth_token. Inject the cookie line "sso=...; sso-rw=...".
+- zed-hosted: OAuth provider in OmniRoute (native-app RSA sign-in), NOT
+  cookie-based — skipped and reclassified.
+- Scans ALL Chrome profiles via chromium_based(key_path, db_path) per profile.
 
+MUST be run from an ELEVATED PowerShell (v20 app-bound decryption needs admin).
 T11-safe: cookie values NEVER printed; stored only in gitignored state/generated_keys.json.
 Results (no secrets) -> state/harvest_14_results.json
 """
@@ -19,199 +27,265 @@ KEYS_PATH = os.path.join(ROOT, "state", "generated_keys.json")
 RESULTS_PATH = os.path.join(ROOT, "state", "harvest_14_results.json")
 sys.path.insert(0, os.path.join(ROOT, "scripts", "automation"))
 
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/151.0 Safari/537.36")
+UA_FF = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15; rv:152.0) "
+         "Gecko/20100101 Firefox/152.0")  # OmniRoute's chatgpt validator UA
+UA_CHROME = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+             'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36')
 
-# 0. elevation check
 if not ctypes.windll.shell32.IsUserAnAdmin():
     print("ERROR: this script must run ELEVATED (app-bound cookie decryption needs admin).")
     print("Run from an elevated PowerShell: .\\.venv\\Scripts\\python.exe scratch\\elevated_harvest_14.py")
     sys.exit(2)
 
 import requests  # noqa: E402
+import rookie_cookies as rc  # noqa: E402
 
-# Prefer the maintained fork (rookie-cookies) which supports Chrome v20 App-Bound
-# encryption on Windows; fall back to the archived rookiepy.
-try:
-    import rookie_cookies as _rc
-    _BACKEND = "rookie-cookies"
-except ImportError:
-    _rc = None
-try:
-    import rookiepy as _rp
-except ImportError:
-    _rp = None
-if _rc is None and _rp is None:
-    print("ERROR: neither rookie-cookies nor rookiepy is installed.")
-    sys.exit(3)
-if _rc is None:
-    _BACKEND = "rookiepy"
-
-TARGETS = {
-    "chatgpt-web": {
-        "domains": ["chatgpt.com", "openai.com"],
-        "auth_cookies": ["__Secure-next-auth.session-token"],
-    },
-    "grok-web": {
-        "domains": ["grok.com", "x.com", "twitter.com"],
-        "auth_cookies": ["auth_token", "ct0"],
-    },
-    "zed-hosted": {
-        "domains": ["zed.dev"],
-        "auth_cookies": ["zed.session"],
-    },
-}
+CHATGPT_DOMAINS = ["chatgpt.com", "openai.com"]
+GROK_DOMAINS = ["grok.com"]
 
 
-def verify_chatgpt(value: str) -> dict:
+def extract_all_profiles(domains):
+    """Return {display_name: [cookie dicts]} for every Chrome profile."""
+    out = {}
     try:
-        r = requests.get("https://chatgpt.com/backend-api/models",
-                         headers={"User-Agent": UA, "Accept": "application/json",
-                                  "Cookie": f"__Secure-next-auth.session-token={value}"},
-                         timeout=30, allow_redirects=True)
-        ok = r.status_code == 200
-        n = 0
-        if ok:
-            try:
-                n = len(r.json().get("models", []))
-            except Exception:
-                ok = False
-        return {"verified": ok and n > 0, "status": r.status_code,
-                "detail": f"{n} models listed" if ok else r.text[:150]}
+        profs = rc.chrome_profiles()
     except Exception as e:
-        return {"verified": False, "status": None, "detail": f"{type(e).__name__}: {str(e)[:150]}"}
-
-
-def verify_grok(cookies: dict) -> dict:
-    """grok.com SSOs off x.com auth_token. Try grok user-info then x.com verify."""
-    jar = "; ".join(f"{k}={v}" for k, v in cookies.items())
-    attempts = []
-    for url in ("https://grok.com/rest/app-chat/user/info",
-                "https://x.com/i/api/1.1/account/verify_credentials.json"):
+        print("chrome_profiles FAILED:", type(e).__name__, str(e)[:300])
+        return out
+    key_path = os.path.join(os.environ["LOCALAPPDATA"],
+                            "Google", "Chrome", "User Data", "Local State")
+    for p in profs:
+        prof = p.get("profile", {})
+        name = prof.get("display_name") or prof.get("profile_id", "?")[:12]
+        srcs = [s for s in p.get("sources", []) if s.get("format") == "chromium_sqlite"]
+        if not srcs:
+            print(f"  profile {name}: no chromium_sqlite source, skip")
+            continue
+        db_path = srcs[0]["path"]
         try:
-            r = requests.get(url, headers={"User-Agent": UA, "Cookie": jar,
-                                           "Accept": "application/json"},
-                             timeout=30, allow_redirects=False)
-            attempts.append(f"{url.split('/')[2]}:{r.status_code}")
-            if r.status_code == 200:
-                return {"verified": True, "status": 200, "detail": " | ".join(attempts)}
+            cookies = rc.chromium_based(key_path=key_path, db_path=db_path, domains=domains)
+            out[name] = cookies
+            print(f"  profile {name}: {len(cookies)} cookies")
         except Exception as e:
-            attempts.append(f"{url.split('/')[2]}:{type(e).__name__}")
-    return {"verified": False, "status": None, "detail": " | ".join(attempts)}
+            print(f"  profile {name}: extract FAILED {type(e).__name__}: {str(e)[:200]}")
+            out[name] = []
+    return out
 
 
-def verify_zed(value: str) -> dict:
+def reassemble_chunked(cookies, base_name):
+    """Reassemble name.0/name.1/... chunks; fall back to exact-name cookie."""
+    exact = [c for c in cookies if c["name"] == base_name]
+    if exact:
+        return exact[0]["value"]
+    chunks = [c for c in cookies if c["name"].startswith(base_name + ".")
+              and c["name"].rsplit(".", 1)[-1].isdigit()]
+    if not chunks:
+        return None
+    chunks.sort(key=lambda c: int(c["name"].rsplit(".", 1)[-1]))
+    return "".join(c["value"] for c in chunks)
+
+
+def verify_chatgpt(token):
+    """OmniRoute's actual validation: GET /api/auth/session, need accessToken."""
     try:
-        r = requests.get("https://zed.dev/api/user",
-                         headers={"User-Agent": UA, "Cookie": f"zed.session={value}",
-                                  "Accept": "application/json"},
-                         timeout=30, allow_redirects=False)
-        ok = r.status_code == 200
-        return {"verified": ok, "status": r.status_code,
-                "detail": (r.text[:150] if not ok else "user info 200")}
+        r = requests.get(
+            "https://chatgpt.com/api/auth/session",
+            headers={
+                "Accept": "application/json",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Cache-Control": "no-cache",
+                "Cookie": f"__Secure-next-auth.session-token={token}",
+                "Origin": "https://chatgpt.com",
+                "Pragma": "no-cache",
+                "Referer": "https://chatgpt.com/",
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-origin",
+                "User-Agent": UA_FF,
+            },
+            timeout=30, allow_redirects=True)
+        cf_mitigated = r.headers.get("cf-mitigated")
+        ctype = r.headers.get("content-type", "")
+        has_access_token = False
+        if r.status_code == 200 and "json" in ctype:
+            try:
+                has_access_token = bool(r.json().get("accessToken"))
+            except Exception:
+                pass
+        return {
+            "verified": has_access_token,
+            "status": r.status_code,
+            "cf_mitigated": cf_mitigated,
+            "detail": ("accessToken present" if has_access_token
+                       else f"ctype={ctype[:40]} body={r.text[:80]!r}"),
+        }
     except Exception as e:
-        return {"verified": False, "status": None, "detail": f"{type(e).__name__}: {str(e)[:150]}"}
+        return {"verified": False, "status": None, "cf_mitigated": None,
+                "detail": f"{type(e).__name__}: {str(e)[:150]}"}
 
 
-def main() -> int:
-    results = {"ts": datetime.now(timezone.utc).isoformat(), "targets": {}}
-
-    # 1. extract
-    all_domains = sorted({d for t in TARGETS.values() for d in t["domains"]})
-    print(f"extracting cookies for: {all_domains} (backend={_BACKEND})")
+def verify_grok(cookie_line):
+    """Best-effort from Python (OmniRoute uses a TLS-impersonating client;
+    plain requests may hit the anti-bot wall — OmniRoute's own validator is
+    authoritative after injection)."""
     try:
-        if _BACKEND == "rookie-cookies":
-            cookies = _rc.chrome(all_domains)
-        else:
-            cookies = _rp.chrome(domains=all_domains)
+        r = requests.post(
+            "https://grok.com/rest/app-chat/conversations/new",
+            headers={
+                "Accept": "*/*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Content-Type": "application/json",
+                "Cookie": cookie_line,
+                "Origin": "https://grok.com",
+                "Referer": "https://grok.com/",
+                "User-Agent": UA_CHROME,
+            },
+            json={"temporary": True, "modeId": "fast", "message": "test"},
+            timeout=30, allow_redirects=False)
+        body = r.text[:120]
+        anti_bot = "anti-bot" in body or "cf-chl" in body or r.status_code == 403
+        return {
+            "verified": r.status_code == 200,
+            "status": r.status_code,
+            "anti_bot_wall": anti_bot,
+            "detail": body.replace("\n", " "),
+        }
     except Exception as e:
-        print(f"{_BACKEND} FAILED:", type(e).__name__, str(e)[:300])
-        return 1
-    print(f"got {len(cookies)} cookies total")
+        return {"verified": False, "status": None, "anti_bot_wall": None,
+                "detail": f"{type(e).__name__}: {str(e)[:150]}"}
 
-    extracted = {}
-    for slug, spec in TARGETS.items():
-        lst = [c for c in cookies
-               if any((c.get("domain") or "").lstrip(".").lower() == d
-                      or (c.get("domain") or "").lstrip(".").lower().endswith("." + d)
-                      for d in spec["domains"])]
-        names = sorted({c["name"] for c in lst})
-        print(f"  {slug}: {len(lst)} cookies {names[:12]}")
-        got = {}
-        for w in spec["auth_cookies"]:
-            base = [c for c in lst if c["name"] == w]
-            chunks = sorted([c for c in lst if c["name"].startswith(w + ".")],
-                            key=lambda c: int(c["name"].rsplit(".", 1)[-1])
-                            if c["name"].rsplit(".", 1)[-1].isdigit() else 0)
-            if base:
-                got[w] = base[0]["value"]
-            elif chunks:
-                got[w] = "".join(c["value"] for c in chunks)
-        if got:
-            extracted[slug] = got
-            print(f"    -> auth cookie(s) extracted: {list(got)} (values masked)")
+
+def main():
+    results = {"ts": datetime.now(timezone.utc).isoformat(),
+               "backend": f"rookie-cookies {rc.version()}",
+               "chatgpt_candidates": {}, "grok_candidates": {},
+               "zed_hosted": "RECLASSIFIED_OAUTH_PROVIDER (not cookie-based)",
+               "verifications": {}, "injections": {}}
+
+    # ---- 1. extract from ALL profiles ----
+    print("== chatgpt/openai domains ==")
+    cgpt_by_profile = extract_all_profiles(CHATGPT_DOMAINS)
+    print("== grok.com domains ==")
+    grok_by_profile = extract_all_profiles(GROK_DOMAINS)
+
+    # ---- 2. build candidates ----
+    cgpt_candidates = []  # (profile, token, extra_cookie_names)
+    for prof, cookies in cgpt_by_profile.items():
+        token = reassemble_chunked(cookies, "__Secure-next-auth.session-token")
+        if token:
+            extras = sorted(c["name"] for c in cookies
+                            if c["name"] in ("__cf_bm", "cf_clearance", "_cfuvid",
+                                             "__Secure-oai-is", "__oailb"))
+            cgpt_candidates.append((prof, token, extras))
+            results["chatgpt_candidates"][prof] = {
+                "token_len": len(token), "extras": extras}
+            print(f"  chatgpt candidate from profile {prof!r}: token len={len(token)} extras={extras}")
+
+    grok_lines = {}  # profile -> cookie line
+    for prof, cookies in grok_by_profile.items():
+        sso = reassemble_chunked(cookies, "sso")
+        if sso:
+            parts = [f"sso={sso}"]
+            for extra in ("sso-rw", "cf_clearance", "__cf_bm"):
+                v = reassemble_chunked(cookies, extra)
+                if v:
+                    parts.append(f"{extra}={v}")
+            line = "; ".join(parts)
+            grok_lines[prof] = line
+            results["grok_candidates"][prof] = {
+                "has_sso": True, "has_sso_rw": "sso-rw=" in line,
+                "has_cf_clearance": "cf_clearance=" in line,
+                "cookie_line_len": len(line),
+            }
+            print(f"  grok candidate from profile {prof!r}: sso len={len(sso)} "
+                  f"sso-rw={'sso-rw=' in line} cf_clearance={'cf_clearance=' in line}")
         else:
-            print("    -> NO auth cookie present")
+            names = sorted({c["name"] for c in cookies})
+            print(f"  profile {prof!r}: no grok sso cookie (names={names[:10]})")
 
-    # 2. verify upstream
-    verifications = {}
-    if "chatgpt-web" in extracted:
-        verifications["chatgpt-web"] = verify_chatgpt(extracted["chatgpt-web"]["__Secure-next-auth.session-token"])
-    if "grok-web" in extracted:
-        verifications["grok-web"] = verify_grok(extracted["grok-web"])
-    if "zed-hosted" in extracted:
-        verifications["zed-hosted"] = verify_zed(extracted["zed-hosted"]["zed.session"])
-    for slug, v in verifications.items():
-        print(f"  verify {slug}: verified={v['verified']} status={v['status']} detail={v['detail'][:100]}")
+    # ---- 3. verify chatgpt candidates ----
+    best_cgpt = None
+    for prof, token, extras in cgpt_candidates:
+        v = verify_chatgpt(token)
+        results["verifications"][f"chatgpt-web@{prof}"] = v
+        print(f"  verify chatgpt@{prof}: verified={v['verified']} status={v['status']} "
+              f"cf_mitigated={v.get('cf_mitigated')} detail={v['detail'][:90]}")
+        if v["verified"] and best_cgpt is None:
+            best_cgpt = (prof, token)
 
-    # 3. save extracted values (gitignored)
+    # ---- 4. verify grok candidates (best-effort) ----
+    best_grok = None
+    for prof, line in grok_lines.items():
+        v = verify_grok(line)
+        results["verifications"][f"grok-web@{prof}"] = v
+        print(f"  verify grok@{prof}: verified={v['verified']} status={v['status']} "
+              f"anti_bot={v.get('anti_bot_wall')} detail={v['detail'][:90]}")
+        if best_grok is None:
+            best_grok = (prof, line, v)
+
+    # ---- 5. store values (gitignored, T11) ----
     store = {}
     if os.path.exists(KEYS_PATH):
         try:
             store = json.loads(open(KEYS_PATH, encoding="utf-8").read())
         except Exception:
             store = {}
-    for slug, got in extracted.items():
-        primary = got.get("__Secure-next-auth.session-token") or got.get("auth_token") or got.get("zed.session")
-        store[f"browser_session:{slug}"] = {
-            "value": primary, "all": got,
-            "harvested_at": "2026-08-18", "source": f"{_BACKEND}-elevated",
-            "upstream_verified": verifications.get(slug, {}).get("verified", False),
+    if best_cgpt:
+        store["browser_session:chatgpt-web"] = {
+            "value": best_cgpt[1], "profile": best_cgpt[0],
+            "harvested_at": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "source": "rookie-cookies-elevated-v2",
+            "upstream_verified": True,
+        }
+    if best_grok:
+        store["browser_session:grok-web"] = {
+            "value": best_grok[1], "profile": best_grok[0],
+            "harvested_at": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "source": "rookie-cookies-elevated-v2",
+            "upstream_verified": bool(best_grok[2].get("verified")),
+            "note": "python-verify may be anti-bot-walled; OmniRoute TLS validator is authoritative",
         }
     json.dump(store, open(KEYS_PATH, "w", encoding="utf-8"), indent=2)
+    print(f"stored {len(store)} session keys -> {KEYS_PATH} (values masked in logs)")
 
-    # 4. inject ONLY upstream-verified into OmniRoute
-    injected = {}
-    verified_slugs = [s for s, v in verifications.items() if v.get("verified")]
-    if verified_slugs:
+    # ---- 6. inject into OmniRoute ----
+    # chatgpt: only if upstream-verified. grok: inject if sso present (OmniRoute's
+    # own TLS-client validator is authoritative; deactivate if it fails).
+    to_inject = {}
+    if best_cgpt:
+        to_inject["chatgpt-web"] = best_cgpt[1]
+    if best_grok:
+        to_inject["grok-web"] = best_grok[1]
+
+    if to_inject:
         from omniroute_api import OmniRouteAPI
         api = OmniRouteAPI()
         api.login()
         r = api.session.get(f"{api.api}/providers", timeout=60)
         conns = r.json().get("connections", [])
-        for slug in verified_slugs:
-            primary = (extracted[slug].get("__Secure-next-auth.session-token")
-                       or extracted[slug].get("auth_token")
-                       or extracted[slug].get("zed.session"))
+        for slug, cred in to_inject.items():
             existing = next((c for c in conns if c.get("provider") == slug), None)
-            payload = {"provider": slug, "authType": "apikey", "apiKey": primary,
-                       "name": slug, "isActive": True}
             if existing:
                 rr = api.session.put(f"{api.api}/providers/{existing['id']}",
-                                     json={**existing, "apiKey": primary, "isActive": True},
+                                     json={**existing, "apiKey": cred, "isActive": True},
                                      timeout=120)
             else:
-                rr = api.session.post(f"{api.api}/providers", json=payload, timeout=120)
-            injected[slug] = {"http": rr.status_code, "body": rr.text[:200]}
-            print(f"  inject {slug}: HTTP {rr.status_code} {rr.text[:120]}")
+                rr = api.session.post(f"{api.api}/providers",
+                                      json={"provider": slug, "authType": "apikey",
+                                            "apiKey": cred, "name": slug, "isActive": True},
+                                      timeout=120)
+            body = rr.text[:300]
+            results["injections"][slug] = {"http": rr.status_code, "body": body}
+            print(f"  inject {slug}: HTTP {rr.status_code} {body[:150]}")
+            # report OmniRoute's own test verdict if present
+            try:
+                j = rr.json()
+                for key in ("testStatus", "valid", "test", "error"):
+                    if key in j:
+                        print(f"    {key}: {str(j[key])[:120]}")
+            except Exception:
+                pass
 
-    # 5. results file (no secrets)
-    for slug in TARGETS:
-        results["targets"][slug] = {
-            "extracted": slug in extracted,
-            "verification": verifications.get(slug),
-            "injection": injected.get(slug),
-        }
     json.dump(results, open(RESULTS_PATH, "w", encoding="utf-8"), indent=2)
     print(f"\nresults -> {RESULTS_PATH}")
     return 0
