@@ -7,14 +7,18 @@
 
 $ErrorActionPreference = "SilentlyContinue"
 
-$Projects = @(
-    'd:\omniroute-monetizer',
-    'd:\neon_unified',
-    'C:\god_ai\crypto-trader-v1_1',
-    'C:\god_ai\ases_v3_1'
-)
+# Per-project checkpoint intervals (seconds). Small repos get 60 s; the huge
+# ases repo (node_modules tracked) gets 300 s to avoid I/O contention with its
+# running Selenium tests. index.lock detection prevents fighting agents' own
+# git commands.
+$Projects = [ordered]@{
+    'd:\omniroute-monetizer'   = 60
+    'd:\neon_unified'          = 60
+    'C:\god_ai\crypto-trader-v1_1' = 120
+    'C:\god_ai\ases_v3_1'      = 300
+}
 
-$IntervalSeconds = 1800   # 30 minutes
+$TickSeconds = 60           # base polling tick
 $LogFile = 'd:\omniroute-monetizer\state\auto_checkpoint.log'
 
 function Write-Log([string]$msg) {
@@ -26,28 +30,43 @@ function Write-Log([string]$msg) {
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "  AUTO-CHECKPOINT WATCHDOG" -ForegroundColor Cyan
-Write-Host "  Interval: every $IntervalSeconds s ($([math]::Round($IntervalSeconds/60,1)) min)" -ForegroundColor Cyan
-Write-Host "  Projects: $($Projects.Count)" -ForegroundColor Cyan
+Write-Host "  Tick: every $TickSeconds s; per-project intervals:" -ForegroundColor Cyan
+foreach ($k in $Projects.Keys) {
+    Write-Host ("    " + (Split-Path $k -Leaf).PadRight(22) + " every " + $Projects[$k] + " s") -ForegroundColor DarkCyan
+}
 Write-Host "  Log: $LogFile" -ForegroundColor Cyan
 Write-Host "  Close this window to stop. Fleet work is unaffected." -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Log "WATCHDOG STARTED (interval=$IntervalSeconds s, projects=$($Projects.Count))"
+Write-Log "WATCHDOG STARTED (tick=$TickSeconds s; intervals: $(($Projects.Keys | ForEach-Object { (Split-Path $_ -Leaf) + '=' + $Projects[$_] + 's' }) -join ', '))"
 
+$lastRun = @{}
 $cycle = 0
 while ($true) {
     $cycle++
-    Write-Log "--- cycle $cycle ---"
-    foreach ($proj in $Projects) {
+    $now = Get-Date
+    foreach ($proj in $Projects.Keys) {
+        $interval = $Projects[$proj]
         $name = Split-Path $proj -Leaf
-        if (-not (Test-Path (Join-Path $proj '.git'))) {
-            Write-Log "$name : SKIP (no .git)"
+        # Not yet due for this project.
+        if ($lastRun.ContainsKey($proj) -and (($now - $lastRun[$proj]).TotalSeconds -lt $interval)) {
             continue
         }
+        if (-not (Test-Path (Join-Path $proj '.git'))) {
+            Write-Log "$name : SKIP (no .git)"
+            $lastRun[$proj] = $now
+            continue
+        }
+        # Never fight an agent's in-flight git operation over the index lock.
+        if (Test-Path (Join-Path $proj '.git\index.lock')) {
+            Write-Log "$name : SKIP (git busy - index.lock present; retry next tick)"
+            continue
+        }
+        $lastRun[$proj] = $now
         Push-Location $proj
         # Only commit when there is something to save.
         $dirty = git status --porcelain 2>$null
         if ([string]::IsNullOrWhiteSpace($dirty)) {
-            Write-Log "$name : clean (nothing to save)"
+            if ($cycle % 10 -eq 1) { Write-Log "$name : clean (nothing to save)" }
         } else {
             $changed = ($dirty -split "`n").Count
             git add -A 2>$null
@@ -62,6 +81,5 @@ while ($true) {
         }
         Pop-Location
     }
-    Write-Log "cycle $cycle done; sleeping $IntervalSeconds s"
-    Start-Sleep -Seconds $IntervalSeconds
+    Start-Sleep -Seconds $TickSeconds
 }

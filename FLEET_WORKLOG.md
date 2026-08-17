@@ -88,3 +88,53 @@
 - Read-only probes to the advertised local OpenAI/Ollama endpoints for Ollama/g4f-Ollama, oobabooga, vLLM, LM Studio, and LocalAI all failed with `Unable to connect to the remote server` (each within ~2.3–2.7 s).
 - Therefore no local provider node was created: adding dead localhost endpoints would not create a LIVE route and would violate the required HTTP-200 inference verification. The corresponding six ledger entries will be reclassified with this concrete `local_runtime_not_listening` evidence.
 - Next: use the existing browser/session automation only for the specifically session/account-blocked catalog entries, then complete final inference verification.
+
+### [step 18] Six failed direct provider routes demoted through the supported REST API
+- `python scripts/automation/fleet_demote_unverified.py` completed after management recovery. It issued six `PUT` disable operations, all HTTP 200, for the standard-chat-proven failures: `amazon-q`, `clinepass`, `lmarena`, `nara`, `openrouter`, and `zai-web`.
+- The action followed the required one repair/retest cycle and was restricted to routes with failed standard-chat evidence in `state/fleet_inference_repair.json`; `state/fleet_demotions.json` stores only provider labels and HTTP status.
+- Next: session refresh attempt for the documented auth/session blockers, then a fresh all-active/cascade standard-chat sweep.
+
+### [step 19] Browser fallback is unsafe/inapplicable for the three documented blockers
+- Inspected the existing generic browser engine without opening browser state. Its fallback maps unknown slugs to `https://<slug>.com` and writes raw page HTML/screenshots, so it cannot safely target `duckduckgo-web`, `hackclub`, or `pollinations` and could persist authentication material.
+- It was deliberately not executed: it would not be an honest session-refresh attempt and would violate the no-secret-artifacts rule. The native OAuth refresh script is the safe existing refresh mechanism and will be run instead; the three current blockers remain documented as no session / HTTP 401 auth required.
+- Next: run one redacted native OAuth refresh pass and retain any still-expired session as an explicit authentication wall.
+
+### [step 20] Native session/OAuth refresh attempted with a truthful partial result
+- `python scripts/automation/oauth_keepalive.py --once` completed: 7 of 9 active OAuth connections refreshed successfully; GitHub and KiloCode failed with `Token refresh failed — provider returned no new token`.
+- This was the safe refresh machinery available for configured OAuth connections. It cannot create the absent DuckDuckGo VQD browser session or the upstream API credentials required by HackClub/Pollinations; those three remain `BLOCKED_NO_SESSION` / `BLOCKED_AUTH_REQUIRED` with their existing HTTP evidence.
+- Next: acquire a post-demotion full REST snapshot without reactivation, then run a fresh standard chat-completion sweep of every currently active, valid direct owner plus all ten cascade routes.
+
+### [step 21] Fresh full standard-chat sweep verified 28 of 29 current active/cascade routes
+- Post-demotion REST snapshot: 56 connections, 22 active / 34 inactive, 25 native-valid tests. `fleet_inference_audit.py` then executed 29 valid `max_tokens=16` standard chat completions: **28 HTTP 200 OpenAI-compatible results** and one failure.
+- All 19 current active direct owners returned HTTP 200. Nine cascade routes returned HTTP 200; only `auto/claude-sonnet` timed out at 60,012 ms. The audit intentionally exited 2 (`total=29 valid=28 failed=1`), which is recorded as a real route failure, not a pass.
+- Next: inspect the affected combo using the REST-safe combo audit, make at most one evidence-based repair/retest, and otherwise demote/reclassify the failed cascade honestly.
+
+### [step 22] Cascade retry recovered the sole timeout; all current routes are now proven
+- REST combo audit confirmed 13 configured combos and no configurable `auto/claude-sonnet` row, so no blind combo edit was made. The transient Anthropic cascade alias was retried once with the same valid chat payload.
+- Retry result: `auto/claude-sonnet` returned HTTP 200 with an OpenAI-compatible response in 24,301 ms (`state/fleet_anthropic_retry.json`). Together with the previous sweep, all **19 direct active owners** and all **10 cascade routes** now have current HTTP-200 inference evidence (29/29).
+- Next: regenerate the execution ledger from redacted REST/inference evidence and refresh the downstream model forest from the live `/v1/models` catalog.
+
+### [step 23] Reverification found one additional GitHub regression; ledger and forest refreshed
+- Targeted recheck of the two active owners omitted by the valid-native-test filter: AI Native returned HTTP 200, while GitHub failed three standard-chat candidates (HTTP 401, 429, and 404) after its native OAuth refresh had already returned no token. GitHub was disabled through one REST `PUT` (HTTP 200); no credential was guessed.
+- Added narrowly scoped support for this evidence in the redacted inference/demotion helpers, then regenerated `state/all_296_providers_execution_ledger.json` and `state/omniroute_model_forest.json`. Current ledger: **20 LIVE_ACTIVE**, **10 CASCADE_ROUTED**, **0 CONFIGURED_INACTIVE**, 7 direct routes `BLOCKED_INFERENCE_FAILED`, and 7 local-runtime blocks.
+- `state/fleet_live_verified_routes.json` records exactly **30** valid standard-chat routes (20 direct + 10 cascades); downstream forest now has 1,911 currently catalogued models from verified live owners. Next: run the T1–T20 acceptance suite and record its actual result.
+
+### [step 24] Certification run completed with one honest performance failure
+- `python acceptance_tests.py` exited 0 but reported `MONETIZER_DEGRADED`: 19/20 checks passed. T1–T12 and T14–T20 all passed, including all route, auth, model, provider-latency, coverage, NVIDIA, free-combo, and VS Code checks.
+- The sole failure was T13: root latency measured 336.1 ms against the required <200 ms threshold. This is not marked as fixed; the service was already showing intermittent management/catalog stalls before route work, so a shallow warm-path remeasurement is required before attributing or attempting a repair.
+- Next: measure the root endpoint with the same median-of-three approach, then rerun certification only if evidence shows the latency recovered.
+
+### [step 25] Root latency remains above threshold during a saturated CPU interval
+- A read-only median-of-three root probe returned 183.4 ms, 283.8 ms, and 215.9 ms (median **215.9 ms**), still above the T13 target. The OmniRoute Node process remains at ~1.71 GB working set while total host CPU sampled at 100%.
+- No restart or cache/DB mutation was attempted: the current evidence is a runtime saturation interval, and repository policy requires a sandbox-backed diagnosis/backup before production-level intervention. The model and protected provider endpoints remain responsive.
+- Next: allow the observable saturation interval to settle and perform one final read-only median probe; certification will be rerun only if that evidence meets T13.
+
+### [step 26] Read-only telemetry excludes a simple cache failure but confirms runtime load
+- Authenticated read-only management telemetry succeeded. Cache statistics are empty (0 entries/hits/misses); telemetry reports 77 active/sticky sessions and recent request latency p50 2,435 ms / p95 19,958 ms, while resilience has a 350 ms minimum request interval and concurrency 6.
+- This confirms a server-runtime/queue-load condition, not a provider key issue or cache-corruption finding. It does not prove a safe cache/resilience mutation; no setting, session, database, process, or service lifecycle was changed.
+- Next: retain the truthful 19/20 certification result and close the fleet run as blocked only on T13 performance, with all provider-route work and state artifacts complete.
+
+### [step 27] Fleet run final summary — provider objective complete; certification performance block remains
+- **Routes gained/revived:** six valid disabled connections were restored earlier in the run; final current standard-chat evidence contains 20 direct + 10 cascade HTTP-200 routes. **Routes lost/demoted:** `amazon-q`, `clinepass`, `github`, `lmarena`, `nara`, `openrouter`, and `zai-web` failed valid inference/repair evidence and were disabled via REST only.
+- **Reclassified:** `CONFIGURED_INACTIVE` reduced 16 → **0**. Six local/public candidates became `BLOCKED_LOCAL_RUNTIME` because no advertised localhost endpoint was listening; session/auth walls are retained with exact redacted diagnosis. Ledger and 1,911-model downstream forest were regenerated; 30 exact proven routes are in `state/fleet_live_verified_routes.json`.
+- **Verification:** `acceptance_tests.py` = 19/20 PASS; only T13 failed (root latency 336.1 ms, subsequent median 215.9 ms then 913.9 ms under 100% CPU). `git diff --check` passed and a targeted secret-pattern scan found no key/token patterns in files written this run. Status: **MONETIZER_BLOCKED** solely by the unresolved T13 runtime-performance threshold.

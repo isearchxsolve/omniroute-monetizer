@@ -73,12 +73,21 @@ def main() -> int:
     parser.add_argument("--owners", nargs="*", help="Limit direct probes to these provider owners")
     parser.add_argument("--cascade-keys", nargs="*", help="Limit cascade probes to these ledger coverage keys")
     parser.add_argument("--output", type=Path, default=OUTPUT, help="Sanitized result JSON path")
+    parser.add_argument(
+        "--include-active-unhealthy",
+        action="store_true",
+        help="Also probe active owners whose native health check is currently false; useful for re-verification.",
+    )
     args = parser.parse_args()
     audit = json.loads(AUDIT_PATH.read_text(encoding="utf-8"))
     models_response = requests.get(f"{BASE}/models", timeout=120)
     models_response.raise_for_status()
     models = models_response.json().get("data", [])
-    active_owners = sorted({c["provider"] for c in audit["connections"] if c["isActive"] and c["test"]["valid"]})
+    active_owners = sorted({
+        c["provider"]
+        for c in audit["connections"]
+        if c["isActive"] and (c["test"]["valid"] or args.include_active_unhealthy)
+    })
     if args.owners is not None:
         wanted = {owner.lower() for owner in args.owners}
         active_owners = [owner for owner in active_owners if owner.lower() in wanted]
