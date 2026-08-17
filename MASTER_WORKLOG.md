@@ -3655,6 +3655,24 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** user re-runs `.\.venv\Scripts\python.exe scratch\elevated_harvest_14.py` from an ELEVATED PowerShell (this terminal is non-elevated). Then e2e `/v1` proof for whichever of the 3 verifies, ledger updates for all 14 (exact-slug matching), optional browser-rendered pass for the 5 JS-heavy SPAs.
 **Status:** ⏳ awaiting elevated re-run with rookie-cookies 0.5.9
 
+### [2026-08-18 04:35] #115 — Elevated rookie-cookies run results: v20 CRACKED (48 cookies) + 3 harvest-logic errors root-caused from OmniRoute source + harvest v2 rewrite + zed-hosted reclassified OAuth
+
+**Context:** user ran `elevated_harvest_14.py` (v1) elevated with rookie-cookies 0.5.9 → **v20 decryption WORKS: 48 cookies decrypted** (chatgpt chunked session token reassembled). But 3 problems surfaced: chatgpt verify 401, grok "no auth cookie", zed 0 cookies.
+**Root causes (from OmniRoute's OWN source — ground truth, not guesswork):**
+1. **chatgpt-web 401 = false negative.** v1 verified against `/backend-api/models` which needs a Bearer *access token*. OmniRoute's real validator (`validateChatGptWebProvider`, `src/lib/providers/validation/webProvidersA.ts:473`) does `GET https://chatgpt.com/api/auth/session` with the raw cookie + Firefox UA (TLS-impersonating client, Cloudflare pins cf_clearance to JA3/JA4) and checks `data.accessToken`. The Default-profile token may be valid.
+2. **grok-web hunted wrong cookies + wrong profile.** OmniRoute wants grok.com **`sso` + `sso-rw`** (`buildGrokCookieHeader`, `src/lib/providers/webCookieAuth.ts:60` — appends sso-rw/cf_clearance/__cf_bm), NOT x.com `auth_token`. Also rookie's `chrome()` scans ONLY the Default profile; grok session lives in **Profile 14 ("Person 1")**. Profile enumeration (`scratch/list_chrome_profiles.py`, T11-safe, non-elevated): 4 profiles — Default ("Your Chrome"), Profile 14 ("Person 1"), Profile 16 ("Niloy"), Profile 17 ("Kunal").
+3. **zed-hosted is NOT cookie-based.** `src/shared/constants/providers/oauth.ts:150`: OAuth provider — native-app RSA-keypair sign-in via zed.dev, proxies through cloud.zed.dev. The `zed.session` cookie is unusable. **Reclassified in ledger: `BLOCKED_BROWSER_SESSION` → `BLOCKED_OAUTH_FLOW`, verdict `NEEDS_OAUTH`** (ledger JSON re-validated: 296 providers).
+**Grok validation detail** (`validateGrokWebProvider`, webProvidersA.ts:292): `POST https://grok.com/rest/app-chat/conversations/new` with TLS-impersonating client + Chrome UA + sentry/statsig headers; plain Python requests likely hit the anti-bot wall — OmniRoute's own validator is authoritative post-injection.
+**Harvest v2 rewrite** (`scratch/elevated_harvest_14.py`, syntax-checked OK):
+- Scans ALL 4 profiles via `rc.chromium_based(key_path=Local State, db_path=<profile>/Network/Cookies)`.
+- chatgpt verify → `GET /api/auth/session`, pass = `accessToken` present (mirrors OmniRoute).
+- grok → harvest grok.com `sso`+`sso-rw`(+cf_clearance/__cf_bm) from all profiles, build cookie line per `buildGrokCookieHeader`; best-effort Python verify, inject if sso present (OmniRoute TLS test is authoritative via `POST /api/providers/{id}/test`).
+- zed-hosted dropped from harvest.
+- Injection now uses `omniroute_api.OmniRouteAPI.update_connection` (partial patch) + `test_connection` for OmniRoute's authoritative verdict. T11-safe throughout.
+**Files touched:** `scratch/elevated_harvest_14.py` (rewritten v2), `scratch/list_chrome_profiles.py` (new), `state/all_296_providers_execution_ledger.json` (zed-hosted reclassified), `MASTER_WORKLOG.md` (this entry).
+**Next step:** user re-runs v2 elevated: `cd d:\omniroute-monetizer; .\.venv\Scripts\python.exe scratch\elevated_harvest_14.py`. Then e2e `/v1` proof for verified providers, ledger updates for chatgpt-web/grok-web + remaining 11, worklog amendment.
+**Status:** ⏳ awaiting elevated re-run of harvest v2
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
