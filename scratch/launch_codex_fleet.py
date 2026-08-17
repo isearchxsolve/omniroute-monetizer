@@ -76,6 +76,7 @@ def build_cmd(codex, mission, workdir, goal, model, effort):
         "-m", model,
         "-c", f"model_reasoning_effort={effort}",
         "-s", "danger-full-access",   # explicit: no sandbox/approval gates in automation
+        "--skip-git-repo-check",      # required: codex refuses untrusted dirs otherwise
         "--json",                     # full event stream -> captured to events.jsonl
         "-o", str(last),              # final agent message
         goal,
