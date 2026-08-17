@@ -77,8 +77,13 @@ def main() -> int:
         return 1
     out = {}
     files = sorted(CHUNKS_DIR.glob("*.js"))
-    print(f"scanning {len(files)} chunks")
-    for f in files:
+    # Only the provider-config chunk families carry baseUrl maps. Skip the
+    # thousands of i18n/ssr/locale/route chunks that never contain them.
+    keep = re.compile(r"^(open-sse|src_shared|\[root-of-the-server\]|src_)", re.I)
+    files = [f for f in files if keep.search(f.name)]
+    files = [f for f in files if not re.search(r"i18n|messages_|_json_|ssr|locale", f.name, re.I)]
+    print(f"scanning {len(files)} chunks (provider-config families only)")
+    for idx, f in enumerate(files):
         if f.stat().st_size > 8_000_000:
             continue
         try:
@@ -88,6 +93,8 @@ def main() -> int:
         n = extract_from(text, out)
         if n:
             print(f"  {f.name}: +{n} (total {len(out)})")
+            # incremental save so progress is never lost
+            OUT.write_text(json.dumps(out, indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"\ntotal providers with baseUrl: {len(out)}")
     OUT.write_text(json.dumps(out, indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"wrote {OUT}")
