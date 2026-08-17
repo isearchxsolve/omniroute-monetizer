@@ -40,7 +40,9 @@ MISSIONS = {
     "monetizer":  (r"d:\omniroute-monetizer",           "monetizer_master.md"),
     "avatar":     (r"D:\god_ai\voice_agent_avatar\voice-agent-clinic", "avatar_voice_agent_clinic.md"),
     "ideation":   (r"d:\ideation_to_prototype",        "nvidia-1_ideation_to_prototype.md"),
-    "emergentsh": (r"d:\emergentsh_latest",            "nvidia-2_emergentsh_latest.md"),
+    # NOTE: emergentsh live copy is C:\god_ai\emergentsh (merged 2026-08-17, worklog #98).
+    # d:\emergentsh_latest is a STALE copy with none of the merged files — do not use.
+    "emergentsh": (r"C:\god_ai\emergentsh",             "nvidia-2_emergentsh_latest.md"),
     "neon":       (r"d:\neon_unified",                 "alibaba_neon_unified.md"),
     "oioi":       (r"C:\god_ai\oioi\oioi",             "tokenrouter-1_oioi.md"),
     "crypto":     (r"C:\god_ai\crypto-trader-v1_1",    "tokenrouter-2_crypto-trader.md"),
