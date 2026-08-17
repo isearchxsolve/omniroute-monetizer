@@ -3467,6 +3467,15 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** Monitor avatar completion; after it finishes, decide whether to fix GODSHAND gaps or move to next mission.
 **Status:** ✅ Avatar launched; `MONETIZER_READY`
 
+### [2026-08-18 00:20] #102 — Avatar launch failure root-caused + fixed: codex trust check; relaunched successfully
+**What:** First avatar launch died instantly (exit 1). Events log showed: `Not inside a trusted directory and --skip-git-repo-check was not specified.` Root cause: codex CLI refuses to run in directories not marked trusted unless the flag is passed. Fixed the launcher and relaunched.
+**Why:** GODSHAND ran fine because `D:\dev\antigravity-kandover` was already trusted; the avatar project dir was not.
+**Fix:** Added `--skip-git-repo-check` to `build_cmd()` in `scratch/launch_codex_fleet.py` (applies to all future missions).
+**Verification:** Relaunched avatar → events file grew to 153KB within 15 seconds; `thread.started` + `turn.started` + first reasoning item confirmed in `avatar_events.jsonl`.
+**Files touched:** `scratch/launch_codex_fleet.py` (flag added), `MASTER_WORKLOG.md` (this entry).
+**Next step:** Monitor avatar completion; GODSHAND gap fixes remain queued after avatar.
+**Status:** ✅ Avatar running; `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
