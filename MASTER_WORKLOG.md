@@ -3401,6 +3401,28 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** Selective-merge emergentsh's 9 snapshot-newer files (review `backend/nim_client.py` conflict first), then wire GODSHAND/oioi missions and launch pending wave.
 **Status:** ✅ Done — version mess resolved without any fleet re-run; `MONETIZER_READY`
 
+### [2026-08-18 00:10] #98 — emergentsh selective merge completed: 6 merged, 3 skipped with evidence; tests green
+**What:** Finished the last version-mess item — the emergentsh selective merge flagged in #97.
+**Why:** 9 snapshot-newer files existed, but blind mtime-based merging was unsafe: one file's mtime lied, and one test patch targeted an interface that doesn't exist in live.
+**Method (evidence-first, per AGENTS.md):** `scratch\inspect_emergentsh_diffs.py` produced unified diffs for all 9 pairs (`scratch\emergentsh_diffs.txt`), then per-file decisions:
+**MERGED (6, all backed up to `state\lasthelp_rescue\pre_merge_backups\emergentsh\`):**
+- `backend/app/api/projects.py` — adds project-ownership 404 checks on conversation endpoints (security fix).
+- `backend/app/services/nim_client.py` — fixes leading-slash bug where HTTPX dropped the configured `/v1` base path.
+- `backend/code_generation.py` — **live file was CORRUPTED** (repeated `from typing import ...` garbage, 7KB of it); snapshot is a clean adapter routing to `backend.agent_pipeline` (verified `AgentPipeline`/`PipelineContext` exist in live).
+- `backend/tests/test_nim_client.py` — proper async tests with `httpx.MockTransport` asserting `/v1/chat/completions` path (matches the fix above; `pytest-asyncio==0.23.5` confirmed in requirements).
+- `src/ui/widgets/auth/auth_dialog.py` — redacts placeholder key text (T11 compliance).
+- `neon_architect.py` — removes duplicated `_refill()`/`_prune()` calls in `try_acquire`.
+**SKIPPED (3, with evidence):**
+- `backend/requirements.txt` — 0 diff lines (identical content; mtime-only difference).
+- `tests/test_nim_client.py` — snapshot patches `_request_json` which does NOT exist in live's sync `NIMClient` (has `_post`/`_get`) — merging would break the suite.
+- `neon_architect_v4_7_mobile_env.py` — **mtime lied**: snapshot looked newer (Aug 6 copy-time) but live (Aug 5, +80KB) is genuinely ahead with RC-2 corruption detection, load-spreading rotate fix, and longer first-token timeouts. Live wins.
+**Verification:**
+- `pytest backend/tests/test_nim_client.py` → **3 passed in 1.59s**.
+- `from backend.code_generation import generate_project, AgentPipeline, PipelineContext` → imports OK (was unimportable garbage before).
+**Files touched:** `scratch\inspect_emergentsh_diffs.py`, `scratch\emergentsh_diffs.txt`, `scratch\merge_emergentsh_selective.py` (new); live merges into `C:\god_ai\emergentsh`; `state\lasthelp_rescue\merge_log.json` updated.
+**Next step:** Version mess is now FULLY resolved (all 7 projects audited, 25 files merged, 0 fleet re-runs needed). Wire GODSHAND/oioi missions and launch pending wave with meter headroom.
+**Status:** ✅ Done — emergentsh merge verified green; `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
