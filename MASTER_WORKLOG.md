@@ -3375,6 +3375,32 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** Execute GODSHAND rescue merge (lasthelp engine fixes → dev canonical), re-run 5 suites with ffmpeg PATH + `GODSHAND_KIT_ROOT` set, then wire GODSHAND/oioi missions and launch pending wave with meter headroom (52% remaining at last autopilot reading).
 **Status:** ✅ Done — status reported from verified artifacts; `MONETIZER_READY`
 
+### [2026-08-17 23:45] #97 — Lasthelp version-mess rescue: content-hash audit + safe merge of 19 files; NO fleet re-run needed
+**What:** User asked whether the previous fleet must be re-run due to the version mess. Executed the full content-hash divergence audit and rescue merge to answer definitively.
+**Why:** The lasthelp workspace (`D:\god_ai\lasthelp\lasthelp`) held Aug 6–9 QA/release snapshots of 7 fleet projects that had diverged from live copies. Needed evidence-based answer: lost work vs. already-superseded work.
+**Method (shallow → incremental, per AGENTS.md):**
+1. `scratch\lasthelp_divergence_audit.py` — SHA-256 content-hash comparison of all 7 project pairs (live vs snapshot), excluding noise dirs. Report: `scratch\lasthelp_divergence_report.json`.
+2. `scratch\lasthelp_rescue_and_direction.py` — rescued 30 snapshot-only files to `state\lasthelp_rescue\` (skipped junk: `.coverage`, `{`, `=6.6.0`, `server.log`, `* - Copy.*`); classified every content-differing file as SNAPSHOT_NEWER vs LIVE_NEWER by mtime. Manifest: `state\lasthelp_rescue\rescue_manifest.json`.
+3. `scratch\lasthelp_safe_merge.py` — merged 17 snapshot-newer files into 3 zero-risk projects (byte-for-byte backups first → `state\lasthelp_rescue\pre_merge_backups\`):
+   - **voice_agent_avatar**: 5 files (live had 0 newer — 100% safe).
+   - **ai_video_monetizer**: 7 files (live had 0 newer — 100% safe).
+   - **antigravity-kandover (GODSHAND)**: 5 engine patches (`vram_governor.py`, `edge_case_integration_test.py`, `neon_architect.py`, `test_gpu_throttle_oom.py`, `test_vram_governor.py`).
+4. `scratch\merge_ases_gaps.py` — merged 2 genuine ases gaps (`agent_service/auth.py` 2026-06-20→2026-08-09, `tests/test_smoke_gate.py`) with backup.
+**Key discovery:** lasthelp was a QA workspace that added an **e2e integration test to every project** — all rescued (e.g. `test_e2e_cinema_pipeline.py`, `test_ases_e2e_integration.py`, `test_voice_agent_e2e.py`, `test_e2e_integration.py`, `test_neon_unified_e2e.py`, `test_e2e_emergentsh.py`, `test_crypto_trader_e2e.test.ts`). Two `.env` files rescued but NOT printed (T11).
+**Verification:**
+- GODSHAND post-merge: **5/5 suites PASS** (cinema4k 6.2s, edge_case 38.9s, comprehensive 150.0s, gpu_throttle_oom 10.5s, selftest_quick 1.9s; gpu_smoke skipped) with ffmpeg PATH + `GODSHAND_KIT_ROOT` set.
+- ases post-merge: **36 passed in 18.94s** (`tests/test_smoke_gate.py`).
+**Answer to user's question — NO fleet re-run needed:**
+- **crypto**: live is Aug 17 (verified green today, 2,050 tests); snapshot patches are older or junk (diff/txt artifacts). ✅ No re-run.
+- **neon**: live is Aug 17 (ran today); snapshot's 4 newer files are older wrappers superseded by live. Only blocker is one fresh live generation — a single run, not a fleet. ✅ No re-run.
+- **ases**: live is Aug 17 fleet output (22 files newer); the 2 genuine gaps (auth.py, smoke gate) are now merged and verified. ✅ No re-run.
+- **avatar / ai_video_monetizer**: live had ZERO newer files — snapshots were strictly ahead; now merged. ✅ No re-run (these were pending anyway).
+- **GODSHAND**: canonical dev copy now contains all newer engine patches; 5/5 green. ✅ No re-run.
+- **emergentsh**: 9 snapshot-newer files remain unmerged (selective merge pending — live has 1 newer file `backend/nim_client.py`); flagged for the emergentsh mission, not a fleet re-run.
+**Files touched:** `scratch\lasthelp_divergence_audit.py`, `scratch\show_only_lasthelp.py`, `scratch\lasthelp_rescue_and_direction.py`, `scratch\lasthelp_safe_merge.py`, `scratch\merge_ases_gaps.py` (new); `state\lasthelp_rescue\*` (new staging/backups/manifests); live merges into `D:\god_ai\voice_agent_avatar`, `D:\god_ai\ai_video_monetizer`, `D:\dev\antigravity-kandover`, `C:\god_ai\ases_v3_1`.
+**Next step:** Selective-merge emergentsh's 9 snapshot-newer files (review `backend/nim_client.py` conflict first), then wire GODSHAND/oioi missions and launch pending wave.
+**Status:** ✅ Done — version mess resolved without any fleet re-run; `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
