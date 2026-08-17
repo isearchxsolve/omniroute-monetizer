@@ -45,6 +45,9 @@ MISSIONS = {
     # GODSHAND fix wave (2026-08-18): sequential — close top-10 ranked gaps,
     # then verbose logging on mock paths, then deep-dive test cases. CPU-only.
     "godshandfix": (r"D:\dev\antigravity-kandover",     "godshand_gap_fixes.md"),
+    # GODSHAND wave 2 (2026-08-18): restore truncated render_motion() + rewire
+    # both production notebooks onto the wave-1 fail-closed blocks. CPU-only.
+    "godshandwave2": (r"D:\dev\antigravity-kandover",   "godshand_wave2.md"),
     "ideation":   (r"d:\ideation_to_prototype",        "nvidia-1_ideation_to_prototype.md"),
     # NOTE: emergentsh live copy is C:\god_ai\emergentsh (merged 2026-08-17, worklog #98).
     # d:\emergentsh_latest is a STALE copy with none of the merged files — do not use.
