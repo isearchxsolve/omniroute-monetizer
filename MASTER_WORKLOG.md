@@ -3346,8 +3346,21 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** Fully close all VS Code windows and reopen the project so Copilot reloads `chatLanguageModels.json` and the cached secret store; then open the model picker. A window reload alone may not refresh the cached secret store.
 **Status:** ✅ Done — configuration restored from recorded setup; `MONETIZER_READY`
 
-<!-- END OF SESSION LOG — new entries are appended above this marker -->
+### [2026-08-17 22:55] #95 — Root cause isolated: TokenRouter Agent admission failure; OmniRoute safe default selected
+**What:** User reported that Copilot still failed after restart. Investigated the new screenshots, Copilot runtime logs, and both configured endpoints.
+**Why:** Determine whether the failure was still a malformed/missing model configuration or an upstream/runtime failure.
+**Findings:**
+- Fresh Copilot logs at `20260817T224818` show repeated GitHub/Copilot service 502/503 responses, initial `Failed to get copilot token` / `ParseFailed`, and `LanguageModel/Embeddings are not available without auth token`; later the extension obtained a Copilot token. This is separate from the custom endpoint configuration.
+- The exact stored TokenRouter credential and model passed a normal valid chat-completion probe with HTTP 200.
+- The Agent-shaped request matching the screenshot (`stream=true`, tools attached, `tool_choice=auto`) returned HTTP 503: `cache-only admission rejected a cold or overloaded request` (`code=cache_only_cold`). This is the direct cause of the visible unavailable state when the qwen TokenRouter model is selected in Agent mode.
+- The same Agent-shaped request through the recorded local OmniRoute `auto/best-coding` model returned HTTP 200 with `text/event-stream`; no model IDs or credentials were changed.
+**Actions taken:** Added and ran `scratch\\prefer_omniroute_copilot.py`, which backed up the current BYOK file and reordered groups only so the verified local `OmniRoute` group / `auto/best-coding` model is first. Backup: `state\\chatLanguageModels_before_omniroute_default_20260817_225200.json`. No secret-store rows were changed.
+**Files touched:** `%APPDATA%\\Code\\User\\chatLanguageModels.json` (group order only), `scratch\\prefer_omniroute_copilot.py`, `state\\chatLanguageModels_before_omniroute_default_20260817_225200.json`, `MASTER_WORKLOG.md`.
+**Verification:** Config remains 20 groups / 990 models / 19 secret references; first group is `OmniRoute`, first model is `auto/best-coding`; script compilation and `git diff --check` passed. Direct Agent-shaped probes: TokenRouter HTTP 503, OmniRoute HTTP 200.
+**Next step:** Fully restart VS Code once more, then choose the `OmniRoute` / `auto/best-coding` entry if the existing chat session remains pinned to `qwen3.8-max-free`. The prior chat session can retain its old model selection even after config reorder.
+**Status:** ⚠️ Partial — local Agent route verified and selected as safe default; TokenRouter upstream overload remains an external limitation.
 
+<!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
 
