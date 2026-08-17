@@ -3524,6 +3524,29 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** Monitor to completion; verify 10-gap table + full-suite counts in `GODSHAND_GAP_FIX_REPORT.md`.
 **Status:** 🔄 godshandfix running to completion; `MONETIZER_READY`
 
+### [2026-08-18 00:56] #107 — godshandfix COMPLETE (honest partial): 10-gap building blocks + 11 new tests green; notebooks NOT yet rewired; ffmpeg missing on host
+**Outcome:** Mission finished 00:53 (turn.completed). Terra stopped at a verified CPU-only boundary and explicitly did NOT claim full completion — the Definition of Done is partially met.
+**Delivered (all CPU-tested, 11/11 new tests + 32/32 existing VRAM/throttle tests passing):**
+- `kit/src/gpu_smoke.py` — real-only smoke, rejects `COMFY_MOCK=1` (E2)
+- `kaggle-environment.lock.json` — pinned cu121 torch + immutable ComfyUI/GGUF/VHS revision SHAs (A1/A3/A4)
+- Free-VRAM tuple fix + mandatory 2GiB reserve enforced (B1/B2)
+- `assets.lock.json` + streaming SHA-256/size verify + atomic `.partial` + preflight helper (C1/C2/C3)
+- `qc.py --shots-dir` + JSON report + `qc.py --master` probe-only contract (E1/F1/E4)
+- Non-silent WAN policy: `WAN_ASSET_SETUP_FAILED` default + engine manifests (H1)
+- Worker-binding/control contract helpers, stage-success-only status, fatal missing-master, disk/zip/audio policy helpers (B3/B4/B5, H2/F3, G1/G3/G5/G6)
+- Structured JSONL verbose logging → `logs/mock_run_<timestamp>.jsonl` (Phase 2, woven in)
+- New deep-dive suite `GODSHAND_MASTER/GODSHAND_MASTER/kit/tests/test_gap_fixes.py` (11 tests, Phase 3 partial)
+- Reports: `GODSHAND_GAP_FIX_REPORT.md` (5.1KB) + 10-step `FLEET_WORKLOG.md`
+**Honest gaps remaining (terra's own verdict — "not ready for a fresh Kaggle 4K run"):**
+1. **Production notebooks unchanged** — `rainman-wan-MERGED-TUNED-FIXED.ipynb` and `GODSHAND_COMPLETE_GATED_PIPELINE.ipynb` still call the OLD paths; cell-level rewiring to the new building blocks is the next required wave.
+2. **Full CPU suite not green:** aggregate run = 2 pass / 3 fail / 1 GPU-skip. Blocker = `ffmpeg` not on PATH on this Windows host (`edge_case_integration_test.py`, `comprehensive_smoke_test.py` need it to synthesize media). Terra refused to fake it.
+3. Bonus finding from the run: `render_motion()` body is truncated (render loop/postprocess/denoise/identity orphaned by mis-indented def) — selftest only passed because it uses `render_film.py`. Logged in the fix report.
+**Cost:** godshand ledger 4.40M → 14.75M = **~10.3M tokens** for this wave (over the 4–6M estimate; deep test iteration cost more). Fleet total now 65.1M tokens / 610 turns.
+**Meter:** user-reported ~32% at last check; Desktop meter authoritative.
+**Files touched:** `MASTER_WORKLOG.md` (this entry). All GODSHAND changes live in `D:\dev\antigravity-kandover`.
+**Next step (queued):** wave 2 = notebook cell rewiring (both notebooks onto the new fail-closed blocks) + install ffmpeg on the test host to unblock the media suite. Wait for meter reset or user confirmation.
+**Status:** ✅ godshandfix wave 1 complete (partial-honest); `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
