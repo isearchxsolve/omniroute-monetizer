@@ -280,7 +280,10 @@ def main():
                         upd = {"http_status": r.status_code, "body": r.json()}
                     except Exception:
                         upd = {"http_status": r.status_code, "body": r.text[:300]}
-                    cid = (upd.get("body") or {}).get("id") if isinstance(upd.get("body"), dict) else None
+                    body = upd.get("body")
+                    cid = None
+                    if isinstance(body, dict):
+                        cid = body.get("id") or (body.get("connection") or {}).get("id")
                 results["injections"][slug] = {
                     "http": upd.get("http_status"),
                     "body": str(upd.get("body"))[:300]}
