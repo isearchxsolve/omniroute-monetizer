@@ -3588,6 +3588,21 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** Monitor `godshandwave2_events.jsonl` + FLEET_WORKLOG.md; verify A7 evidence + notebook contract tests on completion.
 **Status:** 🔄 godshandwave2 running; `MONETIZER_READY`
 
+### [2026-08-18 01:35] #111 — GODSHAND wave 2 COMPLETE: render_motion restored, both notebooks rewired, full suite green — READY FOR FAIL-CLOSED KAGGLE RUN
+**Outcome:** Mission finished 01:31 (turn.completed). All three phases delivered. User's meter: 25% remaining at completion.
+**Phase A — render_motion() RESTORED (independently verified):** render loop, denoise wiring, identity-aware `_pick_best`, `_do_postprocess`, `final.mp4` output, manifest, 64-aligned OOM fallback all present and reachable. **A7 PASSES** — re-ran `edge_case_integration_test.py` myself: **36/36**, including `work/e01/final.mp4` produced under COMFY_MOCK. The defect that made the old "5/5 pass" hollow is gone.
+**Phase B — both notebooks atomically rewired (independently verified):**
+- `rainman-wan-MERGED-TUNED-FIXED.ipynb`: locked env/assets path, fail-closed WAN policy, two-T4 worker binding, preflight gate, disk guards, fatal stitch/master QC, success-only stage status.
+- `GODSHAND_COMPLETE_GATED_PIPELINE.ipynb`: real-only GPU smoke, locked asset preflight, mandatory log evidence, fail-closed deliverables, atomic stored-video archives, real governor constants.
+- Both JSON-valid, changed cells `ast.parse`-clean. New `test_notebook_contracts.py` **5/5** (re-ran myself).
+- Rollback copies left in place: `*.ipynb.wave2.bak` (399KB + 45KB) — terra's deletion attempt was rejected; keeping them as the safety net until the Kaggle run validates.
+**Phase C — full CPU suite green:** test_gap_fixes 11/11, test_notebook_contracts 5/5, vram_governor 24/24, gpu_throttle_oom 32/32, comprehensive_smoke 10/10 sections, edge_case 36/36. Bonus: terra fixed an unbounded ffmpeg freeze-fixture loop in comprehensive_smoke_test.py (added `-t <duration>`; test-only, no production artifacts touched).
+**Honest readiness verdict (terra's, endorsed):** **ready for a fail-closed Kaggle 2×T4 validation run; not real-GPU certified.** Remaining Kaggle-only evidence: real CUDA/ComfyUI/WAN smoke gate, locked WAN asset download/verify, actual two-T4 worker execution, production stitch/master QC.
+**Cost:** wave 2 = **5.68M tokens** (godshand ledger 14.75M → 20.43M). GODSHAND total across 3 missions: 20.43M. (Tracker 6h window now shows fleet total 28.1M / 263 turns — older sessions aged out of the window.)
+**Files touched:** `MASTER_WORKLOG.md` (this entry). All wave-2 changes in `D:\dev\antigravity-kandover` + `GODSHAND_WAVE2_REPORT.md`.
+**Next step:** The Kaggle 2×T4 validation run is now the only remaining gate — it's a human-in-the-loop step (Kaggle account, GPU quota) that terra cannot do. When run, the pipeline will now fail LOUDLY with a precise diagnostic at the first offending stage.
+**Status:** ✅ GODSHAND CPU-side complete; `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
