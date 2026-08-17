@@ -3603,6 +3603,26 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** The Kaggle 2×T4 validation run is now the only remaining gate — it's a human-in-the-loop step (Kaggle account, GPU quota) that terra cannot do. When run, the pipeline will now fail LOUDLY with a precise diagnostic at the first offending stage.
 **Status:** ✅ GODSHAND CPU-side complete; `MONETIZER_READY`
 
+### [2026-08-18 02:10] #112 — Ledger honesty correction: real per-provider upstream scan of the 227 "EXTERNAL_ACCOUNT_REQUIRED" (assumed → measured)
+**Trigger:** User challenged "Are you sure you scanned each of them?" Audit proved the 227 were **bulk-classified, never individually probed** — all 227 had identical fields and ONE generic evidence string. This entry is the honest correction.
+**Method (zero Terra tokens, pure local Python + requests):**
+1. Extracted full provider catalog (299) + upstream baseUrls (200) from OmniRoute's bundled Next.js chunks (`scratch/extract_provider_catalog.py`, `scratch/extract_provider_baseurls.py`).
+2. Of the 227, **139 have probeable baseUrls**; 88 do not (CLI/OAuth-only/enterprise — separate handling).
+3. Ran unauthenticated upstream probe on all 139 (`scratch/scan_unconfigured_providers.py`) → `state/provider_upstream_scan.json`.
+4. Deep-probed every provider whose `/models` answered 200 without auth: real model IDs + unauthenticated chat completion (`scratch/deep_probe_open_models.py`) → `state/provider_deep_probe.json`. Second/third passes resolved near-misses (`scratch/second_pass_probe.py`, `scratch/third_pass_probe.py`).
+5. Merged measured verdicts into the ledger (`scratch/merge_scan_into_ledger.py`) — 139 entries now carry per-provider observed verdict + HTTP evidence.
+**Observed tally (139 scanned, NOT assumed):** AUTH_REQUIRED 61, NOT_FOUND 31, NEEDS_BROWSER 15, UNKNOWN 12, UPSTREAM_DOWN 7, OPEN_NO_AUTH 5 (mostly false-positive HTML/health pages), LOCAL_RUNTIME 3, PAYWALL_CREDITS 2, CAPTCHA_BOT_BLOCK 2, RATE_LIMITED 1.
+**Deep-probe result (27 open-`/models` candidates):** **ZERO are truly zero-auth usable for inference.** AUTH_REQUIRED 20, OTHER 3, RATE_LIMITED 2, CREDITS 1, NO_MODEL_LIST 1.
+- `api-airforce`: 429 masked an auth wall — after its 62s cooldown returned **401 Missing Authorization**. Not open.
+- `nous-research`: 404 references "OpenRouter catalog" — it's an OpenRouter proxy; open `/models` is just a public catalog, inference key-gated.
+- `chutes`: genuine 429 rate-limit on chat (models open).
+**Honest conclusion:** The "all 227 need captcha/card/paywall" claim is **dead**, but so is "some are free/open." Only **2/139 are genuinely captcha-walled** (baidu, qianfan); only **2 are credit-paywalled** at inference. The real split: **61 need API keys** (signup-flow captcha/card status still unverified), **15 are browser-session providers** (now harvestable via the relaxed Chrome-profile gate), **3 are local-runtime**, **29 endpoints gone**, **7 upstream down**.
+**New ledger status_counts:** EXTERNAL_ACCOUNT_REQUIRED 88 (the no-baseUrl set), BLOCKED_AUTH_REQUIRED 73, BLOCKED_ENDPOINT_GONE 29, LIVE_ACTIVE 20, BLOCKED_BROWSER_SESSION 15, BLOCKED_UNVERIFIED 15, CASCADE_ROUTED 10, BLOCKED_LOCAL_RUNTIME 10, others unchanged.
+**Anti-pattern compliance:** No DB writes (ledger is a state JSON, not storage.sqlite), no secrets logged, no fabricated credentials, every verdict backed by observed HTTP status + body snippet.
+**Files touched:** `scratch/extract_provider_catalog.py`, `scratch/extract_provider_baseurls.py`, `scratch/inspect_baseurls.py`, `scratch/scan_unconfigured_providers.py`, `scratch/summarize_scan.py`, `scratch/preview_deep_candidates.py`, `scratch/deep_probe_open_models.py`, `scratch/second_pass_probe.py`, `scratch/third_pass_probe.py`, `scratch/merge_scan_into_ledger.py` (all new); `state/provider_catalog_extracted.json`, `state/provider_baseurls.json`, `state/provider_upstream_scan.json`, `state/provider_deep_probe.json` (new); `state/all_296_providers_execution_ledger.json` (139 entries updated); `MASTER_WORKLOG.md` (this entry).
+**Next steps:** (1) Browser-session harvest for the 15 NEEDS_BROWSER providers via existing Chrome profile (gate relaxed). (2) Classify the 61 AUTH_REQUIRED by signup flow (which give free keys without captcha/card). (3) Handle the 88 no-baseUrl providers separately.
+**Status:** ✅ Scan complete, ledger corrected — `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
