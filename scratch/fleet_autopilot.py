@@ -87,7 +87,9 @@ def codex_processes() -> list:
     if not out:
         return []
     try:
-        data = json.loads(out)
+        # strict=False: CommandLine embeds the full mission prompt, which can
+        # contain raw control characters that ConvertTo-Json does not escape.
+        data = json.loads(out, strict=False)
     except json.JSONDecodeError:
         return []
     if isinstance(data, dict):
