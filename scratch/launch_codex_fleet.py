@@ -39,6 +39,9 @@ LAUNCH_SPECS = Path(r"d:\omniroute-monetizer\state\launch_specs")
 MISSIONS = {
     "monetizer":  (r"d:\omniroute-monetizer",           "monetizer_master.md"),
     "avatar":     (r"D:\god_ai\voice_agent_avatar\voice-agent-clinic", "avatar_voice_agent_clinic.md"),
+    # GODSHAND = deep-dive gap analysis only (terra must NOT render). Goal is
+    # godshand_film.md — surfaces GPU-run failure risks + suggests fixes.
+    "godshand":   (r"D:\dev\antigravity-kandover",      "godshand_film.md"),
     "ideation":   (r"d:\ideation_to_prototype",        "nvidia-1_ideation_to_prototype.md"),
     # NOTE: emergentsh live copy is C:\god_ai\emergentsh (merged 2026-08-17, worklog #98).
     # d:\emergentsh_latest is a STALE copy with none of the merged files — do not use.
