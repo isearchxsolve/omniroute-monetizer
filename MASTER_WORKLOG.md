@@ -3476,6 +3476,18 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** Monitor avatar completion; GODSHAND gap fixes remain queued after avatar.
 **Status:** ✅ Avatar running; `MONETIZER_READY`
 
+### [2026-08-18 00:23] #103 — Codex usage tracker restarted: stale dual-instance killed, avatar/godshand mission tracking added
+**What:** User reported the usage tracker showing stale metrics. Root cause: two tracker instances running since 2026-08-17 19:38 (duplicate `--log` processes), and `MISSION_HINTS` had no entries for avatar/godshand so their token burn was invisible in per-mission breakdowns.
+**Fixes applied:**
+1. Killed both stale tracker PIDs (11276, 45968).
+2. Added `voice_agent_avatar`/`voice-agent-clinic` → `avatar` and `antigravity-kandover` → `godshand` to `MISSION_HINTS` in `scratch/usage_tracker.py`.
+3. Extended CSV schema from 13 → 15 columns (`avatar_tokens`, `godshand_tokens`); migrated existing `usage_history.csv` in place (old rows padded with `,,`; backup at `usage_history.csv.bak-20260818`).
+4. Restarted one fresh tracker (`--log --interval 60`).
+**Verification:** One-shot sample now reports: meter=49.0%, total=50.4M tokens, **avatar=981k** (running), **godshand=4.4M** (completed mission cost). GODSHAND gap analysis cost 4.4M tokens — within the 4–6M estimate.
+**Files touched:** `scratch/usage_tracker.py`, `state/usage_history.csv` (schema migration), `MASTER_WORKLOG.md` (this entry).
+**Note:** Tracker meter reads 49.0% used from rollout rate_limits; Codex Desktop showed ~47% remaining earlier — desktop may include in-flight pending burn not yet flushed to rollout files.
+**Status:** ✅ Tracker restarted and verified; `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
