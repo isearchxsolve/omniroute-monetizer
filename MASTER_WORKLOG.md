@@ -3574,6 +3574,20 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** When meter resets: launch wave-2 mission (tight 1-phase goal: rewire both notebooks onto the tested blocks + restore `render_motion()` body, verified by edge-case test A7).
 **Status:** ✅ Night's work closed; `MONETIZER_READY`
 
+### [2026-08-18 01:15] #110 — GODSHAND wave 2 LAUNCHED (user-confirmed at 30% meter)
+**Decision:** User: "Wanna do that now 30% headroom" → launched wave 2 immediately.
+**Goal file:** `state/fleet_goals/godshand_wave2.md` — tight, budget-safe, priority-ordered:
+- **Phase A (first, verifiable):** restore truncated `render_motion()` body (render loop/denoise/identity `_pick_best`/`_do_postprocess` orphaned by mis-indented def). Acceptance = edge-case test A7 produces `work/e01/final.mp4` under COMFY_MOCK.
+- **Phase B (atomic per notebook):** rewire `rainman-wan-MERGED-TUNED-FIXED.ipynb` (A1/A3/A4 pinned env, C1/C2/C3 asset lock, H1 no-fallback, B4/B5 worker binding, E1/E4 QC CLI, H2 fatal stitch, G1 disk, H5 preflight) then `GODSHAND_COMPLETE_GATED_PIPELINE.ipynb` (E2 real smoke, C3 Gate-3, F4 fatal deliverables, H4 log evidence, G3 zip, E3 VRAM_REGIMES). ATOMIC NOTEBOOK RULE: finish+validate one notebook before touching the other; revert partial edits if unable to complete.
+- **Phase C:** full CPU suite green + `GODSHAND_WAVE2_REPORT.md`.
+- Stop conditions are phase-boundaries only — never a half-edited notebook.
+**Env facts baked into goal:** ffmpeg on PATH, `GODSHAND_KIT_ROOT` permanent, wave-1 blocks listed by name.
+**Launch:** `python launch_codex_fleet.py godshandwave2` → spawned OK. Verified live: codex PID 11836 (01:14:28), thread `01a01141-0849-7eb2-bd90-de514c0c5bee`, turn.started.
+**Budget:** 30% meter remaining; wave 1 cost 10.3M — wave 2 is scoped tighter (1 verifiable fix + 2 notebook rewirings + contract tests). Monitor closely; if meter hits ~15%, check whether terra is at a phase boundary.
+**Files touched:** `state/fleet_goals/godshand_wave2.md` (new), `scratch/launch_codex_fleet.py` (mission added), `MASTER_WORKLOG.md` (this entry).
+**Next step:** Monitor `godshandwave2_events.jsonl` + FLEET_WORKLOG.md; verify A7 evidence + notebook contract tests on completion.
+**Status:** 🔄 godshandwave2 running; `MONETIZER_READY`
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
