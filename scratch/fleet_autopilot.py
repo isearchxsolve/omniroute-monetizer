@@ -16,6 +16,7 @@ All actions logged to state/autopilot.log.
 """
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import json
 import subprocess
@@ -64,16 +65,23 @@ def save_state(st: dict) -> None:
 
 
 def codex_processes() -> list:
-    """Return [{pid, cmdline}] for all codex.exe processes."""
+    """Return [{pid, cmdline}] for all codex.exe processes.
+
+    Uses -EncodedCommand because passing embedded double quotes through
+    subprocess -> powershell -Command is unreliable on Windows PowerShell 5.1
+    (the escaped \" quotes can break parsing and yield empty output).
+    """
     ps_cmd = (
         "Get-CimInstance Win32_Process -Filter \"Name='codex.exe'\" | "
         "Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"
     )
+    encoded = base64.b64encode(ps_cmd.encode("utf-16-le")).decode("ascii")
     try:
-        out = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps_cmd],
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-EncodedCommand", encoded],
             capture_output=True, text=True, timeout=30,
-        ).stdout.strip()
+        )
+        out = r.stdout.strip()
     except (subprocess.TimeoutExpired, OSError):
         return []
     if not out:
@@ -89,16 +97,29 @@ def codex_processes() -> list:
 
 def mission_pid(mission: str):
     workdir = MISSIONS[mission].lower()
-    for p in codex_processes():
+    procs = codex_processes()
+    for p in procs:
         if workdir in p["cmdline"].lower():
             return p["pid"]
     return None
 
 
 def kill_mission(mission: str) -> bool:
-    pid = mission_pid(mission)
+    """Kill a mission's codex process. Returns False (do NOT mark killed) if
+    process detection itself failed, so we retry on the next poll instead of
+    silently believing the mission is gone."""
+    procs = codex_processes()
+    if not procs:
+        log(f"  {mission}: process detection returned nothing - retrying next poll (not marking killed)")
+        return False
+    workdir = MISSIONS[mission].lower()
+    pid = None
+    for p in procs:
+        if workdir in p["cmdline"].lower():
+            pid = p["pid"]
+            break
     if pid is None:
-        log(f"  {mission}: no live codex process found (already stopped?)")
+        log(f"  {mission}: no live codex process found among {len(procs)} detected (already stopped)")
         return True
     r = subprocess.run(["taskkill", "/PID", str(pid), "/F"],
                        capture_output=True, text=True)
