@@ -260,31 +260,39 @@ def main():
     if to_inject:
         from omniroute_api import OmniRouteAPI
         api = OmniRouteAPI()
-        api.login()
-        r = api.session.get(f"{api.api}/providers", timeout=60)
-        conns = r.json().get("connections", [])
-        for slug, cred in to_inject.items():
-            existing = next((c for c in conns if c.get("provider") == slug), None)
-            if existing:
-                rr = api.session.put(f"{api.api}/providers/{existing['id']}",
-                                     json={**existing, "apiKey": cred, "isActive": True},
-                                     timeout=120)
-            else:
-                rr = api.session.post(f"{api.api}/providers",
-                                      json={"provider": slug, "authType": "apikey",
-                                            "apiKey": cred, "name": slug, "isActive": True},
-                                      timeout=120)
-            body = rr.text[:300]
-            results["injections"][slug] = {"http": rr.status_code, "body": body}
-            print(f"  inject {slug}: HTTP {rr.status_code} {body[:150]}")
-            # report OmniRoute's own test verdict if present
-            try:
-                j = rr.json()
-                for key in ("testStatus", "valid", "test", "error"):
-                    if key in j:
-                        print(f"    {key}: {str(j[key])[:120]}")
-            except Exception:
-                pass
+        if not api.login():
+            print("ERROR: could not authenticate to OmniRoute management API")
+        else:
+            conns = api.get_connections()
+            for slug, cred in to_inject.items():
+                existing = next((c for c in conns if c.get("provider") == slug), None)
+                if existing:
+                    upd = api.update_connection(existing["id"],
+                                                {"apiKey": cred, "isActive": True})
+                    cid = existing["id"]
+                else:
+                    r = api.session.post(f"{api.api}/providers",
+                                         json={"provider": slug, "authType": "apikey",
+                                               "apiKey": cred, "name": slug,
+                                               "isActive": True},
+                                         timeout=120)
+                    try:
+                        upd = {"http_status": r.status_code, "body": r.json()}
+                    except Exception:
+                        upd = {"http_status": r.status_code, "body": r.text[:300]}
+                    cid = (upd.get("body") or {}).get("id") if isinstance(upd.get("body"), dict) else None
+                results["injections"][slug] = {
+                    "http": upd.get("http_status"),
+                    "body": str(upd.get("body"))[:300]}
+                print(f"  inject {slug}: HTTP {upd.get('http_status')} "
+                      f"{str(upd.get('body'))[:150]}")
+                # OmniRoute's OWN authoritative test (TLS-impersonating validator)
+                if cid:
+                    t = api.test_connection(cid)
+                    results["injections"][slug]["omniroute_test"] = t
+                    res = t.get("result", {})
+                    print(f"    OmniRoute test: HTTP {t.get('http_status')} "
+                          f"valid={res.get('valid')} error={str(res.get('error'))[:120]}")
 
     json.dump(results, open(RESULTS_PATH, "w", encoding="utf-8"), indent=2)
     print(f"\nresults -> {RESULTS_PATH}")
