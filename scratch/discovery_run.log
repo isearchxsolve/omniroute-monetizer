@@ -1,0 +1,17 @@
+connected to browser CDP
+created fresh target 863FAD94AD0C1B7589F97DE8EB5E539F
+attached session FA481B20B976A019...
+openrouter   AUTHENTICATED        -> https://openrouter.ai/workspaces/default/keys
+anthropic    NOT_AUTHENTICATED    -> https://platform.claude.com/login?returnTo=%2Fsettings%2Fkeys
+github       NOT_AUTHENTICATED    -> https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Ftokens
+groq         AUTHENTICATED        -> https://console.groq.com/keys
+gemini       AUTHENTICATED        -> https://aistudio.google.com/api-keys?project=gen-lang-client-0363453028
+mistral      NOT_AUTHENTICATED    -> https://v2.auth.mistral.ai/login?flow=3b42e18d-17f8-476f-a177-91a09ad74383
+cohere       NOT_AUTHENTICATED    -> https://dashboard.cohere.com/welcome/login?redirect_uri=%2Fapi-keys
+cerebras     UNKNOWN              -> https://cloud.cerebras.ai/api-keys
+sambanova    NAV_ERROR            -> 
+together     AUTHENTICATED        -> https://api.together.ai/settings/projects/proj_Ce6Gstr1kTfcZwF4bRMJs/api-keys
+deepseek     UNKNOWN              -> https://platform.deepseek.com/api_keys
+xai          AUTHENTICATED        -> https://console.x.ai/home
+AUTHENTICATED: openrouter, groq, gemini, together, xai
+saved -> d:\omniroute-monetizer\state\session_discovery.json

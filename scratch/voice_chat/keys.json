@@ -1,0 +1,11 @@
+{
+  "keys": [
+    { "name": "key1", "key": "sk-vpHUXIq5GyO9YQipqHgBHERF24SOCseXocFjjxfG5cY685iL", "live": false },
+    { "name": "key2", "key": "sk-5qUyoiQoJKptZl72riS51UzVNPCxHvYgiB3nLHu31PtGyswE", "live": true },
+    { "name": "key3", "key": "sk-d8x2mCrBuUw6v6kNnPRMwJj1QCYqCSNItdHgBFNfsJIGECjN", "live": true },
+    { "name": "key4", "key": "sk-CrkSNvqBOFQl0dhRf6y1sX3qyWy5fi4OPX4snuIiAacLeuTU", "live": true },
+    { "name": "key5", "key": "sk-EZecibMiCwvb6OFzsVvaYvE1B3Ld6H64xhPA7nKbOitkCUmg", "live": true },
+    { "name": "key6", "key": "sk-2n1wQq1Anbca5mc3FcE0ThTfwl7aaqA54YUAd6SjqVjhGfyu", "live": true },
+    { "name": "key7", "key": "sk-tr4CjC9GqwGmHTU2lfviVNPg9JyofZ8EXM0ATUTxhIOW69Vc", "live": true }
+  ]
+}

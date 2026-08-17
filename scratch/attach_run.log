@@ -1,0 +1,8 @@
+targets via /json: 4
+  page         'http://0.0.0.14/' ws=True
+    HTTP close -> 'Target is closing'
+  page         'about:blank' ws=True
+    HTTP close -> 'Target is closing'
+  browser_ui   'chrome://omnibox-popup.top-chrome/' ws=True
+  browser_ui   'chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html' ws=True
+HTTP new FAILED: <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>

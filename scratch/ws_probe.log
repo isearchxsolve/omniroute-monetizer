@@ -1,0 +1,8 @@
+targets: 3
+  OK    page         '' attached in 0.00s
+        SESSION HANG: Runtime.evaluate no reply in 6s
+  OK    browser_ui   'chrome://omnibox-popup.top-chrome/' attached in 0.20s
+        Runtime.evaluate ok in 0.22s -> 2
+  OK    browser_ui   'chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html' attached in 0.32s
+        Runtime.evaluate ok in 0.07s -> 2
+DONE

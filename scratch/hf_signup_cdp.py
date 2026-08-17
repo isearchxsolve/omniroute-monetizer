@@ -27,7 +27,23 @@ def activate_chrome_window():
         GetWindowThreadProcessId = user32.GetWindowThreadProcessId
 
         SW_RESTORE = 9
-        target_pid = 22236  # CDP chrome main process (fallback: any chrome window)
+        # find the slim-profile CDP chrome main PID dynamically (fallback: any chrome window)
+        target_pid = None
+        try:
+            import subprocess
+            out = subprocess.run(
+                ["wmic", "process", "where", "Name='chrome.exe'", "get", "ProcessId,CommandLine", "/format:csv"],
+                capture_output=True, text=True, timeout=15,
+            ).stdout
+            for line in out.splitlines():
+                if "omniroute-chrome-profile" in line and "--type=" not in line:
+                    parts = line.strip().split(",")
+                    if parts and parts[-1].isdigit():
+                        target_pid = int(parts[-1])
+                        break
+        except Exception:
+            pass
+        print(f"[window] target CDP chrome pid: {target_pid}")
         found = []
 
         @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
@@ -162,8 +178,16 @@ with sync_playwright() as pw:
             print("final body (400):", page.locator("body").inner_text(timeout=3000)[:400].replace("\n", " | "))
         except Exception:
             pass
-        page.screenshot(path=r"d:\omniroute-monetizer\evidence\hf_cdp_signup_final.png", full_page=True)
-        print("screenshot: evidence/hf_cdp_signup_final.png")
+        # CDP-native screenshot (Playwright screenshot hangs on font-wait on this machine)
+        try:
+            import base64
+            cdp = ctx.new_cdp_session(page)
+            shot = cdp.send("Page.captureScreenshot", {"format": "png", "captureBeyondViewport": False})
+            with open(r"d:\omniroute-monetizer\evidence\hf_cdp_signup_final.png", "wb") as f:
+                f.write(base64.b64decode(shot["data"]))
+            print("screenshot: evidence/hf_cdp_signup_final.png")
+        except Exception as e:
+            print("screenshot failed:", e)
 
         # save cookies for later steps
         cookies = ctx.cookies()

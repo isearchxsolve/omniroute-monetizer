@@ -1,0 +1,1 @@
+chrome total=23 slim=0 scoped=0 other=23

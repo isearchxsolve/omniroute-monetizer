@@ -1,0 +1,4 @@
+CDP down -> launching slim Chrome
+prefs marked clean
+chrome launched, waiting for CDP...
+CDP up after ~2s: Chrome/151.0.7922.138

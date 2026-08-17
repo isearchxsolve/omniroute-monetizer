@@ -1,0 +1,2 @@
+LOOP pid=56864 parent=2736 :: C:\Users\Admin\AppData\Local\hermes\hermes-agent\venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.
+  PARENT bash.exe :: "C:\Program Files\Git\bin\..\usr\bin\bash.exe" -c ". /c/Users/Admin/.zcode/cli/exec/shell-snapshots/snapshot-bash-1786901713300-2d6p55.sh 2>/dev/null 

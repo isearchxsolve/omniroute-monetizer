@@ -1,0 +1,1 @@
+cpu_now=100% targets=4 pages=2 pageurls=http://0.0.0.14/ | about:blank

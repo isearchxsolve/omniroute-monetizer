@@ -1,0 +1,1 @@
+total=50 scoped=0 slim=7 chromedrivers=0 loop_py=3

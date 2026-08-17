@@ -1,0 +1,59 @@
+[
+  {
+    "key": "sk-vpH...85iL",
+    "models_status": 400,
+    "n_models": 0,
+    "has_model": false,
+    "chat": "SKIPPED (auth failed)"
+  },
+  {
+    "key": "sk-5qU...yswE",
+    "models_status": 200,
+    "n_models": 125,
+    "has_model": true,
+    "chat": {
+      "status": 200,
+      "secs": 0.64,
+      "info": "\n\nOK"
+    }
+  },
+  {
+    "key": "sk-d8x...ECjN",
+    "models_status": 400,
+    "n_models": 0,
+    "has_model": false,
+    "chat": "SKIPPED (auth failed)"
+  },
+  {
+    "key": "sk-Crk...euTU",
+    "models_status": 400,
+    "n_models": 0,
+    "has_model": false,
+    "chat": "SKIPPED (auth failed)"
+  },
+  {
+    "key": "sk-EZe...CUmg",
+    "models_status": 200,
+    "n_models": 125,
+    "has_model": true,
+    "chat": {
+      "status": 200,
+      "secs": 0.82,
+      "info": "\n\nOK"
+    }
+  },
+  {
+    "key": "sk-2n1...Gfyu",
+    "models_status": 400,
+    "n_models": 0,
+    "has_model": false,
+    "chat": "SKIPPED (auth failed)"
+  },
+  {
+    "key": "sk-tr4...69Vc",
+    "models_status": 400,
+    "n_models": 0,
+    "has_model": false,
+    "chat": "SKIPPED (auth failed)"
+  }
+]

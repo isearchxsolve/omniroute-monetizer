@@ -1,0 +1,34 @@
+﻿[+] Management login OK
+total connections: 56
+
+providers with >=1 ACTIVE connection: 22
+  agnes                        conns=1 active=1
+  ainative                     conns=1 active=1
+  aion                         conns=1 active=1
+  alibaba                      conns=1 active=1
+  amazon-q                     conns=3 active=1
+  cerebras                     conns=1 active=1
+  cloudflare-ai                conns=1 active=1
+  codex                        conns=2 active=1
+  cohere                       conns=1 active=1
+  gemini                       conns=1 active=1
+  github                       conns=1 active=1
+  groq                         conns=1 active=1
+  kilocode                     conns=2 active=1
+  kimi-coding                  conns=2 active=1
+  kiro                         conns=1 active=1
+  llm7                         conns=1 active=1
+  nara                         conns=1 active=1
+  nvidia                       conns=1 active=1
+  opencode                     conns=1 active=1
+  opencode-zen                 conns=1 active=1
+  openrouter                   conns=1 active=1
+  zai-web                      conns=1 active=1
+
+--- gemini / groq / openrouter / nvidia / anthropic / github detail ---
+  gemini: {"id": "fb276999-1370-473a-97e9-12807162fd05", "provider": "gemini", "isActive": true, "status": null, "testStatus": "active", "label": null, "authType": "apikey", "name": "Gemini (AI Studio, autonomous harvest)", "apiKey_masked": "AQ.Ab8RN...0nxQ"}
+  groq: {"id": "a4047134-02d0-4afd-87c7-e10da38f567f", "provider": "groq", "isActive": true, "status": null, "testStatus": "active", "label": null, "authType": "apikey", "name": "Groq (console, autonomous harvest)", "apiKey_masked": "gsk_gIIE...Pdgg"}
+  openrouter: {"id": "49aa144d-9005-4968-a6cd-a36e8a2e947f", "provider": "openrouter", "isActive": true, "status": null, "testStatus": "active", "label": null, "authType": "apikey", "name": "openrouter", "apiKey_masked": "sk-or-v1...f00a"}
+  nvidia: {"id": "574246f2-1cdf-48ad-83b6-2ca1b541f8e4", "provider": "nvidia", "isActive": true, "status": null, "testStatus": "active", "label": null, "authType": "apikey", "name": "nvidia", "apiKey_masked": "nvapi-_S...-ULB"}
+  anthropic: NO connections
+  github: {"id": "a0b9e60a-2316-47b5-bd1a-d6ba30ea0f4d", "provider": "github", "isActive": true, "status": null, "testStatus": "active", "label": null, "authType": "oauth", "name": null, "apiKey_masked": null}
