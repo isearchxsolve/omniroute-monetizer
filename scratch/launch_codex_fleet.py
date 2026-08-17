@@ -42,6 +42,9 @@ MISSIONS = {
     # GODSHAND = deep-dive gap analysis only (terra must NOT render). Goal is
     # godshand_film.md — surfaces GPU-run failure risks + suggests fixes.
     "godshand":   (r"D:\dev\antigravity-kandover",      "godshand_film.md"),
+    # GODSHAND fix wave (2026-08-18): sequential — close top-10 ranked gaps,
+    # then verbose logging on mock paths, then deep-dive test cases. CPU-only.
+    "godshandfix": (r"D:\dev\antigravity-kandover",     "godshand_gap_fixes.md"),
     "ideation":   (r"d:\ideation_to_prototype",        "nvidia-1_ideation_to_prototype.md"),
     # NOTE: emergentsh live copy is C:\god_ai\emergentsh (merged 2026-08-17, worklog #98).
     # d:\emergentsh_latest is a STALE copy with none of the merged files — do not use.
