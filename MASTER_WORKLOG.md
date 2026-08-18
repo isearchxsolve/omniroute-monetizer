@@ -4271,4 +4271,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Current concrete state:** The authenticated xAI console is preserved at the visible `Create your team` step; no team has been created. OpenRouter’s browser session is not authenticated, but its provider was independently repaired through an existing local credential and supported OmniRoute REST API, then verified end-to-end. NVIDIA was likewise independently verified and closed. No state change was made by this constraints response.
 **Status:** 🔵 Info — constraints defined; additional closures may proceed only along the legitimate free/session/key paths above.
 
+### [2026-08-18 13:52] #177 — Clarify Google SSO signup path in handoff blueprint
+**What:** Re-read the user-supplied `MASTER MONETIZER — GPT-LUNA-HIGH HANDOFF PROMPT` after the user challenged the prior constraints explanation.
+**Finding:** The blueprint explicitly prioritizes `WEB_COOKIE_harvest` using a proven Google SSO flow through the existing Chrome profile, with DOM/button identification and user-driven SSO click-through. It also includes `EXTERNAL_ACCOUNT_signup` as a triage bucket ranked by free-tier value, while prohibiting fabricated accounts/keys and requiring honest blocker entries.
+**Correction:** The prior response was too conservative in presenting `EXTERNAL_ACCOUNT_REQUIRED` as largely non-actionable. Legitimate no-card Google SSO signup is practicable where the existing profile is authenticated and the provider exposes that path. It is not universally blockage-free: CAPTCHA/bot detection, unavailable MFA/phone verification, paid-only access, provider terms/identity gates, or a final persistent account/key action can still stop an individual provider. The browser’s action-time confirmation requirement for account/team/key creation remains applicable even with broad user authorization.
+**Status:** 🔵 Info — blueprint interpretation corrected; no provider or runtime state changed in this clarification.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
