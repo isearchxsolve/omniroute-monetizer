@@ -3957,4 +3957,23 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** Backup method and explicit destination are identified; next action is backup execution followed by REST update and provider test.
 **Status:** 🔄 IN PROGRESS
 
+### [2026-08-18 19:35] #139 — OpenCode API key injected through REST and provider test passed
+**What:** Created the prescribed pre-production backup, then updated the OpenCode API-key connection through OmniRoute management REST and re-tested it.
+**Why:** The existing OpenCode environment key had an upstream HTTP 200 proof and was the first actionable API-key bucket item with a usable local source.
+**Findings:** Backup completed successfully at `D:\omniroute-backups\20260818-1925-pre-opencode\20260818` with 3 SQLite files and 93 state files. The OpenCode connection `7dee12ea-c18d-499e-b25f-3873ccca25c4` was already `valid=true` before the update, but the environment credential was explicitly re-applied via `PUT /api/providers/{id}`; the API returned HTTP 200 and the post-update provider test returned HTTP 200, `valid=true`, upstream diagnosis `ok`, latency 1273 ms. No secret value was printed or logged.
+**Actions taken:** Ran `backup_state.py` with a dedicated backup root; authenticated with the local management client; issued one REST update containing the in-memory `OPENCODE_API_KEY`; ran the native provider test. No DB file was edited.
+**Fixes applied:** OpenCode connection is now explicitly synchronized with the upstream-verified local key through the supported management abstraction.
+**Files touched:** Live OmniRoute provider state through REST; backup artifacts under `D:\omniroute-backups\20260818-1925-pre-opencode\20260818`; `MASTER_WORKLOG.md`.
+**Verification:** Backup manifest exists; update HTTP 200; post-update `valid=true`. Full `/v1/chat/completions` content proof remains to be recorded next.
+**Status:** 🔄 IN PROGRESS — native provider test green; E2E content proof pending.
+
+### [2026-08-18 19:45] #140 — Post-injection E2E probe hit a live `/v1/models` read timeout
+**What:** Attempted the required OmniRoute model-catalog lookup before an OpenCode chat-completion proof.
+**Why:** Select a real catalog model and then verify non-empty `/v1/chat/completions` content after the REST update.
+**Findings:** The Python probe failed before selecting a model: `requests.exceptions.ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=20128): Read timed out. (read timeout=10)` while reading `GET /v1/models`. This is the same intermittent catalog stall observed in #129, occurring after the provider update/test; it is not evidence that OpenCode failed. The service process was not restarted or killed.
+**Actions taken:** Issued one read-only local catalog request; stopped the E2E sequence on timeout, without retrying writes or fabricating a provider result.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** OpenCode native test remains the only successful post-update proof so far; full chat-content proof is blocked by the transient catalog stall and will be retried after read-only recovery checks.
+**Status:** ⚠️ Partial — E2E content proof not yet established; service stall requires evidence-based follow-up.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
