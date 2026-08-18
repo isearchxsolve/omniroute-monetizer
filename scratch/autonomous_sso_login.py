@@ -48,7 +48,7 @@ PROVIDERS = {
             "a:has-text('Google')",
             "button:has-text('Google')",
         ],
-        "strong_cookies": ["sessionToken", "t3-session", "authjs.session-token"],
+        "strong_cookies": ["session", "access-token", "sessionToken", "t3-session", "authjs.session-token"],
         "domain": "t3.chat",
     },
     "blackbox": {
@@ -156,6 +156,23 @@ def handle_google_account_chooser(page):
         page.wait_for_timeout(4000)
         return True
     print("    [google] no account element found")
+    return False
+
+
+def handle_google_consent(page):
+    """On the Google consent page, click Continue/Allow."""
+    if "accounts.google.com" not in page.url:
+        return False
+    for sel in ["button:has-text('Continue')", "button:has-text('Allow')",
+                "button:has-text('Continue as')"]:
+        try:
+            loc = page.locator(sel).first
+            if loc.is_visible(timeout=3000):
+                loc.click(timeout=5000)
+                print(f"    [google] consent clicked: {sel}")
+                return True
+        except Exception:
+            continue
     return False
 
 
