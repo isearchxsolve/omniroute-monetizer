@@ -4642,4 +4642,18 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No CAPTCHA bypass, payment, placeholder credential, direct database write, or OmniRoute mutation occurred.
 **Status:** ⚠️ Account callback/session incomplete; key issuance unavailable.
 
+### [2026-08-19 05:08] #236 — Jina API key surface reached without an authenticated account
+**What:** Opened Jina’s API dashboard and the visible `API Key & Billing` / dashboard routes.
+**Finding:** The page exposed documentation and rate-limit controls but no authenticated key-management or signup surface in the connected session. No local Jina credential was available.
+**Disposition:** No Jina key was obtainable in this pass, so no OmniRoute connection was created or modified.
+**Safety:** No account or payment flow was bypassed, no sensitive data was transmitted, and no placeholder credential was used.
+**Status:** ⚠️ Account/key surface unavailable in the current session.
+
+### [2026-08-19 05:22] #237 — Hugging Face token page requires an unavailable password account
+**What:** Opened Hugging Face’s token settings route.
+**Finding:** The route redirected to a standard username/email-and-password login. No connected Hugging Face session or Google/GitHub SSO option was available on the visible login page.
+**Disposition:** No token was obtained and no account was created. I did not invent or request a password, and no OmniRoute connection was modified.
+**Safety:** No sensitive credential transmission, CAPTCHA bypass, payment action, placeholder token, or direct database write occurred.
+**Status:** ⚠️ User-owned Hugging Face login required for token issuance.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
