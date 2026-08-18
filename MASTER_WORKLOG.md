@@ -4318,4 +4318,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** No CAPTCHA or bot-detection path was encountered in this pass. No card, payment, password, OTP, cookie, local storage, profile-store, or API key was handled. No OmniRoute runtime state changed.
 **Status:** ✅ Partial — four additional live browser/product surfaces were independently characterized; only the paths meeting local OmniRoute E2E criteria may be closed as `LIVE_ACTIVE`.
 
+### [2026-08-18 15:41] #185 — Full acceptance regression passes after browser sweep
+**What:** Ran `python acceptance_tests.py` after synchronizing Copilot, Qwen, Venice, and browser-session evidence.
+**Findings:** T1–T20 all passed with 0 failures. The suite observed 3,106 models, 100.0% provider coverage, root median 106.9 ms, models 21.0 ms, and providers 8.0 ms. T17 OpenRouter, T18 NVIDIA, T19 free-tier combo, and T20 VS Code configuration all passed. The OmniRoute process was not restarted.
+**Actions taken:** Read-only certification only; no provider/runtime state mutation, direct database write, secret disclosure, CAPTCHA bypass, payment, or browser profile inspection.
+**Status:** ✅ Done — `[PASS] MONETIZER_READY — All 20 tests passed (or skipped without failures)`.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
