@@ -3871,7 +3871,23 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** No service, database, credential, or configuration state was modified. Failure output preserved: `/v1/models` and `/api/providers` timed out at 10s; acceptance summary was `Passed: 18`, `Failed: 2`, with T1/T20 failures.
 **Status:** ⚠️ Partial — baseline is not certification-ready.
 
+### [2026-08-18 18:18] #130 — Shallow sweep repeated: API recovered; SQLite WAL is active; T20 remains concrete
+**What:** Repeated the public endpoint probes, inspected acceptance-test T20, and performed a read-only SQLite metadata check.
+**Why:** Distinguish a persistent service/database failure from a transient cold/stall window before deeper debugging or state changes.
+**Findings:** Five consecutive reads of `/` succeeded in 68–84 ms; five `/v1/models` reads succeeded in 13–32 ms; five `/api/providers` reads returned the expected HTTP 401 in 5–10 ms. The service therefore recovered without restart. The live database is `C:\Users\Admin\.omniroute\storage.sqlite`, using WAL mode, with 117 tables and 62 provider-connection rows; no write was performed. Acceptance T20 only checks whether the user VS Code settings JSON contains `localhost:20128` or `omniroute`, and the current run says it does not.
+**Actions taken:** Ran repeated read-only timing probes, reviewed the T20 implementation, and opened the SQLite file read-only to inspect journal mode and row/table counts.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** No service restart/termination and no database/config mutation occurred. The transient API issue was not reproducible in the repeated sweep; VS Code configuration is the next narrowly scoped fix candidate, subject to backup-first inspection.
+**Status:** 🔄 IN PROGRESS
+
+### [2026-08-18 18:22] #131 — VS Code settings inspection: only theme configured
+**What:** Inspected the user VS Code settings file and searched existing integration artifacts for the configured endpoint/schema.
+**Why:** T20 failed because VS Code is not configured; the fix must preserve the existing settings and use the project’s documented OmniRoute integration target.
+**Findings:** `C:\Users\Admin\AppData\Roaming\Code\User\settings.json` exists, parses as JSON, and contains only the top-level key `workbench.colorTheme`. No `github.copilot.chat.customEndpoints`, OmniRoute, TokenRouter, or endpoint setting is present. `AGENTS.md` documents OmniRoute’s VS Code target as `http://localhost:20128/v1` and calls for Copilot custom endpoints.
+**Actions taken:** Read and parsed the settings file without printing secrets; searched repository/client integration references. No configuration has been changed yet.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** Existing JSON structure is minimal and safe to preserve. Backup is required immediately before the first settings write.
+**Status:** 🔄 IN PROGRESS
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
-
-
 
