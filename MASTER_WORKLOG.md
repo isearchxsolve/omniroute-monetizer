@@ -4445,4 +4445,9 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** Public HEAD requests only; no forms, signups, credentials, keys, cookies, payments, CAPTCHA, or OmniRoute mutations.
 **Status:** ✅ Sweep complete — unmapped records now have direct public-site reachability evidence for follow-up classification.
 
+### [2026-08-18 21:04] #206 — Routeway account-provisioning checkpoint ready
+**What:** Read the authoritative goal-objective file and opened Routeway’s dashboard path in the existing Chrome profile.
+**Finding:** Routeway redirects to `/auth` and visibly offers Continue with Google, Continue with Discord, Continue with GitHub, or email. The next click would transmit account identity and may create a persistent Routeway account; subsequent dashboard work would create a persistent API key.
+**Status:** ⏸️ Paused at the exact action-time confirmation boundary required before external account creation. No SSO choice, account, key, payment, CAPTCHA, cookie, or profile secret was handled.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
