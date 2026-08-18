@@ -4546,4 +4546,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No payment, CAPTCHA, bot bypass, direct database write, browser-secret extraction, placeholder credential, or OmniRoute restart occurred. The key was not logged.
 **Status:** ⚠️ Account/key and upstream verification complete; OmniRoute local model registration remains the blocker.
 
+### [2026-08-19 01:21] #221 — Novita/OrcaRouter reconciliation and runtime certification
+**What:** Reconciled the 295-provider ledger after the two account/key workflows and synchronized the final verdict counts. Novita is now `BLOCKED_CREDITS`; OrcaRouter is now `BLOCKED_UNVERIFIED` after its native REST connection was safely deactivated because local model registration returned zero models and local chat returned 404.
+**Verification:** Actual ledger totals reconcile to 295: 27 live, 176 external-account-required, 31 non-chat, 24 web-session, 13 local-runtime, 6 auth-required, 5 combined validation/upstream categories as recorded, 4 credit blockers, 3 unverified, and the remaining one-count categories. `python acceptance_tests.py` passed T1–T20 with 20 passed and 0 failed; runtime observed 3,106 models, 100% coverage, root 118.9 ms, models 22.0 ms, providers 8.5 ms.
+**Safety:** No secrets were logged, no payment or CAPTCHA action occurred, no direct database write or OmniRoute restart occurred, and the failed OrcaRouter route was disabled through supported REST.
+**Status:** ✅ Two provider account/key flows completed; one is credit-blocked and one is locally unverified. Remaining providers continue through the same account → key → upstream → OmniRoute → local-E2E sequence.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
