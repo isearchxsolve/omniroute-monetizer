@@ -4571,4 +4571,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Required disposition:** Existing and newly obtained usable credentials must be attached through supported OmniRoute REST and kept out of logs. Providers with no obtainable credential, CAPTCHA/bot wall, payment/card/paywall requirement, or missing user-owned account remain explicitly blocked; no placeholder key may be used.
 **Status:** 🔄 Wiring-only pass active; verification intentionally deferred.
 
+### [2026-08-19 02:18] #225 — Local credential wiring batch applied without verification
+**What:** Enumerated approved local credential sources without printing secret values and wired available credentials through native `PUT /api/providers/{id}` calls. This follows the narrowed wiring-only scope; no upstream or local inference verification was run for this batch.
+**Result:** OpenRouter, NVIDIA, and OpenAI keys were written successfully to their existing API-key connections (HTTP 200). Anthropic and GitHub credentials were found locally but had no matching API-key connection, so they were not forced into OAuth connections and remain pending a compatible connection surface.
+**Safety:** Secret values were not logged, OAuth connections were not overwritten, no placeholder was used, and no OmniRoute restart or direct database write occurred.
+**Status:** ✅ 3 local credentials wired; 2 require a compatible native connection before injection.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
