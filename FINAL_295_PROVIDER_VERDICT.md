@@ -22,7 +22,7 @@ Date: 2026-08-18 (Asia/Calcutta)
 |---|---:|---:|
 | AUTHENTICATED_CLOUDFLARE_TLS_BLOCKED | 1 | 0.3% |
 | BLOCKED_AUTH_REQUIRED | 6 | 2.0% |
-| BLOCKED_CREDITS | 2 | 0.7% |
+| BLOCKED_CREDITS | 3 | 1.0% |
 | BLOCKED_FORBIDDEN | 1 | 0.3% |
 | BLOCKED_LOCAL_RUNTIME | 13 | 4.4% |
 | BLOCKED_RATE_LIMITED | 1 | 0.3% |
@@ -30,7 +30,7 @@ Date: 2026-08-18 (Asia/Calcutta)
 | BLOCKED_UPSTREAM_DOWN | 4 | 1.4% |
 | BLOCKED_VALIDATION_UNSUPPORTED | 4 | 1.4% |
 | BLOCKED_WEB_SESSION | 24 | 8.1% |
-| EXTERNAL_ACCOUNT_REQUIRED | 179 | 61% |
+| EXTERNAL_ACCOUNT_REQUIRED | 178 | 60.3% |
 | LIVE_ACTIVE | 27 | 9.2% |
 | NOT_CHAT_COMPLETABLE | 31 | 10.5% |
 
@@ -51,11 +51,12 @@ A configured connection exists, but the credential is missing, invalid, expired,
 - qoder
 - xai-oauth
 
-### BLOCKED_CREDITS — 2
+### BLOCKED_CREDITS — 3
 Credential reaches the provider, but quota/credits/rate entitlement is exhausted.
 
 - t3-web
 - xai
+- routeway
 
 ### BLOCKED_FORBIDDEN — 1
 Credential reaches the provider, but the upstream returns forbidden/plan/geo denial.
@@ -271,7 +272,6 @@ No usable connection is configured; user-owned account/key setup is required.
 - recraft
 - reka
 - requesty
-- routeway
 - runwayml
 - sambanova
 - sap
