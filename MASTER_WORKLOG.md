@@ -4415,4 +4415,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No signup, SSO selection, key creation, payment, CAPTCHA, cookie extraction, or runtime mutation.
 **Status:** ✅ Evidence synchronized — next state-changing boundary remains external account/API-key creation.
 
+### [2026-08-18 19:02] #201 — Routeway public API surface verified without credentials
+**What:** Consulted the current Routeway API documentation and performed unauthenticated, non-mutating probes against its documented endpoints.
+**Findings:** Routeway documents `https://api.routeway.ai/v1` as its OpenAI-compatible base URL, bearer-key authentication, and `/chat/completions` as the chat endpoint. GET `/v1/models` returned HTTP 200 with a public catalog. A valid chat payload using `max_tokens=60` returned HTTP 403 without authorization, confirming that the public catalog is not sufficient for inference access.
+**Actions:** Added the redacted upstream evidence to the Routeway ledger entry. No account, SSO identity, API key, payment, or OmniRoute connection was created.
+**Status:** ✅ Prepared — after authorized key creation, Routeway can be wired directly at the documented base URL and tested with the valid chat payload.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
