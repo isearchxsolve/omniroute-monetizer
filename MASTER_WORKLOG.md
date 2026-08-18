@@ -4371,4 +4371,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Fix:** Changed the scanner to use a real user prompt requesting `READY` and `max_tokens=60`. The scanner remains read-only with respect to providers: it performs unauthenticated HTTP probes and writes only a sanitized local scan artifact; it does not create accounts, keys, sessions, or OmniRoute connections.
 **Status:** 🔵 Ready — corrected scan is being run against the remaining external-account records.
 
+### [2026-08-18 17:31] #194 — Corrected upstream sweep completed for external queue
+**What:** Ran the corrected read-only unauthenticated upstream scanner across 113 of the remaining external records with a valid `READY` prompt and `max_tokens=60`.
+**Findings:** Tally: 58 authentication-required, 25 endpoint-not-found, 10 unknown/unsupported shape, 5 credit/paywall, 4 open model/catalog surfaces, 4 upstream-down, 4 browser-required, 2 CAPTCHA/bot-blocked, and 1 rate-limited. The four apparent open surfaces were not promoted: Black Forest Labs and Stability returned ordinary landing pages rather than chat APIs; Command Code returned an informational service page with no model list; ModelScope listed models but the deep probe returned HTTP 401 for all tested models.
+**Decision:** Do not run the legacy merge script because its status mapping would overwrite the current report taxonomy and could mark non-chat/open catalog pages incorrectly. Keep the authoritative ledger unchanged except for already synchronized evidence; no unauthenticated provider produced the required verified chat path for wiring.
+**Status:** ✅ Sweep complete — no new provider met the closure standard.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
