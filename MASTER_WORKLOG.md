@@ -4532,4 +4532,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No secret values were read into output or logged; no browser profile/cookie extraction, account creation, payment, CAPTCHA, or OmniRoute mutation occurred.
 **Status:** ✅ Local credential sweep complete for the current candidate set; external-provider work remains active.
 
+### [2026-08-19 00:42] #219 — Novita account/key flow completed; upstream credit blocker verified
+**What:** Continued Novita through the existing authenticated Chrome profile using Google SSO, completed account creation, opened Key Management, and created an API key named `omniroute-monetizer`. The plaintext key was held only in memory for verification and was not written to any file or response.
+**Verification:** Authenticated `GET https://api.novita.ai/openai/v1/models` returned HTTP 200 with a usable catalog. A valid chat diagnostic using model `deepseek/deepseek-v4-pro-0813`, the real READY prompt, and `max_tokens=60` returned HTTP 403 with `NOT_ENOUGH_BALANCE`. The account dashboard showed `$0.0000` credit and no voucher. No card binding or top-up was performed.
+**Disposition:** Novita cannot satisfy the upstream chat requirement, so it was not wired into OmniRoute and was not marked `LIVE_ACTIVE`. It is classified `BLOCKED_CREDITS`.
+**Safety:** No CAPTCHA or bot detection was bypassed; no payment, browser-cookie/profile extraction, direct database write, placeholder credential, or OmniRoute restart occurred.
+**Status:** ⚠️ Account and key completed; provider blocked by upstream credit entitlement.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
