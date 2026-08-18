@@ -4539,4 +4539,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No CAPTCHA or bot detection was bypassed; no payment, browser-cookie/profile extraction, direct database write, placeholder credential, or OmniRoute restart occurred.
 **Status:** ⚠️ Account and key completed; provider blocked by upstream credit entitlement.
 
+### [2026-08-19 01:07] #220 — OrcaRouter account/key, upstream verification, and OmniRoute wiring audit
+**What:** Created the OrcaRouter account through the existing GitHub SSO session, authorized the normal OAuth scope, created an API key named `omniroute-monetizer`, and held the secret only in memory. Verified the upstream catalog and free route, then created an OmniRoute connection through `POST /api/providers` and tested/synchronized it through supported REST endpoints.
+**Verification:** OrcaRouter upstream `GET /v1/models` returned HTTP 200; valid chat using `orcarouter/free` and `max_tokens=60` returned HTTP 200 with a non-empty response. OmniRoute provider test returned HTTP 200 with `valid=True`, but `sync-models` returned HTTP 200 with zero local models; local OmniRoute chat discovery then returned HTTP 404. The connection was set `isActive=false` through native REST so an unverified route cannot enter cascades.
+**Disposition:** `orcarouter` is classified `BLOCKED_UNVERIFIED`: upstream and credential are live, but local model registration/E2E is not complete. It was not marked `LIVE_ACTIVE`.
+**Safety:** No payment, CAPTCHA, bot bypass, direct database write, browser-secret extraction, placeholder credential, or OmniRoute restart occurred. The key was not logged.
+**Status:** ⚠️ Account/key and upstream verification complete; OmniRoute local model registration remains the blocker.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
