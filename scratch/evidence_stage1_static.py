@@ -93,7 +93,10 @@ print(f"executors found: {len(executors)}")
 # ---------- 3. Ledger ----------
 with open("state/all_296_providers_execution_ledger.json", encoding="utf-8") as f:
     ledger = json.load(f)["providers"]
-ledger_by_slug = {p["slug"]: p for p in ledger}
+if isinstance(ledger, dict):
+    ledger_by_slug = {k: v for k, v in ledger.items()}
+else:
+    ledger_by_slug = {p["slug"]: p for p in ledger}
 print(f"ledger entries: {len(ledger_by_slug)}")
 
 # ---------- 4. Live connections ----------
