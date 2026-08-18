@@ -4615,4 +4615,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No secret, payment data, CAPTCHA, placeholder credential, or OmniRoute mutation was used.
 **Status:** ⚠️ SSO consent completed; provider callback/session did not reach key issuance.
 
+### [2026-08-19 04:02] #232 — Mistral API key created and wired
+**What:** Used the authenticated Mistral Studio workspace, opened My API Keys, created a key named `omniroute-monetizer`, captured the one-time value through the visible copy control, and created a native OmniRoute `mistral` API-key connection through supported REST.
+**Result:** Mistral key creation succeeded and OmniRoute provider creation returned HTTP 201. The connection was created inactive because upstream/local verification is deferred.
+**Safety:** The credential was not written to files or the worklog; no payment, CAPTCHA, direct database write, service restart, or verification request was performed.
+**Status:** ✅ Mistral account/key → OmniRoute wiring complete; verification deferred.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
