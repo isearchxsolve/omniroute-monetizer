@@ -4190,4 +4190,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** Report slug count 295, unique count 295, both set differences empty; no provider/runtime/database/credential mutation. Existing final T1–T20 result remains the runtime certification evidence from #160.
 **Status:** ✅ Done — final verdict artifact ready.
 
+### [2026-08-18 12:52] #165 — Align handoff certification timings with final acceptance run
+**What:** Corrected the timing figures in `HANDOFF_RESULTS.md` to match the final acceptance run recorded in #160.
+**Finding:** The handoff report had retained an earlier measurement (root 104.9 ms, models 26.0 ms, providers 11.0 ms); the final run was root median 118.7 ms, models 21.0 ms, providers 8.0 ms, with 20 passed and 0 failed.
+**Actions taken:** Applied a documentation-only correction; no runtime or provider state changed.
+**Status:** ✅ Done.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->

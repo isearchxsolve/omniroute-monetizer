@@ -75,7 +75,7 @@ The final post-change acceptance run reported:
 - T13–T15: 3/3 passed
 - T16–T20: 5/5 passed
 - Total: 20 passed, 0 failed
-- Latest measured timings: root median 104.9 ms, models 26.0 ms, providers 11.0 ms
+- Latest measured timings from the final run: root median 118.7 ms, models 21.0 ms, providers 8.0 ms
 - Output: `[PASS] MONETIZER_READY — All 20 tests passed (or skipped without failures)`
 
 ## Next safe actions
