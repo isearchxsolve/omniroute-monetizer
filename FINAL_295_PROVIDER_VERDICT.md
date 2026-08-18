@@ -27,11 +27,11 @@ Date: 2026-08-18 (Asia/Calcutta)
 | BLOCKED_LOCAL_RUNTIME | 13 | 4.4% |
 | BLOCKED_RATE_LIMITED | 1 | 0.3% |
 | BLOCKED_UNVERIFIED | 2 | 0.7% |
-| BLOCKED_UPSTREAM_DOWN | 3 | 1% |
+| BLOCKED_UPSTREAM_DOWN | 4 | 1.4% |
 | BLOCKED_VALIDATION_UNSUPPORTED | 4 | 1.4% |
 | BLOCKED_WEB_SESSION | 24 | 8.1% |
 | EXTERNAL_ACCOUNT_REQUIRED | 179 | 61% |
-| LIVE_ACTIVE | 28 | 9.5% |
+| LIVE_ACTIVE | 27 | 9.2% |
 | NOT_CHAT_COMPLETABLE | 31 | 10.5% |
 
 The groups below are exhaustive: every one of the 295 actual provider slugs appears once, under its current ledger status.
@@ -90,14 +90,15 @@ A prior failure or upstream boundary exists, but current evidence is not suffici
 - chipotle
 - theoldllm
 
-### BLOCKED_UPSTREAM_DOWN — 3
+### BLOCKED_UPSTREAM_DOWN — 4
 The upstream endpoint is unavailable, gone, or currently rejects the requested path/model.
 
 - auggie
 - mimocode
 - openai
+- perplexity-web
 
-### BLOCKED_VALIDATION_UNSUPPORTED — 5
+### BLOCKED_VALIDATION_UNSUPPORTED — 4
 OmniRoute native validation is unsupported or the selected model/path is not currently certifiable.
 
 - aihorde
@@ -316,7 +317,7 @@ No usable connection is configured; user-owned account/key setup is required.
 - zed-hosted
 - zenmux
 
-### LIVE_ACTIVE — 28
+### LIVE_ACTIVE — 27
 Fresh or current ledger evidence marks the provider active; direct proof details are preserved in the source ledger.
 
 - agnes
@@ -345,7 +346,6 @@ Fresh or current ledger evidence marks the provider active; direct proof details
 - nvidia
 - opencode
 - openrouter
-- perplexity-web
 - zai-web
 
 ### NOT_CHAT_COMPLETABLE — 31

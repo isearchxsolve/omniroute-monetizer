@@ -4340,4 +4340,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Decision:** Do not run that legacy orchestrator. Use the redacted native-REST fleet audit, direct upstream probes, supported connection updates, valid local chat E2E, and incremental ledger/report patches. This preserves the no-fabrication and abstraction-layer rules.
 **Status:** 🔵 Info — safe all-provider pass path selected; no runtime or provider state changed by this decision.
 
+### [2026-08-18 16:46] #189 — Continuous connection and model E2E pass reconciled
+**What:** Ran the redacted native-REST audit across all 62 configured OmniRoute connections, the guarded local-token verification/injection pass, and a valid model-level local E2E sweep with `max_tokens=60`.
+**Findings:** Native connection audit: 62 total, 32 valid tests, 30 invalid. Local token harvester found 5 candidates; OpenRouter, NVIDIA, and GitHub verified upstream HTTP 200; OpenRouter/NVIDIA were already active and GitHub is OAuth-managed, so no unsafe key injection occurred. Model-level sweep: 35 direct/cascade routes, 31 passed. Agnes initially returned 503 but retried successfully with HTTP 200; Alibaba remained HTTP 429; T3 remained HTTP 429; Perplexity Web returned HTTP 502 on two valid probes.
+**Disposition:** Perplexity Web was reclassified from `LIVE_ACTIVE` to `BLOCKED_UPSTREAM_DOWN` because the current local route is not certifiable. Agnes retained `LIVE_ACTIVE` with the successful retry evidence. Alibaba and T3 retained their existing entitlement/rate-limit dispositions with fresh 429 evidence. All cascade routes in the sweep passed.
+**Safety:** No restart, direct DB write, placeholder credential, CAPTCHA bypass, payment, cookie/profile extraction, or secret logging. A complete pre-pass backup exists at `D:\omniroute-backups\20260818-135253-pre-all-provider-pass`.
+**Status:** ✅ Partial — configured route/model verification is reconciled; unconfigured external providers and unsupported browser handoffs remain in their evidence-backed blocker states.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
