@@ -4250,4 +4250,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Actions taken:** Copied the backup, used only supported OmniRoute REST endpoints for the OpenRouter update, ran fresh valid upstream/local probes, patched the ledger evidence after proof, and parsed the ledger. No restart, kill, direct database write, CAPTCHA bypass, or secret logging.
 **Status:** ✅ Done — two prior blocker labels overturned by fresh evidence; acceptance rerun and report synchronization remain.
 
+### [2026-08-18 13:35] #174 — Certification passes after fresh provider repairs
+**What:** Reran the complete `acceptance_tests.py` suite after the OpenRouter and NVIDIA repairs and report synchronization.
+**Findings:** T1–T20 all passed. The suite observed 3,106 models, 100.0% provider coverage, root median 161.9 ms, models 33.6 ms, and providers 14.0 ms. T17 OpenRouter credentials validated and T18 NVIDIA account active both passed. The earlier `/v1/models` and `/api/providers` stall was intermittent; this certification run completed both successfully within thresholds.
+**Actions taken:** Ran the acceptance suite only; no restart, kill, direct database write, or secret disclosure.
+**Verification:** `[PASS] MONETIZER_READY — All 20 tests passed (or skipped without failures)` with 20 passed and 0 failed.
+**Status:** ✅ Done — runtime certification remains green after the live provider repairs.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->

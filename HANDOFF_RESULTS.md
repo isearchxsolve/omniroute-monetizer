@@ -12,6 +12,14 @@ For the exhaustive current per-provider disposition, including all 295 slugs exa
 
 ## Completed in this handoff
 
+### Fresh independent sweep updates
+
+- The existing Chrome profile is now attached and visibly authenticated at the xAI console. The console currently stops at `Create your team`; no team or persistent key was created without the required action-time confirmation.
+- OpenRouter was independently rechecked: the local environment key returned upstream model-list HTTP 200 and a free-model chat HTTP 200 with non-empty content. After the required backup, the key was restored through the supported OmniRoute management API, native test returned HTTP 200 `valid=true`, and local E2E returned HTTP 200 with OpenRouter attribution.
+- NVIDIA was independently rechecked: upstream model-list HTTP 200, direct nano-model chat HTTP 200 with non-empty content, and local E2E HTTP 200 with NVIDIA attribution. Its stale validation blocker was overturned and the ledger now records `LIVE_ACTIVE`.
+- A fresh T1–T20 run after these repairs passed 20/20 with 0 failures: root median 161.9 ms, models 33.6 ms, providers 14.0 ms. T17 OpenRouter and T18 NVIDIA both passed.
+- The earlier `/v1/models` and `/api/providers` timeout window was intermittent; the certification run completed both. No restart, process termination, direct DB edit, CAPTCHA bypass, or secret disclosure occurred.
+
 ### OpenCode API-key bucket item
 
 - Existing `OPENCODE_API_KEY` was verified directly against OpenCode Zen: upstream model-list HTTP 200 and a valid chat-completions response.
@@ -48,7 +56,7 @@ No unsafe model rename was applied.
 
 - aihorde, auggie, and mimocode have no current local catalog models under their provider prefixes and retain unsupported/unknown-model evidence.
 - Gemini has current catalog models and a native-valid connection, but the tested model was in cooldown and a direct public Google model-list probe returned 401; no rename is justified.
-- NVIDIA has a native-valid connection and upstream model list HTTP 200, but the expected phantom names were absent from the checked presence set and the replacement E2E probe did not complete. A replacement was not guessed.
+- NVIDIA is no longer blocked by the earlier model-drift/validation record. Fresh upstream and local E2E proof now exists for `nvidia/llama-3.1-nemotron-nano-vl-8b-v1`, and the ledger records `LIVE_ACTIVE`. Gemini, aihorde, auggie, and mimocode remain unchanged because their current evidence does not yet justify a safe replacement or closure.
 
 ### Browser-cookie harvest
 
