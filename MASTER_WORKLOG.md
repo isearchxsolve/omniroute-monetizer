@@ -4115,4 +4115,13 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** JSON parse `OK`; all five references present; no provider/combo update, service restart, or DB edit.
 **Status:** ✅ Done — model-drift items classified and linked to evidence; no safe rename available.
 
+### [2026-08-18 22:25] #156 — Bounded browser-cookie recon: Claude requires Google/email login in selected browser
+**What:** Used the browser-control skill for a read-only DOM recon of the Claude web provider’s sign-in surface.
+**Why:** The web-cookie bucket requires DOM-first inspection, but cookie/session extraction must obey the active browser-safety constraints and the repository’s zero-fabrication policy.
+**Findings:** The selected Codex in-app browser opened `https://claude.ai/` and landed at `https://claude.ai/login`. After accepting the cookie-consent UI, the visible page offered `Continue with Google`, email sign-in, and SSO; no authenticated Claude workspace or API-key generation surface was visible. The in-app browser does not expose the previously prepared pure-Chrome profile session. The browser skill prohibits inspecting cookies, local storage, profiles, passwords, or session stores, so no cookie was harvested and no credentials were fabricated.
+**Actions taken:** Created one temporary browser tab, navigated to Claude, accepted the non-sensitive cookie-consent UI, and captured the visible DOM. No login credentials, OTP, API key, or sensitive data were entered or transmitted.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** Provider remains honestly unharvested; no OmniRoute web-cookie connection was created or updated. Known browser blockers and the browser-safety boundary are recorded for `HANDOFF_RESULTS.md`.
+**Status:** ⚠️ BLOCKED — requires an authenticated provider session/API-key surface in an allowed browser context; no unsafe cookie inspection attempted.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
