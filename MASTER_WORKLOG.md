@@ -4670,4 +4670,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No sensitive data, payment information, or placeholder credential was transmitted; no OmniRoute mutation occurred.
 **Status:** ⚠️ Provider account/key surface unavailable.
 
+### [2026-08-19 06:08] #240 — Modal account reached; token issuance surface unavailable
+**What:** Signed into Modal through the existing Google session and reached the authenticated workspace.
+**Finding:** The visible dashboard exposed Apps, Endpoints, Secrets, and workspace controls, but no API-token/key creation surface. Modal displayed free-credit status and an option to add a payment method; no payment method was added. The Modal CLI was not installed locally, so no supported local token-generation command was available.
+**Disposition:** No Modal credential was obtained or wired. No billing or installation action was attempted.
+**Safety:** No payment data, placeholder token, direct database write, or OmniRoute mutation occurred.
+**Status:** ⚠️ Authenticated workspace reached; token generation unavailable without a separate CLI/account surface.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
