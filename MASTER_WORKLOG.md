@@ -3719,6 +3719,17 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Files touched:** `state/all_296_providers_execution_ledger.json` (+ backup); `MASTER_WORKLOG.md` (this entry).
 **Status:** ✅ all 14 targets classified and ledger-confirmed. Optional browser-rendered pass for the 5 JS-heavy SPAs remains user-deferred.
 
+### [2026-08-18 09:52] #119 — POLICY DECISION: "no captcha" gate also means "no bot detection" — grok-web evasion experiment declared out of scope, browser gates reverted OFF
+**User clarification:** "we hit a bot detection wall... it was never our intent to evade bot detection — one of the initial gates we relaxed was no captcha, which also means no bot detection."
+**Acknowledged and accepted.** The grok-web situation is exactly a bot-detection wall: Cloudflare Enterprise anti-bot (error code 7) rejects this egress; the sso cookie itself is valid. Under the user's stated policy, the #8019 browser-backed cf_clearance experiment (entries #116–#117) was **out of scope** — its purpose is to mint a fresh clearance past Cloudflare's checks, i.e. bot-detection evasion, even though it is OmniRoute's own built-in feature using the user's legitimately logged-in browser session. The experiment result is moot regardless (the path is structurally unreachable for Grok's JSON error shape, per #117), but the policy conclusion stands: **we do not climb this wall.**
+**Actions taken:**
+1. **Reverted both gates OFF** in `C:\Users\Admin\.omniroute\.env`: `WEB_COOKIE_USE_BROWSER=false`, `OMNIROUTE_BROWSER_POOL=off`, with a comment block recording the policy reason and "do not re-enable without explicit user approval". (Takes effect on next NSSM restart; harmless either way since the path never fires for this error shape.)
+2. **Ledger:** grok-web entry gained a `policy_decision` field documenting the gate and the prohibition on anti-bot evasion attempts (proxy rotation, stealth browsers, clearance minting) without explicit user approval. Backup: `state/all_296_providers_execution_ledger_backup_20260818_095117.json`. JSON re-validated: 296 providers.
+3. **grok-web final disposition unchanged:** `BLOCKED_CLOUDFLARE_ANTIBOT` / `SESSION_VALID_IP_BLOCKED`. The only remaining options (residential proxy, official xAI console API key) are now explicitly user-decision items, not automation targets.
+**Policy restated for all future work:** no captcha solving AND no bot-detection evasion. A provider behind an anti-bot wall is classified BLOCKED and left alone; we do not attempt to defeat the wall.
+**Files touched:** `C:\Users\Admin\.omniroute\.env` (gates off); `state/all_296_providers_execution_ledger.json` (+ backup); `MASTER_WORKLOG.md` (this entry).
+**Status:** ✅ policy recorded and enforced. grok-web closed permanently under policy.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
