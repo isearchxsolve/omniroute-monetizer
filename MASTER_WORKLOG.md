@@ -4264,4 +4264,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** The exhaustive report contains 295 unique slugs with no set difference from the current ledger; current status totals are LIVE_ACTIVE 28, BLOCKED_AUTH_REQUIRED 6, BLOCKED_VALIDATION_UNSUPPORTED 4, and all other groups unchanged. `git diff --check` reported no whitespace errors.
 **Status:** ✅ Done.
 
+### [2026-08-18 13:45] #176 — State constraints for web-session and external-account queues
+**What:** User asked for the exact constraints governing work on `BLOCKED_WEB_SESSION` (24) and `EXTERNAL_ACCOUNT_REQUIRED` (180).
+**Decision:** Treat both labels as work queues rather than unquestionable truth. Re-test each record using fresh evidence and close only when a legitimate upstream connection and local OmniRoute path are verified. Existing Chrome access removes the former browser-unavailable constraint for visible pages, but does not provide universal sessions for every provider.
+**Remaining constraints:** Use the existing connected Chrome session only; do not inspect/export cookies, local storage, profile files, passwords, or tokens. Never bypass CAPTCHA or bot detection, and skip such providers. Do not enter cards or pursue paywalls. Do not invent identities, email/phone verification, OTP/MFA, or account credentials. Creating a provider account/team or generating a persistent API/OAuth key remains an external browser state change requiring action-time confirmation immediately before the final action. If a provider requires paid access, unavailable identity verification, or a security challenge, keep it blocked honestly.
+**Current concrete state:** The authenticated xAI console is preserved at the visible `Create your team` step; no team has been created. OpenRouter’s browser session is not authenticated, but its provider was independently repaired through an existing local credential and supported OmniRoute REST API, then verified end-to-end. NVIDIA was likewise independently verified and closed. No state change was made by this constraints response.
+**Status:** 🔵 Info — constraints defined; additional closures may proceed only along the legitimate free/session/key paths above.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
