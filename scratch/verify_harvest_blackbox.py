@@ -2,7 +2,6 @@
 import json
 import os
 import sys
-import time
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "automation"))
@@ -84,7 +83,6 @@ if cid:
     r = api.update_connection(cid, {"apiKey": header, "isActive": True})
     print(f"updated existing blackbox-web conn {cid}: HTTP {r['http_status']}")
 else:
-    import requests
     resp = api.session.post(f"{api.api}/providers", json={
         "provider": "blackbox-web",
         "name": "blackbox-web (auto-harvested)",
@@ -100,14 +98,32 @@ else:
     print(f"  cid={cid}")
 
 if cid:
+    sr = api.session.post(f"{api.api}/providers/{cid}/sync-models", timeout=60)
+    print(f"sync-models -> HTTP {sr.status_code}")
     t = api.test_connection(cid)
     tj = t.get("result") or {}
     print(f"test_connection: HTTP {t['http_status']} valid={tj.get('valid')} "
           f"msg={str(tj.get('message') or tj.get('error'))[:150]}")
 
-    # E2E with prefixed model
+    # E2E with prefixed model — get real model list first
+    print("\n--- models for connection ---")
+    mr = api.session.get(f"{api.api}/providers/{cid}/models", timeout=30)
+    models = []
+    if mr.status_code == 200:
+        try:
+            mj = mr.json()
+            mlist = mj.get("models") if isinstance(mj, dict) else mj
+            for m in (mlist or [])[:10]:
+                mid = m.get("id") if isinstance(m, dict) else str(m)
+                if mid:
+                    models.append(mid)
+        except Exception:
+            pass
+    print(f"  models: {models}")
+
     print("\n--- E2E /v1/chat/completions ---")
-    for model in ["blackbox-web/blackbox-ai", "blackbox-web/default"]:
+    targets = [f"blackbox-web/{m}" for m in models[:2]] or ["blackbox-web/blackbox-ai"]
+    for model in targets:
         try:
             resp = api.session.post(
                 f"{api.v1}/chat/completions",
