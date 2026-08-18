@@ -3688,6 +3688,25 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** NSSM service restart (elevated: `nssm restart OmniRoute`) to pick up the env gate → re-run `scratch/verify_chatgpt_grok_e2e.py` (grok-web section) → if browser-backed clearance mints a working cf_clearance, grok-web goes LIVE; else final honest classification stands. Then remaining-11 ledger confirmation + optional browser-rendered pass for the 5 JS-heavy SPAs.
 **Status:** ⏳ awaiting NSSM restart + grok e2e retest with browser-backed clearance
 
+### [2026-08-18 09:35] #117 — grok-web browser-backed clearance experiment: NEGATIVE — #8019 path is unreachable for Grok's JSON anti-bot error shape (final classification)
+**Context:** user performed elevated `nssm restart OmniRoute` ("done"). Fresh restart verified: new banner in service-stdout.log mtime 08:47:36 IST, health UP after ~70s, PID 19912, catalogCount 299, activeCount 24.
+**1. Post-restart e2e retest (`scratch/verify_chatgpt_grok_e2e.py`):**
+- **chatgpt-web: still END-TO-END LIVE** — `test_connection` valid=True, real `/v1/chat/completions` HTTP 200 content='hello'. Restart caused zero regression.
+- **grok-web: still blocked** — OmniRoute test valid=False "Grok returned 403 (anti-bot/Cloudflare block)"; `/v1` probe HTTP 502 `{"error":{"message":"[grok-web/fast] [502]: Request rejected by anti-bot rules. (reset after 24s)"}}`. Health: grok-web breaker CLOSED failureCount 1.
+**2. Log forensics — browser path never fired.** First mistake corrected: service-stdout.log contains ONLY the startup banner; the real detailed pino log is `C:\Users\Admin\.omniroute\logs\application\app.log`. Post-restart app.log shows: `GROK-WEB "Query to fast"` ×3 (cooldown retries 1/3→3/3), ProxyEgress `grok-web/142fea8e ... proxy=direct status=error`, `CHAT "[grok-web/fast] [502]: Request rejected by anti-bot rules."` — and **ZERO** lines matching browser|clearance|playwright|chromium|browserPool. The gate/log line "Cloudflare challenge detected on grok.com; attempting browser-backed cf_clearance refresh" never appeared.
+**3. Root cause from installed source (v3.8.49, read directly — no guessing):**
+- `open-sse/executors/grok-web.ts:785` `resolveGrokNullBodyTlsResult()`: browser retry fires ONLY when `classifyGrokNullBodyError(status, text).type === "cloudflare_challenge"` AND `shouldUseGrokBrowserBacked()`.
+- `classifyGrokNullBodyError()` (grok-web.ts:679) checks `isCloudflareChallenge(text)` FIRST.
+- `isCloudflareChallenge()` (`open-sse/services/grokTlsClient.ts:342`) regex: `/just a moment|window\._cf_chl_opt|challenges\.cloudflare\.com|attention required|cf-chl/i` — matches **HTML challenge interstitials only**.
+- Our failure shape is **HTTP 403 with JSON body** `{"error":{"code":7,"message":"Request rejected by anti-bot rules."}}` → regex no-match → falls to `status === 403` branch → classified `authentication_error` (HTTP_403) → gate never opens → `acquireFreshGrokClearance()` never called. Env gate propagation became moot (it could never fire regardless).
+- The streaming peek path (`tlsFetchStreaming`, grokTlsClient.ts:412) uses the same `isCloudflareChallenge(peek)` — same blind spot for JSON bodies.
+- The connection validator (`src/lib/providers/validation/webProvidersA.ts` `validateGrokWebProvider`) has **no browser-backed path at all** — it classifies via `isGrokAntiBotBlock()` (which DOES recognize the JSON anti-bot shape) and returns the IP-reputation guidance directly.
+**4. Conclusion (final, honest, zero-fabrication):** the maintainer's #8019 browser-backed cf_clearance path handles only null-body **HTML** Cloudflare interstitials. Grok's actual datacenter-egress rejection is a **JSON** anti-bot error (code 7) that never reaches the `cloudflare_challenge` classification, so the shipped fix is structurally unreachable for our case. Combined with upstream evidence (#3180 owner: IP/session-dependent; DeepWiki: recovery = fresh session/proxy rotation, not same-egress retry), grok-web from this egress is not recoverable by any code path in v3.8.49. **Final status: `BLOCKED_CLOUDFLARE_ANTIBOT` / `SESSION_VALID_IP_BLOCKED`.** Only real options: (a) residential-proxy egress for grok-web, or (b) official xAI API provider (`grok`) with a console.x.ai API key — both need user-provided resources; neither is automatable from here.
+**5. Ledger:** grok-web entry updated — `pending_experiment` marked done, new `experiment_result` field documents the negative result + exact code-path reasoning. JSON re-validated: 296 providers, grok-web status unchanged.
+**Files touched:** `state/all_296_providers_execution_ledger.json` (grok-web experiment_result); `MASTER_WORKLOG.md` (this entry).
+**Next step:** confirm remaining-11 NEEDS_BROWSER ledger classifications are recorded; optional browser-rendered pass for the 5 JS-heavy SPAs (user-deferred).
+**Status:** ✅ grok-web closed (honest negative). chatgpt-web LIVE. 12/14 targets classified; 11 ledger confirmations remain.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
