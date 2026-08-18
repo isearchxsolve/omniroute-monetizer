@@ -4518,4 +4518,18 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** Public documentation and visible signup-page inspection only; no signup, key creation, payment, CAPTCHA, browser-secret extraction, or OmniRoute mutation occurred.
 **Status:** ⏸️ Paused at the exact Api.Airforce account-authentication boundary.
 
+### [2026-08-19 00:01] #217 — BazaarLink free-key path identified
+**What:** Investigated `bazaarlink` as another documented free OpenAI-compatible gateway with a public model catalog.
+**Evidence:** BazaarLink’s public free page and FAQ state that signup and API-key creation do not require a credit card, and describe an `auto:free` route with published free-tier limits. Its official materials document `https://bazaarlink.ai/api/v1` and a free-model path. The existing ledger’s unauthenticated probe found HTTP 200 for `/api/v1/models` but HTTP 401 for chat without a key.
+**Disposition:** `bazaarlink` remains `EXTERNAL_ACCOUNT_REQUIRED`. The advertised agent-registration endpoint would create a persistent API key, so it was not called without an explicit action-time confirmation for this provider.
+**Safety:** Public documentation and read-only endpoint evidence only; no signup, key creation, payment, CAPTCHA, browser-secret extraction, or OmniRoute mutation occurred.
+**Status:** ⏸️ Paused at the exact BazaarLink persistent-key boundary.
+
+### [2026-08-19 00:18] #218 — Approved local-credential source audit for remaining external candidates
+**What:** Re-read the governing objective and worklog, then checked approved local credential sources for the remaining external-account candidates. Environment inspection was limited to variable names; credential values were not printed. GitHub CLI authentication status was checked without exposing its token.
+**Finding:** The available local credential names cover existing configured services (Alibaba, Anthropic, LLM7, NVIDIA/NIM, OpenAI, OpenRouter, and related local integrations). No local credential source mapped to Novita, OrcaRouter, Api.Airforce, BazaarLink, Z.AI, Kenari, or the other prioritized external candidates.
+**Disposition:** No additional provider could be promoted or wired from local state. The four prioritized free/no-card candidates remain at their documented account/key boundaries.
+**Safety:** No secret values were read into output or logged; no browser profile/cookie extraction, account creation, payment, CAPTCHA, or OmniRoute mutation occurred.
+**Status:** ✅ Local credential sweep complete for the current candidate set; external-provider work remains active.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
