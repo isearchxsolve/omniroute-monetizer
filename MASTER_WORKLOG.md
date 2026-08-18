@@ -4608,4 +4608,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No sensitive financial data was transmitted, no payment flow was attempted, and no placeholder credential or OmniRoute mutation was used.
 **Status:** ⚠️ Account access complete; key issuance blocked by billing requirement.
 
+### [2026-08-19 03:46] #231 — Hyperbolic Google SSO callback did not complete
+**What:** Opened Hyperbolic, used the existing Google SSO account, and completed the visible Google consent step.
+**Finding:** The provider remained on `app.hyperbolic.ai/sign-in/sso-callback?redirect_uri=/` with an empty shell after the callback and did not expose an authenticated dashboard or key-management surface.
+**Disposition:** No Hyperbolic API key was available to wire. The provider remains pending a usable authenticated session; no workaround or cookie/profile extraction was attempted.
+**Safety:** No secret, payment data, CAPTCHA, placeholder credential, or OmniRoute mutation was used.
+**Status:** ⚠️ SSO consent completed; provider callback/session did not reach key issuance.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
