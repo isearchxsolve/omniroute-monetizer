@@ -4324,4 +4324,9 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Actions taken:** Read-only certification only; no provider/runtime state mutation, direct database write, secret disclosure, CAPTCHA bypass, payment, or browser profile inspection.
 **Status:** ✅ Done — `[PASS] MONETIZER_READY — All 20 tests passed (or skipped without failures)`.
 
+### [2026-08-18 15:55] #186 — Copilot onboarding submitted and browser chat verified
+**What:** Verified the user-submitted Copilot account-details form in the preserved Chrome session. The Copilot authenticated home screen loaded successfully and a real UI prompt returned non-empty `READY`.
+**Finding:** Copilot Google SSO and onboarding are now proven. The provider remains `BLOCKED_WEB_SESSION` for OmniRoute because no supported browser-session handoff was performed; no cookies, local storage, profile files, or tokens were inspected.
+**Status:** ✅ Partial — Copilot browser session closed as an onboarding uncertainty, but local OmniRoute integration remains unverified.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
