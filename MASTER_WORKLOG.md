@@ -4329,4 +4329,15 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Finding:** Copilot Google SSO and onboarding are now proven. The provider remains `BLOCKED_WEB_SESSION` for OmniRoute because no supported browser-session handoff was performed; no cookies, local storage, profile files, or tokens were inspected.
 **Status:** ✅ Partial — Copilot browser session closed as an onboarding uncertainty, but local OmniRoute integration remains unverified.
 
+### [2026-08-18 16:00] #187 — Pre-pass backup for continuous all-provider reconciliation
+**What:** Created a fresh backup before the continuous all-provider pass and before any future provider wiring or ledger writes.
+**Backup:** `D:\omniroute-backups\20260818-135253-pre-all-provider-pass` containing the live `C:\Users\Admin\.omniroute` state plus the current ledger, verdict, handoff, and worklog. The backup contains 2,161 files totaling approximately 205,312,193 bytes.
+**Decision:** All subsequent stateful changes in this pass must use the supported OmniRoute management API, preserve the live process, and be followed by upstream plus local E2E verification.
+**Status:** ✅ Done — backup established; continuous all-provider pass begins.
+
+### [2026-08-18 16:12] #188 — Reject unsafe legacy all-provider orchestrator for this pass
+**Finding:** `scripts/automation/all_296_providers_orchestrator.py` is not suitable for the requested evidence-driven sweep. It rebuilds and overwrites the authoritative ledger using broad cascade substring assumptions such as “Active via OpenRouter” without requiring fresh upstream plus local E2E proof, and its generated report is not the current final verdict format.
+**Decision:** Do not run that legacy orchestrator. Use the redacted native-REST fleet audit, direct upstream probes, supported connection updates, valid local chat E2E, and incremental ledger/report patches. This preserves the no-fabrication and abstraction-layer rules.
+**Status:** 🔵 Info — safe all-provider pass path selected; no runtime or provider state changed by this decision.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
