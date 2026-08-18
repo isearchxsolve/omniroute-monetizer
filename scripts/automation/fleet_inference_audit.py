@@ -47,7 +47,7 @@ def probe(label: str, model: str) -> dict[str, Any]:
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": "Reply with the single word OK."}],
-        "max_tokens": 16,
+        "max_tokens": 60,
         "temperature": 0,
         "stream": False,
     }
@@ -111,7 +111,7 @@ def main() -> int:
     results = direct + cascade
     summary = {
         "generatedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "payload": "standard_chat_completion:max_tokens=16",
+        "payload": "standard_chat_completion:max_tokens=60",
         "modelCatalogCount": len(models),
         "total": len(results),
         "valid": sum(1 for item in results if item.get("valid")),
