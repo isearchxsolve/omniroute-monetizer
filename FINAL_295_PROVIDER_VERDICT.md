@@ -4,9 +4,9 @@ Date: 2026-08-18 (Asia/Calcutta)
 
 ## Executive verdict
 
-**Overall provider mission: MONETIZER_BLOCKED.** The 295-provider catalog is inventoried and classified, but the evidence does not support claiming that all 295 providers are authenticated, chat-completable, and live.
+**Overall provider mission: MONETIZER_BLOCKED.** The 295-provider catalog is inventoried and actively being re-audited from live evidence. Two prior blocker labels were overturned in the current sweep (OpenRouter and NVIDIA), but the evidence does not yet support claiming that all 295 providers are authenticated, chat-completable, and live.
 
-**Runtime certification: MONETIZER_READY.** The final acceptance run recorded T1–T20 passed with 0 failures. That certifies the OmniRoute runtime/integration surface; it does not certify every upstream provider.
+**Runtime certification: MONETIZER_READY.** The prior final acceptance run recorded T1–T20 passed with 0 failures. A new certification run is being performed after the current provider repairs; the current /v1/models and /api/providers stall is tracked separately and will not be hidden.
 
 ## Count reconciliation
 
@@ -21,17 +21,17 @@ Date: 2026-08-18 (Asia/Calcutta)
 | Ledger verdict | Count | Share of 295 |
 |---|---:|---:|
 | AUTHENTICATED_CLOUDFLARE_TLS_BLOCKED | 1 | 0.3% |
-| BLOCKED_AUTH_REQUIRED | 7 | 2.4% |
+| BLOCKED_AUTH_REQUIRED | 6 | 2.0% |
 | BLOCKED_CREDITS | 1 | 0.3% |
 | BLOCKED_FORBIDDEN | 1 | 0.3% |
 | BLOCKED_LOCAL_RUNTIME | 13 | 4.4% |
 | BLOCKED_RATE_LIMITED | 1 | 0.3% |
 | BLOCKED_UNVERIFIED | 2 | 0.7% |
 | BLOCKED_UPSTREAM_DOWN | 3 | 1% |
-| BLOCKED_VALIDATION_UNSUPPORTED | 5 | 1.7% |
+| BLOCKED_VALIDATION_UNSUPPORTED | 4 | 1.4% |
 | BLOCKED_WEB_SESSION | 24 | 8.1% |
 | EXTERNAL_ACCOUNT_REQUIRED | 180 | 61% |
-| LIVE_ACTIVE | 26 | 8.8% |
+| LIVE_ACTIVE | 28 | 9.5% |
 | NOT_CHAT_COMPLETABLE | 31 | 10.5% |
 
 The groups below are exhaustive: every one of the 295 actual provider slugs appears once, under its current ledger status.
@@ -48,7 +48,6 @@ A configured connection exists, but the credential is missing, invalid, expired,
 - friendliai
 - huggingface
 - opencode-zen
-- openrouter
 - qoder
 - xai-oauth
 
@@ -102,7 +101,6 @@ OmniRoute native validation is unsupported or the selected model/path is not cur
 
 - aihorde
 - gemini
-- nvidia
 - trae
 - windsurf
 
@@ -318,8 +316,8 @@ No usable connection is configured; user-owned account/key setup is required.
 - zed-hosted
 - zenmux
 
-### LIVE_ACTIVE — 26
-Ledger marks the provider active; this is a state label, not a claim that every provider received a fresh final E2E content probe.
+### LIVE_ACTIVE — 28
+Fresh or current ledger evidence marks the provider active; direct proof details are preserved in the source ledger.
 
 - agnes
 - agy
@@ -345,6 +343,7 @@ Ledger marks the provider active; this is a state label, not a claim that every 
 - lmarena
 - nara
 - opencode
+- openrouter
 - perplexity-web
 - zai-web
 
@@ -383,19 +382,21 @@ Provider is a non-chat service (search, audio, image, video, or other non-LLM pa
 - veoaifree-web
 - youcom-search
 
-## Evidence-strength notes
+## Fresh sweep evidence
 
-- The latest dynamic E2E artifact contains 13 non-empty HTTP 200 probes; the separately logged OpenCode remediation adds a non-empty local E2E HTTP 200 proof. Those 14 names are:
+- OpenRouter: upstream model-list HTTP 200; free-model chat HTTP 200 with non-empty content; supported OmniRoute PUT HTTP 200; native test HTTP 200 valid=true; local E2E HTTP 200 with OpenRouter attribution.
+- NVIDIA: upstream model-list HTTP 200; direct nano-model chat HTTP 200 with non-empty content; local E2E HTTP 200 with NVIDIA attribution.
+- OpenCode remains previously proven with upstream, native, and local non-empty chat proof.
+- The latest dynamic E2E artifact contains 13 non-empty HTTP 200 probes. Including OpenCode plus the two fresh repairs, 16 providers have explicit non-empty proof represented across the current evidence set:
 
-- agnes, aion, blackbox-web, cerebras, chatgpt-web, cloudflare-ai, codex, cohere, gemini-web, groq, kilocode, kiro, llm7, opencode
+- agnes, aion, blackbox-web, cerebras, chatgpt-web, cloudflare-ai, codex, cohere, gemini-web, groq, kilocode, kiro, llm7, nvidia, opencode, openrouter
 
-- The ledger marks 26 entries LIVE_ACTIVE, but the final suite does not issue a fresh chat-completion probe to all 26. I therefore preserve LIVE_ACTIVE as the ledger state and do not rewrite it as 26 freshly E2E-verified providers.
+- The live service is still owned by Node PID 19912. Fresh local probes returned root HTTP 307 in 0.212 seconds, while /v1/models and /api/providers timed out near 8 seconds. No restart or direct database write was performed.
+- The existing Chrome profile is authenticated at xAI, but xAI currently presents a Create your team step. That persistent account-side action is preserved for action-time confirmation; no team or key was created.
 - No provider key, OAuth token, browser cookie, or placeholder credential was fabricated or logged.
-- OpenCode is the completed remediation in this handoff: upstream model-list HTTP 200, native OmniRoute test valid=true, and local chat completion HTTP 200 with non-empty content.
 
 ## Final disposition
 
-The system is operational and certified at the OmniRoute/runtime level, but the all-provider monetizer objective is not complete. The correct final disposition is MONETIZER_BLOCKED, with the blocker classes above preserved as actionable, evidence-backed outcomes.
+The system is operational and the current sweep has already overturned stale blocker labels, but the all-provider monetizer objective is not complete. The current disposition remains MONETIZER_BLOCKED pending further fresh verification and resolution of the catalog/management stall.
 
 Source ledger: state/all_296_providers_execution_ledger.json
-
