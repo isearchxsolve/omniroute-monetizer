@@ -14,7 +14,8 @@ For the exhaustive current per-provider disposition, including all 295 slugs exa
 
 ### Fresh independent sweep updates
 
-- The existing Chrome profile is now attached and visibly authenticated at the xAI console. The console currently stops at `Create your team`; no team or persistent key was created without the required action-time confirmation.
+- The existing Chrome profile was used to create the xAI team through the confirmed Google-authenticated free path (`Hobbyist` → `Explore` → `Continue for free`). The resulting console shows `$0.00` credits and explicitly requires credits to start API use; no payment was entered and no API key was generated. The ledger now records xAI as `BLOCKED_CREDITS`, not `EXTERNAL_ACCOUNT_REQUIRED`.
+- The same existing Chrome session independently loaded DeepSeek Web and Poe Web. Valid UI prompts returned non-empty `READY` responses on both. Those are browser-session proofs only; no cookie/profile/session-store extraction was performed, and no local OmniRoute connection was claimed without an approved supported handoff.
 - OpenRouter was independently rechecked: the local environment key returned upstream model-list HTTP 200 and a free-model chat HTTP 200 with non-empty content. After the required backup, the key was restored through the supported OmniRoute management API, native test returned HTTP 200 `valid=true`, and local E2E returned HTTP 200 with OpenRouter attribution.
 - NVIDIA was independently rechecked: upstream model-list HTTP 200, direct nano-model chat HTTP 200 with non-empty content, and local E2E HTTP 200 with NVIDIA attribution. Its stale validation blocker was overturned and the ledger now records `LIVE_ACTIVE`.
 - A fresh T1–T20 run after these repairs passed 20/20 with 0 failures: root median 161.9 ms, models 33.6 ms, providers 14.0 ms. T17 OpenRouter and T18 NVIDIA both passed.
@@ -60,7 +61,7 @@ No unsafe model rename was applied.
 
 ### Browser-cookie harvest
 
-The bounded browser recon reached Claude’s login page, which offered Google/email/SSO but no authenticated workspace. The selected allowed browser did not expose the prepared pure-Chrome identity session, and its safety rules prohibit cookie/session-store inspection. No cookie or session credential was harvested. Previously established blockers remain recorded for other providers: WeChat QR, Meta credentials, Zed native OAuth import, Grok TLS fingerprint, and plan/rate-limit gates.
+The existing Chrome profile successfully proved live browser sessions for DeepSeek Web and Poe Web with real UI chat responses. This does not by itself create an OmniRoute connection: the selected browser surface prohibits cookie/session-store inspection and no supported session handoff was available. A restored Notion tab was not counted because its heavy app page stalled reliable DOM inspection. Previously established blockers remain recorded for other providers: Claude login, WeChat QR, Meta credentials, Zed native OAuth import, Grok TLS fingerprint, and plan/rate-limit gates. No cookie or session credential was harvested.
 
 ### Local runtimes
 

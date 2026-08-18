@@ -22,7 +22,7 @@ Date: 2026-08-18 (Asia/Calcutta)
 |---|---:|---:|
 | AUTHENTICATED_CLOUDFLARE_TLS_BLOCKED | 1 | 0.3% |
 | BLOCKED_AUTH_REQUIRED | 6 | 2.0% |
-| BLOCKED_CREDITS | 1 | 0.3% |
+| BLOCKED_CREDITS | 2 | 0.7% |
 | BLOCKED_FORBIDDEN | 1 | 0.3% |
 | BLOCKED_LOCAL_RUNTIME | 13 | 4.4% |
 | BLOCKED_RATE_LIMITED | 1 | 0.3% |
@@ -30,7 +30,7 @@ Date: 2026-08-18 (Asia/Calcutta)
 | BLOCKED_UPSTREAM_DOWN | 3 | 1% |
 | BLOCKED_VALIDATION_UNSUPPORTED | 4 | 1.4% |
 | BLOCKED_WEB_SESSION | 24 | 8.1% |
-| EXTERNAL_ACCOUNT_REQUIRED | 180 | 61% |
+| EXTERNAL_ACCOUNT_REQUIRED | 179 | 61% |
 | LIVE_ACTIVE | 28 | 9.5% |
 | NOT_CHAT_COMPLETABLE | 31 | 10.5% |
 
@@ -41,7 +41,7 @@ Authenticated provider/session, but upstream Cloudflare TLS or fingerprint prote
 
 - grok-web
 
-### BLOCKED_AUTH_REQUIRED — 7
+### BLOCKED_AUTH_REQUIRED — 6
 A configured connection exists, but the credential is missing, invalid, expired, or requires reauthentication.
 
 - deepseek
@@ -51,10 +51,11 @@ A configured connection exists, but the credential is missing, invalid, expired,
 - qoder
 - xai-oauth
 
-### BLOCKED_CREDITS — 1
+### BLOCKED_CREDITS — 2
 Credential reaches the provider, but quota/credits/rate entitlement is exhausted.
 
 - t3-web
+- xai
 
 ### BLOCKED_FORBIDDEN — 1
 Credential reaches the provider, but the upstream returns forbidden/plan/geo denial.
@@ -132,7 +133,7 @@ The provider requires an authenticated browser session/cookie that was not avail
 - yuanbao-web
 - zenmux-free
 
-### EXTERNAL_ACCOUNT_REQUIRED — 180
+### EXTERNAL_ACCOUNT_REQUIRED — 179
 No usable connection is configured; user-owned account/key setup is required.
 
 - 360ai
@@ -307,7 +308,6 @@ No usable connection is configured; user-owned account/key setup is required.
 - watsonx
 - writer
 - x5lab
-- xai
 - xiaomi-mimo
 - xiaomi-mimo-token-plan
 - yi
