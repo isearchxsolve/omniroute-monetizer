@@ -1,6 +1,6 @@
 """List existing OmniRoute connections for the target web-session providers."""
 import sys
-sys.path.insert(0, ".")
+sys.path.insert(0, r"d:\omniroute-monetizer\scripts\automation")
 from omniroute_api import OmniRouteAPI
 
 TARGETS = {
