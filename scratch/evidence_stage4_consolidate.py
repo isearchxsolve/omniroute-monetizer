@@ -60,6 +60,34 @@ GAP_DEFS = {
     "UNKNOWN": "Could not classify from available evidence",
 }
 
+def auth_class_from_registry(reg):
+    """Derive the true auth mechanism from the registry file the provider was parsed from.
+    The registry is organized by auth type, so the file path is the source of truth."""
+    rf = (reg.get("registryFile") or "").lower()
+    if not rf:
+        return "unknown"
+    if "noauth" in rf:
+        return "noauth"
+    if "web-cookie" in rf:
+        return "web-cookie"
+    if "oauth" in rf:
+        return "oauth"
+    if "apikey" in rf:
+        return "apikey"
+    if "local" in rf:
+        return "local-cli"
+    if "audio" in rf:
+        return "audio"
+    if "search" in rf:
+        return "search"
+    if "upstream-proxy" in rf:
+        return "upstream-proxy"
+    if "cloud-agent" in rf:
+        return "cloud-agent"
+    if "system" in rf:
+        return "system"
+    return "unknown"
+
 def classify(slug, e):
     reg = e.get("registry") or {}
     noAuth = reg.get("noAuth")
@@ -70,8 +98,10 @@ def classify(slug, e):
     nauth = noauth_by_prov.get(slug, [])
     has_executor = e.get("executor") is not None
     catalog = e.get("catalog_models") or []
+    auth_class = auth_class_from_registry(reg)
 
     ev = []  # evidence strings
+    ev.append(f"registryFile={reg.get('registryFile')} authClass={auth_class}")
 
     # Non-LLM service kinds -> not chat completable
     if kinds and not set(kinds) & {"llm"}:
@@ -188,8 +218,23 @@ def classify(slug, e):
                 return "NOAUTH_UPSTREAM_DOWN", ev
         ev.append("connection test inconclusive")
 
-    # No connections at all
+    # No connections at all — classify by the registry's true auth mechanism
     if not conns and not tests:
+        if auth_class == "apikey":
+            ev.append("apikey provider, no connection configured")
+            return "EXTERNAL_ACCOUNT_REQUIRED", ev
+        if auth_class == "oauth":
+            ev.append("oauth provider, no connection configured")
+            return "EXTERNAL_ACCOUNT_REQUIRED", ev
+        if auth_class == "web-cookie":
+            ev.append("web-cookie provider, no session/cookie harvested")
+            return "WEB_COOKIE_REQUIRED", ev
+        if auth_class == "local-cli":
+            ev.append("local-CLI provider, no connection configured")
+            return "NOAUTH_LOCAL_CLI_MISSING", ev
+        if auth_class in ("audio", "search", "upstream-proxy", "cloud-agent", "system"):
+            ev.append(f"non-chat service class={auth_class}")
+            return "NOT_CHAT_COMPLETABLE", ev
         if not has_executor:
             ev.append("no executor + no connection")
             return "NO_EXECUTOR", ev
