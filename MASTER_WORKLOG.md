@@ -4106,4 +4106,13 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** The pre-model-drift backup exists; no partial ledger mutation occurred, and the live service was untouched.
 **Status:** ⚠️ PARTIAL — retry requires exact context.
 
+### [2026-08-18 22:12] #155 — Model-drift ledger references synchronized after exact-context retry
+**What:** Added worklog reference 153 to all five model-drift ledger entries after re-reading the exact serialized JSON context.
+**Why:** Ensure the ledger points to the current evidence and explicitly records that no unsafe model rename was performed.
+**Findings:** The second, narrower patch succeeded for aihorde, auggie, gemini, mimocode, and nvidia. The ledger parses successfully and each target now has `worklog_entry=153`; statuses and aggregate counts were intentionally not changed.
+**Actions taken:** Applied five exact-context JSON patches after the initial verification failure; parsed the ledger read-only afterward.
+**Files touched:** `state/all_296_providers_execution_ledger.json`, pre-model-drift backup, `MASTER_WORKLOG.md`.
+**Verification:** JSON parse `OK`; all five references present; no provider/combo update, service restart, or DB edit.
+**Status:** ✅ Done — model-drift items classified and linked to evidence; no safe rename available.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
