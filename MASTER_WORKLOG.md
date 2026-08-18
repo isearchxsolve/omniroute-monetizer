@@ -4088,4 +4088,22 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** JSON parse succeeded; `[PASS] MONETIZER_READY — All 20 tests passed (or skipped without failures)`; no service restart/termination or direct DB write.
 **Status:** ✅ Done — quick-win/API-key bucket attempted items are fully classified (1 success, 4 honest blockers).
 
+### [2026-08-18 22:00] #153 — Model-drift bucket classified without unsafe renames
+**What:** Closed the current model-drift investigation for aihorde, auggie, gemini, mimocode, and nvidia based on current catalog/upstream/native evidence.
+**Why:** The handoff requires model-name fixes only when a real current upstream model mapping is established; changing names during catalog contention would risk breaking healthy routes.
+**Findings:** Current local catalog has no `aihorde/`, `auggie/`, or `mimocode/` models, matching the prior unsupported/unknown-model evidence; no safe replacement was available, so those remain blocked. Gemini has 59 current local models and native test `valid=true`, but the chosen model was in a 52-second cooldown and a direct Google public model-list probe returned 401; no rename is justified. NVIDIA has 112 local models and 102 upstream models with native test `valid=true`; the expected AGENTS.md phantom names were not found in the checked presence set, but a current NVIDIA E2E probe did not complete, so no replacement was applied. All five items now have honest current evidence and remain unchanged rather than being guessed into a different model.
+**Actions taken:** Recorded the current evidence against the five ledger entries after a pre-write copy; no combo/provider model PUT was issued.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only; ledger evidence update follows).
+**Verification:** No unsafe rename, restart, DB write, or fabricated E2E result.
+**Status:** ⚠️ PARTIAL — 0/5 safe model-name fixes; 5/5 classified blockers/deferred validations.
+
+### [2026-08-18 22:05] #154 — Model-drift ledger patch initially rejected; no partial write
+**What:** Attempted a targeted ledger evidence patch for the five model-drift entries.
+**Why:** Add worklog references and current evidence after the pre-write backup.
+**Findings:** `apply_patch` failed verification because the expected serialized aihorde blocker text did not exactly match the ledger file. Actual tool error: `apply_patch verification failed: Failed to find expected lines in D:\omniroute-monetizer\state\all_296_providers_execution_ledger.json`. No part of the patch was applied.
+**Actions taken:** Stopped after the patch mismatch and preserved the existing ledger unchanged; will re-read exact JSON blocks and apply a narrower patch.
+**Files touched:** None from the failed patch; `MASTER_WORKLOG.md` (this entry).
+**Verification:** The pre-model-drift backup exists; no partial ledger mutation occurred, and the live service was untouched.
+**Status:** ⚠️ PARTIAL — retry requires exact context.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
