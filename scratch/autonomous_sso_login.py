@@ -207,15 +207,18 @@ def login_provider(p, ctx, slug, cfg):
                 page.close()
                 return "no_google_button"
 
-        # Handle Google account chooser (up to 3 hops)
-        for _ in range(3):
-            if handle_google_account_chooser(page):
-                page.wait_for_timeout(3000)
-
-        # Wait for redirect back + STRONG auth cookie
-        deadline = time.time() + 60
+        # Handle Google account chooser + consent across all pages (incl. popups)
+        deadline = time.time() + 90
         while time.time() < deadline:
             time.sleep(3)
+            # Check all pages for Google account chooser / consent
+            for pg in ctx.pages:
+                if "accounts.google.com" in pg.url:
+                    if handle_google_account_chooser(pg):
+                        pg.wait_for_timeout(3000)
+                    if handle_google_consent(pg):
+                        pg.wait_for_timeout(3000)
+            # Check for strong auth cookie
             present = strong_cookies_present(ctx, cfg)
             if present:
                 print(f"  [OK] SIGNED IN — strong auth cookies: {present}")
