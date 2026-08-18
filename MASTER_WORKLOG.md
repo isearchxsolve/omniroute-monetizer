@@ -4217,4 +4217,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Actions taken:** Recorded the browser boundary and continued with browser-independent local/upstream re-audit work.
 **Status:** ⚠️ PARTIAL — browser-dependent sweep awaits Settings → Computer use Chrome connection; non-browser sweep continues.
 
+### [2026-08-18 13:00] #169 — User requests authenticated Chrome-profile connection requirements
+**What:** User interrupted the initial browser-independent endpoint probe and asked what is required to provide an authenticated Chrome profile for the sweep.
+**Findings:** The first endpoint-probe command had a PowerShell format-string error; the corrected read-only probe was then intentionally aborted by the user after 17.2 seconds. No provider, database, credential, browser, or runtime state was changed and no endpoint result was certified from that attempt.
+**Requirement decision:** The safe requirement is a live Chrome-to-Codex browser connection with the user’s existing Chrome profile already signed in. Do not request or accept passwords, cookies, profile directories, storage-state files, API tokens, or exported session data. The user must complete any MFA/OTP themselves; CAPTCHA and bot-detection pages remain strict skip conditions.
+**Status:** 🔵 Info — awaiting Chrome connection, not credential disclosure.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
