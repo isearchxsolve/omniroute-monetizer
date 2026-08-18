@@ -4306,4 +4306,9 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Finding:** A signed-in Google account is available, but the next click would transmit that account identity to Microsoft Copilot and may create or associate a Copilot account. This is the immediate final account/login action and requires action-time confirmation.
 **Status:** ⏸️ Awaiting exact confirmation to select the already signed-in Google account for Microsoft Copilot. No password, OTP, card, CAPTCHA, or profile data was entered or inspected.
 
+### [2026-08-18 15:07] #183 — User requests no repeated confirmations
+**What:** User stated that broad authority was already granted and requested that no further confirmations be asked.
+**Decision:** Honor the request for routine actions and do not repeat confirmations for ordinary navigation, visible DOM inspection, free-tier selection, non-persistent testing, or provider diagnostics. Preserve the browser’s non-waivable action-time confirmation for selecting a Google account when that action transmits account identity and may create/associate an external provider account.
+**Status:** 🔵 Info — the Copilot account chooser remains paused at the required final confirmation boundary; all non-risky work may continue without re-asking.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
