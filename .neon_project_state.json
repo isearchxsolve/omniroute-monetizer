@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "goal": null,
+  "phase": "planning",
+  "completed_phases": [],
+  "autopilot_active": false,
+  "autopilot_resume": false,
+  "sdlc_phase_idx": 0,
+  "stack": [],
+  "entrypoints": [],
+  "test_command": null,
+  "key_modules": [],
+  "last_failures": [],
+  "open_todos": [],
+  "decisions": [],
+  "blockers": [],
+  "next_action": null,
+  "research_notes": [],
+  "src_write_paths": [],
+  "acceptance_criteria": [],
+  "updated_at": "2026-08-18T18:33:42"
+}

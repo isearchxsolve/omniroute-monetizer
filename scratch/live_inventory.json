@@ -1,0 +1,492 @@
+[
+ {
+  "id": "5b6bb68a-472c-4824-aa71-b8593a643e22",
+  "provider": "antigravity",
+  "authType": "oauth",
+  "isActive": true,
+  "hasKey": false
+ },
+ {
+  "id": "c0338023-1b55-463d-9caa-0e38aa5a4bfe",
+  "provider": "agy",
+  "authType": "oauth",
+  "isActive": true,
+  "hasKey": false
+ },
+ {
+  "id": "f2655ae1-fabb-4c81-ba6b-ac7f21e73d3c",
+  "provider": "kimi-coding",
+  "authType": "oauth",
+  "isActive": true,
+  "hasKey": false
+ },
+ {
+  "id": "a6e1728a-fde7-4d13-a8fd-393133829a8e",
+  "provider": "grok-cli",
+  "authType": "oauth",
+  "isActive": true,
+  "hasKey": false
+ },
+ {
+  "id": "5ec58a27-49c5-4ec8-9b99-d219c1edf80e",
+  "provider": "kiro",
+  "authType": "oauth",
+  "isActive": true,
+  "hasKey": false
+ },
+ {
+  "id": "24baf646-4944-471f-b35d-314613718b67",
+  "provider": "fal-ai",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "d424c133-16d9-4763-90de-2969b5b22a3a",
+  "provider": "orcarouter",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": true
+ },
+ {
+  "id": "4a1b2609-3d1f-41bc-8bd5-3e3e4baedaad",
+  "provider": "cohere",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": true
+ },
+ {
+  "id": "60b97516-92f4-48af-84d1-bc5860452bf3",
+  "provider": "jina-ai",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "4d846855-156a-4b78-90cb-0f26d26ea409",
+  "provider": "mistral",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "72cdb868-5c0e-41cd-b4cd-0718ddefaf26",
+  "provider": "fireworks",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "a4047134-02d0-4afd-87c7-e10da38f567f",
+  "provider": "groq",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "e698b109-f627-4f96-a205-cb4a288bcc3c",
+  "provider": "anthropic",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "978edf30-e7c1-446b-bcfd-da638a5bd401",
+  "provider": "github-models",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "44010c8f-5730-43da-8db0-97461fe4fb80",
+  "provider": "openai",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": true
+ },
+ {
+  "id": "574246f2-1cdf-48ad-83b6-2ca1b541f8e4",
+  "provider": "nvidia",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "49aa144d-9005-4968-a6cd-a36e8a2e947f",
+  "provider": "openrouter",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "5d017578-c81f-4432-9152-c619200e6aeb",
+  "provider": "bazaarlink",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "3b45f2bf-f1aa-4162-a305-ace36bddd4b7",
+  "provider": "perplexity-web",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "96564651-fd1d-4ece-b80f-800ab1c512d0",
+  "provider": "agnes",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "ef5082c2-e57e-4a6d-8e99-0e0cad698fbd",
+  "provider": "t3-web",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "6116ca06-f7c9-4c91-82bc-43aade21e5cb",
+  "provider": "alibaba",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "fb276999-1370-473a-97e9-12807162fd05",
+  "provider": "gemini",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "e2675454-4db3-423a-9af3-c346d3c91444",
+  "provider": "opencode-zen",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "c35491f2-dd22-43ba-8a09-df6dc81d14df",
+  "provider": "llm7",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "811ba58f-c9ea-44b4-b882-221584692b4d",
+  "provider": "ainative",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "b533b28a-24d3-481f-ac5a-f0b9a562c55e",
+  "provider": "cerebras",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "7bc51c6c-1aed-488a-ac64-90141658aafe",
+  "provider": "mimocode",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": false
+ },
+ {
+  "id": "8ae51957-a156-4b57-91f1-1715984d4b81",
+  "provider": "chatgpt-web",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "c24d66d8-d494-4aee-902c-6e672a232a71",
+  "provider": "gemini-web",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "a0b9e60a-2316-47b5-bd1a-d6ba30ea0f4d",
+  "provider": "github",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "73aae217-6f03-41f2-bbc6-22db7b82e219",
+  "provider": "kilocode",
+  "authType": "oauth",
+  "isActive": true,
+  "hasKey": false
+ },
+ {
+  "id": "ba7c4740-ca83-45a3-9a55-1484d1aa6d2c",
+  "provider": "codex",
+  "authType": "oauth",
+  "isActive": true,
+  "hasKey": false
+ },
+ {
+  "id": "9b8e973a-75d8-4b5c-95b7-1241c24d0479",
+  "provider": "cloudflare-ai",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "b2fe293d-41dc-4c70-83d6-0da0a834f279",
+  "provider": "qoder",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "4bb06b19-4481-4855-9e96-8899fddf543e",
+  "provider": "antigravity",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "f76e4db5-55ed-4fe6-93c3-418445ae862a",
+  "provider": "amazon-q",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "6f3af471-59c9-4370-9214-fcee7f8aaaa8",
+  "provider": "kilocode",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "f1a76219-781c-4f2f-85b1-1261af52ec32",
+  "provider": "kimi-coding",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "2248a0bf-72b8-41c8-b079-2d21cd41bb64",
+  "provider": "amazon-q",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "4b688ac0-67a6-4fea-9da2-73547aab7b94",
+  "provider": "antigravity",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "39458046-d0bf-4633-a96d-3addcfc5513d",
+  "provider": "windsurf",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "a4809bf3-13c4-4e74-ae85-114ef6c83f66",
+  "provider": "agy",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "b727fc55-1a8c-44aa-942d-d48336ba611a",
+  "provider": "antigravity",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "c8a7f56f-1753-483a-b593-5fdcf83b1dc2",
+  "provider": "cline",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "db2f61d1-a5cb-422b-8275-f2a21e82f0f7",
+  "provider": "codex",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "0b2d6fb0-49fa-437b-8975-886f0120d565",
+  "provider": "deepseek",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "5c308db7-64a6-4c5f-b390-26098672fd93",
+  "provider": "friendliai",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "414a9dff-c750-4e3b-890f-f93c4c906c76",
+  "provider": "grok-cli",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "9e078cf5-141a-4b6f-aae0-f1437a499ed6",
+  "provider": "huggingchat",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "983495e6-e08a-45e1-a399-e17227a1f34e",
+  "provider": "huggingface",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "a0e46e4e-aaa2-4656-ae6a-a2146c9835fd",
+  "provider": "lmarena",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "e217f911-6909-4ec8-83d4-9558457f57c2",
+  "provider": "qoder",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "ad3b1ec6-3f17-4b7b-8388-0002e5c3d8b7",
+  "provider": "trae",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "179e4825-1e03-47de-accc-c6cb611a195c",
+  "provider": "windsurf",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "47307fe9-c513-4957-8db2-69275efad86a",
+  "provider": "clinepass",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "d7534629-8e19-40e4-9090-a296704022f3",
+  "provider": "amazon-q",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "54efdf9f-8f7c-4c68-b461-12714e89c754",
+  "provider": "lmarena",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": true
+ },
+ {
+  "id": "1504cdce-6851-4d99-975e-a3a89e338d80",
+  "provider": "zai-web",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": true
+ },
+ {
+  "id": "e0f2b1d9-2e8b-4e79-8b55-449ae9366476",
+  "provider": "nara",
+  "authType": "apikey",
+  "isActive": false,
+  "hasKey": true
+ },
+ {
+  "id": "142fea8e-eacf-4ce3-b042-fc3af37cb36c",
+  "provider": "grok-web",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "bc73b1a8-f125-4931-bc96-e45b74ebe91c",
+  "provider": "blackbox-web",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "fa5d2a96-deec-4a8f-ab00-155763929880",
+  "provider": "aion",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "7dee12ea-c18d-499e-b25f-3873ccca25c4",
+  "provider": "opencode",
+  "authType": "apikey",
+  "isActive": true,
+  "hasKey": true
+ },
+ {
+  "id": "a2eced8e-0b95-43e4-b71f-80ec92d68369",
+  "provider": "xai-oauth",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "b34d58dc-7870-44cb-ac64-f623c7a88505",
+  "provider": "xai-oauth",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "55d5fae6-f585-4f57-bb90-7d81f4e050a4",
+  "provider": "xai-oauth",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "e00b5169-9c18-41c8-9c5a-44305771d578",
+  "provider": "antigravity",
+  "authType": "oauth",
+  "isActive": true,
+  "hasKey": false
+ },
+ {
+  "id": "7bbcc7ab-1c75-4e30-a20b-a63d4e6cf156",
+  "provider": "antigravity",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ },
+ {
+  "id": "3be84526-7924-4cec-bc95-eaec6bb8f604",
+  "provider": "xai-oauth",
+  "authType": "oauth",
+  "isActive": false,
+  "hasKey": false
+ }
+]
