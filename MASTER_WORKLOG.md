@@ -4577,4 +4577,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** Secret values were not logged, OAuth connections were not overwritten, no placeholder was used, and no OmniRoute restart or direct database write occurred.
 **Status:** ✅ 3 local credentials wired; 2 require a compatible native connection before injection.
 
+### [2026-08-19 02:26] #226 — GitHub Models connection created and credential wired
+**What:** Used the existing approved GitHub CLI credential and created a native OmniRoute API-key connection for `github-models` through `POST /api/providers`. The credential was written in the request but never printed or logged.
+**Result:** Provider creation returned HTTP 201. The new connection was left inactive pending the separate verification pass, as required by the current wiring-only scope.
+**Safety:** No OAuth connection was overwritten, no upstream/local inference test was run, no secret was logged, and no placeholder credential or direct database write was used.
+**Status:** ✅ GitHub Models credential wired; verification deferred.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
