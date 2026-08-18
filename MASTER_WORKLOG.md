@@ -4595,4 +4595,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** The key was never printed or written to the worklog, no browser profile/cookie extraction occurred, and no placeholder, payment flow, CAPTCHA bypass, direct database write, or service restart was used.
 **Status:** ✅ Groq account key creation → OmniRoute wiring complete; verification deferred.
 
+### [2026-08-19 03:18] #229 — Fireworks account/key created and wired
+**What:** Signed into Fireworks through the existing Google SSO session, opened the API Keys settings, created a key named `omniroute-monetizer`, captured the one-time value through the visible copy control, and created a native OmniRoute `fireworks` API-key connection through supported REST.
+**Result:** Fireworks key generation completed and OmniRoute provider creation returned HTTP 201. The new connection was created inactive because verification is deferred in this pass.
+**Safety:** The credential was not written to files or the worklog; no upstream/local inference check, payment flow, CAPTCHA bypass, direct database write, or service restart occurred.
+**Status:** ✅ Fireworks account/key → OmniRoute wiring complete; verification deferred.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
