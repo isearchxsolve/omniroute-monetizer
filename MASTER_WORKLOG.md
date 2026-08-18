@@ -4497,4 +4497,18 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** Visible-page inspection only; no identity transmission, account creation, password handling, payment, CAPTCHA, browser-secret extraction, or OmniRoute mutation occurred.
 **Status:** ✅ Authentication boundary recorded; external-provider sweep continues.
 
+### [2026-08-18 23:02] #214 — Novita no-card free-credit path identified
+**What:** Inspected Novita AI’s live console login page in the existing Chrome session as the next prioritized external candidate.
+**Finding:** The visible page offers Google, GitHub, Hugging Face, and email login. It advertises $100 in Sandbox credits valid for 90 days and explicitly states no credit card is required. Novita’s official quickstart documents API-key creation after login and its new-user voucher path.
+**Disposition:** `novita` remains `EXTERNAL_ACCOUNT_REQUIRED` until a legitimate authenticated account/key exists and upstream chat is verified. The next action boundary would be selecting a login method, which transmits account identity and may create a persistent Novita account.
+**Safety:** No login selection, account creation, key creation, payment, CAPTCHA, browser-secret extraction, or OmniRoute mutation occurred.
+**Status:** ⏸️ Paused at the exact Novita account-authentication boundary.
+
+### [2026-08-18 23:18] #215 — OrcaRouter free Hacker/API-key path identified
+**What:** Investigated `orcarouter` as the next high-value candidate using official public pages and the visible registration form.
+**Evidence:** OrcaRouter advertises a free Hacker tier with 200+ models, three API keys, zero token markup, and no credit card required. Its registration form visibly offers GitHub signup with `$1 free` credits, Google, Microsoft, email verification, and an email sign-in link. The site documents an OpenAI-compatible API at `https://api.orcarouter.ai/v1` and a free model route.
+**Disposition:** `orcarouter` remains `EXTERNAL_ACCOUNT_REQUIRED` until a legitimate account/key exists and a valid upstream chat request succeeds. The next action boundary is selecting a signup method, which transmits identity and may create a persistent account.
+**Safety:** Public documentation and visible registration-page inspection only; no signup, key creation, payment, CAPTCHA, browser-secret extraction, or OmniRoute mutation occurred.
+**Status:** ⏸️ Paused at the exact OrcaRouter account-authentication boundary.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
