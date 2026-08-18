@@ -4051,4 +4051,23 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** Zero-fabrication maintained: Gemini is not marked live from a cooldown response, NVIDIA is not marked E2E-live without content. Model-drift bucket remains unresolved; no restart/kill/DB write.
 **Status:** ⚠️ PARTIAL — current names are not safely remappable from this evidence.
 
+### [2026-08-18 21:10] #149 — Pre-xAI OAuth refresh backup and scope
+**What:** Prepared the first prioritized quick-win action: retry the native xAI OAuth refresh flow for all four existing xai-oauth connections.
+**Why:** The gap analysis identifies one OAuth refresh-expired bucket item; the supported `/api/providers/{id}/refresh` endpoint is the least invasive way to test whether any stored refresh token can recover.
+**Findings:** Four inactive xai-oauth connection IDs are present. The current ledger identifies connection `55d5fae6` as having an expired refresh token; the remaining rows are also inactive. A current backup is required because a refresh attempt may update token state.
+**Decision:** Back up the live SQLite/state artifacts again, then call the native refresh endpoint for each xai-oauth connection. Do not generate placeholder OAuth data or claim recovery from an HTTP response without a subsequent valid native test and chat proof.
+**Actions taken:** Scoped the refresh attempt; no OAuth or provider mutation has been issued yet.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** Existing OpenCode backup remains available; a dedicated current backup will precede refresh calls.
+**Status:** 🔄 IN PROGRESS
+
+### [2026-08-18 21:25] #150 — xAI OAuth refresh attempted; all four accounts remain blocked
+**What:** Executed the native `/api/providers/{id}/refresh` flow for all four xai-oauth connections, followed by native provider tests.
+**Why:** Complete the handoff’s highest-priority OAuth quick win without browser fabrication or unsupported token manipulation.
+**Findings:** Fresh backup completed at `D:\omniroute-backups\20260818-2110-pre-xai-oauth\20260818` with 3 SQLite files and 93 state files. Connections `a2eced8e` and `3be84526` returned refresh HTTP 200 but their follow-up tests returned HTTP 200 `valid=false`, upstream error `API returned 402`. Connections `b34d58dc` and `55d5fae6` returned refresh HTTP 422 `No token credentials available for refresh`; follow-up tests returned HTTP 200 `valid=false` with diagnosis `reauth_required` and message `Refresh token expired. Please re-authenticate this account.` No connection recovered.
+**Actions taken:** Called only the supported refresh/test management endpoints for all four IDs; no raw OAuth token extraction or placeholder injection.
+**Verification:** Every row has an honest native failure result; xAI OAuth is not marked active or live. Service was not restarted or killed.
+**Files touched:** Live provider runtime state may contain native refresh metadata changes; backup artifacts under `D:\omniroute-backups\20260818-2110-pre-xai-oauth\20260818`; `MASTER_WORKLOG.md`.
+**Status:** ⚠️ BLOCKED — requires fresh xAI OAuth re-authentication/account action; native refresh cannot recover the available rows.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
