@@ -4511,4 +4511,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** Public documentation and visible registration-page inspection only; no signup, key creation, payment, CAPTCHA, browser-secret extraction, or OmniRoute mutation occurred.
 **Status:** ⏸️ Paused at the exact OrcaRouter account-authentication boundary.
 
+### [2026-08-18 23:34] #216 — Api.Airforce free-account/API path identified
+**What:** Investigated `api-airforce` as a separate high-value candidate using official documentation and the visible registration form.
+**Evidence:** Api.Airforce documents an OpenAI-compatible endpoint at `https://api.airforce/v1`, free model variants, and a free plan. The live signup form visibly offers Google, GitHub, Discord, or email registration and advertises 1,000 free requests per day, immediate API-key access, and no credit card required.
+**Disposition:** `api-airforce` remains `EXTERNAL_ACCOUNT_REQUIRED` until an account/key exists and a valid upstream chat request succeeds. The next action boundary is selecting a signup method, which transmits identity and may create a persistent account.
+**Safety:** Public documentation and visible signup-page inspection only; no signup, key creation, payment, CAPTCHA, browser-secret extraction, or OmniRoute mutation occurred.
+**Status:** ⏸️ Paused at the exact Api.Airforce account-authentication boundary.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
