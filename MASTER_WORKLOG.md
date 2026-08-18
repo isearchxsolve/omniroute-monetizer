@@ -4589,4 +4589,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No OAuth connection was overwritten, no upstream/local inference check was run, and no secret, placeholder, direct database write, or service restart was used.
 **Status:** ✅ Anthropic credential wired; verification deferred.
 
+### [2026-08-19 02:48] #228 — Groq API key created and wired
+**What:** Following the user’s explicit confirmation, created a Groq API key named `omniroute-monetizer` in the authenticated Chrome account, captured it through the visible copy control only in memory, and updated the existing OmniRoute `groq` API-key connection through supported REST.
+**Result:** OmniRoute update returned HTTP 200 for connection `a4047134-02d0-4afd-87c7-e10da38f567f`. No upstream or local inference verification was run, consistent with the wiring-only scope.
+**Safety:** The key was never printed or written to the worklog, no browser profile/cookie extraction occurred, and no placeholder, payment flow, CAPTCHA bypass, direct database write, or service restart was used.
+**Status:** ✅ Groq account key creation → OmniRoute wiring complete; verification deferred.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
