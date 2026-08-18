@@ -1,10 +1,17 @@
 """Launch a PURE Chrome profile for user-driven Google SSO signups (gate relaxation #120).
 
-Pure = fresh user-data-dir, no extensions, no history -> clean real-Chrome
-fingerprint (no bot detection), and Google SSO removes email OTP. The user
-performs the one-click Google account selection in each tab; nothing is
-automated. CDP on port 9223 (slim profile uses 9222) so harvest can attach
-afterwards. Stdlib only.
+Pure = a copy of the user's REAL Chrome Profile 14 (Google already signed in,
+provider logins present) with ALL extensions stripped (the VPN extension is what
+tripped hCaptcha before) and heavy caches removed. NOT a blank profile — a blank
+profile has no Google identity and would force email/password + OTP, defeating
+the purpose. Real Chrome fingerprint + existing Google session = no bot detection,
+no email OTP; the user's one-click account selection is the only human step.
+Nothing is automated. CDP on port 9223 (slim profile uses 9222) so harvest can
+attach afterwards. Stdlib only.
+
+RCA (worklog #121): first attempt used a brand-new empty user-data-dir = blank
+profile (no Accounts folder, no account_info) -> wrong. Fixed by copying the
+real-login profile and purifying it.
 """
 import json
 import os
@@ -15,6 +22,7 @@ import urllib.request
 
 CHROME = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 PROFILE = r"d:\omniroute-pure-chrome"
+PROFILE_DIR = "Profile 14"   # the real-login profile (Google signed in), extensions stripped
 PORT = 9223
 
 # Wave-1 Google-SSO candidates: open their sign-in pages directly.
@@ -46,6 +54,7 @@ def main():
     args = [
         CHROME,
         f"--user-data-dir={PROFILE}",
+        f"--profile-directory={PROFILE_DIR}",
         f"--remote-debugging-port={PORT}",
         "--no-first-run",
         "--no-default-browser-check",
