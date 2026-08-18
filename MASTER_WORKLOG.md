@@ -4347,4 +4347,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No restart, direct DB write, placeholder credential, CAPTCHA bypass, payment, cookie/profile extraction, or secret logging. A complete pre-pass backup exists at `D:\omniroute-backups\20260818-135253-pre-all-provider-pass`.
 **Status:** ✅ Partial — configured route/model verification is reconciled; unconfigured external providers and unsupported browser handoffs remain in their evidence-backed blocker states.
 
+### [2026-08-18 16:58] #190 — Remaining external-account queue shallow sweep
+**What:** Read the reconciled 295-provider ledger and grouped the 179 `EXTERNAL_ACCOUNT_REQUIRED` records by their recorded upstream evidence, without touching the live service or provider database.
+**Findings:** The remaining queue is dominated by providers that either have no configured account and no probe evidence, or have already returned an explicit authentication/credit/rate-limit/endpoint gate. Several visible free-model listings (for example ZenMux, OrcaRouter, Bazaarlink, Charm, Kenari, OpenCode Zen, and Vercel AI Gateway) still reject unauthenticated chat requests; model-list visibility is not an integration credential. No existing local credential candidate beyond the guarded harvester results was found in this read-only grouping.
+**Decision:** Continue with targeted browser/free-path characterization only where the provider exposes a practicable visible path. Do not create persistent API keys, enter personal data, bypass CAPTCHA/bot detection, or classify a web chat session as OmniRoute-live without a supported handoff and local valid chat E2E.
+**Status:** 🔵 In progress — queue grouped; targeted no-card candidates remain to be checked.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
