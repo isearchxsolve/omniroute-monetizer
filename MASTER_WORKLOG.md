@@ -4031,4 +4031,15 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** Existing native evidence is preserved; no restart/kill and no direct DB write. Per AGENTS.md, the repeated runtime symptom now requires external triangulation before deep local debugging.
 **Status:** ⚠️ BLOCKED for model mapping until catalog behavior is understood/recovered.
 
+### [2026-08-18 20:50] #147 — External triangulation confirms known v3.8.x catalog serialization risk
+**What:** Triangulated the repeated local `/v1/models` stall against upstream sources before deeper runtime analysis.
+**Why:** AGENTS.md requires own evidence → upstream GitHub → Stack Overflow API → blind search before deep local debugging.
+**Findings:** Upstream OmniRoute GitHub issue #6408, “fix(api): GET /v1/models serializes concurrent requests,” describes the same failure class: a cached catalog endpoint serializes requests and can time out under contention; suspected causes include provider-registry rebuilds, single-flight locking, or SQLite WAL reads. The issue is marked closed but shows no linked development/PR in the page, so a closed issue is not treated as a released fix. The upstream Database Guide confirms WAL mode and `busy_timeout=5000`, and says persistent lock symptoms require waiting or a restart—restart is prohibited for this mission. The official Stack Exchange API query `q=/v1/models SQLite lock`, site=stackoverflow, returned HTTP 200 with zero results. Blind web searches for exact `/v1/models`/OmniRoute/SQLite timeout terms returned the same upstream issue and API references, with no independent fix.
+**External sources consulted:** OmniRoute GitHub issue #6408; OmniRoute GitHub Database Guide; Stack Exchange API 2.3 (zero results); blind web queries `"GET /v1/models" "OmniRoute" timeout`, `"OmniRoute" "provider-registry rebuild" models timeout`, and `"OmniRoute" "SQLite" "v1/models"`.
+**Decision:** Do not perform an unsafe lock removal or restart. Treat the catalog stall as a known service/version contention risk, use cooldown/retry for current read-only validation, and defer any code/runtime upgrade to `DEFERRED_ACTIONS.md` because it would require controlled service replacement.
+**Actions taken:** External source triangulation only; no service or provider/model state changed.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** External evidence matches the observed intermittent stall; the correct immediate mitigation is retry/defer, not direct DB surgery.
+**Status:** ⚠️ PARTIAL — catalog issue understood enough to avoid unsafe remediation; model mapping still needs current E2E evidence.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
