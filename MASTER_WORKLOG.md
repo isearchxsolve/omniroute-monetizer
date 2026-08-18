@@ -4677,4 +4677,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No payment data, placeholder token, direct database write, or OmniRoute mutation occurred.
 **Status:** ⚠️ Authenticated workspace reached; token generation unavailable without a separate CLI/account surface.
 
+### [2026-08-19 06:22] #241 — User-supplied Jina credential wired
+**What:** Received a Jina API credential directly from the user and used it only in memory to create a native OmniRoute `jina-ai` API-key connection through supported REST.
+**Result:** Provider creation returned HTTP 201. The connection was created inactive because verification is deferred in this wiring-only pass.
+**Safety:** The credential was not echoed, logged, or written to files. No upstream/local inference request, payment action, CAPTCHA bypass, direct database write, or service restart occurred.
+**Status:** ✅ Jina credential → OmniRoute wiring complete; verification deferred.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
