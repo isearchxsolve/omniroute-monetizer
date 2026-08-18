@@ -4013,4 +4013,13 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** OpenCode success remains certified; model-drift work is still pending current model-list evidence.
 **Status:** 🔄 IN PROGRESS
 
+### [2026-08-18 20:30] #145 — Current model inventory: NVIDIA upstream healthy; Gemini direct key probe rejected
+**What:** Completed read-only current model-catalog and provider-upstream inventory for the model-drift candidates.
+**Why:** Separate stale model-name evidence from current provider availability before changing any model mappings.
+**Findings:** Local `/v1/models` returned HTTP 200. It contains 59 `gemini/` models and 112 `nvidia/` models, but no `aihorde/`, `auggie/`, or `mimocode/` models. NVIDIA’s authenticated upstream `/v1/models` returned HTTP 200 with 102 models, including current DeepSeek/Google/etc. families. The two key drift candidates documented by AGENTS.md (`nvidia/nemotron-3-super-120b-a12b` and `nvidia/nemotron-nano-12b-v2-vl`) were not among the initial current NVIDIA samples and require explicit presence checks. The current Gemini connection credential, when tried against Google’s public `v1beta/models` endpoint, returned HTTP 401; this conflicts with the prior native OmniRoute-valid evidence and is not enough to overwrite or disable the connection.
+**Actions taken:** Queried local catalog, authenticated NVIDIA upstream model list, and attempted a read-only Gemini upstream model list using the in-memory connection credential; no provider/combo state changed.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** Current catalog and upstream status captured; next action is native-test/E2E validation of current Gemini/NVIDIA model IDs and explicit expected-name presence checks. No stale model name will be injected based on assumptions.
+**Status:** ⚠️ PARTIAL — model mapping evidence is mixed and requires validation.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
