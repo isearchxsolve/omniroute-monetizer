@@ -4022,4 +4022,13 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** Current catalog and upstream status captured; next action is native-test/E2E validation of current Gemini/NVIDIA model IDs and explicit expected-name presence checks. No stale model name will be injected based on assumptions.
 **Status:** ⚠️ PARTIAL — model mapping evidence is mixed and requires validation.
 
+### [2026-08-18 20:40] #146 — Native provider tests pass, but catalog stalls recur after health tests
+**What:** Ran native management tests for current NVIDIA and Gemini connections, then attempted current catalog/model E2E validation.
+**Why:** Validate whether model drift is real before changing model names.
+**Findings:** Native NVIDIA test returned HTTP 200, `valid=true`, upstream `ok`, 605 ms. Native Gemini test returned HTTP 200, `valid=true`, upstream `ok`, 533 ms. Immediately afterward, a read-only `GET /v1/models` timed out after 15 seconds with `requests.exceptions.ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=20128): Read timed out`. The model-name presence and chat probes did not execute. This is a repeated interaction pattern: provider tests can be green while the catalog enters a transient stall. It is not evidence of model drift or provider failure.
+**Actions taken:** Executed two native provider tests; stopped the follow-on model/E2E sequence at the catalog timeout; did not modify model/combo state.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** Existing native evidence is preserved; no restart/kill and no direct DB write. Per AGENTS.md, the repeated runtime symptom now requires external triangulation before deep local debugging.
+**Status:** ⚠️ BLOCKED for model mapping until catalog behavior is understood/recovered.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
