@@ -4656,4 +4656,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No sensitive credential transmission, CAPTCHA bypass, payment action, placeholder token, or direct database write occurred.
 **Status:** ⚠️ User-owned Hugging Face login required for token issuance.
 
+### [2026-08-19 05:38] #238 — Replicate token created; OmniRoute provider creation rejected
+**What:** Signed into Replicate through the existing GitHub OAuth session, opened Account → API tokens, created a token named `omniroute-monetizer`, and held it only in memory.
+**Result:** The supported `POST /api/providers` attempt using provider slug `replicate` returned HTTP 400, so no OmniRoute connection was created. No alternate or guessed provider slug was injected.
+**Disposition:** Replicate credential acquisition succeeded, but wiring is pending a supported OmniRoute provider identifier/adapter. Verification was not run.
+**Safety:** The token was not written to files or the worklog; no placeholder, payment, CAPTCHA bypass, direct database write, or service restart occurred.
+**Status:** ⚠️ Key obtained; native OmniRoute provider mapping rejected the connection.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
