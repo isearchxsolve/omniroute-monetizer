@@ -3749,6 +3749,21 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Files touched:** `d:\omniroute-pure-chrome` (rebuilt pure); `scratch/launch_pure_chrome.py` (profile-directory fix + RCA docstring); `scratch/verify_pure_chrome.py` (new); `MASTER_WORKLOG.md` (this entry).
 **Status:** ⏳ pure Chrome (real Google identity, extensions stripped) is open — user performs one-click Google SSO in the tabs, then `scratch/harvest_pure_chrome.py` → inject → e2e verify.
 
+### [2026-08-18 11:20] #122 — PROVEN Google SSO click-through blueprint recorded + t3.chat LOGIN VERIFIED; credential formats mapped from OmniRoute source
+**User directive:** "you got the blueprint — record it in a separate document so you do not get confused again. Next part: harvest the API keys — either read the cookie, or if it has a 'generate API key' button, click it and harvest the key."
+**Blueprint recorded:** `docs/GOOGLE_SSO_LOGIN_BLUEPRINT.md` — the exact, verified click-through sequence (navigate → click Google button → account chooser → consent → verify strong cookies). This is the reusable pattern for every NEEDS_BROWSER provider.
+**t3.chat LOGIN VERIFIED (real autonomous click-through):** clicked `a:has-text('Continue with Google')` → landed on `accounts.google.com/v3/signin/accountchooser` → clicked `[data-email*=xxpertcomments]` → consent page → clicked `button:has-text('Continue')` → redirected back to t3.chat with strong auth cookies: `session` (len=25), `access-token` (len=749), `wos-session` (len=2300), `__recent_auth`. **KEY INSIGHT:** Google OAuth navigates the SAME page, not a popup — scan all `ctx.pages` for `accounts.google.com`.
+**Live cookie state (CDP 9223):** perplexity-web ✅ signed in (`__Secure-next-auth.session-token`); t3-web ✅ signed in (`session`, `wos-session`); blackbox ❌ not signed in; muse-spark-web ❌ not signed in (only anon tracking cookies).
+**Credential formats mapped from OmniRoute source (`src/shared/providers/webSessionCredentials.ts` + executors):**
+- `perplexity-web`: kind=cookie, `__Secure-next-auth.session-token`, acceptsFullCookieHeader=true → inject full Cookie header as `apiKey`.
+- `t3-web` (slug `t3-web`): kind=cookie, `convex-session-id + Cookie header`, acceptsFullCookieHeader=true. Executor `parseT3Credentials` reads `credentials.apiKey` as Cookie header; needs `convex-session-id` present.
+- `t3-chat-web` (separate slug): kind=**token**, token from **localStorage** (`token` key), NOT cookies.
+- `blackbox-web`: kind=cookie, `__Secure-authjs.session-token`, acceptsFullCookieHeader=true. Executor reads `credentials.apiKey` via `normalizeSessionCookieHeader`. NOTE: needs `BLACKBOX_WEB_VALIDATED_TOKEN` env var for the `validated` field (else 403).
+- `muse-spark-web`: kind=cookie, `abra_sess` (rebranded to `ecto_1_sess`), acceptsFullCookieHeader=true. Executor reads `credentials.apiKey`.
+**No existing OmniRoute connections** for the 4 targets (59 total connections, none match) → will create via `POST /api/providers`.
+**Files touched:** `docs/GOOGLE_SSO_LOGIN_BLUEPRINT.md` (new); `scratch/autonomous_sso_login.py` (added consent handler + all-pages loop); `scratch/select_t3_account.py`, `scratch/check_live_cookies.py`, `scratch/check_connections.py`, `scratch/check_catalog.py` (new recon tools); `MASTER_WORKLOG.md` (this entry).
+**Status:** ⏳ NEXT: harvest perplexity-web + t3-web sessions (signed in) → inject → e2e verify. Then complete blackbox + muse-spark-web logins.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
