@@ -107,9 +107,14 @@ ALL pages in `ctx.pages` (not just the current page) checking for
 | Provider | login_url | Google button selector | Strong auth cookies |
 | :--- | :--- | :--- | :--- |
 | `t3-web` | `https://t3.chat/auth/login` | `a:has-text('Continue with Google')` | `session`, `access-token`, `sessionToken`, `t3-session`, `authjs.session-token` |
-| `perplexity-web` | `https://www.perplexity.ai/settings/account` | `button:has-text('Continue with Google')` | `__Secure-next-auth.session-token`, `__Secure-perplexity_session` |
-| `blackbox` | `https://www.blackbox.ai/login` | `button:has-text('Continue with Google')` | `token`, `session`, `auth`, `jwt` |
-| `muse-spark-web` | `https://www.meta.ai` | `button:has-text('Continue with Google')` | `c_user`, `xs`, `sessionid` |
+| `perplexity-web` | `https://www.perplexity.ai/` (onboarding) | entry: `button:has-text('Get started')` → then Google SSO | `__Secure-next-auth.session-token`, `__Secure-perplexity_session` |
+| `blackbox-web` | `https://app.blackbox.ai/login` (NOT www) | `button:has-text('GOOGLE')` | `next-auth.session-token` (NO `__Secure-` prefix) |
+| `muse-spark-web` | `https://www.meta.ai` | **NO Google SSO** — only Facebook/Instagram/email | `abra_sess`/`ecto_1_sess` (needs Meta creds) |
+
+**Verified entry points (worklog #123):**
+- Perplexity: the login entry is `Get started` on the onboarding page, not a "Log in" button.
+- Blackbox: `www.blackbox.ai/login` only has a link "SIGN IN TO BLACKBOX" → the real Google button is on `app.blackbox.ai/login` (`button:has-text('GOOGLE')`).
+- Meta.ai: `Log in` → `auth.meta.com` offers only Facebook/Instagram/mobile-email. Google SSO is NOT available — honest blocker without Meta credentials.
 
 ---
 
