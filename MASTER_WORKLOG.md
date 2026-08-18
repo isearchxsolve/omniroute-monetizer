@@ -3805,6 +3805,26 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 
 **Next:** grok-web needs an executor TLS-profile bump (chrome_149+) or a cf_clearance earned by a matching-fingerprint client. yuanbao/codebuddy need a WeChat QR scan (human). zed-hosted needs the Zed OAuth import flow. adapta needs email/password creds.
 
+### [2026-08-18 17:20] #125 — Ledger synced with gap-analysis evidence (backup-first)
+
+**What:** Applied the gap-analysis-derived status updates to the master provider ledger and created a pre-modification backup, completing the "Worklog #125 + ledger update backup-first" todo item.
+
+**Why:** The gap-analysis sweep (entries #112–#124) reclassified providers from assumed statuses to evidence-measured ones (static analysis of OmniRoute executor source, connection tests, and E2E probes). The ledger (`state/all_296_providers_execution_ledger.json`) had to be synchronized with that evidence so it remains the single source of truth for provider operational state. Per AGENTS.md rule 10 (backup before touching state), a timestamped backup was taken before any write.
+
+**Actions taken:**
+1. Backup of the ledger taken before modification (backup-first discipline).
+2. Ran `.\.venv\Scripts\python.exe scratch\update_ledger_with_gaps.py` — exit code 0. The script applied the gap-analysis-derived statuses across the ledger entries (classifications from `state/provider_upstream_scan.json` and the wave-1/wave-2 results).
+3. Spot-checked updated entries against the evidence artifacts to confirm status changes were applied as classified.
+
+**Findings:**
+- Ledger update completed cleanly (exit 0); no provider was marked LIVE without real completion-content proof (zero-fabrication rule upheld from entries #112–#124).
+- Status buckets reflect the measured reality: LIVE (E2E-verified), AUTHENTICATED_BLOCKED (e.g. grok-web TLS fingerprint), NOT_CHAT_COMPLETABLE (media-only providers), BLOCKED_* (human-credential gates: WeChat QR, email/pass, Zed OAuth import), EXTERNAL_ACCOUNT_REQUIRED (remaining unconfigured cloud providers).
+
+**Files touched:** `state/all_296_providers_execution_ledger.json` (updated), ledger backup (created), `scratch/update_ledger_with_gaps.py` (executed).
+
+**Verification:** script exit code 0; backup exists pre-modification; ledger entries consistent with `state/provider_upstream_scan.json` evidence.
+
+**Status:** ✅ Done
 
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
