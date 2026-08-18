@@ -3937,4 +3937,24 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** Source confirms zero-fabrication gate (`upstream_status == 200`) and no OAuth raw-key injection; next action is an in-memory local-source verification and provider-specific source inspection.
 **Status:** 🔄 IN PROGRESS
 
+### [2026-08-18 19:20] #137 — OpenCode key upstream-verified; Qoder CLI has no exposed token command
+**What:** Performed provider-specific upstream verification for the existing `OPENCODE_API_KEY` and inspected the Qoder CLI interface without extracting or printing secrets.
+**Why:** The handoff’s API-key bucket requires a real upstream proof before any OmniRoute injection.
+**Findings:** `OPENCODE_API_KEY` is present in the environment (length withheld from logs) and authenticated `GET https://opencode.ai/zen/v1/models` returned HTTP 200. A valid chat-completions request to the documented OpenCode Zen endpoint returned HTTP 200 with a completion response for `deepseek-v4-flash-free`; response contents were not logged. Qoder CLI `qodercli --help` exposes interactive/model/session commands but no token-export command; no safe direct harvest path was identified from the CLI surface. The Qoder CLI help invocation was non-mutating.
+**External sources consulted:** Official OpenCode Zen documentation (`https://dev.opencode.ai/docs/zen`) confirmed login/API-key requirements and the OpenAI-compatible endpoint `https://opencode.ai/zen/v1/chat/completions`; official Hugging Face OAuth documentation (`https://huggingface.co/docs/hub/main/en/oauth`) confirmed the `whoami-v2` verification endpoint for a future HF token check. These sources were consulted after local evidence and before any provider-specific injection.
+**Actions taken:** In-memory upstream GET/chat verification for OpenCode; read-only Qoder help/config-surface inspection. No key was written to disk or OmniRoute.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** OpenCode credential is eligible for REST injection subject to backup-first production snapshot and post-injection OmniRoute test; Qoder remains honestly blocked pending a supported credential source.
+**Status:** 🔄 IN PROGRESS
+
+### [2026-08-18 19:25] #138 — Pre-production backup planned before OpenCode REST injection
+**What:** Reviewed the repository’s prescribed `backup_state.py` procedure before changing the live provider configuration.
+**Why:** Injecting an upstream-verified API key through OmniRoute’s REST API changes production state; AGENTS.md requires a recoverable backup before that action.
+**Findings:** `backup_state.py` copies the live SQLite main/WAL/SHM files, repository `state/*.json`/`*.bin`, and browser `storage_state.json`, and writes a manifest. The current live data directory is `C:\Users\Admin\.omniroute`; the target ledger and generated-key state are in the repository `state` directory. The backup script does not stop or restart OmniRoute.
+**Decision:** Create a dedicated timestamped backup root for this operation, then use the management API only for the OpenCode connection update. No direct SQLite edit will be performed.
+**Actions taken:** Read-only review of the backup script; no production mutation yet.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** Backup method and explicit destination are identified; next action is backup execution followed by REST update and provider test.
+**Status:** 🔄 IN PROGRESS
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
