@@ -3995,4 +3995,22 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** JSON parse and aggregate-count verification are pending immediately; no OmniRoute restart or direct database write occurred.
 **Status:** 🔄 IN PROGRESS
 
+### [2026-08-18 20:15] #143 — Post-OpenCode ledger verification and acceptance green
+**What:** Parsed the updated ledger and reran the full acceptance suite after the OpenCode state synchronization.
+**Why:** Ensure the ledger write was valid, counts remained coherent, and the live service/certification suite stayed healthy.
+**Findings:** Ledger JSON parses successfully; OpenCode status is `LIVE_ACTIVE`, worklog reference is 141, and aggregate counts are `BLOCKED_AUTH_REQUIRED=73`, `LIVE_ACTIVE=23`. Acceptance suite returned 20 passed, 0 failed, including T1–T20; root median was 102.2 ms, models 19.8 ms, providers 9.0 ms.
+**Actions taken:** Read-only JSON validation and full `acceptance_tests.py` execution.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** `[PASS] MONETIZER_READY — All 20 tests passed (or skipped without failures)`; no service restart/termination.
+**Status:** ✅ Done — OpenCode remediation fully evidenced and certified.
+
+### [2026-08-18 20:20] #144 — Begin model-drift bucket with catalog and upstream inventory
+**What:** Started the prioritized model-drift investigation for aihorde, auggie, gemini, mimocode, and nvidia.
+**Why:** The handoff calls for evidence-based model-name mapping before any combo/provider update; current catalog and upstream model lists are the shallowest valid sources.
+**Findings:** The ledger currently classifies aihorde as a no-auth model-mapping bug, auggie/mimocode as upstream model-gone/unsupported, and gemini/nvidia as model-404/drift candidates despite their current native connection tests being valid. The distinction between stale ledger evidence and current catalog state must be measured before writing.
+**Actions taken:** Prepared read-only local catalog filtering and provider-specific upstream model-list checks; no model or combo mutation performed.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** OpenCode success remains certified; model-drift work is still pending current model-list evidence.
+**Status:** 🔄 IN PROGRESS
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
