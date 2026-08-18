@@ -4476,4 +4476,18 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** Read-only documentation and endpoint probe only; no account, key, payment, CAPTCHA, browser-secret, or OmniRoute mutation occurred.
 **Status:** ✅ Candidate evidence refreshed; external-provider sweep continues.
 
+### [2026-08-18 22:19] #211 — Z.AI API-console session boundary identified
+**What:** Inspected the existing authenticated Chrome session and opened Z.AI’s documented API-key dashboard path at `/manage-apikey/apikey-list`.
+**Finding:** The public Z.AI chat surface is signed in, but the API-key console is a separate authentication surface that presents Continue with Google, Continue with Email, Continue with GitHub, or Skip for now. No API key is visible and the chat session cannot be treated as an API credential.
+**Disposition:** `zhipuai` remains `EXTERNAL_ACCOUNT_REQUIRED`. No SSO choice or API-key creation was performed in this pass; no provider was promoted.
+**Safety:** No identity transmission, account creation, key creation, payment, CAPTCHA, browser-secret extraction, or OmniRoute mutation occurred.
+**Status:** ✅ Separate API-console boundary documented; external-provider sweep continues.
+
+### [2026-08-18 22:32] #212 — Kenari free-model and payment-path evidence refresh
+**What:** Investigated `kenari` as another unmapped candidate with a documented free-model route.
+**Evidence:** Kenari’s official documentation states that API access uses a bearer `kn-...` key at `https://kenari.id/v1`, that free models can be requested with a `:free` suffix, and that account signup is required to create the key. The same documentation states that metered use can require a QRIS top-up, while the public site advertises signup without an international credit card. Official login documentation exposes Google/email authentication.
+**Disposition:** `kenari` remains `EXTERNAL_ACCOUNT_REQUIRED`; free-model availability does not itself provide a credential, and no account/key action was taken in this pass. No payment path was entered.
+**Safety:** Official documentation and public login-page inspection only; no identity transmission, account creation, key creation, payment, CAPTCHA, browser-secret extraction, or OmniRoute mutation occurred.
+**Status:** ✅ Candidate evidence refreshed; external-provider sweep continues.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
