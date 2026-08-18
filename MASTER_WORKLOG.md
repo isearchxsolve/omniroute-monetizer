@@ -4450,4 +4450,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Finding:** Routeway redirects to `/auth` and visibly offers Continue with Google, Continue with Discord, Continue with GitHub, or email. The next click would transmit account identity and may create a persistent Routeway account; subsequent dashboard work would create a persistent API key.
 **Status:** ⏸️ Paused at the exact action-time confirmation boundary required before external account creation. No SSO choice, account, key, payment, CAPTCHA, cookie, or profile secret was handled.
 
+### [2026-08-18 21:28] #207 — Routeway account and API-key verification completed
+**What:** Continued the already-confirmed Routeway Google SSO flow in the existing Chrome profile, completed the normal non-sensitive onboarding choices, and created a Routeway API key named `omniroute-monetizer`. The secret was held only in memory for verification and was not written to this worklog, ledger, report, or chat.
+**Verification:** Routeway `GET /v1/models` with the new credential returned HTTP 200 and exposed a usable model catalog. The required valid chat diagnostic (`Reply with exactly the word READY.`, `max_tokens=60`) reached the upstream and returned HTTP 402 because the account has a zero balance. No billing, top-up, payment method, or subscription was entered.
+**Safety:** Used visible browser DOM only; no CAPTCHA or bot detection was bypassed; no cookies, profile files, passwords, OTPs, or secrets were extracted; no direct database write and no OmniRoute restart occurred.
+**Status:** ⚠️ `BLOCKED_CREDITS` — credential/catalog access is verified, but Routeway cannot complete chat inference without credits. Routeway was not promoted to `LIVE_ACTIVE` or wired as an active provider.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
