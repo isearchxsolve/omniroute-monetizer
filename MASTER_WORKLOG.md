@@ -4070,4 +4070,13 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Files touched:** Live provider runtime state may contain native refresh metadata changes; backup artifacts under `D:\omniroute-backups\20260818-2110-pre-xai-oauth\20260818`; `MASTER_WORKLOG.md`.
 **Status:** ⚠️ BLOCKED — requires fresh xAI OAuth re-authentication/account action; native refresh cannot recover the available rows.
 
+### [2026-08-18 21:35] #151 — Local API-key bucket classified: OpenCode success, four source blockers
+**What:** Closed the local-source investigation for the five prioritized API-key providers based on the supported harvester matrix and source inventory.
+**Why:** Every attempted bucket item must have either a verified success or an honest blocker in both the ledger and worklog.
+**Findings:** OpenCode is fully verified and recorded as `LIVE_ACTIVE` in #142. DeepSeek, FriendliAI, and Hugging Face have no supported local key source present: their corresponding environment variables were absent, no supported CLI source was found, and their current connections remain missing-key/inactive. Qoder’s installed CLI exposes no token-export command, and no safe local token source was identified; its two connections remain inactive/missing-key. No placeholder or guessed key was used.
+**Actions taken:** Cross-referenced environment-variable names, command/path inventory, and the harvester’s supported verifier/source matrix; prepared ledger evidence for the four blockers.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only; ledger update follows after a dedicated pre-write copy).
+**Verification:** OpenCode success remains backed by upstream 200 + native test + non-empty E2E. The other four are not claimed as harvested; no provider PUT was issued for them.
+**Status:** ⚠️ PARTIAL — 1/5 API-key items complete; 4/5 blocked on absent/safely inaccessible credentials.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
