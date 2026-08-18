@@ -4490,4 +4490,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** Official documentation and public login-page inspection only; no identity transmission, account creation, key creation, payment, CAPTCHA, browser-secret extraction, or OmniRoute mutation occurred.
 **Status:** ✅ Candidate evidence refreshed; external-provider sweep continues.
 
+### [2026-08-18 22:44] #213 — Kenari authenticated-dashboard boundary confirmed
+**What:** Opened Kenari’s live login page in the existing Chrome session and inspected the visible authentication options.
+**Finding:** Kenari presents email/password login, Google login, and a separate “Daftar gratis” (free registration) action. No authenticated dashboard or API key was available in the current session; the public chat/provider state cannot be used as an API credential.
+**Disposition:** `kenari` remains `EXTERNAL_ACCOUNT_REQUIRED`. Stopped before the account-creation action; no key or provider connection was created.
+**Safety:** Visible-page inspection only; no identity transmission, account creation, password handling, payment, CAPTCHA, browser-secret extraction, or OmniRoute mutation occurred.
+**Status:** ✅ Authentication boundary recorded; external-provider sweep continues.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
