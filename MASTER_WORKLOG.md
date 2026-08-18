@@ -4689,4 +4689,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** The trial credential was held only in memory and not written to files or the worklog. No payment, CAPTCHA bypass, upstream/local verification request, direct database write, or service restart occurred.
 **Status:** ✅ Cohere account/key → OmniRoute wiring complete; verification deferred.
 
+### [2026-08-19 07:02] #243 — Galadriel console unavailable
+**What:** Attempted to open the provider’s console surface for account/key acquisition.
+**Finding:** The console hostname failed DNS resolution (`ERR_NAME_NOT_RESOLVED`), so no account or key page was reachable.
+**Disposition:** No credential was obtained and no OmniRoute connection was modified. No alternate guessed host or workaround was attempted.
+**Safety:** No sensitive data, payment information, placeholder credential, or direct database write was used.
+**Status:** ⚠️ Provider console unavailable at the documented attempt point.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
