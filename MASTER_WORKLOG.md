@@ -4142,4 +4142,13 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** JSON validation and acceptance rerun are pending immediately; no service restart/termination or direct DB write.
 **Status:** 🔄 IN PROGRESS
 
+### [2026-08-18 23:00] #159 — Prepare deferred-actions and final handoff results artifacts
+**What:** Prepared the required final artifacts: a root-level deferred-actions record for the known catalog/runtime issue and `HANDOFF_RESULTS.md` summarizing successes, blockers, backups, and certification.
+**Why:** The handoff requires a final report; AGENTS.md requires restart-dependent work to be deferred explicitly, and the current catalog stall must not be hidden behind a green acceptance result.
+**Findings:** T1–T20 is currently green, but the overall credential-recovery mission remains incomplete: xAI OAuth needs fresh re-authentication, four local API-key items lack supported credentials, model drift has no safe mapping proof, browser-cookie harvesting is blocked in the allowed browser context, local runtimes are absent, and external account signups remain user/account-dependent. OpenCode is the one newly completed provider remediation.
+**Actions taken:** Planned `DEFERRED_ACTIONS.md` and `HANDOFF_RESULTS.md` content with redacted evidence and explicit dual verdicts: certification ready vs. mission blocked.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only; report artifacts next).
+**Verification:** No production state change in this planning step; final acceptance and JSON validation will follow artifact creation.
+**Status:** 🔄 IN PROGRESS
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
