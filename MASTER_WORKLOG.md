@@ -3889,5 +3889,25 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** Existing JSON structure is minimal and safe to preserve. Backup is required immediately before the first settings write.
 **Status:** 🔄 IN PROGRESS
 
-<!-- END OF SESSION LOG — new entries are appended above this marker -->
+### [2026-08-18 18:30] #132 — External triangulation: VS Code uses chatLanguageModels.json for Custom Endpoint BYOK
+**What:** Verified the current VS Code Custom Endpoint configuration format against official documentation before changing the certification check.
+**Why:** The initial T20 failure was based on checking only `settings.json`; current VS Code may store BYOK model providers separately, so writing a legacy/deprecated setting would be misleading.
+**Findings:** Official VS Code documentation (`https://code.visualstudio.com/docs/agent-customization/language-models`, current page crawled 2026-08-18) states that Custom Endpoint replaces the deprecated `github.copilot.chat.customOAIModels` setting and stores provider/model details in `chatLanguageModels.json`; `vendor` must be `customendpoint`, with explicit Chat Completions model URLs supported. The existing `C:\Users\Admin\AppData\Roaming\Code\User\chatLanguageModels.json` parses as a 20-item array and already contains an `OmniRoute` customendpoint provider with seven models pointing to `http://localhost:20128/v1/chat/completions`, tool calling enabled, and no logged API key in the inspected output. The user `settings.json` contains only the theme.
+**External sources consulted:** Official VS Code “AI language models in VS Code” documentation; search query `site:code.visualstudio.com GitHub Copilot custom endpoints VS Code settings customEndpoints OpenAI compatible`. Search results also confirmed the Custom Endpoint provider is the current stable path and the legacy custom OpenAI-compatible setting is deprecated.
+**Decision:** Fix T20’s stale test logic to recognize the authoritative `chatLanguageModels.json` Custom Endpoint file, while retaining backward compatibility with the older settings.json string check. Do not add a fake or deprecated settings marker.
+**Actions taken:** Read-only inspection and source/schema comparison completed; no user configuration or service state modified.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** Existing OmniRoute VS Code configuration is present and structurally valid according to the current official schema; next action is a narrowly scoped acceptance-test correction.
+**Status:** 🔄 IN PROGRESS
 
+### [2026-08-18 18:35] #133 — Corrected stale T20 check for current VS Code BYOK storage
+**What:** Updated `acceptance_tests.py` T20 to validate both current `chatLanguageModels.json` and legacy `settings.json` configuration locations.
+**Why:** The live user configuration already contained a valid OmniRoute Custom Endpoint provider, but T20 inspected only the unrelated theme-only settings file and produced a false failure.
+**Findings:** The correction parses both files when present, serializes their JSON content, and accepts the existing OmniRoute endpoint/model configuration. It does not add settings, keys, placeholders, or endpoint markers.
+**Actions taken:** Applied a narrowly scoped source patch to T20 with UTF-8 parsing, current-file support, and backward-compatible fallback behavior.
+**Fixes applied:** Certification logic now follows the current VS Code Custom Endpoint file location documented by VS Code; the prior false-negative condition is removed.
+**Files touched:** `acceptance_tests.py`, `MASTER_WORKLOG.md`.
+**Verification:** Syntax/behavior verification is pending the next targeted and full acceptance runs; no service or production state was modified.
+**Status:** 🔄 IN PROGRESS
+
+<!-- END OF SESSION LOG — new entries are appended above this marker -->

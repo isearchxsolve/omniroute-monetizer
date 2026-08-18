@@ -446,14 +446,25 @@ class AcceptanceTestSuite:
         """T20: VSCode Copilot configured with OmniRoute endpoint."""
         try:
             vscode_config = Path.home() / "AppData/Roaming/Code/User/settings.json"
-            assert vscode_config.exists(), "VSCode settings.json not found"
-            
-            with open(vscode_config) as f:
-                config = json.load(f)
-            
-            # Check for OmniRoute or TokenRouter in copilot settings
-            settings_str = json.dumps(config)
-            has_endpoint = "localhost:20128" in settings_str or "omniroute" in settings_str.lower()
+            language_models_config = Path.home() / "AppData/Roaming/Code/User/chatLanguageModels.json"
+
+            # Current VS Code stores BYOK Custom Endpoint providers in
+            # chatLanguageModels.json. Keep the settings.json fallback for
+            # older VS Code releases and legacy OpenAI-compatible setups.
+            config_texts = []
+            if vscode_config.exists():
+                with open(vscode_config, encoding="utf-8") as f:
+                    config_texts.append(json.dumps(json.load(f)))
+            if language_models_config.exists():
+                with open(language_models_config, encoding="utf-8") as f:
+                    config_texts.append(json.dumps(json.load(f)))
+
+            assert config_texts, "VSCode settings.json and chatLanguageModels.json not found"
+            settings_str = " ".join(config_texts)
+            has_endpoint = (
+                "localhost:20128" in settings_str
+                or "omniroute" in settings_str.lower()
+            )
             assert has_endpoint, "OmniRoute not configured in VSCode"
             
             self.log_pass("T20", "VSCode configured with OmniRoute")
