@@ -6,7 +6,9 @@ Date: 2026-08-18 (Asia/Calcutta)
 
 The live OmniRoute service was preserved and the certification suite is green: T1–T20 passed with no restart, kill, direct database write, placeholder credential, or fabricated provider result.
 
-The overall 296-provider credential-recovery mission is not fully complete. The attempted buckets now have evidence-backed outcomes, but several require external account ownership, fresh OAuth authorization, an allowed authenticated browser session, or a future maintenance window. The honest overall mission verdict is `MONETIZER_BLOCKED`; the current runtime certification verdict is `MONETIZER_READY`.
+The ledger contains 296 records, of which 295 are actual provider slugs; the additional `services` row is embedded local-services metadata rather than an upstream provider. The 295-provider credential-recovery mission is not fully complete. The attempted buckets now have evidence-backed outcomes, but several require external account ownership, fresh OAuth authorization, an allowed authenticated browser session, or a future maintenance window. The honest overall mission verdict is `MONETIZER_BLOCKED`; the current runtime certification verdict is `MONETIZER_READY`.
+
+For the exhaustive current per-provider disposition, including all 295 slugs exactly once and the stale gap-file count reconciliation, see [FINAL_295_PROVIDER_VERDICT.md](D:/omniroute-monetizer/FINAL_295_PROVIDER_VERDICT.md).
 
 ## Completed in this handoff
 

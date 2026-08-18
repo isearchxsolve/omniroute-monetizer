@@ -13,7 +13,7 @@ Date: 2026-08-18 (Asia/Calcutta)
 - state/all_296_providers_execution_ledger.json contains 296 records.
 - The services record is excluded from the provider verdict: it is deployed_code / embedded local-services management, with no registry entry, executor, or database connection. It is a meta/service row, not an upstream provider.
 - Therefore the authoritative current provider inventory is **295 actual provider slugs**.
-- The older state/evidence/gap_analysis.json is not authoritative for this final count: it contains 300 merged slugs, including auto and four slugs absent from the current ledger (alibaba-cn, auto, kimi, kimi-coding-apikey).
+- The older state/evidence/gap_analysis.json is not authoritative for this final count: it contains 300 merged slugs, including four slugs absent from the current ledger (alibaba-cn, auto, kimi, kimi-coding-apikey).
 - The gemini record is keyed by gemini but lacks an internal slug field; the ledger property key is used as its provider ID.
 
 ## Current verdict totals
@@ -398,5 +398,4 @@ Provider is a non-chat service (search, audio, image, video, or other non-LLM pa
 The system is operational and certified at the OmniRoute/runtime level, but the all-provider monetizer objective is not complete. The correct final disposition is MONETIZER_BLOCKED, with the blocker classes above preserved as actionable, evidence-backed outcomes.
 
 Source ledger: state/all_296_providers_execution_ledger.json
-
 
