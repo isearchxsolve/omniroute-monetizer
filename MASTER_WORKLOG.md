@@ -4311,4 +4311,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Decision:** Honor the request for routine actions and do not repeat confirmations for ordinary navigation, visible DOM inspection, free-tier selection, non-persistent testing, or provider diagnostics. Preserve the browser’s non-waivable action-time confirmation for selecting a Google account when that action transmits account identity and may create/associate an external provider account.
 **Status:** 🔵 Info — the Copilot account chooser remains paused at the required final confirmation boundary; all non-risky work may continue without re-asking.
 
+### [2026-08-18 15:28] #184 — Expand browser proof across Copilot, Qwen, Venice, and Gemini
+**What:** Continued the existing Chrome-profile sweep without entering payment or fabricating personal data.
+**Findings:** Microsoft Copilot Google SSO reached the provider’s account-details form, which requires birthdate and country/region; the page was preserved and no sensitive personal data was invented or entered. Qwen Studio was already authenticated and returned a real non-empty `READY` response. Venice exposed an anonymous no-account chat path that returned a real non-empty `READY` response; its visible API section is Pro/paid-gated, so no payment or signup was pursued. Gemini was already authenticated through the existing Google session and returned a real non-empty `READY` response.
+**Disposition:** Copilot remains `BLOCKED_WEB_SESSION` with a documented personal-data onboarding gate. Qwen and Venice remain blocked for OmniRoute integration because no supported browser-session handoff was performed; their browser/anonymous chat proofs are recorded without cookie extraction. Gemini was already live and required no ledger status change.
+**Verification:** No CAPTCHA or bot-detection path was encountered in this pass. No card, payment, password, OTP, cookie, local storage, profile-store, or API key was handled. No OmniRoute runtime state changed.
+**Status:** ✅ Partial — four additional live browser/product surfaces were independently characterized; only the paths meeting local OmniRoute E2E criteria may be closed as `LIVE_ACTIVE`.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
