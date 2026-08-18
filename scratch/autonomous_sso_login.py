@@ -39,12 +39,13 @@ PROVIDERS = {
         "domain": "perplexity.ai",
     },
     "t3-web": {
-        "login_url": "https://t3.chat",
+        "login_url": "https://t3.chat/auth/login",
         "google_btn": [
-            "button:has-text('Continue with Google')",
-            "button:has-text('Sign in with Google')",
             "a:has-text('Continue with Google')",
+            "button:has-text('Continue with Google')",
             "a:has-text('Sign in with Google')",
+            "button:has-text('Sign in with Google')",
+            "a:has-text('Google')",
             "button:has-text('Google')",
         ],
         "strong_cookies": ["sessionToken", "t3-session", "authjs.session-token"],
@@ -94,7 +95,7 @@ def strong_cookies_present(ctx, cfg):
 
 
 def click_google_button(page, cfg):
-    """REAL click on the provider's Google sign-in button."""
+    """REAL click on the provider's Google sign-in button (button OR anchor)."""
     for sel in cfg["google_btn"]:
         try:
             loc = page.locator(sel).first
