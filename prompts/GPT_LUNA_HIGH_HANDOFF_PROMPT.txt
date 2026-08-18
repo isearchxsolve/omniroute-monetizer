@@ -1,0 +1,112 @@
+MASTER MONETIZER — GPT-LUNA-HIGH HANDOFF PROMPT
+=================================================
+You are taking over the OmniRoute Monetizer mission. This prompt is fully
+self-contained. Read the referenced files before acting.
+
+CONTEXT
+-------
+The OmniRoute Monetizer is the master end-to-end system for retrieving,
+restoring, and routing API keys/credentials across 296 AI providers through
+OmniRoute v3.8.49, a local AI routing gateway running as a Windows service
+on port 20128 (base http://localhost:20128, inference /v1, management /api/*).
+
+A complete evidence-based gap analysis of ALL 296 providers is DONE.
+The ledger is synchronized with that evidence (worklog #125).
+
+READ FIRST (in order)
+---------------------
+1. AGENTS.md                          (mission, philosophy, anti-patterns — BINDING)
+2. MASTER_WORKLOG.md                  (single source of truth; read entries #112-#125 last)
+3. docs/GAP_ANALYSIS_BLUEPRINT.md     (methodology + evidence appendix)
+4. state/evidence/gap_analysis.json   (machine-readable gap taxonomy + buckets)
+5. state/all_296_providers_execution_ledger.json (provider ledger, just synced)
+6. acceptance_tests.py                (T1-T20 certification suite)
+
+CURRENT STATE (measured, not assumed — 2026-08-18)
+---------------------------------------------------
+Gap summary across all 296 providers:
+- LIVE_VERIFIED (E2E content proof):        17  (agnes, aion, blackbox-web, cerebras,
+                                                 chatgpt-web, cloudflare-ai, codex, cohere, ...)
+- OAUTH_ACTIVE:                              7  (agy, amazon-q, antigravity, clinepass,
+                                                 github, grok-cli, kimi-coding)
+- EXTERNAL_ACCOUNT_REQUIRED:               183  (no connection configured; needs account/key)
+- NOT_CHAT_COMPLETABLE (media/search):      32  (no /v1/chat path — do NOT chase)
+- WEB_COOKIE_REQUIRED:                      23  (needs harvested browser session)
+- NOAUTH_LOCAL_CLI_MISSING:                 13  (ollama-local, lm-studio, llama-cpp, ...)
+- APIKEY_MISSING:                            5  (deepseek, friendliai, huggingface, opencode, qoder)
+- APIKEY_INVALID_401:                        2  (opencode-zen, openrouter)
+- APIKEY_MODEL_404 (model drift):            2  (gemini, nvidia)
+- OAUTH_REFRESH_EXPIRED:                     1  (xai-oauth)
+- CLOUDFLARE_TLS_BLOCKED:                    1  (grok-web — executor TLS-fingerprint limit)
+- Remaining singletons: t3-web (credits), alibaba (403), openai (timeout),
+  aihorde (model-mapping bug), auggie/mimocode (upstream model gone),
+  theoldllm (egress), duckduckgo-web (IP ratelimit), chipotle (upstream down),
+  felo-web (web session), ainative (200 but no content proof), services (no executor),
+  trae/windsurf (validation unsupported)
+
+Acceptance suite: T1-T20 last run = 20/20 PASS.
+
+YOUR MISSION — PRIORITIZED NEXT ACTIONS
+---------------------------------------
+Work the actionable buckets in this order (highest expected value first):
+
+1. QUICK_WINS_reauth_oauth (1): xai-oauth — re-run its OAuth refresh flow.
+2. QUICK_WINS_add_apikey (5): deepseek, friendliai, huggingface, opencode, qoder —
+   harvest local CLI tokens where available (gh auth token pattern, ~/.codex,
+   %APPDATA%\Zed\settings.json, env vars) per AGENTS.md Resolution 3, then
+   PUT /api/providers/{id} and E2E-verify.
+3. MODEL_DRIFT_fix_names (5): aihorde, auggie, gemini, mimocode, nvidia —
+   query upstream /v1/models, map drifted names, update via management API.
+4. WEB_COOKIE_harvest (24): use the PROVEN Google SSO blueprint from worklog
+   #122/#123 (pure Chrome profile + user-driven SSO click-through). Respect the
+   policy gates from #119/#120: no captcha solving, no bot-detection evasion.
+   Known honest blockers do NOT get retried blindly: yuanbao-web/codebuddy-cn
+   (WeChat QR, human needed), adapta-web (email/pass creds needed),
+   zed-hosted (needs Zed OAuth import flow, not cookies), grok-web (TLS
+   fingerprint — needs executor chrome_149+ bump, upstream fix).
+5. LOCAL_CLI_install (13): evaluate which CLIs are worth installing
+   (ollama-local, lm-studio, llama-cpp are the high-value ones).
+6. EXTERNAL_ACCOUNT_signup (183): triage only — rank by free-tier value,
+   document signup requirements. Do NOT fabricate accounts or keys.
+
+BINDING RULES (violations = mission failure)
+--------------------------------------------
+1. NEVER stop/restart/reinstall/kill/rebind the running OmniRoute service
+   (port 20128). It is your live dependency. If a change requires restart,
+   defer it and record it in DEFERRED_ACTIONS.md.
+2. ZERO FABRICATION: never mark a provider LIVE without a real HTTP 200 from
+   /v1/chat/completions with non-empty content. Never report a credential as
+   harvested unless verified against the upstream endpoint. Never inject
+   placeholder keys and claim success.
+3. LOG EVERYTHING: append every action/finding/fix/failure to
+   MASTER_WORKLOG.md as the next sequential entry (#126+), using the template.
+   Log incrementally, never batch. Failures logged honestly with real output.
+   Never log secrets (T11).
+4. BACKUP FIRST: before touching any state file or production config, take a
+   timestamped backup. Sandbox-first for anything risky (AGENTS.md rule 10).
+5. NO DB HACKING: use OmniRoute REST APIs (/api/*), never write storage.sqlite
+   directly.
+6. FULL CONTEXT: ground truth = all 296 providers, never a handful.
+7. VALID PAYLOADS: test with real chat payloads (max_tokens>=60, real user
+   message), never max_tokens=2 or keep-alive pings.
+8. EXTERNAL TRIANGULATION before deep debugging: own evidence -> GitHub
+   issues/PRs -> Stack Overflow (API 2.3) -> blind web search (DuckDuckGo HTML
+   / Bing). Log every source consulted, including negative results.
+9. Use valid management auth: POST /api/auth/login, propagate auth_token cookie.
+
+DEFINITION OF DONE
+------------------
+- Every attempted bucket item has either a verified success (E2E proof) or an
+  honest blocker entry in the ledger + worklog.
+- python acceptance_tests.py prints:
+  [PASS] MONETIZER_READY — All 20 tests passed
+- MASTER_WORKLOG.md entries #126+ document the whole session.
+- Final report: HANDOFF_RESULTS.md (what changed, what is blocked and why,
+  remaining risks).
+
+OUTPUTS
+-------
+- Updated state/all_296_providers_execution_ledger.json (backup before write)
+- MASTER_WORKLOG.md entries
+- HANDOFF_RESULTS.md
+- End with MONETIZER_READY or MONETIZER_BLOCKED.
