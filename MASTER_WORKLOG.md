@@ -4282,4 +4282,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Finding:** The next visible action is `Continue`, which creates the persistent provider-side team. No team was created and no credential/key was generated.
 **Status:** ⏸️ Awaiting action-time confirmation for the exact persistent action: create the xAI team named `Kunal's team` with `Hobbyist` selected by clicking `Continue`.
 
+### [2026-08-18 14:06] #179 — xAI Google SSO onboarding completed; API credit gate confirmed
+**What:** After the user confirmed the exact action, clicked `Continue` on the authenticated xAI team-creation page, creating the team named `Kunal's team` with `Hobbyist` selected. Chose the visible free `Explore` starting point, clicked `Continue for free`, skipped the optional product tour, and reached the xAI console dashboard.
+**Findings:** The dashboard loads successfully with visible API Keys, Models, Usage, and Logs navigation. It states `Add credits to start using the API` and shows `Credit balance: $0.00`. The free onboarding path is usable for exploring/playground surfaces, but the API route is credit-gated. No card was entered, no credits were purchased, and no API key was generated.
+**Disposition:** Do not create or inject an xAI API key without a legitimate usable no-credit path; do not pursue the displayed payment gate. Record xAI as an account/session onboarding success but API connectivity remains blocked by credits. The visible `Create API key` action was not clicked because it would create a persistent credential and the API is explicitly credit-gated.
+**Status:** ⚠️ Partial — Google SSO/signup path proven practicable; xAI API remains honestly blocked by the provider’s credit requirement.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
