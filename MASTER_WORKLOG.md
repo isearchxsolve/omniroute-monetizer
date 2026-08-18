@@ -4383,4 +4383,9 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Actions:** Added redacted visible-path evidence to the four ledger entries. No signup, account association, API-key creation, wallet/payment action, CAPTCHA, cookie extraction, or OmniRoute wiring occurred.
 **Status:** ✅ Characterized — Routeway is the best remaining candidate, but its persistent account/key creation still requires the browser’s action-time confirmation boundary before it can be attempted.
 
+### [2026-08-18 17:53] #196 — Routeway free-tier signup gate identified
+**What:** Opened Routeway’s free dashboard path in the connected Chrome profile and inspected the visible authentication page.
+**Finding:** `/dashboard` redirects to `/auth`; the page offers Continue with Google, Discord, GitHub, or email. It states that sign-in is required to access the dashboard and manage API keys. The free Starter tier remains advertised as 200 requests/day with a free $1 credit.
+**Status:** ⏸️ The next action would select a specific SSO provider and may create/associate a Routeway account, followed by persistent API-key creation. That exact browser-side account/key action requires action-time confirmation; no account or key was created in this step.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
