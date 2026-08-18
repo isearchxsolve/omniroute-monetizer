@@ -3976,4 +3976,13 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** OpenCode native test remains the only successful post-update proof so far; full chat-content proof is blocked by the transient catalog stall and will be retried after read-only recovery checks.
 **Status:** ⚠️ Partial — E2E content proof not yet established; service stall requires evidence-based follow-up.
 
+### [2026-08-18 19:55] #141 — OpenCode E2E content proof passed after transient catalog recovery
+**What:** Retried the read-only model catalog lookup and executed a valid OpenCode chat-completion probe through OmniRoute.
+**Why:** Complete the zero-fabrication requirement for the OpenCode bucket: HTTP 200 plus non-empty `/v1/chat/completions` content.
+**Findings:** The first catalog retry recovered immediately: `/v1/models` HTTP 200 in 34.1 ms with 94 `opencode/` models. Model `opencode/deepseek-v4-flash-free` returned HTTP 200 in 2310.5 ms with non-empty content `OK` (2 characters) and response model `deepseek-v4-flash-free`. Payload used a real user message and `max_tokens=60`. This is a genuine E2E content proof; the earlier timeout was transient.
+**Actions taken:** Performed read-only catalog retry; sent one valid non-streaming chat completion through `http://127.0.0.1:20128/v1/chat/completions`.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only; ledger update is next and requires a pre-write backup).
+**Verification:** HTTP 200 + non-empty content proof recorded; no service restart/termination. Next action is backup-first ledger synchronization and post-update acceptance.
+**Status:** ✅ Done — OpenCode bucket item has verified upstream, native-test, and E2E proof.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
