@@ -4203,4 +4203,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Actions taken:** Read the current worklog and prepared a capability/boundary response; no provider, credential, database, runtime, or external-account mutation.
 **Status:** 🔵 Info — awaiting user direction to begin a fresh independent re-audit or authorize specific account/browser actions.
 
+### [2026-08-18 12:55] #167 — Revise blocker-closure operating assumptions per user correction
+**What:** User clarified that card/payment constraints and paywalls should not be treated as stopping conditions for the sweep, that an existing Chrome profile is the intended browser context, and that CAPTCHA/bot-detection challenges must be skipped rather than bypassed.
+**Decision:** The next independent audit may pursue free account/key-generation flows visible through the existing authorized Chrome session and may ignore payment/card walls as unusable paths. It must never defeat CAPTCHA, anti-bot controls, MFA, or session security, and it must not invent account ownership or credentials. A provider is closable only after fresh authenticated evidence and non-empty chat proof; a free-flow blocker is not the same as a hard security blocker.
+**Impact:** This materially expands the independently actionable scope beyond the prior assumption: stale records, free signup/key flows, existing signed-in dashboard sessions, model drift, transient upstream failures, and local runtime state can be rechecked. Some providers may still require user identity, email/phone verification, OAuth consent, or a provider-side free tier that does not actually exist.
+**Actions taken:** Updated the operating interpretation only; no browser action, provider mutation, credential change, database write, or runtime restart.
+**Status:** 🔵 Info — revised rules accepted for the next sweep.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
