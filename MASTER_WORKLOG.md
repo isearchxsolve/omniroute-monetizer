@@ -4176,4 +4176,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Actions taken:** Recorded the start of the reconciliation; no production, database, provider, credential, or runtime changes were made.
 **Status:** 🔄 IN PROGRESS
 
+### [2026-08-18 12:45] #163 — Establish authoritative 295-provider inventory and current status counts
+**What:** Parsed the current provider ledger by property key and reconciled it with the static and gap evidence files.
+**Findings:** The live ledger contains 296 records. `services` is the sole non-provider/meta record (`deployed_code`, embedded local-services management, no registry entry, no executor, and no connection), leaving 295 actual provider slugs. The current ledger’s per-entry statuses sum to 295 after excluding `services`: LIVE_ACTIVE 26; EXTERNAL_ACCOUNT_REQUIRED 180; NOT_CHAT_COMPLETABLE 31; BLOCKED_WEB_SESSION 24; BLOCKED_LOCAL_RUNTIME 13; BLOCKED_AUTH_REQUIRED 7; BLOCKED_VALIDATION_UNSUPPORTED 5; BLOCKED_UPSTREAM_DOWN 3; BLOCKED_UNVERIFIED 2; and four one-off blockers (Cloudflare TLS, credits, forbidden, rate-limited) at one each.
+**Evidence hygiene:** `gap_analysis.json` is stale relative to the current ledger: it contains 300 merged slugs, including `auto` plus `alibaba-cn`, `kimi`, and `kimi-coding-apikey` absent from the current ledger. The `gemini` ledger object is keyed by `gemini` but lacks an internal `slug` field; the property key is used as its provider ID. Cached top-level `status_counts` also do not match the current per-entry statuses, so the final verdict will use the current provider records and explicitly disclose these discrepancies.
+**Actions taken:** Read-only JSON parsing and set/count comparison; no service, database, provider, credential, or runtime mutation.
+**Status:** ✅ Done — authoritative inventory established; exhaustive verdict drafting remains.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
