@@ -4566,4 +4566,9 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No secret was logged, no direct database write or OmniRoute restart occurred, and no blocked security or payment flow was bypassed.
 **Status:** ✅ Account/key → upstream → OmniRoute wiring → local E2E complete.
 
+### [2026-08-19 02:12] #224 — Scope narrowed to credential wiring pass
+**Decision:** Per user instruction, this goal now covers account/key acquisition where permitted and wiring usable keys into OmniRoute only. Upstream chat checks, local inference checks, model-quality checks, and T1–T20 certification are deferred to a separate verification pass.
+**Required disposition:** Existing and newly obtained usable credentials must be attached through supported OmniRoute REST and kept out of logs. Providers with no obtainable credential, CAPTCHA/bot wall, payment/card/paywall requirement, or missing user-owned account remain explicitly blocked; no placeholder key may be used.
+**Status:** 🔄 Wiring-only pass active; verification intentionally deferred.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
