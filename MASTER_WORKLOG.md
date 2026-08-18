@@ -4365,4 +4365,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No restart, kill, database write, placeholder credential, payment, CAPTCHA bypass, cookie/profile extraction, or secret logging.
 **Status:** ✅ `MONETIZER_READY` — certification complete; unresolved providers remain explicitly blocked by their recorded account, session, credit, entitlement, upstream, or non-chat constraints.
 
+### [2026-08-18 17:22] #193 — Correct unauthenticated external scan payload before continuation
+**What:** Inspected the existing read-only unconfigured-provider scanner before reusing it for the next sweep.
+**Finding:** Its unauthenticated chat confirmation used `max_tokens=1` and a generic `hi` prompt, which can produce false negatives and violates the repository’s valid-diagnostic-payload rule.
+**Fix:** Changed the scanner to use a real user prompt requesting `READY` and `max_tokens=60`. The scanner remains read-only with respect to providers: it performs unauthenticated HTTP probes and writes only a sanitized local scan artifact; it does not create accounts, keys, sessions, or OmniRoute connections.
+**Status:** 🔵 Ready — corrected scan is being run against the remaining external-account records.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->

@@ -154,7 +154,9 @@ def probe_one(slug: str, meta: dict) -> dict:
     # 2) if models open, confirm with a minimal unauthenticated chat completion
     if result.get("verdict") == "OPEN_NO_AUTH" and models_url:
         chat_url = re.sub(r"/models$", "/chat/completions", models_url)
-        payload = {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "hi"}], "max_tokens": 1}
+        # Use a valid diagnostic payload; tiny max_tokens values create false negatives
+        # on providers that reject undersized or malformed completion requests.
+        payload = {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Reply with exactly the word READY."}], "max_tokens": 60}
         try:
             r2 = requests.post(chat_url, json=payload, timeout=TIMEOUT, headers=HEADERS)
             chat_verdict = classify(r2.status_code, r2.text, chat_url)
