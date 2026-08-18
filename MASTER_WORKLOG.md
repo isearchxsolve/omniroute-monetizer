@@ -3707,6 +3707,18 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Next step:** confirm remaining-11 NEEDS_BROWSER ledger classifications are recorded; optional browser-rendered pass for the 5 JS-heavy SPAs (user-deferred).
 **Status:** ✅ grok-web closed (honest negative). chatgpt-web LIVE. 12/14 targets classified; 11 ledger confirmations remain.
 
+### [2026-08-18 09:43] #118 — Ledger confirmation pass: 5 of 14 target entries corrected to their real signup-flow classifications
+**What:** `scratch/check_remaining_11.py` compared all 14 NEEDS_BROWSER targets against the ledger. 9 already matched; 5 still carried generic pre-classification statuses from the upstream scan. Corrected via `scratch/fix_5_classifications.py` (backup-first: `state/all_296_providers_execution_ledger_backup_20260818_094255.json`), using the authoritative classifications from entry #116 (`state/signup_flow_classification_14.json` + `_pass2.json`):
+- **udio**: BLOCKED_BROWSER_SESSION → **BLOCKED_CAPTCHA** / DISCARD_CAPTCHA (hCaptcha on signup; captcha policy = discard).
+- **suno**: BLOCKED_BROWSER_SESSION → **BLOCKED_CAPTCHA** / DISCARD_CAPTCHA (hCaptcha + Turnstile markers).
+- **microsoft-designer-web**: BLOCKED_BROWSER_SESSION → **BLOCKED_AUTH_REQUIRED** / OAUTH_ONLY (Microsoft SSO only, no email signup path).
+- **muse-spark-web**: BLOCKED_BROWSER_SESSION → **BLOCKED_UNVERIFIED** / BOT_BLOCKED_403 (www.meta.ai 403 to plain probes, empty-HTML SPA, /api/graphql 405).
+- **blackbox**: BLOCKED_ENDPOINT_GONE → **BLOCKED_BROWSER_SESSION** / JS_HEAVY_SPA_DEFERRED (the 404 was the api.blackbox.ai probe; the web app at www.blackbox.ai is up — JS-heavy SPA, needs browser-rendered pass).
+**Verification:** re-ran check → **14/14 match expected**. JSON re-validated: 296 providers. status_counts recomputed: BLOCKED_CAPTCHA 2→4, BLOCKED_AUTH_REQUIRED 73→74, BLOCKED_UNVERIFIED 15→16, BLOCKED_BROWSER_SESSION 11→8, BLOCKED_ENDPOINT_GONE 29→28.
+**Final 14-target tally:** 1 LIVE (chatgpt-web), 1 honest negative (grok-web BLOCKED_CLOUDFLARE_ANTIBOT), 2 captcha-discarded (udio, suno), 1 OAuth-only (microsoft-designer-web), 1 bot-blocked/unverifiable (muse-spark-web), 1 OAuth-flow (zed-hosted), 2 email-signup-possible (adapta-web, veoaifree-web), 5 JS-heavy SPA deferred (blackbox, perplexity-web, t3-web, yuanbao-web, codebuddy-cn).
+**Files touched:** `state/all_296_providers_execution_ledger.json` (+ backup); `MASTER_WORKLOG.md` (this entry).
+**Status:** ✅ all 14 targets classified and ledger-confirmed. Optional browser-rendered pass for the 5 JS-heavy SPAs remains user-deferred.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
