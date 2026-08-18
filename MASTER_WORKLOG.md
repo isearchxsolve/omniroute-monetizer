@@ -4124,4 +4124,22 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** Provider remains honestly unharvested; no OmniRoute web-cookie connection was created or updated. Known browser blockers and the browser-safety boundary are recorded for `HANDOFF_RESULTS.md`.
 **Status:** ⚠️ BLOCKED — requires an authenticated provider session/API-key surface in an allowed browser context; no unsafe cookie inspection attempted.
 
+### [2026-08-18 22:40] #157 — Local runtime evaluation and external-account free-tier ranking
+**What:** Evaluated the 13 local-runtime candidates for install value and ranked external-account candidates using the repository’s static provider registry and current gap taxonomy.
+**Why:** Complete the handoff’s “evaluate before install” and “triage only, do not fabricate accounts” buckets without creating accounts, installing software, or spending credits.
+**Findings:** High-value local runtimes are absent: `ollama`, `lms`/LM Studio, `llama-server`/`llama-cli`, ComfyUI, Lemonade, vLLM, Xinference, Oobabooga, and related commands were not found. Docker is installed, but `docker-model` is not. No software was installed. The static evidence contains 80 external-account candidates with an advertised free tier. Highest-ranked evidence-backed candidates include Nous Research (50 RPM/500K TPM), Ant Ling (500K tokens/day), Puter (500+ models via free account), Requesty (~200 requests/day), FreeModel.dev ($300 signup credits), Arcee AI (free 262K-context model), Morph (250K credits/month), Scaleway (1M free tokens), Routeway (~200 RPD free models), and AgentRouter ($200 signup credits). These are triage rankings from registry notes, not current account or credential proofs.
+**Actions taken:** Read-only command availability check and static JSON ranking; no signup, key creation, payment, software installation, or external account mutation.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** Candidate count and ranking generated from `state/evidence/provider_evidence_static.json` intersected with the 183-provider external-account gap list; no credentials were written or claimed.
+**Status:** ⚠️ PARTIAL — ranked triage complete; actual signup/key acquisition is intentionally deferred pending explicit account ownership and authentication steps.
+
+### [2026-08-18 22:50] #158 — Claude web-cookie blocker linked in ledger
+**What:** Added worklog reference 156 to the Claude web provider ledger entry after a pre-write copy.
+**Why:** The browser recon attempted Claude’s web-session bucket item and found only an unauthenticated login surface in the allowed browser; the ledger must link that honest blocker.
+**Findings:** `claude-web` remains `BLOCKED_WEB_SESSION`, with prior upstream 403/auth evidence preserved and `worklog_entry=156` added. No cookie, login credential, or provider connection was created.
+**Actions taken:** Copied the current ledger to `pre-claude-web-update.json`, applied one targeted JSON patch, and did not alter status counts.
+**Files touched:** `state/all_296_providers_execution_ledger.json`, pre-write backup artifact, `MASTER_WORKLOG.md`.
+**Verification:** JSON validation and acceptance rerun are pending immediately; no service restart/termination or direct DB write.
+**Status:** 🔄 IN PROGRESS
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
