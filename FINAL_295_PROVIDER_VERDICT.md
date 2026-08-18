@@ -342,6 +342,7 @@ Fresh or current ledger evidence marks the provider active; direct proof details
 - llm7
 - lmarena
 - nara
+- nvidia
 - opencode
 - openrouter
 - perplexity-web
