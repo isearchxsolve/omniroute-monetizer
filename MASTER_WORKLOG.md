@@ -4628,4 +4628,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No financial data was transmitted, no payment was attempted, and no OmniRoute mutation or placeholder credential was used.
 **Status:** ⚠️ Account access complete; key creation blocked by billing/deposit requirement.
 
+### [2026-08-19 04:31] #234 — Cerebras signup excluded by reCAPTCHA gate
+**What:** Opened the Cerebras Inference signup page to inspect its available account paths.
+**Finding:** The page explicitly states it is protected by reCAPTCHA, and the email, Google, and GitHub signup controls were disabled in the visible state.
+**Disposition:** Per the governing rule, no signup or key creation was attempted and no workaround was used. Cerebras remains blocked for this pass.
+**Safety:** No CAPTCHA was solved or bypassed, no sensitive data was transmitted, and no OmniRoute mutation occurred.
+**Status:** ⚠️ Provider excluded at CAPTCHA/bot-detection boundary.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
