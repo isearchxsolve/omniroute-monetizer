@@ -3910,4 +3910,13 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** Syntax/behavior verification is pending the next targeted and full acceptance runs; no service or production state was modified.
 **Status:** 🔄 IN PROGRESS
 
+### [2026-08-18 18:50] #134 — Certification rerun: 20/20 PASS after T20 correction
+**What:** Ran `py_compile` on `acceptance_tests.py` and reran the full T1–T20 acceptance suite.
+**Why:** Verify the T20 logic change and ensure the service remained healthy after the read-only baseline and source-only patch.
+**Findings:** All 20 tests passed. T1–T12 core, T13–T15 latency, and T16–T20 automation checks are green. Reported timings included root median 98.9 ms, models 24.0 ms, and providers 8.0 ms. The suite printed `[PASS] MONETIZER_READY — All 20 tests passed (or skipped without failures)`.
+**Actions taken:** Compiled and executed `acceptance_tests.py` with the repository `.venv` Python.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only; prior source patch remains documented in #133).
+**Verification:** Exit completed with 20 passed, 0 failed; no service restart/termination and no provider/database/configuration writes occurred.
+**Status:** ✅ Done — current certification is green; provider remediation buckets remain to be executed/evidenced.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
