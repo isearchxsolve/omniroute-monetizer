@@ -4210,4 +4210,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Actions taken:** Updated the operating interpretation only; no browser action, provider mutation, credential change, database write, or runtime restart.
 **Status:** 🔵 Info — revised rules accepted for the next sweep.
 
+### [2026-08-18 12:57] #168 — Existing Chrome session unavailable; preserve browser constraint
+**What:** Began the fresh independent sweep and attempted to connect to the explicitly designated existing Chrome browser session.
+**Finding:** Chrome-control initialization returned the exact result `Browser is not available: chrome`. The required browser extension/session is not attached to this Codex environment.
+**Decision:** Per the Chrome-control procedure and the user’s explicit existing-Chrome instruction, do not substitute the in-app browser, a fresh profile, raw profile inspection, cookie extraction, or standalone Playwright. Dashboard/key-generation/free-signup work is pending Chrome availability.
+**Actions taken:** Recorded the browser boundary and continued with browser-independent local/upstream re-audit work.
+**Status:** ⚠️ PARTIAL — browser-dependent sweep awaits Settings → Computer use Chrome connection; non-browser sweep continues.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
