@@ -4169,4 +4169,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** No additional changes were made; no service or state mutation occurred.
 **Status:** ✅ Done — handoff ready.
 
+### [2026-08-18 12:38] #162 — Reconcile requested 295-provider final verdict
+**What:** Began a fresh, read-only reconciliation of the requested final verdict for all 295 providers against the current execution ledger and evidence taxonomy.
+**Why:** The repository ledger currently records 296 entries, so the final response must identify whether one entry is a non-provider route/meta entry or an actual count mismatch before assigning a verdict.
+**Plan:** Parse the ledger and evidence files, derive counts from provider records rather than cached summaries, classify every entry exactly once, and document any discrepancy without changing live service state or credentials.
+**Actions taken:** Recorded the start of the reconciliation; no production, database, provider, credential, or runtime changes were made.
+**Status:** 🔄 IN PROGRESS
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
