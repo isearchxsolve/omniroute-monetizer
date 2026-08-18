@@ -4421,4 +4421,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Actions:** Added the redacted upstream evidence to the Routeway ledger entry. No account, SSO identity, API key, payment, or OmniRoute connection was created.
 **Status:** ✅ Prepared — after authorized key creation, Routeway can be wired directly at the documented base URL and tested with the valid chat payload.
 
+### [2026-08-18 19:18] #202 — Guarded local-token refresh verified
+**What:** Re-ran the guarded CLI/runtime token harvester against approved local credential sources.
+**Findings:** Five candidates were found; OpenRouter, NVIDIA, and GitHub verified upstream HTTP 200; Anthropic and OpenAI returned HTTP 401. The harvester refreshed one OpenRouter API-key connection through the native management API and its post-injection provider test returned valid. NVIDIA was already active and skipped idempotently; GitHub is OAuth-managed and was not touched.
+**Safety:** The harvester remained within its guarded scope: no OAuth mutation, no placeholder credential, no secret logging, no database access, and no service restart. A pre-pass backup already exists.
+**Status:** ✅ Verified — OpenRouter refresh succeeded; remaining account-gated providers still need their own credentials.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
