@@ -4242,4 +4242,12 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Actions taken:** Inspected the existing Chrome session, xAI console, OpenRouter sign-in surface, environment-variable names only, local config-path existence, direct upstream model lists, direct upstream chat, and local curl E2E. No provider state was written.
 **Status:** ⚠️ PARTIAL — fresh evidence supports OpenRouter/NVIDIA/OpenCode remediation, but OmniRoute management/catalog endpoints are stalled and OpenRouter still needs a supported live-connection update.
 
+### [2026-08-18 13:20] #173 — Repair OpenRouter and close NVIDIA from fresh E2E proof
+**What:** Backed up the live state/configuration, restored the valid OpenRouter key through the supported management API, tested it natively, and reclassified OpenRouter and NVIDIA only after fresh upstream plus local E2E proof.
+**Backup:** Created `D:\omniroute-backups\20260818-1315-pre-fresh-openrouter` containing 1,597 files and approximately 819.13 MiB of state/config backup data before the provider update.
+**Findings:** OpenRouter management login HTTP 200; supported PUT for connection `49aa144d-9005-4968-a6cd-a36e8a2e947f` HTTP 200; native test HTTP 200 `valid=true` diagnosis `ok`; local `openrouter/nvidia/nemotron-3.5-lightning:free` HTTP 200 with non-empty content and OpenRouter attribution. NVIDIA direct upstream `nvidia/llama-3.1-nemotron-nano-vl-8b-v1` HTTP 200 with non-empty content; local `nvidia/nvidia/llama-3.1-nemotron-nano-vl-8b-v1` HTTP 200 with non-empty content and NVIDIA attribution. OpenRouter and NVIDIA now have ledger status `LIVE_ACTIVE`, classification `standard_chat_verified`, and worklog reference 172. OpenCode remains previously proven `LIVE_ACTIVE`.
+**Failures corrected honestly:** The first inline Python management command failed with `SyntaxError: unexpected character after line continuation character`; it performed no write. A first ledger verification one-liner failed with PowerShell `An empty pipe element is not allowed`; the corrected read-only verification succeeded.
+**Actions taken:** Copied the backup, used only supported OmniRoute REST endpoints for the OpenRouter update, ran fresh valid upstream/local probes, patched the ledger evidence after proof, and parsed the ledger. No restart, kill, direct database write, CAPTCHA bypass, or secret logging.
+**Status:** ✅ Done — two prior blocker labels overturned by fresh evidence; acceptance rerun and report synchronization remain.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
