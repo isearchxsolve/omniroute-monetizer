@@ -4583,4 +4583,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No OAuth connection was overwritten, no upstream/local inference test was run, no secret was logged, and no placeholder credential or direct database write was used.
 **Status:** ✅ GitHub Models credential wired; verification deferred.
 
+### [2026-08-19 02:34] #227 — Anthropic API connection created and credential wired
+**What:** Used the approved local Anthropic credential source and created a native OmniRoute API-key connection for `anthropic` through `POST /api/providers`. The key was held in process memory and was not printed or persisted in the worklog.
+**Result:** Provider creation returned HTTP 201. The connection was set inactive for the wiring-only pass so the separate verification run can validate it before promotion.
+**Safety:** No OAuth connection was overwritten, no upstream/local inference check was run, and no secret, placeholder, direct database write, or service restart was used.
+**Status:** ✅ Anthropic credential wired; verification deferred.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
