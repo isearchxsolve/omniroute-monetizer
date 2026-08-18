@@ -4462,4 +4462,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No secret was written; no billing action, CAPTCHA bypass, direct database write, or OmniRoute restart occurred.
 **Status:** ✅ Ledger/report synchronized; remaining provider sweep continues.
 
+### [2026-08-18 21:52] #209 — Ledger aggregate repair and T1–T20 re-certification
+**What:** Re-read the governing objective and worklog, audited the live 296-record ledger, and found stale `status_counts` metadata that did not match the individual provider records. Recomputed the aggregate metadata from the actual records and added the previously omitted `BLOCKED_ENDPOINT_GONE` row to the final verdict table.
+**Verification:** The ledger contains 296 records including `services`; excluding that metadata row leaves exactly 295 providers. Actual status totals now reconcile to 295: 27 `LIVE_ACTIVE`, 178 `EXTERNAL_ACCOUNT_REQUIRED`, 31 `NOT_CHAT_COMPLETABLE`, 24 `BLOCKED_WEB_SESSION`, 13 `BLOCKED_LOCAL_RUNTIME`, 6 `BLOCKED_AUTH_REQUIRED`, 4 `BLOCKED_VALIDATION_UNSUPPORTED`, 4 `BLOCKED_UPSTREAM_DOWN`, 3 `BLOCKED_CREDITS`, 2 `BLOCKED_UNVERIFIED`, and one each for `BLOCKED_FORBIDDEN`, `BLOCKED_RATE_LIMITED`, `AUTHENTICATED_CLOUDFLARE_TLS_BLOCKED`, and `BLOCKED_ENDPOINT_GONE`.
+**Certification:** `python acceptance_tests.py` passed T1–T20 with 20 passed and 0 failed. Runtime observed 3,106 models, 100% coverage, root latency 100.7 ms, models 25.0 ms, and providers 8.0 ms.
+**Safety:** No provider credential or account state changed; no secret was logged; no direct database write, payment, CAPTCHA bypass, or OmniRoute restart occurred.
+**Status:** ✅ Ledger metadata and final-verdict table reconciled; runtime certification remains `MONETIZER_READY`. The overall 295-provider mission remains active because the evidence-backed blocker classifications are not equivalent to every provider being live.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
