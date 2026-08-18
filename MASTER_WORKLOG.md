@@ -4635,4 +4635,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No CAPTCHA was solved or bypassed, no sensitive data was transmitted, and no OmniRoute mutation occurred.
 **Status:** ⚠️ Provider excluded at CAPTCHA/bot-detection boundary.
 
+### [2026-08-19 04:52] #235 — Chutes Google signup callback did not complete
+**What:** Opened Chutes, initiated Google signup, completed the visible Google consent, selected the available username `omniroute`, and submitted the account-creation flow.
+**Finding:** The page remained on `auth/complete-signin?returnTo=/models&intent=create` and the create-account controls disappeared without redirecting to an authenticated model or key-management surface.
+**Disposition:** No Chutes API key was exposed, so nothing was wired into OmniRoute. No cookie/profile extraction or workaround was attempted.
+**Safety:** No CAPTCHA bypass, payment, placeholder credential, direct database write, or OmniRoute mutation occurred.
+**Status:** ⚠️ Account callback/session incomplete; key issuance unavailable.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
