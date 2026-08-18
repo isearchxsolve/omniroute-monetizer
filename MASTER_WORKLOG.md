@@ -4621,4 +4621,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** The credential was not written to files or the worklog; no payment, CAPTCHA, direct database write, service restart, or verification request was performed.
 **Status:** ✅ Mistral account/key → OmniRoute wiring complete; verification deferred.
 
+### [2026-08-19 04:18] #233 — Together AI key creation blocked by billing gate
+**What:** Opened the authenticated Together AI project API Keys page and attempted the normal `Create key` flow.
+**Finding:** Together AI redirected the key-creation action to a billing/deposit form. The dashboard states the workspace is in read-only mode until an initial deposit is made. The form was dismissed with `Skip for now`; no billing address, payment method, or deposit was entered.
+**Disposition:** No new Together key was issued. The only existing key is a masked legacy key, so it was not extracted or reused in this wiring pass.
+**Safety:** No financial data was transmitted, no payment was attempted, and no OmniRoute mutation or placeholder credential was used.
+**Status:** ⚠️ Account access complete; key creation blocked by billing/deposit requirement.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
