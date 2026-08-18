@@ -4601,4 +4601,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** The credential was not written to files or the worklog; no upstream/local inference check, payment flow, CAPTCHA bypass, direct database write, or service restart occurred.
 **Status:** ✅ Fireworks account/key → OmniRoute wiring complete; verification deferred.
 
+### [2026-08-19 03:32] #230 — DeepInfra account reached; key issuance blocked by billing prerequisite
+**What:** Signed into DeepInfra through the existing Google SSO session and opened the Keys page.
+**Finding:** DeepInfra requires a billing address before it will issue API keys, and the dashboard states that funds must be added to enable inference. No billing address, payment data, or funds were entered.
+**Disposition:** No DeepInfra key was available to wire. The provider remains blocked for this wiring pass by the billing prerequisite.
+**Safety:** No sensitive financial data was transmitted, no payment flow was attempted, and no placeholder credential or OmniRoute mutation was used.
+**Status:** ⚠️ Account access complete; key issuance blocked by billing requirement.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
