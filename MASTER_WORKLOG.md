@@ -4388,4 +4388,18 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Finding:** `/dashboard` redirects to `/auth`; the page offers Continue with Google, Discord, GitHub, or email. It states that sign-in is required to access the dashboard and manage API keys. The free Starter tier remains advertised as 200 requests/day with a free $1 credit.
 **Status:** ⏸️ The next action would select a specific SSO provider and may create/associate a Routeway account, followed by persistent API-key creation. That exact browser-side account/key action requires action-time confirmation; no account or key was created in this step.
 
+### [2026-08-18 18:08] #197 — Ranked unmapped free-tier candidates with current provider documentation
+**What:** Reviewed the local registry for external providers without mapped upstream URLs, then consulted current provider documentation for the highest-ranked free/no-card candidates.
+**Findings:** AI21 documents a $10 trial credit that expires after three months and then requires billing information. Arcee’s Trinity Builders Program is an application/approval grant rather than immediate access. Featherless documents paid subscription or prepaid-credit API plans. Inference.net advertises a free starting tier with included gateway requests and a separate opening-credit plan. These distinctions prevent treating promotional or application-based access as immediately wireable.
+**Sources consulted:** AI21 pricing documentation (`docs.ai21.com/docs/usage-cost`); Arcee Trinity Builders Program (`arcee.ai/trinity-builders-program`); Featherless plans and quickstart (`featherless.ai/docs/plans`, `featherless.ai/docs/quickstart-guide`); Inference.net pricing (`inference.net/pricing`).
+**Actions:** No account creation, key creation, payment, personal-data transmission, browser session export, or OmniRoute mutation occurred. The ledger remains unchanged pending a concrete authenticated upstream proof.
+**Status:** 🔵 In progress — Inference.net and the remaining genuinely free candidates are the next characterization targets.
+
+### [2026-08-18 18:24] #198 — Prioritize genuinely free API candidates
+**What:** Checked current public documentation for the next unmapped candidates after the local registry ranking.
+**Findings:** Inference.net documents an OpenAI-compatible API with account/API-key creation and an advertised free starting tier. NavyAI advertises a free plan of 150K tokens/day and 20 RPM, but its terms state keys are tied to Discord authentication. Morph documents a free API tier with 250K credits and a dashboard API-key flow. SEA-LION documents a free API with a 10-RPM limit, but requires an API key. These are technically actionable free paths, but each still requires an external account and persistent credential creation.
+**Sources consulted:** Inference.net API quickstart and pricing (`docs.inference.net/api/api-quickstart`, `inference.net/pricing`); NavyAI homepage and terms (`api.navy`, `api.navy/terms`); Morph API guide (`morphllm.com/fast-apply-model`); SEA-LION API page and documentation (`sea-lion.ai/try-sea-lion`, `docs.sea-lion.ai/guides/inferencing/api`).
+**Decision:** Inference.net is the first candidate to attempt because its API is OpenAI-compatible and its documentation explicitly describes a free starting path. Account creation and API-key creation remain separate action-time confirmation points; no persistent credential has been created.
+**Status:** ⏸️ Ready for the exact account/key action confirmation.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
