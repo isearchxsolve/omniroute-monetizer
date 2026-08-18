@@ -4353,4 +4353,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Decision:** Continue with targeted browser/free-path characterization only where the provider exposes a practicable visible path. Do not create persistent API keys, enter personal data, bypass CAPTCHA/bot detection, or classify a web chat session as OmniRoute-live without a supported handoff and local valid chat E2E.
 **Status:** 🔵 In progress — queue grouped; targeted no-card candidates remain to be checked.
 
+### [2026-08-18 17:06] #191 — Free-path evidence synchronized into the ledger
+**What:** Inspected the visible Pollinations registration dashboard in the connected Chrome profile and reconciled the existing zero-auth probe artifact with the current ledger.
+**Findings:** Pollinations visibly advertises registration without a credit card and free Quest Pollen, but its only visible sign-in is GitHub and its API probe returned HTTP 401 requiring an API key. Hackclub’s model listing was reachable but its chat probe returned HTTP 401. UncloseAI’s upstream returned HTTP 502. These are account/auth or upstream gates, not live connections.
+**Actions:** Added redacted, non-secret evidence to the Pollinations, Hackclub, and UncloseAI ledger records. No signup, GitHub account transmission, API-key creation, payment, CAPTCHA handling, cookie extraction, or OmniRoute runtime mutation occurred.
+**Status:** ✅ Evidence synchronized — no provider was promoted without upstream plus local OmniRoute proof.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
