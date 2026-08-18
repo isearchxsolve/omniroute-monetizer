@@ -3739,6 +3739,16 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Files touched:** `scratch/launch_pure_chrome.py` (new); `MASTER_WORKLOG.md` (this entry).
 **Status:** ⏳ pure Chrome launching — user performs Google SSO in the opened tabs, then harvest + inject + e2e verify.
 
+### [2026-08-18 10:40] #121 — RCA: first "pure Chrome" was a BLANK profile (no Google identity) — fixed by copying the real-login profile and purifying it
+**User correction:** "you are still not opening up a pure chrome profile, it's just a blank profile — do an RCA."
+**Root cause (evidence-based, from disk):** the first `launch_pure_chrome.py` created a **brand-new empty** user-data-dir (`d:\omniroute-pure-chrome`). Disk proof it was blank, not pure: `Accounts` folder = **False**, `Google Profile Picture.png` = **False**, `account_info` in Local State = **empty**. A blank profile has **no Google account signed in**, so "Continue with Google" would force email + password → possibly OTP → possibly bot detection — exactly the friction the gate relaxation exists to avoid. **Blank ≠ pure. A blank profile defeats the purpose.**
+**Correct definition of "pure":** a copy of the user's **real Chrome profile** (Google already signed in → one-click SSO, no OTP) with the **impurities stripped** — all extensions (the slim profile's VPN extension is what tripped hCaptcha before) + heavy caches/models. **Pure = real identity + clean fingerprint.**
+**Real Chrome Google accounts (from `%LOCALAPPDATA%\Google\Chrome\User Data\Local State`):** Default=kunal.colab@gmail.com, **Profile 14=xxpertcomments@gmail.com** (the one with provider logins), Profile 16=niloydassana@gmail.com, Profile 17=isearch.xsolve@gmail.com.
+**Fix applied:** rebuilt `d:\omniroute-pure-chrome` from the existing slim profile `d:\omniroute-chrome-profile` (already a copy of Profile 14 with Google + provider logins, proven by the chatgpt/grok cookie harvest). Steps: (1) robocopy slim → pure (1,028 MB), (2) strip all extension dirs (`Extensions`, `Extension State/Rules/Scripts`, `Local Extension Settings`, `Extension Cookies*`, `Sync Extension Settings`, `extensions_crx_cache`, `Webstore Downloads`) + heavy caches (`OptGuideOnDeviceModel`, `OnDeviceHeadSuggestModel`, `GraphiteDawnCache`, `screen_ai`, `File System`, `GPUCache`, `Code Cache`, `Cache`, etc.) → 557 MB, (3) mark `Preferences` `exit_type=Normal`/`exited_cleanly=true`, (4) verify identity survived: `Accounts`=True, `Google Profile Picture`=True, `Sync Data`=True, Local State `Profile 14 → xxpertcomments@gmail.com`.
+**Launcher fixed:** `launch_pure_chrome.py` now passes `--profile-directory=Profile 14` (was defaulting to the blank `Default`). Relaunched → CDP up on 9223, Chrome/151.0.7922.138, 5 tabs open (meta.ai, blackbox.ai/login, t3.chat, perplexity.ai/onboarding, newtab). Verified via `scratch/verify_pure_chrome.py`.
+**Files touched:** `d:\omniroute-pure-chrome` (rebuilt pure); `scratch/launch_pure_chrome.py` (profile-directory fix + RCA docstring); `scratch/verify_pure_chrome.py` (new); `MASTER_WORKLOG.md` (this entry).
+**Status:** ⏳ pure Chrome (real Google identity, extensions stripped) is open — user performs one-click Google SSO in the tabs, then `scratch/harvest_pure_chrome.py` → inject → e2e verify.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
