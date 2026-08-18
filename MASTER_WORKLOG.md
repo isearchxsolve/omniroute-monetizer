@@ -4469,4 +4469,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No provider credential or account state changed; no secret was logged; no direct database write, payment, CAPTCHA bypass, or OmniRoute restart occurred.
 **Status:** ✅ Ledger metadata and final-verdict table reconciled; runtime certification remains `MONETIZER_READY`. The overall 295-provider mission remains active because the evidence-backed blocker classifications are not equivalent to every provider being live.
 
+### [2026-08-18 22:06] #210 — Z.AI free-model candidate evidence refresh
+**What:** Investigated the unmapped `zhipuai` provider as a prioritized legitimate free/no-card candidate using current official Z.AI documentation and a read-only upstream probe.
+**Evidence:** Official Z.AI documentation lists `GLM-4.7-Flash` and `GLM-4.5-Flash` as free models and documents the OpenAI-compatible chat API; the unauthenticated `GET https://open.bigmodel.cn/api/paas/v4/models` probe returned HTTP 401, confirming that an API credential is still required before verification. Sources consulted: official Z.AI model overview, pricing page, chat-completion reference, and quick-start documentation.
+**Disposition:** `zhipuai` remains `EXTERNAL_ACCOUNT_REQUIRED`; no signup or key creation was attempted in this pass because no authenticated Z.AI session was already available and the candidate’s free eligibility still requires account-level confirmation.
+**Safety:** Read-only documentation and endpoint probe only; no account, key, payment, CAPTCHA, browser-secret, or OmniRoute mutation occurred.
+**Status:** ✅ Candidate evidence refreshed; external-provider sweep continues.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
