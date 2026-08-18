@@ -4663,4 +4663,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** The token was not written to files or the worklog; no placeholder, payment, CAPTCHA bypass, direct database write, or service restart occurred.
 **Status:** ⚠️ Key obtained; native OmniRoute provider mapping rejected the connection.
 
+### [2026-08-19 05:52] #239 — AI21 account/key surface unavailable
+**What:** Opened the current AI21 Labs site and inspected its visible navigation and links for an account, developer console, or API-key surface.
+**Finding:** The site exposed product/company information and contact-sales routes but no visible login, signup, studio, or API-key route.
+**Disposition:** No AI21 credential could be obtained or wired in this pass. No guessed dashboard URL or sales/contact form was submitted.
+**Safety:** No sensitive data, payment information, or placeholder credential was transmitted; no OmniRoute mutation occurred.
+**Status:** ⚠️ Provider account/key surface unavailable.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
