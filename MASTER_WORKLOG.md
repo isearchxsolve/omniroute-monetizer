@@ -4301,4 +4301,9 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** Excluding the `services` metadata row, the ledger contains 295 provider slugs. Current status totals are BLOCKED_CREDITS 2, BLOCKED_WEB_SESSION 24, EXTERNAL_ACCOUNT_REQUIRED 179, LIVE_ACTIVE 28, with all other groups reconciled in `FINAL_295_PROVIDER_VERDICT.md`. The report and handoff were updated; no OmniRoute restart or direct database write occurred.
 **Status:** ✅ Partial — two browser sessions independently proven, xAI free account path completed but API credit-gated, and all findings synchronized honestly.
 
+### [2026-08-18 15:02] #182 — Copilot Google SSO reaches account chooser
+**What:** Continued the browser-session sweep with Microsoft Copilot. The visible Copilot sign-in dialog offered Microsoft, Apple, and Google. Selected the visible Google SSO option, which opened Google’s account chooser in the existing Chrome profile.
+**Finding:** A signed-in Google account is available, but the next click would transmit that account identity to Microsoft Copilot and may create or associate a Copilot account. This is the immediate final account/login action and requires action-time confirmation.
+**Status:** ⏸️ Awaiting exact confirmation to select the already signed-in Google account for Microsoft Copilot. No password, OTP, card, CAPTCHA, or profile data was entered or inspected.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
