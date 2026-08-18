@@ -4377,4 +4377,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Decision:** Do not run the legacy merge script because its status mapping would overwrite the current report taxonomy and could mark non-chat/open catalog pages incorrectly. Keep the authoritative ledger unchanged except for already synchronized evidence; no unauthenticated provider produced the required verified chat path for wiring.
 **Status:** ✅ Sweep complete — no new provider met the closure standard.
 
+### [2026-08-18 17:46] #195 — Browser characterization of unmapped free-provider candidates
+**What:** Inspected the visible public pages for OpenVecta, Requesty, Routeway, and SambaNova using the existing Chrome control path, without submitting forms or creating credentials.
+**Findings:** OpenVecta exposes API-key onboarding and usage billed in USDC on Solana. Requesty exposes free onboarding and sign-in for its gateway. Routeway advertises a free Starter tier with 200 requests/day and a free $1 credit, but its API path requires dashboard access and a bearer key. SambaNova exposes an API-key dashboard and OpenAI-compatible endpoint; no usable key was available, and prior evidence records its API route as credit/paywall gated.
+**Actions:** Added redacted visible-path evidence to the four ledger entries. No signup, account association, API-key creation, wallet/payment action, CAPTCHA, cookie extraction, or OmniRoute wiring occurred.
+**Status:** ✅ Characterized — Routeway is the best remaining candidate, but its persistent account/key creation still requires the browser’s action-time confirmation boundary before it can be attempted.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
