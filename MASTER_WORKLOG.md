@@ -4439,4 +4439,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** OmniRoute was not restarted; no direct database write, placeholder credential, payment, CAPTCHA bypass, or browser-secret extraction occurred.
 **Status:** ✅ `MONETIZER_READY` — certification remains green after the latest verified connection refresh.
 
+### [2026-08-18 20:34] #205 — Public website reachability sweep for unmapped external records
+**What:** Performed a read-only HTTP HEAD sweep against the registered public websites for 63 external-account providers that have no mapped OmniRoute upstream URL.
+**Findings:** 51 registered sites returned HTTP 200. The remaining 12 were directly classified as: Azure OpenAI, Empower, Gigachat, Llamagate, and TheBAI unreachable; Featherless HTTP 500; FenayAI HTTP 530; LaoZhang HTTP 502; Meta Llama HTTP 302; Navy HTTP 403; NScale HTTP 403; and Predibase HTTP 403. Website reachability does not prove API access, so no provider was promoted from this sweep.
+**Safety:** Public HEAD requests only; no forms, signups, credentials, keys, cookies, payments, CAPTCHA, or OmniRoute mutations.
+**Status:** ✅ Sweep complete — unmapped records now have direct public-site reachability evidence for follow-up classification.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
