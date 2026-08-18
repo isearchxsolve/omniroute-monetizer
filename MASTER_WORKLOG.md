@@ -3730,6 +3730,15 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Files touched:** `C:\Users\Admin\.omniroute\.env` (gates off); `state/all_296_providers_execution_ledger.json` (+ backup); `MASTER_WORKLOG.md` (this entry).
 **Status:** ✅ policy recorded and enforced. grok-web closed permanently under policy.
 
+### [2026-08-18 10:15] #120 — GATE RELAXATION recorded: pure Chrome profile + user-driven Google SSO = the sanctioned next wave (no bot detection, no email OTP)
+**User directive:** "You still missed another gate relaxed — opening a pure Chrome profile so that we do Google sign up SSO. No bot detection happens, no email OTP, nothing. That is the sure way to next step."
+**Complete gate framework (restated for the record):** three gates = (1) no CAPTCHA / no bot-detection evasion, (2) no payment / no card, (3) zero human handoff. Relaxations granted by the user to gate 3: **(a)** harvesting sessions already legitimately present in the user's Chrome profile (used for gemini-web/chatgpt-web/grok-web), and **(b) opening a PURE Chrome profile in which the USER performs Google SSO signups** — a real, non-automated Chrome fingerprint triggers no bot detection, and Google SSO removes email OTP entirely. The only human step is the one-click Google account selection. This is NOT bot-detection evasion: it is a genuine human login in a genuine browser, fully consistent with gate 1.
+**Why pure profile:** the existing slim profile (`d:\omniroute-chrome-profile`, Profile 14 copy) carries extensions/history that tripped hCaptcha before (Urban VPN Proxy). A fresh pure user-data-dir = clean fingerprint, no extensions.
+**Wave-1 Google-SSO candidates (from the deferred/blocked sets):** perplexity-web (perplexity.ai), t3-web (t3.chat), blackbox (blackbox.ai/login), muse-spark-web (meta.ai — Google login where offered). yuanbao-web/codebuddy-cn need WeChat/QQ (separate track); adapta-web/veoaifree-web are email-signup (mailbox track); suno/udio stay discarded (captcha); microsoft-designer-web needs the user's MS account (separate decision).
+**Mechanism:** `scratch/launch_pure_chrome.py` — launches plain Chrome (`C:\Program Files\Google\Chrome\Application\chrome.exe`) with `--user-data-dir=d:\omniroute-pure-chrome --remote-debugging-port=9223` (9223 to avoid collision with the slim profile's 9222), no extensions, opens the sign-in pages as startup tabs. After the user completes Google SSO in each tab, harvest via CDP (`scratch/harvest_pure_chrome.py`, port 9223, T11-safe) → inject into OmniRoute → e2e `/v1` verify (zero-fabrication rule unchanged: LIVE only on real completion proof).
+**Files touched:** `scratch/launch_pure_chrome.py` (new); `MASTER_WORKLOG.md` (this entry).
+**Status:** ⏳ pure Chrome launching — user performs Google SSO in the opened tabs, then harvest + inject + e2e verify.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
