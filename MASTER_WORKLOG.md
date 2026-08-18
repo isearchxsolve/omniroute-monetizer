@@ -4683,4 +4683,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** The credential was not echoed, logged, or written to files. No upstream/local inference request, payment action, CAPTCHA bypass, direct database write, or service restart occurred.
 **Status:** ✅ Jina credential → OmniRoute wiring complete; verification deferred.
 
+### [2026-08-19 06:46] #242 — Cohere trial key created and wired
+**What:** Signed into Cohere through the existing Google SSO session, completed the lightweight account onboarding, opened API Keys, created a free trial key named `omniroute-monetizer`, and updated the existing native OmniRoute `cohere` API-key connection.
+**Result:** OmniRoute update returned HTTP 200 for connection `4a1b2609-3d1f-41bc-8bd5-3e3e4baedaad`. The connection was set inactive pending the separate verification pass.
+**Safety:** The trial credential was held only in memory and not written to files or the worklog. No payment, CAPTCHA bypass, upstream/local verification request, direct database write, or service restart occurred.
+**Status:** ✅ Cohere account/key → OmniRoute wiring complete; verification deferred.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
