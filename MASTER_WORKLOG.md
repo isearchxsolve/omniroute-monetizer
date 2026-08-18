@@ -4402,4 +4402,17 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Decision:** Inference.net is the first candidate to attempt because its API is OpenAI-compatible and its documentation explicitly describes a free starting path. Account creation and API-key creation remain separate action-time confirmation points; no persistent credential has been created.
 **Status:** ⏸️ Ready for the exact account/key action confirmation.
 
+### [2026-08-18 18:41] #199 — Inference.net registration gate characterized
+**What:** Opened Inference.net’s public homepage and registration page in the existing Chrome profile without clicking any signup control.
+**Findings:** The homepage exposes `Get Started with Inference` to `/register/`. The registration page says `Create an account` and offers GitHub and Google sign-in, but both visible buttons were disabled in the current page state. The documentation still requires an account and API key before the OpenAI-compatible endpoint can be called.
+**Disposition:** No account identity was transmitted and no persistent key was created. This remains a viable free-path candidate, but the current browser state does not provide an executable signup action without further page/session change.
+**Status:** ⏸️ Characterized — no OmniRoute wiring yet.
+
+### [2026-08-18 18:49] #200 — Free-candidate evidence synchronized
+**What:** Added redacted documentation/browser evidence for Inference.net, Morph, NavyAI, and SEA-LION to the current ledger.
+**Findings:** Inference.net remains account/API-key gated despite its free starting tier; Morph has a documented 250K-credit dashboard path; NavyAI has a free 150K-token/day plan tied to Discord authentication; SEA-LION advertises free API access but requires a bearer key and enforces 10 RPM.
+**Verification:** Parsed the updated ledger successfully; provider count remains 295 and no status was promoted without an upstream plus local OmniRoute proof.
+**Safety:** No signup, SSO selection, key creation, payment, CAPTCHA, cookie extraction, or runtime mutation.
+**Status:** ✅ Evidence synchronized — next state-changing boundary remains external account/API-key creation.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
