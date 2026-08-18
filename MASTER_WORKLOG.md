@@ -4456,4 +4456,10 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** Used visible browser DOM only; no CAPTCHA or bot detection was bypassed; no cookies, profile files, passwords, OTPs, or secrets were extracted; no direct database write and no OmniRoute restart occurred.
 **Status:** ⚠️ `BLOCKED_CREDITS` — credential/catalog access is verified, but Routeway cannot complete chat inference without credits. Routeway was not promoted to `LIVE_ACTIVE` or wired as an active provider.
 
+### [2026-08-18 21:36] #208 — Routeway ledger and final-verdict reconciliation
+**What:** Synchronized `state/all_296_providers_execution_ledger.json` and `FINAL_295_PROVIDER_VERDICT.md` with the Routeway evidence from #207. Routeway moved from `EXTERNAL_ACCOUNT_REQUIRED` to `BLOCKED_CREDITS`; the exhaustive provider total remains 295 because the `services` record is excluded.
+**Verification:** Routeway is now listed exactly once under `BLOCKED_CREDITS`; the count changed from 2 to 3 and `EXTERNAL_ACCOUNT_REQUIRED` changed from 179 to 178. No provider was marked `LIVE_ACTIVE`.
+**Safety:** No secret was written; no billing action, CAPTCHA bypass, direct database write, or OmniRoute restart occurred.
+**Status:** ✅ Ledger/report synchronized; remaining provider sweep continues.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
