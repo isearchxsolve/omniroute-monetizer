@@ -27,11 +27,11 @@ Date: 2026-08-18 (Asia/Calcutta)
 | BLOCKED_ENDPOINT_GONE | 1 | 0.3% |
 | BLOCKED_LOCAL_RUNTIME | 13 | 4.4% |
 | BLOCKED_RATE_LIMITED | 1 | 0.3% |
-| BLOCKED_UNVERIFIED | 3 | 1.0% |
+| BLOCKED_UNVERIFIED | 4 | 1.4% |
 | BLOCKED_UPSTREAM_DOWN | 4 | 1.4% |
 | BLOCKED_VALIDATION_UNSUPPORTED | 4 | 1.4% |
 | BLOCKED_WEB_SESSION | 24 | 8.1% |
-| EXTERNAL_ACCOUNT_REQUIRED | 176 | 59.7% |
+| EXTERNAL_ACCOUNT_REQUIRED | 175 | 59.3% |
 | LIVE_ACTIVE | 27 | 9.2% |
 | NOT_CHAT_COMPLETABLE | 31 | 10.5% |
 
@@ -87,11 +87,13 @@ The upstream currently rate-limits or anti-abuses this source IP/session.
 
 - duckduckgo-web
 
-### BLOCKED_UNVERIFIED — 3
+### BLOCKED_UNVERIFIED — 4
 A prior failure or upstream boundary exists, but current evidence is not sufficient to certify the connection.
 
 - chipotle
 - theoldllm
+- orcarouter
+- api-airforce
 
 ### BLOCKED_UPSTREAM_DOWN — 4
 The upstream endpoint is unavailable, gone, or currently rejects the requested path/model.
@@ -137,7 +139,7 @@ The provider requires an authenticated browser session/cookie that was not avail
 - yuanbao-web
 - zenmux-free
 
-### EXTERNAL_ACCOUNT_REQUIRED — 176
+### EXTERNAL_ACCOUNT_REQUIRED — 175
 No usable connection is configured; user-owned account/key setup is required.
 
 - 360ai
@@ -146,7 +148,6 @@ No usable connection is configured; user-owned account/key setup is required.
 - aimlapi
 - ant-ling
 - anthropic
-- api-airforce
 - arcee-ai
 - azure-ai
 - azure-openai
@@ -401,4 +402,3 @@ Provider is a non-chat service (search, audio, image, video, or other non-LLM pa
 The system is operational and the current sweep has already overturned stale blocker labels, but the all-provider monetizer objective is not complete. The current disposition remains MONETIZER_BLOCKED pending further fresh verification and resolution of the catalog/management stall.
 
 Source ledger: state/all_296_providers_execution_ledger.json
-- orcarouter

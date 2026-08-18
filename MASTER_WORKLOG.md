@@ -4552,4 +4552,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No secrets were logged, no payment or CAPTCHA action occurred, no direct database write or OmniRoute restart occurred, and the failed OrcaRouter route was disabled through supported REST.
 **Status:** ✅ Two provider account/key flows completed; one is credit-blocked and one is locally unverified. Remaining providers continue through the same account → key → upstream → OmniRoute → local-E2E sequence.
 
+### [2026-08-19 01:49] #222 — Api.Airforce account/key flow; free-model verification timeout
+**What:** Created the Api.Airforce account through the existing GitHub SSO session, completed the normal OAuth authorization, opened the Free dashboard, and retrieved the automatically created primary API key. The key was held only in memory and was not logged.
+**Verification:** Authenticated `GET https://api.airforce/v1/models` returned HTTP 200 with 648 models and identified `gemma3-270m:free`. A valid chat request using that model and `max_tokens=60` was submitted, but the provider did not return an HTTP response within the bounded verification timeout. The dashboard showed the request count incrementing under the 1,000/day free plan. No payment or card action was entered.
+**Disposition:** `api-airforce` is `BLOCKED_UNVERIFIED`: account/key and catalog access are verified, but a non-empty upstream chat response is not yet proven, so no OmniRoute connection or local E2E promotion was performed.
+**Safety:** No CAPTCHA or bot bypass, payment, direct database write, browser-secret extraction, placeholder credential, or OmniRoute restart occurred.
+**Status:** ⚠️ Account/key completed; upstream free-model completion timed out before the required proof.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
