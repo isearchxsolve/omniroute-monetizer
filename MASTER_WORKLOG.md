@@ -4042,4 +4042,13 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** External evidence matches the observed intermittent stall; the correct immediate mitigation is retry/defer, not direct DB surgery.
 **Status:** ⚠️ PARTIAL — catalog issue understood enough to avoid unsafe remediation; model mapping still needs current E2E evidence.
 
+### [2026-08-18 21:05] #148 — Current model probes: Gemini cooldown; NVIDIA E2E did not complete within probe window
+**What:** Attempted valid content probes for current Gemini and NVIDIA catalog models without changing provider/model configuration.
+**Why:** Establish current E2E evidence for the model-drift bucket after native tests and catalog recovery.
+**Findings:** `gemini/gemini-2.5-flash` returned HTTP 429 in 34.4 ms with `model_cooldown`, `reset_seconds=52`, and one credential cooling down; this is a cooldown state, not a model-name 404. The NVIDIA probe for `nvidia/deepseek-ai/deepseek-v4-flash-0731` produced no completed response in the 60-second Python probe window after printing `starting`; no success or failure body was captured, so it is not treated as E2E proof. Native NVIDIA remains `valid=true` and upstream model-list HTTP 200 from #146.
+**Actions taken:** Sent valid `max_tokens=60` chat probes; did not retry the cooling Gemini model or mutate model mappings.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** Zero-fabrication maintained: Gemini is not marked live from a cooldown response, NVIDIA is not marked E2E-live without content. Model-drift bucket remains unresolved; no restart/kill/DB write.
+**Status:** ⚠️ PARTIAL — current names are not safely remappable from this evidence.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
