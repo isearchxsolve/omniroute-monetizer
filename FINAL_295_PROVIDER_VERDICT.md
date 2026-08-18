@@ -31,8 +31,8 @@ Date: 2026-08-18 (Asia/Calcutta)
 | BLOCKED_UPSTREAM_DOWN | 4 | 1.4% |
 | BLOCKED_VALIDATION_UNSUPPORTED | 4 | 1.4% |
 | BLOCKED_WEB_SESSION | 24 | 8.1% |
-| EXTERNAL_ACCOUNT_REQUIRED | 175 | 59.3% |
-| LIVE_ACTIVE | 27 | 9.2% |
+| EXTERNAL_ACCOUNT_REQUIRED | 174 | 59.0% |
+| LIVE_ACTIVE | 28 | 9.5% |
 | NOT_CHAT_COMPLETABLE | 31 | 10.5% |
 
 The groups below are exhaustive: every one of the 295 actual provider slugs appears once, under its current ledger status.
@@ -139,7 +139,7 @@ The provider requires an authenticated browser session/cookie that was not avail
 - yuanbao-web
 - zenmux-free
 
-### EXTERNAL_ACCOUNT_REQUIRED — 175
+### EXTERNAL_ACCOUNT_REQUIRED — 174
 No usable connection is configured; user-owned account/key setup is required.
 
 - 360ai
@@ -156,7 +156,6 @@ No usable connection is configured; user-owned account/key setup is required.
 - baidu
 - bailian-coding-plan
 - baseten
-- bazaarlink
 - bedrock
 - black-forest-labs
 - blackbox

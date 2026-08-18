@@ -4559,4 +4559,11 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Safety:** No CAPTCHA or bot bypass, payment, direct database write, browser-secret extraction, placeholder credential, or OmniRoute restart occurred.
 **Status:** ⚠️ Account/key completed; upstream free-model completion timed out before the required proof.
 
+### [2026-08-19 02:05] #223 — BazaarLink account/key wired and locally verified
+**What:** Completed the documented BazaarLink agent registration flow, held the returned API key only in memory, and created the OmniRoute provider connection through supported management REST. No card, payment, CAPTCHA, or browser-profile secret extraction was used.
+**Verification:** Authenticated BazaarLink `GET /api/v1/models` returned HTTP 200 with 186 models. A valid upstream chat through the free route returned HTTP 200 with non-empty content. OmniRoute provider test returned HTTP 200 with `valid=true`; model synchronization returned HTTP 200 and the local catalog exposed BazaarLink models. A local OmniRoute chat using `bazaarlink/qwen3.8-max` returned HTTP 200 with a non-empty SSE response.
+**Disposition:** `bazaarlink` promoted from `EXTERNAL_ACCOUNT_REQUIRED` to `LIVE_ACTIVE`, connection `5d017578-c81f-4432-9152-c619200e6aeb` remains active, and the ledger/report counts were reconciled from 27 to 28 live providers and 175 to 174 external-account blockers.
+**Safety:** No secret was logged, no direct database write or OmniRoute restart occurred, and no blocked security or payment flow was bypassed.
+**Status:** ✅ Account/key → upstream → OmniRoute wiring → local E2E complete.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
