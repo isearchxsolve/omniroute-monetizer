@@ -3862,8 +3862,16 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** All required files were readable. No service or state was changed; next action is live process/API and acceptance baseline verification.
 **Status:** 🔄 IN PROGRESS
 
-<!-- END OF SESSION LOG — new entries are appended above this marker -->
+### [2026-08-18 18:12] #129 — Shallow live baseline: service up but intermittent API timeouts and VS Code gap
+**What:** Ran the live process/port check, sampled `/`, `/v1/models`, `/api/providers`, and executed `acceptance_tests.py`.
+**Why:** Establish current ground truth before attempting provider remediation; the handoff’s historical 20/20 result must not be assumed.
+**Findings:** Port 20128 is listening on `0.0.0.0` under existing Node PID 19912; the process was not restarted or terminated. Direct probes returned `/` HTTP 200 in 2672 ms, while `/v1/models` and `/api/providers` timed out after 10 seconds. The acceptance run reported 18/20: T1 failed with a 5-second root read timeout and T20 failed because VS Code is not configured; T2–T19 passed, including cached model/provider/performance checks and NVIDIA/OpenRouter checks. The inconsistency indicates intermittent endpoint/lock or cold-path behavior rather than a provider credential issue; it must be investigated before deeper edits.
+**Actions taken:** Performed read-only `Get-NetTCPConnection`, process inspection, HTTP probes, and the repository acceptance suite using `.venv` Python.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** No service, database, credential, or configuration state was modified. Failure output preserved: `/v1/models` and `/api/providers` timed out at 10s; acceptance summary was `Passed: 18`, `Failed: 2`, with T1/T20 failures.
+**Status:** ⚠️ Partial — baseline is not certification-ready.
 
+<!-- END OF SESSION LOG — new entries are appended above this marker -->
 
 
 
