@@ -3919,4 +3919,22 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** Exit completed with 20 passed, 0 failed; no service restart/termination and no provider/database/configuration writes occurred.
 **Status:** ✅ Done — current certification is green; provider remediation buckets remain to be executed/evidenced.
 
+### [2026-08-18 19:00] #135 — Management/API and local-token source inventory
+**What:** Authenticated to the OmniRoute management API using the existing local password vault and inventoried target connections plus local credential-source availability without exposing values.
+**Why:** Determine which prioritized bucket items can be progressed autonomously and identify exact connection IDs for REST-only updates.
+**Findings:** Management login succeeded and `/api/providers` returned 62 connections. Target connection IDs were found for xai-oauth (4 OAuth rows; all inactive), deepseek (1 inactive apikey row), friendliai (1 inactive), huggingface (1 inactive), opencode (1 active), qoder (2 inactive), gemini (1 active), and nvidia (1 active). Local command names `gh`, `qodercli`, `qoder`, and `docker` are available; Ollama/LMS/llama-server are absent. Qoder CLI path and Zed/Codex config files exist. Matching environment variable names include `OPENCODE_API_KEY`, `OPENROUTER_API_KEY`, `NVIDIA_API_KEY`, and related names; values were not read into logs.
+**Actions taken:** Used the existing `OmniRouteAPI` client for a read-only authenticated provider listing; checked command/path existence and environment-variable names only.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** Login and provider inventory completed; no PUT/POST provider mutation, credential output, database write, process control, or service restart occurred. Next step is upstream verification of any available local keys before injection.
+**Status:** 🔄 IN PROGRESS
+
+### [2026-08-18 19:08] #136 — Existing CLI harvester reviewed; target coverage is incomplete
+**What:** Read the repository’s Tier-1 `cli_token_harvester.py` implementation before using it.
+**Why:** The handoff explicitly prioritizes local credential extraction, but the harvester must be checked for source coverage and upstream verification behavior before execution.
+**Findings:** The harvester verifies tokens with upstream HTTP 200 checks before any injection and uses REST `PUT /api/providers/{id}` plus provider tests. It covers environment variables for OpenRouter/NVIDIA/Cerebras/Cohere/Anthropic/OpenAI/DeepSeek/GitHub/Hugging Face, GitHub CLI, Codex config, and Zed settings, but has no OPENCODE or Qoder extraction path and writes `state/harvest_result.json` when run normally. It is therefore safe as a read-only verifier only if invoked in-memory or dry-run with an explicit backup for its artifact.
+**Actions taken:** Reviewed the script source and identified its supported verifier/source matrix; did not execute the state-writing main path.
+**Files touched:** `MASTER_WORKLOG.md` (this entry only).
+**Verification:** Source confirms zero-fabrication gate (`upstream_status == 200`) and no OAuth raw-key injection; next action is an in-memory local-source verification and provider-specific source inspection.
+**Status:** 🔄 IN PROGRESS
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
