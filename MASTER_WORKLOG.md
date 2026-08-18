@@ -3985,4 +3985,14 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Verification:** HTTP 200 + non-empty content proof recorded; no service restart/termination. Next action is backup-first ledger synchronization and post-update acceptance.
 **Status:** ✅ Done — OpenCode bucket item has verified upstream, native-test, and E2E proof.
 
+### [2026-08-18 20:05] #142 — Ledger updated for verified OpenCode provider
+**What:** Synchronized the provider ledger with the OpenCode proof after taking a dedicated pre-write ledger backup.
+**Why:** The ledger must reflect measured reality and not retain the prior `BLOCKED_AUTH_REQUIRED` classification after upstream, native, and E2E verification.
+**Findings:** The pre-write ledger copy exists under the pre-OpenCode backup directory. The OpenCode entry now uses the existing schema’s `LIVE_ACTIVE` status, records redacted verification facts and worklog entry 141, and retains `standard_chat_verified`; aggregate status counts changed from `BLOCKED_AUTH_REQUIRED=74` / `LIVE_ACTIVE=22` to 73 / 23.
+**Actions taken:** Copied the current ledger to a backup-specific filename, then applied a targeted JSON patch to `state/all_296_providers_execution_ledger.json`.
+**Fixes applied:** Removed the stale auth-blocker text from the OpenCode ledger entry and recorded the verified state without recording the API key.
+**Files touched:** `state/all_296_providers_execution_ledger.json`, its pre-write backup, `MASTER_WORKLOG.md`.
+**Verification:** JSON parse and aggregate-count verification are pending immediately; no OmniRoute restart or direct database write occurred.
+**Status:** 🔄 IN PROGRESS
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
