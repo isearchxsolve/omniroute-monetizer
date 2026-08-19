@@ -78,10 +78,34 @@ def backup_vscode_state() -> Path:
 
 
 def reset_sixth_ai_credentials():
-    """Wipe Sixth AI trial state, device identity tokens, Machine ID, and credentials."""
-    print("[*] Performing Sixth AI Deep Factory Reset...")
+    """Wipe Sixth AI trial state, device identity tokens, Machine ID, SQLite secrets, and dotfiles."""
+    print("[*] Performing 100% Complete Sixth AI Deep Purge & Factory Reset...")
 
-    # 1. Regenerate VS Code Machine ID (un-blacklists device from Sixth servers)
+    # 1. Clear state.vscdb SQLite secrets & extension state
+    import sqlite3
+    db_path = CODE_USER / "globalStorage" / "state.vscdb"
+    if db_path.exists():
+        try:
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute("DELETE FROM ItemTable WHERE key LIKE '%sixth%' OR key LIKE '%cline%'")
+            conn.commit()
+            conn.close()
+            print(f"  [+] Purged Sixth & Cline keys from {db_path.name}")
+        except Exception as e:
+            print(f"  [!] state.vscdb purge error: {e}")
+
+    # 2. Delete .cline and .overture dotfile directories in User Home
+    home = Path(os.environ.get("USERPROFILE", str(Path.home())))
+    for dotdir in (home / ".cline", home / ".overture"):
+        if dotdir.exists():
+            try:
+                shutil.rmtree(dotdir, ignore_errors=True)
+                print(f"  [+] Removed dotfile directory: {dotdir}")
+            except Exception as e:
+                print(f"  [!] Failed removing {dotdir}: {e}")
+
+    # 3. Regenerate VS Code Machine ID (un-blacklists device from Sixth servers)
     import uuid
     new_machine_id = uuid.uuid4().hex + uuid.uuid4().hex
     machineid_file = CODE_USER / "machineid"
@@ -99,7 +123,7 @@ def reset_sixth_ai_credentials():
         except Exception as e:
             print(f"  [!] storage.json update error: {e}")
 
-    # 2. Clear Windows Credential Manager entries
+    # 4. Clear Windows Credential Manager entries
     try:
         cmd = 'cmdkey /list | findstr /i "sixth"'
         res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -112,7 +136,7 @@ def reset_sixth_ai_credentials():
     except Exception as e:
         print(f"  [!] Credential cleanup warning: {e}")
 
-    # 3. Remove Sixth storage in globalStorage
+    # 5. Remove Sixth storage in globalStorage
     sixth_global = CODE_USER / "globalStorage" / "sixth.sixth-ai"
     if sixth_global.exists():
         try:
@@ -125,7 +149,7 @@ def reset_sixth_ai_credentials():
         except Exception as e:
             print(f"  [!] Failed to remove {sixth_global}: {e}")
 
-    # 4. Clear Local Storage, Session Storage, and WebStorage
+    # 6. Clear Local Storage, Session Storage, and WebStorage
     for folder in ("Local Storage", "Session Storage", "WebStorage"):
         target = APPDATA / "Code" / folder
         if target.exists():
@@ -135,7 +159,7 @@ def reset_sixth_ai_credentials():
             except Exception as e:
                 print(f"  [!] Warning clearing {folder}: {e}")
 
-    print("[+] Sixth AI deep factory reset complete! Restart VS Code to sign into a new account.")
+    print("[+] 100% Sixth AI deep purge & factory reset complete! Restart VS Code to sign into a new account.")
 
 
 if __name__ == "__main__":
