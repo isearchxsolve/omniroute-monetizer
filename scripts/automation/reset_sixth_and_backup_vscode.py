@@ -98,7 +98,11 @@ def reset_sixth_ai_credentials():
     sixth_global = CODE_USER / "globalStorage" / "sixth.sixth-ai"
     if sixth_global.exists():
         try:
-            shutil.rmtree(sixth_global)
+            def force_remove_readonly(func, path, exc_info):
+                import stat
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+            shutil.rmtree(sixth_global, onerror=force_remove_readonly)
             print(f"  [-] Removed globalStorage dir: {sixth_global}")
         except Exception as e:
             print(f"[!] Failed to remove {sixth_global}: {e}")
