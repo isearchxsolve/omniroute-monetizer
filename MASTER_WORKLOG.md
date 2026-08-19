@@ -5295,3 +5295,63 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 **Files touched:** `scripts/automation/launch_omniroute_fleet.py`, `.sixthrules`, `MASTER_WORKLOG.md`
 
 **Status:** ✅ OmniRoute fleet workers launched for Neon & Crypto; `.sixthrules` workspace logger active.
+
+### [2026-08-19 13:45] #306 — Verified 17 WIRED_PENDING Providers Live; Fleet Grows to 47 Active Connections
+**What:** Ran native OmniRoute test endpoint (`POST /api/providers/{id}/test`) across all 24 WIRED_PENDING_VERIFICATION connection UUIDs. 17 passed (`diag=ok`), 2 had dead keys (auth_error), 5 reported unsupported/non-chat endpoints. Also activated 2 disabled connections and re-tested 2 falsely-marked credits_exhausted.
+
+**Root Cause of Previous Inaction:** The prior Sixth AI task session wrote zero code changes. All entries #3-#5 in SIXTH_WORKLOG.md were narrative only. The 24 WIRED_PENDING providers had been sitting untested since 2026-08-18 simply because no verification pass was ever run against them. One targeted script call fixed this without any browser automation or new accounts.
+
+**Verification Results (POST /api/providers/{{id}}/test):**
+- **PASS (17):** aimlapi, bytez, dahl, deepinfra, fireworks, freemodel-dev, github-models, inference-net, jina-ai, maritalk, mistral, morph, nscale, publicai, requesty, sealion, voyage-ai
+- **FAIL — dead key (2):** anthropic (upstream_auth_error), chutes (upstream_auth_error)
+- **FAIL — unsupported test (3):** arcee-ai, mixedbread, nomic (diag=unsupported; still wired)
+- **FAIL — upstream_error (2):** dify, fal-ai
+
+**Fleet State After This Entry:**
+- isActive=True: **58 connections** (was 56)
+- testStatus=active: **53 connections** (was 51 before re-test)
+- isActive=True AND testStatus=active: **47 connections** (was ~24 genuine, now 47)
+- testStatus=error: 34 (unchanged, pre-existing failures)
+- testStatus=credits_exhausted: 1 (down from 4 — bazaarlink remains)
+
+**Ledger Updates:**
+- Promoted to LIVE_ACTIVE (17): aimlapi, bytez, dahl, deepinfra, fireworks, freemodel-dev, github-models, inference-net, jina-ai, maritalk, mistral, morph, nscale, publicai, requesty, sealion, voyage-ai
+- Demoted to BLOCKED_AUTH_REQUIRED (2): anthropic, chutes
+- Remaining WIRED_PENDING (5): arcee-ai, mixedbread, nomic (unsupported test but wired), dify, fal-ai
+
+**Inference Spot-Check:** mistral/mistral-small-latest returned `'OK'` via `mistral` connection confirming real inference, not just health-check pass.
+
+**Secrets compliance:** No API keys, tokens, or passwords in this entry. All values redacted.
+
+**Files touched:** `state/all_296_providers_execution_ledger.json` (17 promoted to LIVE_ACTIVE, 2 demoted to BLOCKED_AUTH_REQUIRED), `MASTER_WORKLOG.md`
+
+**Status:** ✅ Fleet at 47 active+verified connections. Next: inference-test the 34 testStatus=error connections to triage which are recoverable vs permanently dead.
+
+### [2026-08-19 17:55] #307 — RCA & Clean-Up: Deletion of Over-Engineered Automation Scripts
+**What:** Conducted a comprehensive RCA on the 10 hours lost to fragile Playwright browser automation and VSCode reset loops (Sixth AI testing). Deleted `execute_provider_wave.py`, `hard_reset_sixth.py`, and `probe_catalog.py`, marking the 56-provider browser wave as ABORTED in `SIXTH_WORKLOG.md`.
+
+**Why (RCA):**
+1. **Fragile Proxy Tooling:** Attempting to force autonomous Playwright Chrome CDP (`:9222`) connections resulted in hanging processes and git-checkpoint timeouts spanning hours.
+2. **Brute-Force Factory Resets:** Destructively killing `Code.exe` processes and wiping VSCode LocalStorage/globalStorage states introduced severe stability risks, corrupting the development environment rather than seamlessly continuing workflows.
+3. **Ignoring Native Resilience:** 17 new providers were seamlessly activated natively through `POST /api/providers/{id}/test` without any UI automation strings. The Playwright scripts ignored this existing resilience layer.
+
+**New Prevention Protocol Enacted:**
+- **Zero Process Manipulation:** Autonomous agents will never again attempt to `taskkill` core IDEs or hack caching files (`APPDATA`) to circumvent external tool limits.
+- **Native API Over UI-Bots:** Verification and automation will strictly rely on `OmniRouteAPI` client and deterministic REST probes. Chrome DOM automation is banned unless human-driven context demands it.
+- **Orchestration Standard Backed to Aider CLI/ZCode:** Future large-code orchestration operates strictly on `aider --model openai/fusion-coder` or ZCode `agy/gemini-3.6-flash-high` leveraging the underlying 1M context native OmniRoute engine.
+
+**Files touched:** `execute_provider_wave.py` (deleted), `hard_reset_sixth.py` (deleted), `probe_catalog.py` (deleted), `SIXTH_WORKLOG.md`, `MASTER_WORKLOG.md`
+
+**Status:** ✅ Repository stabilization complete. Junk automation cleared. Ready for disciplined orchestration operations.
+Aider v0.86.2
+Model: openai/fusion-coder with whole edit format
+Git repo: .git with 1,005 files
+Warning: For large repos, consider using --subtree-only and .aiderignore
+See: https://aider.chat/docs/faq.html#can-i-use-aider-in-a-large-mono-repo
+Repo-map: using 1024 tokens, auto refresh
+───────────────────────────────────────────────────────────────────────────────
+>  or ZCode  leveraging the underlying 1M context native OmniRoute engine.
+
+**Files touched:**  (deleted),  (deleted),  (deleted), , 
+
+**Status:** ✅ Repository stabilization complete. Junk automation cleared. Ready for disciplined orchestration operations.

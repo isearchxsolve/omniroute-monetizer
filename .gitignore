@@ -48,3 +48,4 @@ scratch/MonkeyCode/
 
 # Windows reserved-name artifact from accidental redirect
 nul
+.aider*
