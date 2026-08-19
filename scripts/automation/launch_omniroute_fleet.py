@@ -134,7 +134,30 @@ def main() -> int:
             print(f"            Spec saved: {spec_path.name}")
             continue
 
-        print(f"  [+] Launched '{mission}' -> Worktree: {wt_dir}")
+        # Spawn child process for execution
+        wrapper_script = PROJECT_ROOT / "scratch" / "aider_session_wrapper.py"
+        env = dict(os.environ)
+        env["OPENAI_API_BASE"] = OMNIROUTE_BASE_URL
+        env["OPENAI_API_KEY"] = "sk-omniroute"
+
+        wrapper_spec_data = {
+            "slot": f"omni-{mission}",
+            "cmd": [
+                sys.executable, "-m", "pip", "--version"  # placeholder engine invocation spec
+            ],
+            "cwd": str(wt_dir),
+            "stdout_log": str(events_log),
+        }
+        wrapper_spec_path = LAUNCH_SPECS / f"spec_omni_{mission}_{run_id}.json"
+        wrapper_spec_path.write_text(json.dumps(wrapper_spec_data, indent=2), encoding="utf-8")
+
+        proc = subprocess.Popen(
+            [sys.executable, str(wrapper_script), str(wrapper_spec_path)],
+            env=env, cwd=str(wt_dir),
+            creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == "win32" else 0,
+        )
+
+        print(f"  [+] Spawned process PID {proc.pid} for '{mission}' -> Worktree: {wt_dir}")
         print(f"      Logs: {events_log.name}")
 
     return 0
