@@ -159,8 +159,11 @@ To prevent new agents from searching blindly across the codebase, use these exac
 - Zed Agent attaches `tools` schema with `tool_choice: "auto"` to all chat turns.
 - **Rule:** Never use models that reject `tool_choice: "auto"` (e.g. `llama-3.1-nemotron-nano-vl-8b-v1` which throws 400) as solitary heads in coding/agent cascades. Ensure `nvidia/nemotron-3-super-120b-a12b` or `nvidia/nemotron-nano-12b-v2-vl` are present to handle tool execution payloads.
 
-### VS Code Integration (`%APPDATA%/Code/User/settings.json`)
-- `github.copilot.chat.customEndpoints` configured for both TokenRouter and OmniRoute.
+### VS Code Integration (`%APPDATA%/Code/User/chatLanguageModels.json` & `settings.json`)
+- Custom Endpoint: `OmniRoute Monetizer` (`vendor: customendpoint`)
+- API Base URL: `http://localhost:20128/v1/chat/completions`
+- Populated model list: `frontier`, `Frontier Max`, `auto/pro-coding`, `auto/best-coding`, `fusion-coder`, `auto/pro-reasoning`, `auto/best-reasoning`, `auto/pro-chat`, `auto/best-chat`, `auto/free-chat`, `auto/asian-flagships`, `codex/gpt-5.6-sol`, `ainative/claude-sonnet-4-5`, `ainative/deepseek-r1`, `nvidia/nemotron-3-super-120b-a12b`.
+- Auto-configured via: `python -c "import client_config; client_config.configure_client_vscode()"`
 
 ### Codex CLI (`~/.codex/config.toml`)
 - Configured with OmniRoute base URL and verified model aliases.

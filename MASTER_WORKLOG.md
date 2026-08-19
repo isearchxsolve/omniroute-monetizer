@@ -5201,6 +5201,15 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 
 **Status:** ✅ ZCode client config automated & documented in AGENTS.md.
 
+### [2026-08-19 10:05] #300 — Added VS Code Auto-Configurator to client_config.py & Updated AGENTS.md
+**What:** Added `configure_client_vscode()` to `scripts/automation/client_config.py` to auto-configure VS Code (`%APPDATA%/Code/User/chatLanguageModels.json`) with OmniRoute custom endpoints and all 13 master combos + flagship models.
+1. **VS Code Integration:** Injected `OmniRoute Monetizer` (`vendor: customendpoint`) pointing to `http://localhost:20128/v1/chat/completions` with 15 master combos and models (`frontier`, `Frontier Max`, `auto/pro-coding`, `auto/best-coding`, `fusion-coder`, `auto/pro-reasoning`, `auto/best-reasoning`, `auto/pro-chat`, `auto/best-chat`, `auto/free-chat`, `auto/asian-flagships`, `codex/gpt-5.6-sol`, `ainative/claude-sonnet-4-5`, `ainative/deepseek-r1`, `nvidia/nemotron-3-super-120b-a12b`).
+2. **AGENTS.md Standards:** Updated *VS Code Integration* in `AGENTS.md` with auto-configuration command and schema details.
+
+**Files touched:** `scripts/automation/client_config.py`, `AGENTS.md`, `MASTER_WORKLOG.md`
+
+**Status:** ✅ VS Code client config automated & documented in AGENTS.md.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 ### [2026-08-19 02:21] #283 � Start processing 295 providers for credential wiring
 **What:** Begin systematic processing of all 295 providers to acquire credentials and wire them into OmniRoute
