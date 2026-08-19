@@ -5192,6 +5192,15 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 
 **Status:** ✅ 2,586 verified frontier models exported; 13/13 master healthy combos updated & verified; AGENTS.md updated with Master Scripts Directory.
 
+### [2026-08-19 09:50] #299 — Added ZCode Client Configurator to client_config.py & Updated AGENTS.md Standards
+**What:** Added `configure_client_zcode()` to `scripts/automation/client_config.py` to auto-configure ZCode (`C:/Users/Admin/.zcode/v2/config.json`) with OmniRoute custom provider and all 13 master combos + flagship models.
+1. **ZCode Integration:** Configured `custom:omniroute` provider pointing to `http://localhost:20128/v1` with models `frontier`, `auto/pro-coding`, `auto/best-coding`, `fusion-coder`, `auto/pro-reasoning`, `auto/pro-chat`, `auto/best-chat`, `auto/free-chat`, `auto/asian-flagships`, `codex/gpt-5.6-sol`, `ainative/claude-sonnet-4-5`, `ainative/deepseek-r1`, `nvidia/nemotron-3-super-120b-a12b`.
+2. **AGENTS.md Updated:** Replaced Zed client focus with ZCode Client integration standards under *IDE & Client Integration Standards* and updated command references in *Master Automation & Management Scripts Directory*.
+
+**Files touched:** `scripts/automation/client_config.py`, `AGENTS.md`, `MASTER_WORKLOG.md`
+
+**Status:** ✅ ZCode client config automated & documented in AGENTS.md.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 ### [2026-08-19 02:21] #283 � Start processing 295 providers for credential wiring
 **What:** Begin systematic processing of all 295 providers to acquire credentials and wire them into OmniRoute

@@ -19,161 +19,67 @@ def get_settings_path(base_path: str) -> Path:
         return Path(base_path).expanduser()
 
 
-def configure_client_zed():
+def configure_client_zcode():
     """
     [EXECUTABLE_IDEMPOTENT_CONFIG]
-    Auto-configures Zed with the validated OmniRoute API URL and complete Frontier + Free Model Catalog.
+    Auto-configures ZCode client (C:/Users/Admin/.zcode/v2/config.json) with OmniRoute custom provider and master combos.
     """
-    if platform.system() == "Windows":
-        appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
-        settings_path = Path(appdata) / "Zed" / "settings.json"
-    else:
-        settings_path = Path("~/.config/zed/settings.json").expanduser()
+    userprofile = os.environ.get("USERPROFILE", str(Path.home()))
+    config_path = Path(userprofile) / ".zcode" / "v2" / "config.json"
     
-    settings_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    settings = {}
-    if settings_path.exists():
-        try:
-            settings = json.loads(settings_path.read_text(encoding="utf-8"))
-        except Exception:
-            settings = {}
+    if not config_path.exists():
+        print(f"[-] ZCode config path {config_path} does not exist")
+        return False
 
-    capabilities_template = {
-        "tools": True,
-        "images": True,
-        "parallel_tool_calls": False,
-        "prompt_cache_key": False,
-        "chat_completions": True,
-        "interleaved_reasoning": False,
-        "max_tokens_parameter": False
-    }
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[-] Failed to read ZCode config {config_path}: {e}")
+        return False
 
-    available_models = [
-        # Unified Auto Routers & Cascades
-        {
-            "name": "frontier",
-            "display_name": "👑 [FREE FRONTIER] Sonnet 5 + GPT-Sol + Kimi K3 Cascade",
-            "max_tokens": 200000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 200000,
-            "capabilities": capabilities_template
-        },
-        {
-            "name": "auto/pro-coding",
-            "display_name": "⚡ [FREE PRO CODING] GPT-5.6 Sol + Sonnet 5 + Kimi K3",
-            "max_tokens": 200000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 200000,
-            "capabilities": capabilities_template
-        },
-        {
-            "name": "auto/free-chat",
-            "display_name": "🆓 [FREE] Auto Free Router (Zero Cost)",
-            "max_tokens": 128000,
-            "max_output_tokens": 8192,
-            "max_completion_tokens": 128000,
-            "capabilities": capabilities_template
-        },
-
-        # Top Frontier Models
-        {
-            "name": "claude-sonnet-5",
-            "display_name": "👑 [FREE] Claude Sonnet 5 (Anthropic Next-Gen)",
-            "max_tokens": 200000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 200000,
-            "capabilities": capabilities_template
-        },
-        {
-            "name": "gpt-5.6-sol",
-            "display_name": "👑 [FREE] GPT-5.6 Sol (Peak Coding ELO 1623)",
-            "max_tokens": 200000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 200000,
-            "capabilities": capabilities_template
-        },
-        {
-            "name": "kimi-k3",
-            "display_name": "👑 [FREE] Kimi K3 (200k Frontier ELO 1674)",
-            "max_tokens": 200000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 200000,
-            "capabilities": capabilities_template
-        },
-        {
-            "name": "qwen3.8-max-preview",
-            "display_name": "👑 [FREE] Qwen 3.8 Max Preview (Alibaba ELO 1671)",
-            "max_tokens": 128000,
-            "max_output_tokens": 16384,
-            "max_completion_tokens": 128000,
-            "capabilities": capabilities_template
-        },
-        {
-            "name": "glm-5.2",
-            "display_name": "👑 [FREE] GLM 5.2 Flagship (Zhipu ELO 1588)",
-            "max_tokens": 128000,
-            "max_output_tokens": 16384,
-            "max_completion_tokens": 128000,
-            "capabilities": capabilities_template
-        },
-        {
-            "name": "deepseek-v4-pro",
-            "display_name": "👑 [FREE] DeepSeek V4 Pro (Frontier Architecture)",
-            "max_tokens": 128000,
-            "max_output_tokens": 16384,
-            "max_completion_tokens": 128000,
-            "capabilities": capabilities_template
-        },
-        {
-            "name": "deepseek-ai/deepseek-r1",
-            "display_name": "👑 [FREE] DeepSeek R1 (Frontier Reasoning)",
-            "max_tokens": 128000,
-            "max_output_tokens": 16384,
-            "max_completion_tokens": 128000,
-            "capabilities": capabilities_template
-        },
-        {
-            "name": "nvidia/nemotron-3-ultra-550b-a55b",
-            "display_name": "👑 [FREE] Nemotron 3 Ultra 550B (NVIDIA MoE Giant)",
-            "max_tokens": 128000,
-            "max_output_tokens": 16384,
-            "max_completion_tokens": 128000,
-            "capabilities": capabilities_template
-        },
-        {
-            "name": "github/gpt-4o",
-            "display_name": "👑 [FREE] GPT-4o (GitHub Developer Free Tier)",
-            "max_tokens": 128000,
-            "max_output_tokens": 4096,
-            "max_completion_tokens": 128000,
-            "capabilities": capabilities_template
-        },
-        {
-            "name": "gemini-3.1-pro-preview",
-            "display_name": "👑 [FREE] Gemini 3.1 Pro (Google 2M Context)",
-            "max_tokens": 1000000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 1000000,
-            "capabilities": capabilities_template
-        }
+    master_models = [
+        ("frontier", "👑 [FREE FRONTIER] GPT-5.6 Sol + Sonnet 5 + Opus 4 + R1 Cascade", 1),
+        ("auto/pro-coding", "⚡ [FREE PRO CODING] GPT-5.6 Sol + Sonnet 5 + Kimi K3", 2),
+        ("auto/best-coding", "⚡ [FREE BEST CODING] GPT-5.6 Sol + Sonnet 5 + Codestral", 3),
+        ("fusion-coder", "⚡ [FREE FUSION CODER] GPT-5.6 Sol + Sonnet 5 + Kimi K3", 4),
+        ("auto/pro-reasoning", "🧠 [FREE PRO REASONING] GPT-5.6 Sol + DeepSeek R1 + Qwen 3.7 Max", 5),
+        ("auto/pro-chat", "💬 [FREE PRO CHAT] GPT-5.6 Sol + Sonnet 5 + Gemini 2.5 Pro", 6),
+        ("auto/best-chat", "💬 [FREE BEST CHAT] GPT-5.6 Sol + Sonnet 5 + Nemotron 120B", 7),
+        ("auto/free-chat", "🆓 [FREE CHAT ROUTER] GPT-5.6 Sol + Sonnet 5 + Groq 70B", 8),
+        ("auto/asian-flagships", "🌏 [FREE ASIAN FLAGSHIPS] DeepSeek R1 + Qwen 3.7 Max + GLM 5.2", 9),
+        ("codex/gpt-5.6-sol", "👑 [FREE] GPT-5.6 Sol (Peak Coding ELO 1623)", 10),
+        ("ainative/claude-sonnet-4-5", "👑 [FREE] Claude Sonnet 4.5 (Anthropic Flagship)", 11),
+        ("ainative/deepseek-r1", "🧠 [FREE] DeepSeek R1 (Frontier Reasoning)", 12),
+        ("nvidia/nemotron-3-super-120b-a12b", "⚡ [FREE] Nemotron 3 Super 120B (NVIDIA Low-Latency)", 13),
     ]
-    
-    # Set default agent model
-    settings.setdefault("agent", {})["default_model"] = {
-        "enable_thinking": False,
-        "provider": "OmniRoute",
-        "model": "frontier"
+
+    models_dict = {}
+    for name, display_name, priority in master_models:
+        models_dict[name] = {
+            "name": name,
+            "displayName": display_name,
+            "limit": {"context": 200000, "output": 32000},
+            "modalities": {"input": ["text"], "output": ["text"]},
+            "zcode": {"modified": False, "priority": priority},
+        }
+
+    omniroute_provider = {
+        "name": "OmniRoute Monetizer",
+        "kind": "openai",
+        "options": {
+            "apiKey": "sk-omniroute",
+            "baseURL": "http://localhost:20128/v1",
+            "apiKeyRequired": False,
+        },
+        "enabled": True,
+        "source": "custom",
+        "models": models_dict,
     }
 
-    lm = settings.setdefault("language_models", {}).setdefault("openai_compatible", {})
-    lm["OmniRoute"] = {
-        "api_url": "http://localhost:20128/v1",
-        "available_models": available_models
-    }
-    
-    settings_path.write_text(json.dumps(settings, indent=4, ensure_ascii=False), encoding="utf-8")
-    print(f"Zed configured successfully at {settings_path}")
+    data.setdefault("provider", {})["custom:omniroute"] = omniroute_provider
+    config_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"[+] ZCode configured successfully at {config_path}")
+    return True
 
 
 def configure_client_codex():

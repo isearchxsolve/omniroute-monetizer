@@ -129,11 +129,19 @@ To prevent new agents from searching blindly across the codebase, use these exac
 | **All-OAuth Re-Auth Orchestrator** | `scripts/automation/oauth_reauth_all.py` | `python scripts/automation/oauth_reauth_all.py` | `state/oauth_reauth_results.json` |
 | **Fleet Provider Connection Audit** | `scripts/automation/fleet_provider_audit.py` | `python scripts/automation/fleet_provider_audit.py` | `state/fleet_provider_audit.json` |
 | **CLI & System Token Harvester** | `scripts/automation/cli_token_harvester.py` | `python scripts/automation/cli_token_harvester.py` | Upstream verified token injection to OmniRoute API |
+| **IDE & Client Auto-Configurator** | `scripts/automation/client_config.py` | `python -c "import client_config; client_config.configure_client_zcode(); client_config.configure_client_codex()"` | Auto-configures ZCode, Codex, VSCode with OmniRoute base URL & models |
 | **Full Acceptance Test Suite (T1–T20)** | `acceptance_tests.py` | `python acceptance_tests.py` | `MONETIZER_READY` certification (20/20 PASS) |
 
 ---
 
 ## IDE & Client Integration Standards
+
+### ZCode Client (`%USERPROFILE%/.zcode/v2/config.json`)
+- Custom Provider: `custom:omniroute`
+- API Base URL: `http://localhost:20128/v1`
+- `apiKey`: `sk-omniroute` (`apiKeyRequired: false`)
+- Populated model list: `frontier`, `auto/pro-coding`, `auto/best-coding`, `fusion-coder`, `auto/pro-reasoning`, `auto/pro-chat`, `auto/best-chat`, `auto/free-chat`, `auto/asian-flagships`, `codex/gpt-5.6-sol`, `ainative/claude-sonnet-4-5`, `ainative/deepseek-r1`, `nvidia/nemotron-3-super-120b-a12b`.
+- Auto-configured via: `python -c "import client_config; client_config.configure_client_zcode()"`
 
 ### Zed Editor (`%APPDATA%/Zed/settings.json`)
 - `language_models.openai_compatible.OmniRoute.api_url: "http://localhost:20128/v1"`
