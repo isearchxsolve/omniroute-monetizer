@@ -78,10 +78,28 @@ def backup_vscode_state() -> Path:
 
 
 def reset_sixth_ai_credentials():
-    """Wipe Sixth AI trial state, device identity tokens, and credentials."""
-    print("[*] Performing Sixth AI Factory Reset...")
+    """Wipe Sixth AI trial state, device identity tokens, Machine ID, and credentials."""
+    print("[*] Performing Sixth AI Deep Factory Reset...")
 
-    # 1. Clear Windows Credential Manager entries
+    # 1. Regenerate VS Code Machine ID (un-blacklists device from Sixth servers)
+    import uuid
+    new_machine_id = uuid.uuid4().hex + uuid.uuid4().hex
+    machineid_file = CODE_USER / "machineid"
+    machineid_file.write_text(new_machine_id, encoding="utf-8")
+    print(f"  [+] Regenerated VS Code Machine ID: {new_machine_id[:16]}...")
+
+    storage_json = CODE_USER / "storage.json"
+    if storage_json.exists():
+        try:
+            data = json.loads(storage_json.read_text(encoding="utf-8"))
+            data["telemetry.machineId"] = new_machine_id
+            data["telemetry.devDeviceId"] = str(uuid.uuid4())
+            storage_json.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            print("  [+] Updated telemetry.machineId in storage.json")
+        except Exception as e:
+            print(f"  [!] storage.json update error: {e}")
+
+    # 2. Clear Windows Credential Manager entries
     try:
         cmd = 'cmdkey /list | findstr /i "sixth"'
         res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -92,9 +110,9 @@ def reset_sixth_ai_credentials():
                     subprocess.run(f'cmdkey /delete:"{target}"', shell=True, check=False)
                     print(f"  [-] Removed Windows Credential: {target}")
     except Exception as e:
-        print(f"[!] Credential cleanup warning: {e}")
+        print(f"  [!] Credential cleanup warning: {e}")
 
-    # 2. Remove Sixth storage in globalStorage
+    # 3. Remove Sixth storage in globalStorage
     sixth_global = CODE_USER / "globalStorage" / "sixth.sixth-ai"
     if sixth_global.exists():
         try:
@@ -105,33 +123,19 @@ def reset_sixth_ai_credentials():
             shutil.rmtree(sixth_global, onerror=force_remove_readonly)
             print(f"  [-] Removed globalStorage dir: {sixth_global}")
         except Exception as e:
-            print(f"[!] Failed to remove {sixth_global}: {e}")
+            print(f"  [!] Failed to remove {sixth_global}: {e}")
 
-    # 3. Clear Local Storage, Session Storage, and State files
-    for folder in ("Session Storage", "WebStorage"):
+    # 4. Clear Local Storage, Session Storage, and WebStorage
+    for folder in ("Local Storage", "Session Storage", "WebStorage"):
         target = APPDATA / "Code" / folder
         if target.exists():
             try:
-                def force_remove_readonly(func, path, exc_info):
-                    import stat
-                    os.chmod(path, stat.S_IWRITE)
-                    func(path)
-                shutil.rmtree(target, onerror=force_remove_readonly)
+                shutil.rmtree(target, ignore_errors=True)
                 print(f"  [-] Cleared VS Code {folder}")
             except Exception as e:
-                print(f"[!] Warning clearing {folder}: {e}")
+                print(f"  [!] Warning clearing {folder}: {e}")
 
-    # Remove specific LevelDB keys or leveldb files in Local Storage without deleting open log files
-    ls_leveldb = APPDATA / "Code" / "Local Storage" / "leveldb"
-    if ls_leveldb.exists():
-        for item in ls_leveldb.glob("*.ldb"):
-            try:
-                item.unlink()
-                print(f"  [-] Removed leveldb store: {item.name}")
-            except Exception:
-                pass
-
-    print("[+] Sixth AI factory reset complete! Restart VS Code to sign into a new account.")
+    print("[+] Sixth AI deep factory reset complete! Restart VS Code to sign into a new account.")
 
 
 if __name__ == "__main__":
