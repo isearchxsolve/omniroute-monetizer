@@ -9,6 +9,7 @@ Expected: ✅ MONETIZER_READY (all 20 pass) or ❌ MONETIZER_BLOCKED (any core f
 """
 
 import json
+import sys
 import requests
 import time
 from pathlib import Path

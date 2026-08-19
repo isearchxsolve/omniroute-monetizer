@@ -5228,3 +5228,14 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 - Service responding with HTTP 200
 - Ledger loaded successfully
 **Status:** ?? Info - Beginning provider processing workflow
+
+### [2026-08-19 10:25] #301 — Approved OmniRoute-to-Terra Takeover Execution Matrix & Logged Live Frontier Cascade Quota Finding
+**What:** Finalized and approved the OmniRoute-to-Terra Takeover Qualification Matrix (`docs/OMNIROUTE_TERRA_TAKEOVER_MATRIX.md`), updated session todo tracking, and recorded diagnostic findings from live `frontier` cascade quota failures.
+1. **Takeover Matrix Created:** `docs/OMNIROUTE_TERRA_TAKEOVER_MATRIX.md` defines 8 qualification stages (0: Snapshot -> 1: Protocol Battery -> 2: Canary -> 3: Historical Replay -> 4: 2-Worker -> 5: 4-Worker -> 6: Deep Dive -> 7: Certification).
+2. **Live Cascade Failure Diagnosis:** Investigated user-reported `frontier` failure (`reason=rate_limited status=403`). Diagnosed that `frontier` combo contained upstream models returning 402/403/404 (`groq` 404, `ainative` 402, `gemini` 404, `alibaba` 403 free quota exhausted) before reaching live heads (`nvidia/nemotron-3-super-120b-a12b`).
+3. **Current Direct Route:** User is actively pair-programming using `omniroute/agy/gemini-3.6-flash-high` via OmniRoute, confirming Antigravity OAuth route is healthy and fast.
+4. **Resolution Strategy:** Exclude quota-exhausted/trial models from primary combo heads and implement dedicated No-Plus qualification combos in Phase 3.
+
+**Files touched:** `docs/OMNIROUTE_TERRA_TAKEOVER_MATRIX.md`, `MASTER_WORKLOG.md`
+
+**Status:** ✅ Takeover Matrix documented; live combo quota failure diagnosed; current session running on `omniroute/agy/gemini-3.6-flash-high`.
