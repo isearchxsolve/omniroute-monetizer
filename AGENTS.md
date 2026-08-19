@@ -99,7 +99,15 @@ Before loading a heavy web browser, the automation checks local system credentia
 ### Cascade & Combo Schema (`PUT /api/combos/:id`)
 - Target model schema:
   `{"id": "<uuid>", "kind": "model", "model": "<model_name>", "providerId": "<provider_id>", "weight": 0}`
-- **Performance Invariant:** Place ultra-low latency, tool-call verified models (e.g. `nvidia/nemotron-3-super-120b-a12b`, `nvidia/nemotron-nano-12b-v2-vl`, ~2.1-3.5s TTFT) as **Priority #1** in all combos (`frontier`, `auto/best-coding`, `auto/best-reasoning`, `auto/best-chat`, `fusion-coder`, `kimi-coding`, `moonshotai/kimi-k3-free`) to eliminate client timeouts while cascading to higher-tier models.
+- **Model Power Hierarchy & Cascade Standard:**
+  All combos (`frontier`, `Frontier Max`, `auto/pro-coding`, `auto/best-coding`, `fusion-coder`, `kimi-coding`, `moonshotai/kimi-k3-free`, `auto/pro-reasoning`, `auto/best-reasoning`, `auto/pro-chat`, `auto/best-chat`, `auto/free-chat`) are ordered in strict capability hierarchy starting from the **#1 Most Powerful Model (`codex/gpt-5.6-sol`)** at the head of the priority chain (weight 100), cascading down:
+  1. `codex/gpt-5.6-sol` (#1 Flagship Power Model)
+  2. `ainative/claude-sonnet-4-5` / `ainative/claude-opus-4`
+  3. `ainative/deepseek-r1` / `alibaba/qwen3.7-max`
+  4. `kimi-coding/kimi-coding-default`
+  5. `nvidia/nemotron-3-super-120b-a12b` (Low-latency fallback & tool-call verified priority head)
+  6. Lighter / edge models (`aion`, `amazon-q`, `agnes`, `cohere`, `cloudflare-ai`)
+- **Note / Verified Script:** Re-ordering and cascade hot-reloads across all 13 combos are managed by `scripts/automation/apply_power_combos.py`. Execute `python scripts/automation/apply_power_combos.py` to re-apply the power hierarchy.
 
 ---
 

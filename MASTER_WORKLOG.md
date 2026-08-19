@@ -5167,6 +5167,16 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 
 **Status:** ✅ Rule 13 added to AGENTS.md and verified operational.
 
+### [2026-08-19 09:10] #297 — Re-Ordered All 13 Combos to Power Hierarchy (#1: codex/gpt-5.6-sol) & Added Reference Script Note in AGENTS.md
+**What:** Re-ordered all 13 OmniRoute combos to establish strict model capability hierarchy with **`codex/gpt-5.6-sol`** as the #1 most powerful model at the top of the priority cascade.
+1. **Script Implementation:** Built and executed `scripts/automation/apply_power_combos.py` which re-ordered all 13 combos (`frontier`, `Frontier Max`, `auto/pro-coding`, `auto/best-coding`, `fusion-coder`, `kimi-coding`, `moonshotai/kimi-k3-free`, `auto/pro-reasoning`, `auto/best-reasoning`, `auto/pro-chat`, `auto/best-chat`, `auto/free-chat`, `auto/asian-flagships`) placing `codex/gpt-5.6-sol` as Priority #1 model (weight 100).
+2. **Live Routing Verification:** Tested live completions against `frontier` and `auto/pro-coding` endpoints; both successfully routed directly to `gpt-5.6-sol` via provider `cx` (Codex) in 810ms and 1221ms.
+3. **AGENTS.md Documentation:** Added model power hierarchy and script reference note in `AGENTS.md` under Cascade & Combo Schema section.
+
+**Files touched:** `scripts/automation/apply_power_combos.py`, `AGENTS.md`, `MASTER_WORKLOG.md`
+
+**Status:** ✅ 13/13 combos re-ordered to power hierarchy with `codex/gpt-5.6-sol` at #1; verified via live API queries and documented in AGENTS.md.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 ### [2026-08-19 02:21] #283 � Start processing 295 providers for credential wiring
 **What:** Begin systematic processing of all 295 providers to acquire credentials and wire them into OmniRoute
