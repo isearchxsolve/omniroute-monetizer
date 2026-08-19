@@ -84,7 +84,7 @@ def main() -> int:
         http = res.get("http_status")
         body = res.get("result") or {}
         valid = bool(body.get("valid")) if isinstance(body, dict) else False
-        latency = body.get("latency") if isinstance(body, dict) else None
+        latency = (body.get("latencyMs") if body.get("latencyMs") is not None else body.get("latency")) if isinstance(body, dict) else None
         ok = http == 200 and valid
         if not ok:
             failed += 1

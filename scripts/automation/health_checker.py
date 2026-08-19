@@ -140,10 +140,12 @@ class ProviderHealthChecker:
         try:
             start = time.time()
             
-            # Call provider test endpoint
-            is_valid = self.api_client.test_connection(provider_id, timeout=self.timeout)
+            # Call provider test endpoint using OmniRouteAPI (which accepts cid positional arg)
+            res = self.api_client.test_connection(provider_id)
+            test_result = res.get("result") or {}
+            is_valid = res.get("http_status") == 200 and bool(test_result.get("valid"))
             
-            latency_ms = (time.time() - start) * 1000
+            latency_ms = test_result.get("latencyMs") or (time.time() - start) * 1000
             
             with self.lock:
                 if provider_id not in self.health_status:
@@ -168,6 +170,7 @@ class ProviderHealthChecker:
                 else:
                     # Health check failed
                     status.consecutive_failures += 1
+                    status.error_message = str(test_result.get("diagnosis") or test_result.get("error") or "invalid")
                     if status.consecutive_failures >= self.max_failures:
                         status.is_healthy = False
                         if provider_id not in self.stale_providers:

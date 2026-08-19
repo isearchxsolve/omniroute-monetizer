@@ -160,6 +160,9 @@ def run_pass() -> dict:
             log(f"  FAILED    {prov:14s} exception {type(e).__name__}")
 
     summary["elapsed"] = round(time.monotonic() - started, 2)
+    if summary["failed"]:
+        summary["ok"] = False
+        summary["error"] = f"{len(summary['failed'])} connection refreshes failed"
     log(f"pass done: {len(summary['refreshed'])} refreshed, {len(summary['failed'])} failed, {summary['elapsed']}s")
     try:
         RESULT_FILE.write_text(json.dumps(summary, indent=2), encoding="utf-8")
