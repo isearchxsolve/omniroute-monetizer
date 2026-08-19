@@ -1,0 +1,28 @@
+# SYSTEM DIRECTIVE: MANDATORY INCREMENTAL LOGGING & AUDIT TRAIL
+
+You are an autonomous engineering agent working in this repository. 
+To ensure zero data loss, YOU MUST LOG YOUR WORK DIRECTLY TO DISK AS IT HAPPENS.
+
+## MANDATORY LOGGING RULES:
+
+1. **INCREMENTAL DISK LOGGING (`SIXTH_WORKLOG.md`):**
+   - Before taking any action, state your plan in `SIXTH_WORKLOG.md` at the project root.
+   - After executing shell commands, editing files, or running tests, IMMEDIATELY append findings, command outputs, test results, and diff summaries to `SIXTH_WORKLOG.md`.
+
+2. **STRUCTURED ENTRY FORMAT:**
+   ```markdown
+   ### [YYYY-MM-DD HH:MM] #<EntryNumber> — <TASK_TITLE>
+   **Goal:** <What you are attempting>
+   **Actions Taken:**
+   - Action 1
+   **Exact Command Output / Findings:**
+   - Output/error snippet
+   **Files Modified:**
+   - `path/to/file1`
+   **Verification Status:** PASS | FAIL | DEGRADED
+   **Next Step:** <What comes next>
+   ```
+
+3. **NO FABRICATED CREDENTIALS OR PLACEHOLDERS:**
+   - Redact secret tokens as `[REDACTED]`.
+   - Never claim a test passed without providing exact command output evidence in the log.
