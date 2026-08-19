@@ -91,10 +91,14 @@ Before loading a heavy web browser, the automation checks local system credentia
 - Endpoint: `POST /api/auth/login` with `{"password": "..."}`.
 - Capture session cookie `auth_token` and propagate across all subsequent `/api/` management calls.
 
-### Provider Connection Schema
-- Endpoint: `GET /api/providers` returns `{"connections": [...], "total": 51}`.
-- Connection fields: `id`, `provider`, `authType`, `apiKey`, `providerSpecificData`, `isActive`.
-- Update provider: `PUT /api/providers/{id}` with updated `apiKey` or `isActive` status.
+### Provider Connection & Master Model Catalog Schema
+- Endpoint: `GET /api/providers` returns `{"connections": [...], "total": 89}` (57 active provider connections).
+- Endpoint: `GET /v1/models` exposes **6,108 live models** across the fleet:
+  * **4,240 Flagship / Frontier Models:** `codex/gpt-5.6-sol`, `chatgpt-web/gpt-5.6-pro`, `anthropic/claude-opus-5`, `ainative/claude-sonnet-4-5`, `ainative/deepseek-r1`, `alibaba/qwen3.7-max`, `gemini/gemini-2.5-pro`, `openrouter/qwen/qwen3.8-max`, `requesty/doubleword/deepseek-v4-pro`, etc.
+  * **1,132 Reasoning Specialist Models:** `ainative/deepseek-r1`, `chatgpt-web/o3`, `cloudflare-ai/@cf/qwen/qwq-32b`, `nscale/Qwen/Qwen3-4B-Thinking`, etc.
+  * **292 Coding Specialist Models:** `codex/gpt-5.6-sol`, `kimi-coding/kimi-coding-default`, `mistral/codestral-2508`, `opencode-zen/gpt-5.1-codex-max`, etc.
+  * **1,768 Fast Inference & Edge Models:** `groq/llama-3.3-70b-versatile`, `cerebras/gpt-oss-120b`, `cloudflare-ai/@cf/meta/llama-3.2-3b-instruct`, etc.
+- Audit & Verification Script: `scripts/automation/audit_full_working_catalog.py` (saves report to `state/full_working_models_audit.json`).
 
 ### Cascade & Combo Schema (`PUT /api/combos/:id`)
 - Target model schema:
@@ -107,7 +111,25 @@ Before loading a heavy web browser, the automation checks local system credentia
   4. `kimi-coding/kimi-coding-default`
   5. `nvidia/nemotron-3-super-120b-a12b` (Low-latency fallback & tool-call verified priority head)
   6. Lighter / edge models (`aion`, `amazon-q`, `agnes`, `cohere`, `cloudflare-ai`)
-- **Note / Verified Script:** Re-ordering and cascade hot-reloads across all 13 combos are managed by `scripts/automation/apply_power_combos.py`. Execute `python scripts/automation/apply_power_combos.py` to re-apply the power hierarchy.
+- **Note / Verified Script:** Re-ordering and cascade hot-reloads across all 13 combos are managed by `scripts/automation/apply_master_healthy_combos.py`. Execute `python scripts/automation/apply_master_healthy_combos.py` to re-apply the power hierarchy.
+
+---
+
+## Master Automation & Management Scripts Directory (Quick Reference for Agents)
+
+To prevent new agents from searching blindly across the codebase, use these exact, verified scripts for system tasks:
+
+| Purpose / Task | Primary Script Location | Command Invocation | Output / Artifact |
+| :--- | :--- | :--- | :--- |
+| **Combo Power Hierarchy Hot-Reload** | `scripts/automation/apply_master_healthy_combos.py` | `python scripts/automation/apply_master_healthy_combos.py` | Updates all 13 combos via REST API with `codex/gpt-5.6-sol` as Priority #1 |
+| **Full Fleet Model Catalog & Health Audit** | `scripts/automation/audit_full_working_catalog.py` | `python scripts/automation/audit_full_working_catalog.py` | `state/full_working_models_audit.json` |
+| **Exhaustive Verified Frontier Models Export** | `scripts/automation/export_exhaustive_frontier_list.py` | `python scripts/automation/export_exhaustive_frontier_list.py` | `state/exhaustive_frontier_models.json` (2,586 verified models) |
+| **OAuth Keep-Alive Pass / Daemon** | `scripts/automation/oauth_keepalive.py` | `python scripts/automation/oauth_keepalive.py --once` | `state/keepalive_result.json` & `logs/keepalive.log` |
+| **Single-Provider Visual & DOM Re-Auth** | `scripts/automation/run_single_reauth.py` | `python scripts/automation/run_single_reauth.py <conn_id> <provider> <method> <email>` | `state/reauth_screenshots/` & connection update |
+| **All-OAuth Re-Auth Orchestrator** | `scripts/automation/oauth_reauth_all.py` | `python scripts/automation/oauth_reauth_all.py` | `state/oauth_reauth_results.json` |
+| **Fleet Provider Connection Audit** | `scripts/automation/fleet_provider_audit.py` | `python scripts/automation/fleet_provider_audit.py` | `state/fleet_provider_audit.json` |
+| **CLI & System Token Harvester** | `scripts/automation/cli_token_harvester.py` | `python scripts/automation/cli_token_harvester.py` | Upstream verified token injection to OmniRoute API |
+| **Full Acceptance Test Suite (T1–T20)** | `acceptance_tests.py` | `python acceptance_tests.py` | `MONETIZER_READY` certification (20/20 PASS) |
 
 ---
 

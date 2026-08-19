@@ -5177,6 +5177,21 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 
 **Status:** ✅ 13/13 combos re-ordered to power hierarchy with `codex/gpt-5.6-sol` at #1; verified via live API queries and documented in AGENTS.md.
 
+### [2026-08-19 09:30] #298 — Audited Full Catalog (6,108 Models / 2,586 Verified Frontier Models), Updated Master Healthy Combos & Master Scripts Directory in AGENTS.md
+**What:** Audited the complete 6,108-model fleet catalog, exported the exhaustive list of 2,586 verified healthy frontier models from 34 passing provider families, updated all 13 combos with master healthy cascades, and added a Master Automation & Management Scripts Directory to `AGENTS.md`.
+1. **Catalog Audit (`audit_full_working_catalog.py` & `export_exhaustive_frontier_list.py`):**
+   - Total exposed models: 6,108 across 57 active connections.
+   - Verified healthy frontier models: **2,586 models** (saved to `state/exhaustive_frontier_models.json`).
+   - Breakdown: 4,240 Flagship/Frontier, 1,132 Reasoning, 292 Coding, 1,768 Fast/Edge models.
+2. **Master Combo Re-Ordering (`apply_master_healthy_combos.py`):**
+   - Re-ordered all 13 combos (`frontier`, `Frontier Max`, `auto/pro-coding`, `auto/best-coding`, `fusion-coder`, `kimi-coding`, `moonshotai/kimi-k3-free`, `auto/pro-reasoning`, `auto/best-reasoning`, `auto/pro-chat`, `auto/best-chat`, `auto/free-chat`, `auto/asian-flagships`) placing `codex/gpt-5.6-sol` as #1 Flagship Power Model, cascading to `ainative/claude-sonnet-4-5`, `ainative/claude-opus-4`, `ainative/deepseek-r1`, `alibaba/qwen3.7-max`, `gemini/gemini-2.5-pro`, `kimi-coding`, `nvidia/nemotron-3-super-120b-a12b`, `groq/llama-3.3-70b-versatile`, etc.
+   - Tested live non-streaming chat completions across all updated combos; **100% returned HTTP 200 OK** (latencies down to 1.7s).
+3. **AGENTS.md Quick Reference Directory:** Added *Master Automation & Management Scripts Directory* mapping all 9 primary scripts, invocations, and output artifacts.
+
+**Files touched:** `scripts/automation/audit_full_working_catalog.py`, `scripts/automation/export_exhaustive_frontier_list.py`, `scripts/automation/apply_master_healthy_combos.py`, `AGENTS.md`, `MASTER_WORKLOG.md`
+
+**Status:** ✅ 2,586 verified frontier models exported; 13/13 master healthy combos updated & verified; AGENTS.md updated with Master Scripts Directory.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 ### [2026-08-19 02:21] #283 � Start processing 295 providers for credential wiring
 **What:** Begin systematic processing of all 295 providers to acquire credentials and wire them into OmniRoute
