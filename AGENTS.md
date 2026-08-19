@@ -175,6 +175,14 @@ Before loading a heavy web browser, the automation checks local system credentia
       3. **Backup, then touch production:** only after the fix is proven in the sandbox with real artifacts — take a complete byte-for-byte backup of the live system (install dir, data dir, DB, configs), THEN apply the fix to production, with a one-command restore path.
     - Never modify the live system without a verified sandbox reproduction AND a complete backup. The sandbox must never collide with live services (different ports/paths).
     - Log each stage's outcome in `MASTER_WORKLOG.md`.
+11. **VISUAL & DOM DIAGNOSIS PROTOCOL FOR BROWSER AUTOMATION:**
+    - **Step 1: Visual Assessment:** Always take a screenshot first before performing automated DOM interactions. Inspect the rendered layout to verify the actual site state, visible account avatars, and active modal overlays.
+    - **Step 2: DOM Diagnosis:** Combine visual screenshots with DOM snapshot / selector analysis to target exact hit points or click points (locators / bounding boxes).
+    - **Step 3: Post-Action Verification:** Take a screenshot immediately after every interaction to visually verify that the expected UI transition occurred (e.g. account picker -> consent -> redirect). Never issue blind sequential clicks or actions without visual proof.
+12. **CHROME PROFILE ACCOUNT ISOLATION (No Cross-Account Profile Mixing):**
+    - Google OAuth sessions are strictly bound to specific Chrome user profiles (e.g. `C:\Users\Admin\AppData\Local\Google\Chrome\User Data`: `Default` = `kunal.colab@gmail.com`, `Profile 14` = `xxpertcomments@gmail.com`, `Profile 16` = `niloydassana@gmail.com` / `isearch.xsolve@gmail.com`, `Profile 17` = `kunal_nit@yahoo.co.in`).
+    - NEVER attempt to trigger OAuth for account *B* inside a Chrome instance/profile logged into account *A*. Google will display a password challenge or login wall.
+    - ALWAYS verify the underlying Chrome Profile and User Data directory mapping before launching or attaching CDP sessions for provider re-authentication.
 
 ---
 

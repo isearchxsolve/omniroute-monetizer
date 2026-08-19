@@ -5116,6 +5116,47 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 
 **Status:** ✅ Wave complete; ledger and live connections reconciled.
 
+### [2026-08-19 04:10] #293 — Maritalk & Public AI wired via Google SSO + API key; hcnsec & venice exact blockers recorded
+**What:** Conducted credential acquisition and connection wiring sweep for open browser tabs and 295-provider catalog.
+1. **Maritalk (maritaca.ai):** Completed Google SSO, reached `plataforma.maritaca.ai/chaves-de-api`, generated API key `omniroute_monetizer`, captured single-reveal key into memory, and wired to OmniRoute connection `3aa5fce3-505e-4b5f-ace3-c9e1927a61be` (`WIRED_PENDING_VERIFICATION`).
+2. **Public AI (platform.publicai.co):** Completed Google SSO, reached `platform.publicai.co/settings/api-keys`, generated API key `omniroute-monetizer-v3`, captured single-reveal key from API response into memory, and wired to OmniRoute connection `c33a43e1-d2a6-4ae8-af08-faf52e82456c` (`WIRED_PENDING_VERIFICATION`).
+3. **hcnsec (api.hcnsec.cn):** Reached `api.hcnsec.cn/keys`, created key `omniroute-monetizer`; dashboard masks key (sk-...****) without plaintext reveal modal; no key secret recorded per zero-placeholder rule.
+4. **Venice AI (venice.ai):** Reached `venice.ai/settings/api`; account has $0.00 spendable balance and API status inactive; invalid connection cleaned up.
+5. **Tab Pruning:** Cleaned up 7 open browser tabs to free system memory.
+
+**Reconciliation:**
+- Live OmniRoute connections: 89 (24 `WIRED_PENDING_VERIFICATION`, 28 `LIVE_ACTIVE`).
+- Ledger updated: `maritalk` & `publicai` moved to `WIRED_PENDING_VERIFICATION`; `hcnsec` & `venice` updated with exact technical blockers.
+- Status counts: 150 `EXTERNAL_ACCOUNT_REQUIRED`, 24 `WIRED_PENDING_VERIFICATION`, 28 `LIVE_ACTIVE`.
+
+**Safety:** No secrets logged or printed. No payment card entered. No CAPTCHA bypassed. OmniRoute service preserved without restart. Verification intentionally deferred per wiring-only pass.
+
+**Status:** ✅ Maritalk & Public AI wired; hcnsec & venice exact blockers recorded; ledger reconciled.
+
+### [2026-08-19 04:25] #294 — Verification suite executed: 20/20 PASS & fleet provider audit completed
+**What:** Executed full verification suite across acceptance test matrix and live OmniRoute provider connections.
+1. **Acceptance Test Suite (`acceptance_tests.py`):** **20/20 PASS — `[PASS] MONETIZER_READY — All 20 tests passed`**.
+   - T1–T12 Core: reachability, 6,038 models catalog, auth enforcement, flagships (`frontier`, `auto/pro-coding`, `auto/pro-reasoning`, `auto/pro-chat`), Zed integration, zero process restart, idempotency, zero secrets, local SQLite.
+   - T13–T15 Performance: Root latency 103.9ms median-of-3 (< 200ms), Models latency 27.0ms (< 1s), Providers latency 7.0ms (< 500ms).
+   - T16–T20 Automation: 100.0% provider coverage, OpenRouter validated, NVIDIA active, free-tier combo routable, VSCode custom endpoint configured.
+2. **Fleet Provider Audit (`fleet_provider_audit.py`):**
+   - Total connections: 89 across native management REST API.
+   - Valid tests: 51 active connections passing native test.
+   - Audit report generated: `state/fleet_provider_audit.json`.
+
+**Safety:** No secrets logged or printed. OmniRoute service preserved without restart. Zero DB hacking.
+
+**Status:** ✅ **`MONETIZER_READY`** — All 20 acceptance tests passed; fleet audit complete.
+
+### [2026-08-19 08:15] #295 — Codified Visual & DOM Diagnosis Protocol and Chrome Profile Isolation in AGENTS.md
+**What:** Updated `AGENTS.md` to incorporate two load-bearing engineering anti-patterns and operational rules:
+1. **Rule 11 (Visual & DOM Diagnosis Protocol):** Mandatory 3-step browser workflow: (1) Visual Assessment via screenshot before action, (2) DOM Diagnosis combining visual layout and locator analysis to target exact hit/click points, and (3) Post-Action Verification via screenshot after every interaction to confirm UI transition.
+2. **Rule 12 (Chrome Profile Account Isolation):** Google OAuth sessions are strictly bound to specific Chrome user profiles (`C:\Users\Admin\AppData\Local\Google\Chrome\User Data`: `Default` = `kunal.colab@gmail.com`, `Profile 14` = `xxpertcomments@gmail.com`, `Profile 16` = `niloydassana@gmail.com` / `isearch.xsolve@gmail.com`, `Profile 17` = `kunal_nit@yahoo.co.in`). Cross-account profile mixing is prohibited to prevent account chooser/login walls.
+
+**Files touched:** `AGENTS.md`, `MASTER_WORKLOG.md`
+
+**Status:** ✅ AGENTS.md updated with visual/DOM diagnosis protocol and Chrome profile mapping rules.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 ### [2026-08-19 02:21] #283 � Start processing 295 providers for credential wiring
 **What:** Begin systematic processing of all 295 providers to acquire credentials and wire them into OmniRoute
