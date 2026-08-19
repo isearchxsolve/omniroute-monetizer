@@ -5157,6 +5157,16 @@ claude-opus-4:100 > gpt-5.6-sol:96 > claude-sonnet-4-5:92 > deepseek-r1:88 > qwe
 
 **Status:** ✅ AGENTS.md updated with visual/DOM diagnosis protocol and Chrome profile mapping rules.
 
+### [2026-08-19 08:45] #296 — Verified Persistent Automated Hourly OAuth Keep-Alive Windows Service Added to AGENTS.md
+**What:** Verified and recorded Rule 13 in `AGENTS.md` for the persistent background OAuth keep-alive service.
+1. **Windows Service Setup:** Configured silent VBScript startup service `C:\Users\Admin\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\omniroute_oauth_keepalive_service.vbs` executing `python oauth_keepalive.py --interval 3600` continuously in 0-window background mode on Windows startup.
+2. **Hourly Execution:** Automatically runs every 1 hour (3600s), refreshing all 14 active OAuth provider connections (`antigravity`, `agy`, `codex`, `kilocode`, `kiro`, `grok-cli`, `kimi-coding`, `xai-oauth`, `amazon-q`, `clinepass`, `cline`) via OmniRoute's native REST endpoint `POST /api/providers/{id}/refresh`.
+3. **Verification:** Confirmed active process (`PID 7284`), 13/14 active OAuth connections refreshed in 11.34s.
+
+**Files touched:** `AGENTS.md`, `MASTER_WORKLOG.md`
+
+**Status:** ✅ Rule 13 added to AGENTS.md and verified operational.
+
 <!-- END OF SESSION LOG — new entries are appended above this marker -->
 ### [2026-08-19 02:21] #283 � Start processing 295 providers for credential wiring
 **What:** Begin systematic processing of all 295 providers to acquire credentials and wire them into OmniRoute
