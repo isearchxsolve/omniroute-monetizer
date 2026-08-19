@@ -107,15 +107,29 @@ def reset_sixth_ai_credentials():
         except Exception as e:
             print(f"[!] Failed to remove {sixth_global}: {e}")
 
-    # 3. Clear Local Storage and Session Storage (Webviews)
-    for folder in ("Local Storage", "Session Storage", "WebStorage"):
+    # 3. Clear Local Storage, Session Storage, and State files
+    for folder in ("Session Storage", "WebStorage"):
         target = APPDATA / "Code" / folder
         if target.exists():
             try:
-                shutil.rmtree(target)
+                def force_remove_readonly(func, path, exc_info):
+                    import stat
+                    os.chmod(path, stat.S_IWRITE)
+                    func(path)
+                shutil.rmtree(target, onerror=force_remove_readonly)
                 print(f"  [-] Cleared VS Code {folder}")
             except Exception as e:
                 print(f"[!] Warning clearing {folder}: {e}")
+
+    # Remove specific LevelDB keys or leveldb files in Local Storage without deleting open log files
+    ls_leveldb = APPDATA / "Code" / "Local Storage" / "leveldb"
+    if ls_leveldb.exists():
+        for item in ls_leveldb.glob("*.ldb"):
+            try:
+                item.unlink()
+                print(f"  [-] Removed leveldb store: {item.name}")
+            except Exception:
+                pass
 
     print("[+] Sixth AI factory reset complete! Restart VS Code to sign into a new account.")
 
