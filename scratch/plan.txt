@@ -1,0 +1,1 @@
+User correctly identified critical flaw: if Sixth AI crashes without writing to disk, the entire 2-3M token run is wasted. We must enforce aggressive micro-commits and disk writes.
