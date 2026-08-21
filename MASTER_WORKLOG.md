@@ -982,3 +982,71 @@ config change rather than a rewrite.**
   path, (3) mobile support is dead code, (4) no user-facing UI. Its own all-mocked E2E suite is
   why both fatal flaws shipped green.
 - **STATUS**: Audit #2 complete. Next: D:\ideation_to_prototype.
+
+
+### [2026-08-22 02:30] #1007 — DEEP AUDIT #3 of 4: D:\ideation_to_prototype (dual-layer: platform + output)
+
+- **Project identity**: Two products in one repo. (A) A Selenium QA Automation Suite: a
+  1,220-test WebDriver suite (VERIFIED: 1,229 collected via pytest --collect-only) against a
+  505-line Flask demo app (auth/messaging/navigation), with Page Object Model, data factories,
+  parallel execution, HTML/JUnit reports, screenshots-on-failure, a 5-run stability runner, and
+  CI. (B) idea-terminal-engine: a 1,282-line stdlib-only state-machine orchestrator
+  (RECEIVED->DISTILLED->BLUEPRINTED->PLANNED->BUILDING<->REPAIRING->QA_VERIFYING->RELEASED/FAILED).
+  Git history real; latest commit a66f948 = the same Aug-21 SandboxExecutor moat sweep.
+- **L1 BACKEND / ENGINE — the most intellectually rigorous orchestration of the series
+  (verified in orchestrator.py, runners.py, evidence_runner.py, verify/*)**:
+  - Fail-closed philosophy stated and enforced: illegal transitions halt, budget exhaustion ->
+    FAILED, unsupported claims reroute, unsafe model-supplied paths rejected (PurePosixPath jail,
+    rejects absolute + ..), command allowlist (python/py/node/npx/npm/pytest) with NO shell,
+    blocks -c/-e/--eval direct-code-execution flags, timeout-bounded, output capped at 20KB.
+  - TWO DISTINCT ERROR CLASSES never conflated (their General Rule 11): InferenceCallError
+    (network/429/malformed) vs VerificationFailureError (evidence-backed rejection). This is the
+    correct taxonomy the other three projects lack.
+  - BudgetTracker with per-task retry cap (5) + RateLimiter, SHARED across steps (a documented
+    past bug: fresh tracker per step made REPAIRING unbounded — now fixed).
+  - BEHOLDER verifier: LLM judges (command, exit_code, stdout, stderr) evidence; a documented
+    fix restored stdout to the verdict payload because dropping it caused infinite
+    BUILDING<->REPAIRING cycles (verifier blind-spot). Good root-cause hygiene.
+  - Release gates: RELEASE requires BOTH verification_gate + qa_gate; QA floor checks flow
+    coverage + substantive-test count with anti_triviality (refuses to pad with trivial tests —
+    shortfall recorded as tension, never gamed). Provider fallback chain OmniRoute->direct NIM
+    on 502/503/504/timeout.
+- **THE AUG-21 MOAT INJECTION — THE ONLY ONE OF THE THREE WIRED CORRECTLY**: the pytest gate in
+  _build_task uses the engine's OWN evidence_runner (allowlisted, workspace-jailed, no-shell),
+  NOT a host-native subprocess with a hardcoded wrong path. PROOF IT WORKS: latest selftest run
+  st-1787324511 reached state RELEASED (2026-08-21 15:02); the run before it st-1787324460
+  correctly FAILED with 'retry budget exhausted for task T1 (5)' — honest failure, correctly
+  recorded. Golden path demonstrably executes end-to-end.
+- **L1 QA / OUTPUT (the Selenium suite) — the ONLY real, executed, evidenced E2E suite of the
+  four projects**: 1,229 tests collected; stability_runs.json is HONEST — it records a run with
+  1,059 errors and a run with 1 failure ALONGSIDE the green runs (1220 passed). This is rare
+  integrity; the other projects only show green. Demo app under test is XSS-safe (html.escape),
+  uses werkzeug password hashing, and data-testid attributes throughout. CAVEAT: the 1,220 count
+  is parametrize-inflated (73 functions x heavy parametrize, some range(10) repeats) — technically
+  true, substantively padded; the engine's own anti-triviality gate would flag some of these.
+- **CRITICAL GAPS**:
+  - NO VISION LOOP anywhere. The engine verifies via command evidence + BEHOLDER reading
+    stdout/exit-codes, but NEVER renders or screenshots a UI. Output visual quality unverified.
+  - NO SANDBOX ISOLATION: evidence_runner runs host-native subprocess (allowlisted + jailed +
+    eval-blocked, but NOT Docker). Better than emergentsh, far weaker than ases_v3_1's containers.
+  - NO USER-FACING UI: it is a terminal/CLI engine. No product surface to audit (L1 frontend = 0).
+  - NO MULTI-STACK: Python/web only; no mobile story.
+  - NO BILLING / TENANCY: single-user engine.
+  - Demo app SECRET_KEY default 'change-me-in-production' (low stakes: it is a test target).
+  - Repo hygiene: garbage files ('[ 200 OK Standard JSON Response ]', 0-byte 'password',
+    sweepcheck/sweeptest txt), 217KB demo_app.db committed; 700KB neon_architect_v5_perf.py
+    monolith referenced by blueprint with a known SQL-injection at line 10483 (fix planned, not
+    verified here).
+- **SCORECARD (vs baseline, /10)**: L1 backend/engine 6 · L1 frontend 0 (CLI) · L1 own QA 8 ·
+  orchestration design 8 · sandbox isolation 4 · vision loop 0 · perfection loop 7 · E2E/QA 8
+  (best of series) · multi-stack 0 · auth/security 5 · billing 0 · repo discipline 4.
+- **VERDICT**: The most HONEST and the most QA-mature of the four — the only project with a real,
+  executed, evidenced Selenium E2E suite (stability runs including failures logged truthfully),
+  and the only one where the Aug-21 moat injection was wired correctly (proven by a RELEASED
+  selftest). Its fail-closed engine, two-class error taxonomy, and anti-triviality release gates
+  are the most intellectually rigorous orchestration in the series. But it is a QA harness +
+  terminal engine, not a product: no UI, no vision loop, no sandbox isolation, no multi-stack, no
+  billing/tenancy, and the smallest scope (1,282 lines). It proves the discipline; it does not
+  yet sell it.
+- **STATUS**: Audit #3 complete. Next: D:
+eon_unified.
