@@ -796,3 +796,94 @@ Requires directory access outside the Monetizer working tree. The Animator will 
 against a provider-pool abstraction (3 workers, retry-with-backoff on 5xx, no retry on 4xx,
 shot-level idempotency) so that credentialing any provider from the #1002 table later is a
 config change rather than a rewrite.**
+
+### [2026-08-22 00:29] #1004 — REWIRE 4 NO-CODE PROJECTS TO TOKENROUTER
+
+- **Action**: Modified `setup_continue_dev_4_projects.ps1` and `.bat` to route through TokenRouter instead of NVIDIA NIM.
+- **Details**: Replaced `https://integrate.api.nvidia.com/v1` with `https://api.tokenrouter.com/v1`. Injected the provided `sk-...` API keys for the 4 concurrent environments (OMEGA, Kandover, Project-3/DeepSeek, Project-4/Kimi).
+- **Status**: SUCCESS
+
+### [2026-08-22 01:15] #1005 — DEEP AUDIT #1 of 4: C:\god_ai\emergentsh (dual-layer: platform + output)
+
+- **Context**: User commissioned sequential deep audits of four vibe-coding platform projects
+  (emergentsh, ases_v3_1, ideation_to_prototype, neon_unified) against the SOTA baseline
+  established in-session: frontend token/component/state discipline, backend contract/primitive/
+  layering discipline, perfection loop, E2E/QA loop, multi-stack readiness, AI-specific elements
+  (vision loop, sandbox, memory). Each project audited at TWO layers: (L1) the platform as a
+  product, (L2) what the platform generates.
+- **Project identity**: Clone of emergent.sh. Next.js 14 (App Router, Tailwind 3.4, lucide,
+  zustand dep) + FastAPI (async SQLAlchemy, python-jose JWT, passlib bcrypt) + 8-agent pipeline
+  (Planner→Designer→Frontend→Backend→Integration→QA→SeleniumQA→DevOps) on NVIDIA NIM inference.
+  Core implementation ~2,200 lines across backend/agent_pipeline.py (610), backend/app/* and
+  frontend/src/app/* (2 pages). Worklog restored first per documentation rule (entries #1–#4 there).
+- **L1 FRONTEND (platform UI) — verified by reading workspace/page.tsx, page.tsx, globals.css, tailwind.config.js**:
+  - POSITIVE: real Tailwind token layer (primary/dark ramps, glow shadows, mesh gradients,
+    float/blob-spin/reveal-up keyframes), Outfit font, 3-pane workspace (agent activity / chat /
+    live preview iframe), genuine SSE EventSource wiring to /api/pipeline/stream (fake setInterval
+    timers were removed per their worklog #1), credit counter, ZIP export button, hydration-safe
+    timestamp guard (mounted state).
+  - GAPS: no semantic HSL token system (raw ramps only, dark-only, no theme switch); zero
+    component primitives (all inline JSX, no Button/Card/Dialog, no CVA variants); four-state
+    discipline absent on preview iframe and credit fetch (failure = console.error only); multiple
+    DEAD buttons with no handlers (Settings, Refresh, Open-in-tab, Copy URL, GitHub Sync);
+    a11y = title attributes only, no aria-labels, no focus-visible rings; no motion library;
+    no frontend tests of the platform itself; zustand/socket.io-client/axios installed but unused;
+    sidebar toggle broken below lg breakpoint (hidden lg:flex overrides state).
+- **L1 BACKEND (platform infra) — verified by reading app/core/auth.py, database.py, api/pipeline.py, api/auth.py**:
+  - POSITIVE: async SQLAlchemy session lifecycle with rollback, Postgres pool config, JWT+bcrypt
+    auth endpoints, SSE via asyncio.Queue, NIM_STRICT_MODE fail-loud, multi-stage Dockerfiles,
+    standalone Next output.
+  - CRITICAL GAPS: (1) SECRET_KEY falls back to hardcoded "your-secret-key-change-in-production"
+    → forgeable JWTs if env unset (P0). (2) USER_CREDITS=10 is a GLOBAL in-memory variable —
+    one shared pool for all users, no lock, lost on restart, not per-user: billing is theater.
+    (3) _JOBS/_JOB_QUEUES in-memory dicts → jobs vanish on restart, single-process only.
+    (4) ZERO authentication on /pipeline/run, /stream, /export, /jobs, /credits — anyone can burn
+    credits and download any job ZIP by guessing 12-char hex ids. (5) logout is a documented no-op;
+    7-day JWTs never invalidated. (6) no rate limiting, no CORS review, no migrations (create_all
+    only), no user-scoping of projects (no multi-tenancy at all).
+- **ORCHESTRATION LAYER — verified by reading agent_pipeline.py (610 lines) + sandbox_executor.py (50 lines)**:
+  - POSITIVE: genuine multi-agent chain; Designer emits validated JSON tokens (colors+typography
+    required, JSONDecodeError→retry); FrontendAgent "architectural moat" rejects output lacking
+    backdrop-blur/transition; QAAgent executes pytest via SandboxExecutor and raises into a
+    max-3 self-healing retry with error context re-fed to the model; ast.parse on .py artifacts.
+  - CRITICAL GAPS: (1) NO VISION LOOP — no rendering, no screenshots, no critic model; the "moat"
+    is a substring grep for "backdrop-blur". The platform is BLIND to its own output. (2) NO REAL
+    SANDBOX — SandboxExecutor runs pytest as a local subprocess on the host with full privileges,
+    60s timeout, no container, no resource limits; the file's own comment admits production needs
+    Docker. Untrusted AI-generated code executes unsandboxed = existential for this product class.
+    (3) JS "validation" is a keyword-presence regex (any prose containing "function" passes).
+    (4) Retry loop is not monotonic: no scorecard, no checkpointing, no regression guard.
+    (5) stream_run() — the path the UI actually uses — has NO retry loop at all; first error kills
+    the run. Self-healing exists only in the unused synchronous run(). (6) IntegrationAgent builds
+    Dockerfiles from frontend[:1000]/backend[:1000] — truncated context. (7) No contract between
+    generated frontend and backend (both generated independently from PLAN.md; API drift unverified).
+    (8) QA = generator grading own homework; no independent critic. (9) No design grounding/research
+    step. (10) No model routing (single NIM endpoint, fixed temps). (11) No memory/iteration: every
+    run starts from scratch despite UI promising "iterate with more instructions".
+- **L2 OUTPUT (what it generates)**: PLAN.md, design_tokens.json, single-file frontend/App.tsx,
+  single-file backend/main.py, docker-compose, .env.example, Dockerfiles, AI-written tests, CI yaml,
+  checklist. GAPS: single-file front/back (no component arch, no routes/services/repos layering),
+  no migrations, no auth/payments primitives guaranteed, web-only (no mobile story wired despite a
+  612KB neon_architect_v4_7_mobile_env.py monolith sitting at root), no E2E proof of generated apps.
+  POSITIVE: ZIP export (no vendor lock-in) + credit gating exist as real business-vision elements.
+- **PLATFORM'S OWN TEST SUITE**: 87 tests / 7 files; last recorded run 8 failed, 68 passed.
+  Failures are "moat correctly rejecting mocks" per their worklog #4, but a red suite is a red
+  suite — acceptance discipline requires green-or-skipped. Tests are overwhelmingly static
+  file-content assertions (grep on source), not behavioral. No E2E test of the platform itself.
+- **REPO HYGIENE**: garbage root files from shell accidents (-p, a, are, failures, fixing, test,
+  Engineer, Software — all 0 bytes; PLAN.md.tmp.mdx variants with sentence-length filenames),
+  96MB emergentsh.zip in tree, three coexisting generations of agent code (src/agents/,
+  src/core/agents/ with .bak files bearing absurd numeric suffixes, backend/agent_pipeline.py),
+  duplicate nim_client.py in two locations.
+- **SCORECARD (vs baseline, /10)**: FE tokens 6 · components 2 · four-states 3 · a11y 2 · motion 4 ·
+  BE contract 3 · data layer 4 · auth/security 3 · layering 5 · perfection loop 4 · vision loop 0 ·
+  E2E/QA 2 · sandbox isolation 1 · multi-stack 1 · repo discipline 2.
+- **VERDICT**: A prototype with unusually correct architectural INSTINCTS — it named nearly every
+  right element (multi-agent chain, SSE, design tokens, QA execution loop, strict mode, export,
+  credits) — but implements almost none to production depth. Two existential gaps define it:
+  (1) the platform is blind (no vision loop; grep is not perception), (2) the platform is unsafe
+  (host-subprocess execution of untrusted generated code). Everything else is incremental; those
+  two are the difference between a demo and a product. Secondary systemic risk: the streaming path
+  (the only path the UI uses) lacks the retry loop entirely, so the flagship self-healing feature
+  is dead code in practice.
+- **STATUS**: Audit #1 complete. Next: C:\god_ai\ases_v3_1.
