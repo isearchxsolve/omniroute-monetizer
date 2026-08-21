@@ -1050,3 +1050,118 @@ config change rather than a rewrite.**
   yet sell it.
 - **STATUS**: Audit #3 complete. Next: D:
 eon_unified.
+
+---
+
+### [2026-08-22 03:40] #1008 — AUDIT #4/4: D:\neon_unified — Neon Architect v5.1.0 (dual-layer dissection, last drop of blood)
+
+- **GOAL**: Fourth and final project in the user's four-project audit series. neon_unified is
+  itself a vibe coding platform (Neon Architect v5.1.0 — merged from neon_architect_v5_fixed,
+  generation_core, sdlc_wrapper(_full), oiioii_engineering, qa_browser, qa_self_heal). Audited
+  at BOTH layers: (1) the platform as a product, (2) the apps it generates (eight oiioii_clone*
+  output dirs). Same rubric as audits #1005–#1007.
+
+- **METHOD / EVIDENCE GATHERED (all verified on disk, nothing taken on faith)**:
+  1. Read UNIFIED.md, FLEET_WORKLOG.md (18 steps), DESIGN_SYSTEM.md in full.
+  2. Ran `python -m pytest --collect-only -q` myself: **1,160 collected BUT 1 collection ERROR** —
+     `tests/baseline/test_baseline.py:8` imports `oiioii_clone_final.src.jobs`, which does
+     `from src.models import ...` → `ModuleNotFoundError: No module named 'src'`. No conftest.py
+     exists anywhere in the repo to fix sys.path. The fleet worklog step 18 claims "full suite
+     1,160/1,160 passed" — that claim is NOT reproducible from a clean checkout in this
+     environment. Honest reading: the suite passed in the fleet agent's environment (likely a
+     different cwd/PYTHONPATH), but the shipped tree does not pass as-is. Logged as a real
+     defect, not papered over.
+  3. Inspected generation_core.py structure: 9 specialized GenAgents (Architect, DesignTokens,
+     Primitives, BackendArchitected, FrontendFeatures, UIPolish, Tester, DevOps), stack_surface
+     contract, entity derivation, `_safe_write` atomic fsynced writes, import-consistency gate
+     with up-to-3-round `_repair_imports`, one-pass `_repair_tests`, and a real subprocess test
+     run (`pytest tests/ -x`, 120s timeout).
+  4. Verified the vision/QA wiring: `_run_qa_pass` DOES import qa_browser and can drive a real
+     Playwright suite with pixel-diff baselines — BUT it is **opt-in** (`config["enable_qa_pass"]`),
+     requires a caller-supplied `_preview_starter`, and every failure mode (no Playwright, no
+     starter, server won't start) returns None = "no QA signal", never a failure. **Fails OPEN
+     by design**, documented as such. qa_self_heal.py is a standalone closed loop (QA → repair
+     brief → agent fix → re-QA, max 5 rounds) but is NOT invoked by generation_core.
+  5. Inspected generated outputs (Layer 2):
+     - `oiioii_clone_final`: backend/main.py is a **1-line stub** (`from typing import Optional, List`),
+       frontend/styles.css is **0 bytes**. The "final" clone has no runnable backend or frontend.
+     - `oiioii_clone_final2/frontend/src/generated.tsx` (263 lines): genuinely good code —
+       imports from `../components/ui` primitives, uses `tokens` for spacing/color, explicit
+       loading/error/empty states, skeleton loaders. Zero backdrop-blur/glass/transition hits,
+       but the architecture (tokens-first, primitives, four-states) is real. This is the best
+       Layer-2 output of all four audits.
+     - 5 of 8 clone dirs have NO html/tsx/dart frontend at all.
+  6. Isolation: generated-app tests run as HOST subprocess (`subprocess.run`, cwd=project_dir).
+     No Docker, no network jail, no resource caps. Same weakness as emergentsh and
+     ideation_to_prototype; only ases_v3_1 has real container isolation.
+  7. Monoliths: neon_architect.py 641KB / neon_architect_v5.py 643KB single files containing
+     17 tool classes (EditTool, SearchTool, TodoTool, 6+ SpecializedAgents). TodoTool
+     instance-isolation fix verified present (fleet steps 6–7).
+  8. Secrets: fleet step 9 scanned tracked text, no credential literals; .env.example empty.
+     Consistent with what I saw. No secrets logged here per T11.
+
+- **FINDINGS — PLATFORM LAYER (Layer 1)**:
+  - **FATAL-1 (reproducibility):** shipped tree does not pass its own suite from a clean
+    checkout (collection error above). The 1,160/1,160 claim is environment-dependent. A
+    release gate must pin the invocation (conftest.py adding oiioii_clone_final to sys.path,
+    or fix the generated app's import to be package-relative).
+  - **FATAL-2 (no live proof):** the system's own worklog admits it — the only live
+    flutter-fastapi run finished `success=False` (24 files, consistency 3→1, test-repair
+    failed). Step 18 explicitly says "do not certify release until that fresh post-fix live
+    generation clears." The platform is NOT proven end-to-end. This is honest, and it is the
+    single biggest gap.
+  - **HIGH-3 (QA fails open):** the pixel-diff/vision crown jewel exists (qa_browser.py has
+    real PIL ImageChops diffing, 2% threshold, screenshot baselines; qa_self_heal.py has a
+    real closed loop) but it is decoupled from the default generation path and degrades to
+    "skip" on any friction. The discipline is present as tooling, absent as a gate.
+  - **HIGH-4 (host-native execution):** generated tests + repair run on the host with no
+    sandbox. A hostile generated `tests/` could do anything the agent user can.
+  - **MED-5 (monoliths):** two ~640KB single-file agents; any merge conflict or partial edit
+    is catastrophic. No module boundaries.
+  - **MED-6 (multi-stack partial):** stack_surface covers fastapi-react, nextjs-postgres,
+    expo-node, flutter-fastapi, but `_run_tests` only wires pytest for the two FastAPI stacks;
+    expo/flutter return "No automated runner wired ... yet". DESIGN_SYSTEM.md promises
+    Web+Expo+Flutter parity; the test loop doesn't deliver it.
+
+- **FINDINGS — GENERATED OUTPUT LAYER (Layer 2)**:
+  - Best architecture of the four audits: tokens-first, UI primitives, four-states, typed
+    fetch with error handling (generated.tsx evidence above).
+  - But the flagship "final" output is a hollow shell (1-line backend, 0-byte CSS), and most
+    clone dirs lack any frontend. Output quality is high where it exists, sparse where it
+    matters.
+
+- **SCORECARD (same 10-dimension rubric as #1005–#1007, 0–10)**:
+  | Dimension | Score | Note |
+  |---|---|---|
+  | Frontend rigor (platform) | n/a | platform is a CLI, no product UI |
+  | Frontend rigor (output) | 7 | tokens/primitives/four-states real; no motion/glass in sample |
+  | Backend contract/layering (output) | 4 | good src/ layering, but final backend is a 1-line stub |
+  | Perfection loop | 7 | import-repair 3 rounds + test-repair + self-heal exist; QA opt-in/fail-open |
+  | E2E/QA | 6 | real Playwright + pixel-diff + self-heal tooling; not a default gate |
+  | Multi-stack | 5 | 4 stacks declared, only 2 have test runners |
+  | Sandbox isolation | 2 | host subprocess only |
+  | Secrets/config hygiene | 9 | clean scan, empty .env.example |
+  | Documentation honesty | 10 | FLEET_WORKLOG + UNIFIED.md limitations section are exemplary |
+  | Reproducibility | 3 | suite doesn't collect clean; live run failed |
+  | **Weighted verdict** | **5.9/10** | |
+
+- **VERDICT**: neon_unified is the most DESIGN-SYSTEM-AWARE and most DOCUMENTATION-HONEST of
+  the four, and its generated code (where it exists) is the highest quality. But it is the
+  least PROVEN: no successful live generation, a test suite that doesn't collect from a clean
+  checkout, a crown-jewel vision loop that is opt-in and fails open, and a flagship output
+  that is a stub. It is a well-architected prototype, not a shippable platform. Its own
+  worklog already says exactly this — the rare case where the audit confirms the project's
+  self-assessment rather than contradicting it.
+
+- **CROSS-PROJECT PATTERN (all four audits now complete)**: The Aug-21 "SandboxExecutor moat
+  injection" sweep hit 3 of 4 repos: emergentsh (broke the streaming path — retry only in
+  run(), not stream_run()), ases_v3_1 (path mismatch ases_sandboxes vs ases-sandboxes blocks
+  the golden path and its visual reviewer fails open), ideation_to_prototype (correctly wired
+  via its own evidence_runner, proven by a RELEASED selftest). neon_unified predates that
+  sweep and instead fails on honest live-run grounds. Common thread across all four: the
+  vision/screenshot loop and the sandbox are the two elements every repo claims but none has
+  fully closed as a DEFAULT, FAIL-CLOSED gate.
+
+- **STATUS**: Audit #4 complete. All four projects dissected. No code changes made to any
+  audited repo (read-only audits). Awaiting user direction on whether to produce the final
+  cross-project synthesis ranking + remediation roadmap.
