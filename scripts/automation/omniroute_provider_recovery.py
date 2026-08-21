@@ -50,7 +50,7 @@ def api_login() -> requests.Session:
     s = requests.Session()
     url = f"{BASE_URL}/api/auth/login"
     log(f"POST {url}")
-    r = s.post(url, json={"password": PASSWORD}, timeout=15)
+    r = s.post(url, json={"password": PASSWORD}, timeout=120)
     if r.status_code == 404:
         raise RuntimeError(f"404 at {url}")
     r.raise_for_status()

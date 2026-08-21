@@ -71,6 +71,12 @@ V1_URL = f"{BASE_URL}/v1"
 PASSWORD = os.environ.get("OMNIROUTE_PASSWORD", "").strip() or "<REDACTED>"
 API_KEY = os.environ.get("OMNIROUTE_API_KEY", "").strip() or "<REDACTED>"
 
+# Management login is bcrypt-bound and measured at ~9.5s on this host. The former 15s
+# ceiling left only ~5s of headroom, so a slow login raised ReadTimeout, which these
+# checks read as status != 200 and reported as a genuine auth failure. Widened so a
+# slow-but-successful login is recorded as the pass it is.
+LOGIN_TIMEOUT = int(os.environ.get("OMNIROUTE_LOGIN_TIMEOUT", "120"))
+
 # Canonical routing aliases required by spec
 REQUIRED_ALIASES = [
     "frontier",
@@ -384,7 +390,7 @@ def step_auth(state: MonetizerState, dry_run: bool = False) -> StepResult:
         "POST",
         f"{BASE_URL}/api/auth/login",
         body={"password": PASSWORD},
-        timeout=15,
+        timeout=LOGIN_TIMEOUT,
     )
     r.details["login_status"] = status
     r.details["login_latency"] = round(elapsed, 3)
@@ -574,7 +580,7 @@ def step_onboarding(state: MonetizerState, dry_run: bool = False) -> StepResult:
     # Login first
     login_status, login_body, _ = http_request(
         "POST", f"{BASE_URL}/api/auth/login",
-        body={"password": PASSWORD}, timeout=15,
+        body={"password": PASSWORD}, timeout=LOGIN_TIMEOUT,
     )
     if login_status != 200:
         r.status = "FAIL"
@@ -1147,7 +1153,7 @@ def step_performance(state: MonetizerState, dry_run: bool = False) -> StepResult
         for i in range(2):
             status, body, elapsed = http_request(
                 "POST", f"{BASE_URL}/api/auth/login",
-                body={"password": PASSWORD}, timeout=15,
+                body={"password": PASSWORD}, timeout=LOGIN_TIMEOUT,
             )
             if status == 200:
                 latencies.append(elapsed)

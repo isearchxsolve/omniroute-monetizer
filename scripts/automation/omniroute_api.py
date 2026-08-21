@@ -47,11 +47,41 @@ SECRET_RE = re.compile(
     re.I,
 )
 
+# Media providers return *presigned* asset URLs whose query string carries real
+# credential material — Alibaba OSS embeds `OSSAccessKeyId` and `Signature`, GCS and S3
+# embed their own equivalents. These match none of the patterns above, so a video URL
+# logged verbatim would leak an access key id. Strip the query string instead: the path
+# is what identifies the asset, and the signature is never worth persisting.
+PRESIGN_PARAM_RE = re.compile(
+    r"[?&](?:OSSAccessKeyId|Signature|X-Amz-Signature|X-Amz-Credential|X-Goog-Signature|"
+    r"X-Goog-Credential|AWSAccessKeyId|sig|token|se|sp|sv|st)=",
+    re.I,
+)
+
+# Management login is bcrypt-bound and measured at ~9.5s on this host, so the previous
+# 15s ceiling left only ~5s of headroom and raised ReadTimeout intermittently across
+# every management script in the repo. Widened deliberately: a slow login is normal,
+# a failed one is not.
+LOGIN_TIMEOUT = int(os.environ.get("OMNIROUTE_LOGIN_TIMEOUT", "120"))
+
 
 def redact(value: Any) -> str:
     """Redact anything that looks like a secret in a string."""
     s = str(value)
     return SECRET_RE.sub("[REDACTED]", s)
+
+
+def redact_url(url: str) -> str:
+    """Drop the query string from a presigned asset URL, keeping it identifiable.
+
+    Applied to media URLs before they are logged or persisted. See PRESIGN_PARAM_RE:
+    the signature params are credential material, and the URL is short-lived anyway,
+    so the durable value is the object path, not the grant.
+    """
+    s = str(url)
+    if "?" in s and PRESIGN_PARAM_RE.search(s):
+        return s.split("?", 1)[0] + "?[PRESIGN_REDACTED]"
+    return redact(s)
 
 
 def mask_token(token: str) -> str:
@@ -113,7 +143,7 @@ class OmniRouteAPI:
         r = self.session.post(
             f"{self.api}/auth/login",
             json={"password": self._password},
-            timeout=15,
+            timeout=LOGIN_TIMEOUT,
         )
         if r.status_code != 200:
             log(f"Management login failed: HTTP {r.status_code}", "err")

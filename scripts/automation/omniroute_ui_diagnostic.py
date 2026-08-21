@@ -46,7 +46,7 @@ def api_login():
     s = requests.Session()
     url = f"{BASE_URL}/api/auth/login"
     log(f"  [auth] POST {url}")
-    r = s.post(url, json={"password": PASSWORD}, timeout=15)
+    r = s.post(url, json={"password": PASSWORD}, timeout=120)
     r.raise_for_status()
     token = r.cookies.get("auth_token") or s.cookies.get("auth_token")
     if not token:
