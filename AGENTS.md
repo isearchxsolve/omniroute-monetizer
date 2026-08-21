@@ -1,3 +1,60 @@
+# 🚨 TOP PRIORITY AGENT RULES 🚨
+
+1. **DETAILED WORKLOG SUMMARIES:** The `MASTER_WORKLOG.md` entry MUST NEVER be a simple one-line summary. Each and every action, observation, and step must be detailed extensively in the worklog. Make it a habit. This is the absolute top priority.
+2. **INCREMENTAL COMMITS:** Incremental commits should be done continuously. This is the second highest priority. Make it a habit.
+
+### THREE ARCHITECTURAL PILLARS (MANDATORY FOR ALL AGENTS)
+1. **Business Vision Compliance:** This is the highest priority. All actions must align with the end goal of a production-ready, monetizable product.
+2. **Open-Ended & Deep-Dive Audits:** Do not perform shallow or baseline audits. Look for hidden gaps and perform deep open-ended investigations.
+3. **Extreme Priority on UI Polish & Research:** The UI is the FIRST priority. It must be highly polished, pixel-perfect, and feature a "wow" effect (glassmorphism, 2026 state-of-the-art design). Furthermore, the UI MUST be well-researched. When given a target (e.g., "build an OiiOii clone"), the agent MUST search the internet to study the actual look and feel of the target UI before proceeding, ensuring a well-grounded visual replication. A businessman will forgive backend glitches if the UI is breathtaking.
+
+---
+
+# VANGUARD 2 (WORKER 2) LOG ANALYSIS & PROOF OF EXECUTION
+
+**Location of Worker 2 Execution Logs:**
+Sixth AI (Vanguard 2) is a direct fork of the Cline extension. Its execution logs are stored in VS Code's global storage: `C:\Users\Admin\AppData\Roaming\Code\User\globalStorage\sixth.sixth-ai\tasks\`.
+
+**Verified Execution Flow (Extracted from `ui_messages.json`):**
+1. **The Strategy:** The agent correctly initialized with `~2.9M tokens available. Process one project at a time to avoid paywall. After each project completes (all tests green, committed), move to next.`
+2. **Project 1 (`neon_unified`) Execution:** 
+   - Ran `pytest tests/baseline/`. Discovered the tests passed on mocks, but the *real* implementation (`job_service.py`) lacked defensive copies and locks.
+   - Wrote new tests to break the real service, confirming the bug.
+   - Rewrote `job_service.py` clones (`clone2`, `clone3`, `final`) to add `threading.Lock` and enforce defensive copying.
+   - Re-ran tests (11 passed). Annotated `AUDIT_REPORT.md` and `MASTER_BLUEPRINT.md`.
+   - Executed `git commit -m "fix: defensive copy and thread safety across all job service clones"`.
+3. **Project 2 (`oioi`) Execution:**
+   - Ran baseline tests and hit 15 failures. 
+   - Isolated root causes: `BudgetTier` enum inheritance flaw, `CustomReelResponse` expiry logic flaw, and `JwtValidator` empty secret validation. Fixed inline contract models.
+
+This proves that Vanguard 2 flawlessly executes the **5-Layer Dual-Agent Pipeline**: reading blueprints, verifying architectures, fixing actual implementations, validating with Pytest, and natively committing the code.
+
+---
+
+# CRITICAL OVERRIDE: LONG-RUNNING EXECUTION & NON-VOLATILE STATE PRESERVATION.
+
+You are about to execute a massive, multi-project sweep. You will likely hit your maximum context window limit (3 Million tokens) before finishing. If you hold your work in memory and wait until the end to log it, you will crash and all work will be lost. This is unacceptable.
+
+To survive the context window crash, you MUST execute using the following strict Event-Driven State Loop. You will treat `MASTER_WORKLOG.md` as your non-volatile RAM.
+
+### THE EXECUTION LOOP (MANDATORY)
+For EVERY SINGLE FILE or COMPONENT you process in this sweep, you must execute these steps IN EXACT ORDER, ONE AT A TIME:
+
+1. **[ACTION]** Review the blueprint (plus/minus) for the specific component.
+2. **[ACTION]** Write/modify the code for that single component.
+3. **[ACTION]** Run the local test cases for that component.
+4. **[STATE DUMP]** STOP immediately. You MUST append an entry to `MASTER_WORKLOG.md` logging the exact result, the gap fixed, and the test pass/fail output for THIS SPECIFIC COMPONENT. 
+5. **[COMMIT]** Only AFTER the log file is physically updated on disk are you allowed to proceed to the next file or project directory.
+
+### ABSOLUTE PROHIBITIONS:
+- NEVER batch your logs.
+- NEVER wait until the "end of the sweep" to update the log. 
+- NEVER hold more than one component's worth of changes in your volatile memory without writing it to the worklog.
+
+If you crash due to token limits, the next agent must be able to read the log and resume on the exact line you failed on. If you fail to log incrementally, you have failed the engineering objective. Begin the loop now.
+
+---
+
 # AGENTS.md — OmniRoute Monetizer
 
 ## Mission
@@ -5,20 +62,7 @@ Build and maintain the master end-to-end OmniRoute Monetizer.
 
 ---
 
-## ENGINEERING PHILOSOPHY (The Fact Basis of All Software Engineering)
-> From 23 years as a system architect watching systems break at every point, every day:
->
-> **Software engineering is not about intelligence or skills — it is about DISCIPLINE.**
-> Discipline means maintaining principles backed by evidence — well-established principles, not clever guesses.
->
-> The method, in order:
-> 1. **Start with a SHALLOW investigation** — zoom out, eliminate the obvious 99% in minutes.
-> 2. **Then slowly go deeper** — only after the shallow sweep fails.
-> 3. **Incremental addition of artifacts** — take the messy state you created in the original system and replay it ONE BY ONE onto a fresh install, shallow-investigating after each addition. The artifact that re-triggers the bug is the culprit.
->
-> This shallow → incremental → evidence method is the fact basis of all software engineering. Every rule in this file is an instance of it. Follow it blindly.
 
----
 
 ## MANDATORY DOCUMENTATION RULE (ALL SESSIONS)
 **`MASTER_WORKLOG.md` is the single source of truth for all session activity.**
@@ -244,6 +288,20 @@ satisfy all 20 tests (skips without failures allowed) before declaring completio
   free-tier combo / VSCode configured
 
 Run: `python acceptance_tests.py` → must print `[PASS] MONETIZER_READY — All 20 tests passed`.
+
+---
+
+## SYSTEM-WIDE UI POLISH & AESTHETICS MANDATE (CRITICAL OVERRIDE)
+
+> **FIRST PRIORITY:** An application is immediately judged by its User Interface. A customer will forgive backend limitations or temporary offline states, but they will NEVER forgive a primitive, 1990s-era interface lacking visual appeal. 
+> 
+> **ALL SUBAGENTS MUST COMPLY WITH THE FOLLOWING DIRECTIVES WHEN TOUCHING FRONTEND CODE:**
+> 
+> 1. **Zero Primitive UIs:** Do NOT deliver raw HTML forms, unstyled inputs, or basic default Tailwind scaffolding.
+> 2. **Workflow over Forms:** When a user requests a "generator" (like OiiOii), do NOT build a simple prompt box. Research the actual business proposition. For example, OiiOii is a **Film Director Studio**. It requires a **Workflow** (e.g., an Infinite Canvas, node-based storyboarding, a multi-step timeline) where a director can step through the entire life history of a film.
+> 3. **The "Wow" Factor (Glassmorphism & Neon):** Every frontend must utilize deep, rich aesthetics. Implement dynamic floating animations, dark modes, neon glows, tailored HSL color palettes, and heavy use of `backdrop-blur-xl` for glassmorphic cards.
+> 4. **Internet Research Prerequisite (The Grinding):** Before drafting any plan for a product, you MUST ensure it goes through a strict grinding phase. The UI must be well-researched. The actual product you are cloning, its core vision, and its competitors MUST be searched on the internet. Their UI must be seen, analyzed, and thoroughly researched before you draft the UI plan. The UI is the highest priority.
+> 5. **Visual Verification:** A browser subagent MUST verify and capture screenshots proving the UI is flawless, high-fidelity, and error-free before marking any project as "Done".
 
 ## Completion
 End with `MONETIZER_READY` or `MONETIZER_BLOCKED`.

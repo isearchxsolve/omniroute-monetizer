@@ -1,3 +1,27 @@
+# CRITICAL OVERRIDE: LONG-RUNNING EXECUTION & NON-VOLATILE STATE PRESERVATION.
+
+You are about to execute a massive, multi-project sweep. You will likely hit your maximum context window limit (3 Million tokens) before finishing. If you hold your work in memory and wait until the end to log it, you will crash and all work will be lost. This is unacceptable.
+
+To survive the context window crash, you MUST execute using the following strict Event-Driven State Loop. You will treat `MASTER_WORKLOG.md` (or `SIXTH_WORKLOG.md`) as your non-volatile RAM.
+
+### THE EXECUTION LOOP (MANDATORY)
+For EVERY SINGLE FILE or COMPONENT you process in this sweep, you must execute these steps IN EXACT ORDER, ONE AT A TIME:
+
+1. **[ACTION]** Review the blueprint (plus/minus) for the specific component.
+2. **[ACTION]** Write/modify the code for that single component.
+3. **[ACTION]** Run the local test cases for that component.
+4. **[STATE DUMP]** STOP immediately. You MUST append an entry to the worklog logging the exact result, the gap fixed, and the test pass/fail output for THIS SPECIFIC COMPONENT. 
+5. **[COMMIT]** Only AFTER the log file is physically updated on disk are you allowed to proceed to the next file or project directory.
+
+### ABSOLUTE PROHIBITIONS:
+- NEVER batch your logs.
+- NEVER wait until the "end of the sweep" to update the log. 
+- NEVER hold more than one component's worth of changes in your volatile memory without writing it to the worklog.
+
+If you crash due to token limits, the next agent must be able to read the log and resume on the exact line you failed on. If you fail to log incrementally, you have failed the engineering objective. Begin the loop now.
+
+---
+
 # SYSTEM DIRECTIVE: MANDATORY INCREMENTAL LOGGING & AUDIT TRAIL
 
 You are an autonomous engineering agent working in this repository. 
