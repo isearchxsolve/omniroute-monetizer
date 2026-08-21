@@ -577,3 +577,144 @@ pool, and resolve deepinfra's quota-preflight rejection.**
 - **Action:** Executed code modifications to C:\god_ai\ases_v3_1\agent_service\ejima_agent.py based on AUDIT_REPORT.
 - **Details:** Replaced {path} string interpolation in generated Python tests with {json.dumps(path)} to properly escape routes containing quotes or special characters, eliminating the code injection vulnerability in the differential tester template.
 - **Result:** Successfully applied patch. Ran vitest baseline tests, 4 passed (9 tests total). Architectural sweep is COMPLETE.
+
+### [2026-08-21 22:40] #1002 — VANGUARD 2 / STAGE 1c: REDUNDANCY SWEEP — ALL 15 WIRED FORMATS PROBED
+
+**Objective:** build a multi-provider pool for the Animator, because Stage 1b measured
+~140s per 5s clip and a 3-hour film needs ~2,160 clips (~84h sequential on one provider).
+
+**RESULT: no additional provider could be brought online. `alibaba` remains the only working
+video route. Every remaining blocker requires something I cannot supply myself (account
+balance, an API key, or a Google Flow-authorised OAuth grant) — details and evidence below.**
+
+---
+
+#### 1. Sweep results — 10 explicit candidates, one per remaining wired format
+
+| Model | HTTP | Time | Actual error output |
+|---|---|---|---|
+| `googleflow/veo-3.1-fast-generate` | 404 | 1.7s | `Google Flow submit failed: <!DOCTYPE html>` |
+| `veoaifree-web/veo` | — | 420.0s | `ReadTimeout` — never completes |
+| `deepinfra/Wan-AI/Wan2.7-T2V` | 400 | 2.3s | `No credentials for video provider: deepinfra` |
+| `xai/grok-imagine-video` | 400 | 0.0s | `No credentials for video provider: xai` |
+| `vertex/veo-3.0-fast-generate-001` | 400 | 0.0s | `No credentials for video provider: vertex` |
+| `kie/wan/2-7-text-to-video` | 400 | 0.0s | `No credentials for video provider: kie` |
+| `segmind/wan2.1-t2v` | 400 | 0.0s | `No credentials for video provider: segmind` |
+| `novita/wan-t2v` | 400 | 0.0s | `No credentials for video provider: novita` |
+| `adobe-firefly/veo-3.1-fast` | 400 | 0.1s | `No credentials for video provider: adobe-firefly` |
+| `qwen-cloud/wan2.7-t2v` | 400 | 0.1s | `No credentials for video provider: qwen-cloud` |
+
+#### 2. `deepinfra` — NOT a wiring bug. The account has no money.
+
+Stage 1b left this open, suspecting quota preflight. Confirmed by reading the connection
+record (`6964962e`, active, 16-char key):
+
+    "testStatus":    "credits_exhausted"
+    "errorCode":     "402.0"
+    "lastErrorType": "quota_exhausted"
+    "lastError":     "You need positive balance to do inference.
+                      Please add balance manually or setup top-up"
+
+The credential is valid and correctly wired; OmniRoute's quota preflight is *correctly*
+excluding an exhausted account, which surfaces as the generic "No credentials" message.
+**No code change can fix this — the DeepInfra account needs a balance top-up.** Once topped
+up, `deepinfra/Wan-AI/Wan2.7-T2V` should work with no further wiring.
+
+#### 3. `googleflow` — credential resolves, Google refuses the endpoint
+
+This was the most promising lead (Veo 3.1, and `resolveVideoCredentialProvider` maps
+`googleflow -> antigravity`, of which 3 active connections exist). Ruled out methodically:
+
+- All 3 antigravity connections carry a `projectId` (`fourth-veld-09z5m`,
+  `thematic-victory-39z5m`, `fluent-cave-hmjvc`), so `resolveFlowProjectId` succeeds.
+- Two are `Google AI Pro` tier, one `free-tier`.
+- **Token expiry checked before acting** (anti-pattern #1, shallow first): `tokenExpiresAt`
+  16:58:08Z vs 16:18:19Z now = **valid for another 39.8 minutes**. So this is NOT expiry, and
+  I deliberately did NOT refresh the tokens — a mutation to the live ledger that would have
+  achieved nothing.
+- Target endpoint is `https://aisandbox-pa.googleapis.com/v1:generateVideo`
+  (`GOOGLE_FLOW_SUBMIT_PATH`), Google's internal Flow/Labs sandbox API.
+- It returns an **HTML 404**, not a JSON auth error — the signature of a Google front-end
+  rejecting a path the token's client is not authorised for. Antigravity's scopes are
+  `cloud-platform`, `cclog`, `experimentsandconfigs`, `userinfo.profile` — none grant the
+  Flow sandbox.
+
+**Conclusion: the Antigravity OAuth grant is not authorised for Flow video.** Needs a Google
+account connected through Flow's own OAuth client, which OmniRoute must offer — not
+something I can wire from here.
+
+#### 4. `veoaifree-web` — upstream is alive, but the handler never completes. EXCLUDE.
+
+Zero-auth, so it needed no credential and was the best free candidate. Tested the upstream
+directly to separate "site is down" from "handler is broken":
+
+    GET  https://veoaifree.com/            -> 200 in 2.2s (235,623 bytes HTML)
+    POST .../wp-admin/admin-ajax.php       -> 400 in 1.9s (body "0")
+
+The host is **alive and fast**; `0` is normal WordPress for an unknown action. So OmniRoute's
+`veoaifree-web` handler submits and then polls a job that never reaches a terminal state —
+it hung past **420s** on two separate runs.
+
+> **Design consequence: this provider must be excluded from the Animator pool, and not merely
+> deprioritised. A provider that hangs is worse than one that fails — a clean 400 costs 0.0s,
+> this costs 420s of a worker slot before yielding nothing.**
+
+#### 5. `comfyui` / `sdwebui` — 502 `TypeError: fetch failed`, no local server
+
+Not misconfigured, simply not running (`localhost:8188` / `localhost:7860`). These are the
+only routes that would be free and unmetered, so they are the strategic option for the
+throughput problem, but standing up ComfyUI + video model weights is a substantial
+infrastructure task with a GPU dependency. Flagged, not attempted unilaterally.
+
+#### 6. Provider id must match EXACTLY — `xai-oauth` does not satisfy `xai`
+
+`resolveVideoCredentialProvider` is the identity function for everything except googleflow.
+The ledger has 4 `xai-oauth` connections but zero `xai` connections, so `xai/grok-imagine-video`
+cannot resolve a credential. The same exact-match rule applies to every other missing
+provider. Of 72 distinct providers in the 88-connection ledger, **only `alibaba`, `deepinfra`
+and `antigravity` intersect the 15 wired video formats at all.**
+
+#### 7. CLIP LENGTH — hard ceilings measured (directly constrains brief §2 agent 5)
+
+The brief specifies "10-30 second MP4 clips per shot". Both bounds tested on the working
+provider:
+
+| Requested | Result | Evidence |
+|---|---|---|
+| 5s | **200 OK**, 124-162s | verified 1080p MP4 (entry #1001) |
+| 10s | **504** after 300.7s | `DashScope task dc823ddc-... timed out (status: RUNNING)` |
+| 30s | **502** after 3.7s | `Duration should be between 2 and 15` |
+
+Two independent ceilings:
+
+1. **Upstream (DashScope): max 15s.** So "30 second clips" is impossible on this provider.
+2. **OmniRoute's own poll budget: ~300s.** The 10s request did not fail upstream — DashScope
+   reported the task still `RUNNING` when OmniRoute stopped polling and returned 504. The
+   loop is `for(;Date.now()<q+W;)` with `W` an imported compiled constant. **Checked all 42
+   feature flags for any video/timeout/poll/duration setting: NONE.** So the budget is not
+   configurable through any supported API.
+
+> **DECISION: the Animator will use 5-second clips.** A 10s clip generates successfully
+> upstream but OmniRoute discards the result at 300s, which would burn ~5 minutes per shot
+> to produce nothing. 5s completes in 124-162s with ~2x headroom. This deviates from the
+> brief's "10-30 seconds" and the deviation is forced by measured platform limits, not
+> preference. Revisit if a faster provider (kie/vertex/novita) is credentialed later.
+
+#### 8. Net position going into Stage 2
+
+Working pool: **1 provider, 2 models** (`alibaba/wan2.7-t2v-2026-06-12`,
+`alibaba/happyhorse-1.1-t2v`), 5s clips, ~140s each, 1080p H.264+AAC.
+
+Unblockable by me, in rough order of least effort for the operator:
+
+| Provider | What it needs | Value if unblocked |
+|---|---|---|
+| `deepinfra` | account balance top-up (key already wired) | Wan 2.7 T2V, 4 models |
+| `kie` | an API key | 16 models incl. Veo 3.1, Kling 3, Sora 2 |
+| `vertex` / `adobe-firefly` / `novita` / `segmind` / `xai` / `leonardo` / `haiper` / `runwayml` | an API key each | broad redundancy |
+| `googleflow` | a Flow-authorised Google OAuth grant | Veo 3.1, likely free on Pro tier |
+| `comfyui` / `sdwebui` | local server + weights + GPU | free, unmetered, fully parallel |
+
+**Status: Stage 1c complete. `alibaba` confirmed as the sole route. Next: measure concurrency
+on the single alibaba credential — the only remaining lever on the ~84h sequential estimate
+that requires no new credentials — then build the Animator's provider-pool module.**
