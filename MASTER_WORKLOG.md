@@ -887,3 +887,98 @@ config change rather than a rewrite.**
   (the only path the UI uses) lacks the retry loop entirely, so the flagship self-healing feature
   is dead code in practice.
 - **STATUS**: Audit #1 complete. Next: C:\god_ai\ases_v3_1.
+
+### [2026-08-22 01:55] #1006 — DEEP AUDIT #2 of 4: C:\god_ai\ases_v3_1 (dual-layer: platform + output)
+
+- **Project identity**: ASES — Autonomous Software Engineering System. Freelance-automation
+  pipeline: Upwork lead scoring → Planner → Coder → Docker-sandbox Executor → Reviewer →
+  GitHub repo + Vercel delivery, orchestrated by n8n. FastAPI + asyncpg Postgres + Redis +
+  RQ workers + autoscaler. ~19,000 lines across 60+ agent modules. 415 test functions / 50
+  files, 3 TDD gates, CI workflow, coverage artifacts. Git history real (7 commits, latest
+  730255c1 = the same Aug-21 "SandboxExecutor moat injection" sweep that hit emergentsh).
+- **L1 BACKEND (platform infra) — STRONGEST of the four so far. Verified in auth.py, billing.py,
+  sandbox.py, main.py**:
+  - Multi-tenant: tenants table, per-tenant API keys stored as SHA-256 hashes (plaintext never
+    stored), constant-time compare, key rotation endpoint guarded by ADMIN_SECRET, rate limiting
+    dependency, 202+async job acceptance, CRM webhook ACK pattern.
+  - BillingFence is REAL: per-plan daily/monthly/job USD caps + token budgets, preflight check
+    BEFORE spending, per-iteration checkpoints, 80% soft warning, finalize records spend to
+    Postgres (billing_events upsert). This is what emergentsh's global USER_CREDITS=10 variable
+    only pretended to be.
+  - Sandbox (sandbox.py) is genuinely hardened: real Docker containers, --network none,
+    --read-only, --cpus 1.0, --memory 512m, --pids-limit 128, no-new-privileges, tmpfs /tmp,
+    command ALLOWLIST (frozenset, rejects shell metacharacters), path jail with traversal
+    rejection, output truncation, Redis atomic concurrency cap, Postgres sandbox_registry that
+    survives restarts, startup reconciliation of ghost containers + counter drift correction,
+    GIT_ASKPASS credential helper so the GitHub token never appears in URLs/config.
+  - GAPS: API key plaintext logged once at WARNING (log-aggregation leak vector; violates the
+    no-secrets-in-logs rule); migrations are raw SQL files, no migration tool; admin route
+    security depends on nginx-layer discipline per its own docstring.
+- **L1 FRONTEND (platform UI) — effectively ABSENT**: platform is headless/API-first (curl +
+  n8n). apps/studio + packages/core is a design-token/IR/canvas SCAFFOLD: tokens/index.ts is
+  interface-only ("Interface stubs only — no feature logic"), ir/types.ts 0 lines,
+  shortcuts.ts 0 lines, plus garbage files (ops.test.ts.test.ts, ops.test.ts.testtemp.ts).
+  No user-facing product UI exists to audit.
+- **ORCHESTRATION LAYER (agent_loop.py, 1,477 lines) — the most complete perfection-loop
+  implementation seen in this audit series. Verified elements**:
+  - Clarifier (pre-flight ambiguity scoring, blocking or assumption-injection modes) → Planner
+    (JSON plan with quality_gates) → Designer (design spec + CSS variables, vector-cached
+    warm-start) → Coder (SOTA system prompt: TS strict, real assertions, a11y WCAG AA,
+    observability, security headers, migrations) → static review → LLM reviewer (independent
+    critic, 15-point checklist, file-attributed issues, budget-aware context packing) →
+    visual reviewer (vision gate) → interaction reviewer (dynamic behavior gate).
+  - Monotonic-progress machinery: IterationJournal (scored constraint queue, penalises violated
+    constraints), SemanticDiffer (detects interface regressions between iterations), warm
+    interface-signature cache across jobs, DependencyDebugger (enriches errors with import graph).
+  - Learning machinery: pgvector memory (cosine-similarity pattern retrieval), design-spec
+    vector store, per-tenant learned failure classifier with keyword-heuristic cold start,
+    design regen capped at 2 with surgical-patch-first (~10x cheaper) then A/B best-fallback spec.
+  - Budget machinery: max 5 iterations, BillingFence checkpoints inside the loop, Redis prompt
+    cache with per-call-type TTL, model routing (4o-mini planner/reviewer, 4o coder) with cost table.
+- **CRITICAL FINDING 1 — THE VISION LOOP CANNOT EXECUTE IN ITS OWN SANDBOX (silent approval)**:
+  visual_reviewer.py runs `npm install && npm start &` / `npm run dev &` and
+  `python .ases_screenshot.py ...` via sandbox.run_command — but NONE of those commands are in
+  sandbox.ALLOWED_COMMANDS (verified by grep: zero matches), so validate_command() raises
+  ValueError on every call. Additionally: containers run --network none (npm install cannot
+  work) and node:18-alpine has no Playwright/Chromium. Failure path returns _visual_skip() =
+  {"approved": True} — the gate fails OPEN. Net effect: the crown-jewel element exists in code,
+  is cost-optimized (last-mile heuristic: 0-1 vision calls per job), and in practice NEVER SEES
+  ANYTHING while reporting approval. Worse than emergentsh's grep moat: a blind critic that
+  rubber-stamps.
+- **CRITICAL FINDING 2 — LATEST COMMIT IS A SHIP-BLOCKING REGRESSION (730255c1)**: the injected
+  SandboxExecutor in reviewer_agent targets `/tmp/ases_sandboxes/{execution_id}` (underscore)
+  while the real workspace root is SANDBOX_BASE_DIR=/tmp/ases-sandboxes (hyphen) → path never
+  exists → run_tests returns (False, "directory does not exist") → reviewer returns
+  approved=False high-severity on EVERY review when execution_id is set → the golden path can
+  never approve → delivery impossible. Even if the path matched, it executes pytest NATIVELY ON
+  THE HOST (bypassing the entire Docker security model the system otherwise enforces) and
+  hardcodes `pytest -v` regardless of tech stack (Node projects fail). Same moat-injection
+  pattern as emergentsh — the sweep broke both repos' golden paths on the same day.
+- **L2 OUTPUT**: strongest prompt-level SOTA discipline of the series (planner quality_gates:
+  TS strict, 80% coverage, lint, security audit, WCAG AA, observability; coder prompt bans
+  stubs/any/@ts-ignore/inline-styles). Output is tested with real npm test/pytest in Docker,
+  reviewed twice, delivered as private GitHub repo + Vercel preview. GAPS: no contract-first
+  between generated FE/BE (single coder pass), generated Playwright e2e specs are written but
+  never executed (playwright not in allowlist, no browser in image), output visual quality
+  unverified (finding 1).
+- **MULTI-STACK**: mobile_stacks.py defines RN/Expo/Flutter/iOS/Android images + test commands
+  + dev commands — but grep proves it is imported NOWHERE (sandbox.py/agent_loop.py/main.py:
+  zero references). Dead code. Platform is web-only in practice.
+- **PLATFORM'S OWN QA**: 415 tests/50 files (README stale: claims 215/22), 3 TDD gates
+  (smoke/syntax/integration), executor-security contract tests (allowlist, timeout, output cap,
+  jail), coverage.xml + htmlcov artifacts, GitHub Actions CI. BUT the integration E2E gate mocks
+  ALL externals (OpenAI, Docker, Postgres, Redis, GitHub, Vercel) — it proves orchestration
+  logic, never reality; which is precisely why findings 1 & 2 passed the suite.
+- **SCORECARD (vs baseline, /10)**: L1 backend infra 8 · L1 frontend 1 (headless stubs) ·
+  L1 own QA 7 · orchestration design 9 · sandbox isolation 8 · vision loop 2 (exists, cannot
+  run, fails open) · perfection loop 7 · E2E/QA 5 · multi-stack 2 · auth/security 8 ·
+  billing 8 · repo discipline 6.
+- **VERDICT**: The most production-grade chassis of the four — real multi-tenancy, real billing
+  enforcement, the only genuinely hardened sandbox in the series, and the most complete
+  perfection-loop architecture (journal, differ, learned classifier, capped regen with A/B
+  fallback). But it is a race car with no windshield and a broken ignition: (1) the vision loop
+  cannot execute inside its own sandbox and fails OPEN (silent approval while blind),
+  (2) the newest commit's path-mismatched host-native executor blocks (or bypasses) the golden
+  path, (3) mobile support is dead code, (4) no user-facing UI. Its own all-mocked E2E suite is
+  why both fatal flaws shipped green.
+- **STATUS**: Audit #2 complete. Next: D:\ideation_to_prototype.
