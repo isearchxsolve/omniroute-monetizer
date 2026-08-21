@@ -1165,3 +1165,36 @@ eon_unified.
 - **STATUS**: Audit #4 complete. All four projects dissected. No code changes made to any
   audited repo (read-only audits). Awaiting user direction on whether to produce the final
   cross-project synthesis ranking + remediation roadmap.
+
+---
+
+### [2026-08-22 04:05] #1009 — MASTER REMEDIATION PROMPT authored for all four audited platforms
+
+- **GOAL**: User requested a single master prompt that verifies and fixes every gap found in
+  audits #1005–#1008, covering all four projects.
+- **DELIVERABLE**: `MASTER_REMEDIATION_PROMPT.md` at repo root (committed). Self-contained:
+  pasteable into any agent session without this conversation's context.
+- **CONTENTS**:
+  - Execution order chosen by cost/unblock value: neon_unified → ases_v3_1 → emergentsh →
+    ideation_to_prototype (reproducibility gates first, live proof last).
+  - 8 non-negotiable rules: verify-before-fix, event-driven log/commit loop, fail-closed
+    gates, honest BLOCKED records, no secrets, no destructive shortcuts, failure-class
+    separation, per-repo REMEDIATION_WORKLOG.md.
+  - 18 concrete gaps with exact repro commands, file:line evidence, fix prescriptions, and
+    per-gap acceptance criteria:
+    - neon_unified: NU-1 conftest/collection fix, NU-2 fail-closed default QA + self-heal
+      wiring, NU-3 Docker sandbox, NU-4 expo/flutter test runners, NU-5 stub `_final` output,
+      NU-6 live generation proof, NU-7 monolith freeze + extraction plan.
+    - ases_v3_1: AS-1 sandbox path single-source-of-truth (underscore/hyphen), AS-2 visual
+      reviewer fail-closed + allowlist/image fix, AS-3 one real unmocked e2e golden path,
+      AS-4 mobile_stacks wire-or-delete.
+    - emergentsh: EM-1 SECRET_KEY fail-closed boot + route auth, EM-2 per-user persisted
+      credit ledger, EM-3 stream_run retry parity, EM-4 structural design-token lint
+      replacing the backdrop-blur string check, EM-5 Docker sandbox, EM-6 dead-button/four-
+      states UI fix.
+    - ideation_to_prototype: IP-1 optional Docker isolation backend, IP-2 visual evidence for
+      UI claims in BEHOLDER, IP-3 honest test-count reporting.
+  - Cross-project Definition of Done (6 criteria) + context-crash resume protocol.
+- **VERIFICATION**: file written (10.6KB), all gap evidence cross-checked against worklog
+  entries #1005–#1008 before inclusion; no fabricated file paths or line numbers.
+- **STATUS**: Delivered. Execution of the prompt itself awaits user go-ahead.
