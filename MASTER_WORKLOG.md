@@ -718,3 +718,81 @@ Unblockable by me, in rough order of least effort for the operator:
 **Status: Stage 1c complete. `alibaba` confirmed as the sole route. Next: measure concurrency
 on the single alibaba credential — the only remaining lever on the ~84h sequential estimate
 that requires no new credentials — then build the Animator's provider-pool module.**
+
+### [2026-08-21 23:05] #1003 — VANGUARD 2 / STAGE 1d: CONCURRENCY MEASURED — 1.88x ON ONE CREDENTIAL
+
+**Component:** `scripts/automation/video_concurrency_probe.py` (NEW)
+
+**Objective:** concurrency is the only throughput lever that needs no new provider, key or
+account top-up. Stage 1c left the Animator facing ~84h sequential for a 3-hour film, so this
+measures what one `alibaba` credential actually sustains in parallel.
+
+Test design notes:
+- 8 **distinct** prompts, cycled, so nothing can be served from a prompt-keyed upstream cache
+  — that would make concurrency look free when it is not.
+- One `requests.Session` per worker (a Session is not guaranteed thread-safe for concurrent
+  use), each seeded with the authenticated cookie jar.
+- Reports speedup as `sum(successful latencies) / wall clock`, i.e. measured against the same
+  jobs run serially, not against a theoretical ideal.
+- This exercises the entire path — OmniRoute's request handling, its per-connection
+  `maxConcurrent` gate (currently `null`), and DashScope's per-key rate limit. Any of the
+  three could serialise us, and only a real parallel run distinguishes "N workers" from
+  "N queued requests".
+
+#### Result — 4 concurrent 5s requests on `alibaba/wan2.7-t2v-2026-06-12`
+
+| Request | HTTP | Latency | Outcome |
+|---|---|---|---|
+| req0 | 200 | 162.5s | MP4 returned |
+| req1 | **504** | 304.3s | `DashScope task 63045c4b-... timed out (status: RUNNING)` |
+| req2 | 200 | 171.3s | MP4 returned |
+| req3 | 200 | 239.5s | MP4 returned |
+
+    succeeded        : 3/4
+    latency          : min 162.5s / median 171.3s / max 239.5s
+    wall clock       : 304.4s
+    serial estimate  : 573.3s
+    effective speedup: 1.88x  (of 4 requested)
+
+#### Interpretation — the 300s poll ceiling and concurrency are coupled
+
+This is the important finding, and it is not simply "concurrency is 1.88x":
+
+**Latency inflates under load, and inflated latency collides with the ~300s poll budget
+from entry #1002.** Serial latency was 124-162s. Under 4-way load the spread widened to
+162-239s, and one job crossed 300s and was discarded by OmniRoute with the task still
+`RUNNING` upstream. So raising concurrency does not just yield diminishing returns — past a
+point it actively **converts successes into 504s**, and each 504 costs a full 300s worker
+slot and still bills the upstream job.
+
+Consequences for the Animator (brief §2 agent 5):
+1. **Worker pool of 3, not 4+.** 4-way already lost 25% of jobs. The safe operating point is
+   below the level where p95 latency approaches 300s.
+2. **Retry is mandatory, not optional.** A 504 here is a *transient capacity* failure, not a
+   bad request — the same prompt succeeds when the queue is shorter. Retries must be
+   distinguished from genuine 400s (bad model / missing input), which must never be retried.
+3. **Per-shot idempotency required.** Because a 504 can arrive after the upstream job
+   succeeded, the Animator must be able to re-request a shot without corrupting the timeline,
+   and must treat any given shot as "not done until an MP4 is on disk".
+
+#### Revised throughput estimate for a true 3-hour film
+
+    2,160 shots x ~140s = 302,400s sequential      = ~84.0 h
+    at the measured 1.88x sustained                = ~44.7 h
+    plus retry overhead for capacity-induced 504s  = ~45-50 h realistic
+
+**This is the honest number for a 3-hour film on the one credential currently available.**
+It is dominated entirely by provider capacity, not by pipeline code — which is why Stage 1c's
+blocked-provider table matters: each additional credentialed provider is a near-linear
+reduction (two providers ~= half the wall clock, since they queue independently).
+
+**Status: Stage 1 (brief §1 prerequisite) COMPLETE.**
+- Working video route verified end-to-end with real MP4 bytes (#1001).
+- All 15 wired formats swept; every other provider blocked on an external dependency (#1002).
+- Clip length and concurrency ceilings measured (#1002, #1003).
+
+**Next: Stage 2 — the 7-agent pipeline in `C:\god_ai\oioi\oioi\backend\agent_pipeline.py`.
+Requires directory access outside the Monetizer working tree. The Animator will be built
+against a provider-pool abstraction (3 workers, retry-with-backoff on 5xx, no retry on 4xx,
+shot-level idempotency) so that credentialing any provider from the #1002 table later is a
+config change rather than a rewrite.**
