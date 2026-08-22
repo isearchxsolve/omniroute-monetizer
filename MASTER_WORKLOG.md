@@ -1540,3 +1540,32 @@ All five repos now have GitHub remotes; the earlier "no remote" caveat for neon_
 - **CORRECTIVE HONESTY**: The report explicitly corrects the prior overclaim that profile-registration repair meant fully signed-in Chrome. The remaining authentication state is server-backed and cannot be restored without Google accepting normal account authentication or an already-valid session. No credential fabrication, token injection, MFA bypass, or destructive restore was attempted.
 - **PREVENTION STATUS**: Existing recovery code already has atomic staging, pre-restore backup, explicit confirmation, same-encryption-key checks, and fail-closed junction validation. The RCA adds the missing operational controls: one canonical root, explicit profile identity, separate status labels, UI evidence before `GOOGLE_SYNC_AUTHENTICATED`, periodic finalized-backup verification, and no provider-cookie shortcut for Chrome health.
 - **VERIFICATION**: RCA file added and `rg` audit completed across automation paths. No production Chrome data modified by this RCA turn. External source URLs and negative evidence are recorded here and in the RCA. Final commit is pending after worklog/file review.
+---
+
+### [2026-08-22 09:24] #1021 — Final local-session recovery sweep: no all-four Chrome Sync source exists
+
+- **OPERATOR DIRECTIVE**: Operator demanded restoration of all four sign-ins without entering
+  credentials. Per that directive, performed one final read-only sweep of every known live,
+  historical, automation, and finalized-backup Cookies database before considering any
+  destructive copy.
+- **METHOD**: For each available root/profile, copied only the Cookies SQLite file to a temporary
+  read-only location, queried Google-host rows and encrypted-value presence, and removed the
+  temporary copy. No cookie plaintext, token, or secret value was read or logged. Roots included
+  the live User Data, `D:\omniroute-chrome-profile`, `D:\omniroute-chrome-profile-v2`,
+  `D:\omniroute-pure-chrome`, `state\harvest_profile`, and the complete Aug 22 backup.
+- **RESULT**: The only historical Google authentication-cookie sets found were in the older
+  Default profile under `D:\omniroute-chrome-profile-v2` and Profile 14 under
+  `D:\omniroute-chrome-profile`/`D:\omniroute-pure-chrome`. No available snapshot contains a
+  corresponding verified Google authentication-cookie set for Profile 16 or Profile 17. The
+  current Profile 14 has Google auth-cookie names, while current Default/Profile 16/Profile 17
+  do not show those auth-cookie names in the read-only query. This means there is no local source
+  capable of restoring all four Chrome Sync sign-ins without Google accepting new authentication.
+- **SAFETY DECISION**: Did not partially overwrite Default/Profile 14 from older snapshots. A
+  partial restore would risk replacing newer browsing data, would not restore Profiles 16/17,
+  and could create a mixed-state profile that is harder to recover. The complete Aug 22 backup
+  remains intact. No live Chrome files were changed in this sweep.
+- **ROOT-CAUSE CONFIRMATION**: This independently corroborates RCA #1019: the user-visible
+  failure is server-backed Chrome Sync authentication, not missing profile directories. Local
+  file copying cannot create the missing server session. The requested all-four no-sign-in
+  outcome is therefore technically blocked by the absence of a valid all-four session source,
+  not by a remaining untried local restore path.
