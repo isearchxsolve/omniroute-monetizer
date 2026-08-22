@@ -655,8 +655,11 @@ def wait_for_auth_ui(page, ms: int = 14000) -> str:
     deadline = ms
     saw_password = False
     while deadline > 0:
-        if out_of_time():
-            return "password" if saw_password else "unknown"
+        # NOTE: no out_of_time() here, on purpose. The budget bounds the hunt ACROSS candidate
+        # pages (the loops that call this); it must not blind the poll on the page we are
+        # already standing on -- MEASURED on inception/featherless 2026-08-22: reach_key_page
+        # legitimately spends most of the budget navigating, and a deadline-checked poll then
+        # returned instantly about a page that had the Google button ready.
         if find_google_control(page) is not None:
             return "google"
         try:
@@ -881,8 +884,6 @@ def pick_google_account(page, want_email: Optional[str]) -> str:
     # Poll instead of guessing a duration.
     waited = 0
     while waited < 30000:
-        if out_of_time():
-            return "OUT_OF_TIME"
         if "accounts.google.com" not in page.url:
             return "RETURNED"
         if "signin/rejected" in page.url:
