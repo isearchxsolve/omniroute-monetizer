@@ -3819,3 +3819,16 @@ commit · orphan-adoption + wrong-console guard commit.
 5. Mint-with-modal-already-open: wait_for_control label sweep can be starved by swallowed
    click timeouts when a modal is up (minor; seen in run 13's wrong-console confusion).
 6. Attach-mode `restart_attached` proven once (run 8); not stress-tested.
+
+---
+
+### [2026-08-22 23:1x] #1046 — THE E2E SWEEP STARTS: full queue, --attach, NO --dry-run
+
+Operator: *"now the e2e run"*. Harvest Chrome verified alive on port 9333 (Chrome/151).
+Command: `python scripts/automation/auto_key_harvester.py --attach` (default budget 180s per
+provider, full queue: every free-tier target not already wired, not KNOWN_DEAD, not PARKED).
+This is the first non-dry run of the fixed harvester: keys will be minted on the providers'
+own consoles, wired via `wire()`, and counted ONLY when `real_completion()` gets real text
+from a real model. Raw keys go only to gitignored `state/generated_keys.json`. Google
+refusal / CAPTCHA / card / phone walls end that provider honestly; a GOOGLE_REFUSED result
+stops the whole run by design. Results entry follows when the sweep completes.
