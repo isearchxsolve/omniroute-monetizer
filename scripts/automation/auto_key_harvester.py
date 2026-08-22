@@ -491,34 +491,55 @@ def dom_nav_links(page, kind: str) -> list[dict]:
     return out[:6]
 
 
-def login_candidates(page, target: dict) -> list[str]:
-    """Evidence-ordered auth navigation. NO guessing.
+def nav_click(page, href: str) -> bool:
+    """Click the page's own anchor for this href. Navigation is CLICK-BASED (operator,
+    2026-08-22): press the link the page renders -- no address-bar reloads. Clicking carries
+    referrer and session context; a cold goto() at deep URLs is both unnatural and exactly the
+    traffic pattern WAFs blacklist. True when the click navigated or at least landed."""
+    try:
+        loc = page.locator(f"a[href={json.dumps(href)}]").first
+        if not (loc.count() and loc.is_visible()):
+            return False
+        try:
+            loc.scroll_into_view_if_needed(timeout=3000)
+        except Exception:
+            pass
+        loc.click(timeout=5000)
+    except Exception:
+        return False
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=15000)
+    except Exception:
+        pass
+    settle(page, 3000)
+    return True
 
-    1. the provider's own documented key URL, if the catalog has one;
-    2. URLs the provider's own freeNote/authHint name (see note_urls -- different-domain
-       consoles live here);
-    3. the landing page's own visible login/console anchors, found by DOM study and ranked
-       (dom_nav_links).
-    Nothing else. Conventional-subdomain fabrication and stock-path probing are gone: guessed
-    URLs waste the budget and hammering 100+ domains with them is an IP-blacklist risk.
-    """
-    out: list[str] = []
-    seen: set[str] = set()
 
-    def add(u: Optional[str]) -> None:
-        if not u:
-            return
-        u = u.split("#")[0].rstrip("/")
-        if u.startswith("http") and u.lower() not in seen:
-            seen.add(u.lower())
-            out.append(u)
+def step_back(page) -> None:
+    """After a candidate link led nowhere interesting, go back so the next candidate is still
+    clickable. The candidates were read from the page we are going back to."""
+    try:
+        page.go_back(timeout=8000)
+        settle(page, 2000)
+    except Exception:
+        pass
 
-    add(target.get("apiKeyUrl"))
-    for u in note_urls(target):
-        add(u)
-    for link in dom_nav_links(page, "auth"):
-        add(link["href"])
-    return out[:8]
+
+def adopt_popup(ctx, page):
+    """A click that opened a new tab is still click-based navigation: follow the trail into it."""
+    try:
+        pages = [p for p in ctx.pages if not p.is_closed()]
+    except Exception:
+        return page
+    if len(pages) <= 1:
+        return page
+    for p in reversed(pages):
+        try:
+            if p is not page and p.url not in ("about:blank", "", page.url):
+                return p
+        except Exception:
+            continue
+    return page
 
 
 def frames_of(page) -> list:
@@ -844,17 +865,35 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
     if st:
         return st
 
-    for url in login_candidates(page, target):
-        if url.rstrip("/") == page.url.rstrip("/"):
-            continue
+    # Click-based hunt: press the landing page's own login links, best first, going back
+    # between candidates. No URL reloads -- see nav_click for why.
+    for link in dom_nav_links(page, "auth"):
         if out_of_time():
             return "OUT_OF_TIME"
+        if link["href"].rstrip("/") == (page.url or "").rstrip("/"):
+            continue
+        if not nav_click(page, link["href"]):
+            continue
+        log(f"        clicking '{link['text']}' -> {page.url}")
+        st = attempt_here()
+        if st:
+            return st
+        step_back(page)
+
+    # Last resort: the provider's own documented entry points -- the catalog's apiKeyUrl and
+    # the URLs in the provider's notes. Never guesses. One open each, logged as such.
+    for url in [target.get("apiKeyUrl"), *note_urls(target)]:
+        if out_of_time():
+            return "OUT_OF_TIME"
+        url = (url or "").split("#")[0].rstrip("/")
+        if not url or url == (page.url or "").rstrip("/"):
+            continue
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=20000)
         except Exception:
             continue
         settle(page, 3000)
-        log(f"        looking for a login at {url}")
+        log(f"        documented entry point: {url}")
         st = attempt_here()
         if st:
             return st
@@ -880,44 +919,38 @@ def looks_like_key_page(page) -> bool:
 
 
 def reach_key_page(page, target: dict) -> bool:
-    """Step 5, evidence-first: the provider's documented key URL, the URLs its own notes name,
-    then the signed-in shell's key/token nav anchors found by DOM study.
+    """Step 5, click-based: press the signed-in shell's own key/token nav link (DOM study).
 
-    Stock-path probing (/api-keys, /keys, /settings/keys, ...) was removed with the rest of the
-    URL guessing: it burned budget on pages that never existed and risked the IP. Every URL
-    visited here is either the provider's own documentation or a link the page renders.
+    Falls back to the provider's documented apiKeyUrl / note URLs only when no on-page link
+    leads there. Stock-path probing (/api-keys, /keys, ...) is gone with the rest of the URL
+    guessing: it burned budget on pages that never existed and risked the IP.
     """
-    def try_url(url: str) -> bool:
+    for link in dom_nav_links(page, "keys"):
+        if not nav_click(page, link["href"]):
+            continue
+        log(f"        clicking '{link['text']}' -> {page.url}")
+        if looks_like_key_page(page):
+            return True
+        if login_wall(page) or has_google_control(page):
+            return False   # the provider's own redirect answered the session question
+        step_back(page)
+
+    tried: set[str] = set()
+    for url in [target.get("apiKeyUrl"), *note_urls(target)]:
+        url = (url or "").split("#")[0].rstrip("/")
+        if not url or url in tried or url == (page.url or "").rstrip("/"):
+            continue
+        tried.add(url)
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=30000)
         except Exception:
-            return False
+            continue
         settle(page)
         dismiss_overlays(page)
-        # A redirect to a login page is an answer, not a failure: stop, let the caller run the
-        # Google flow, then come back here.
+        log(f"        documented entry point: {url}")
         if login_wall(page) or has_google_control(page):
             return False
-        return looks_like_key_page(page)
-
-    tried: set[str] = set()
-
-    def fresh(u: Optional[str]) -> Optional[str]:
-        if not u:
-            return None
-        u = u.split("#")[0].rstrip("/")
-        if u in tried or u == (page.url or "").rstrip("/"):
-            return None
-        tried.add(u)
-        return u
-
-    for url in [target.get("apiKeyUrl"), *note_urls(target)]:
-        url = fresh(url)
-        if url and try_url(url):
-            return True
-    for link in dom_nav_links(page, "keys"):
-        url = fresh(link["href"])
-        if url and try_url(url):
+        if looks_like_key_page(page):
             return True
     return False
 
@@ -1025,6 +1058,13 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
         if login_wall(page) or has_google_control(page) or not reached:
             sso = do_sso(ctx, page, target, target.get("google_email"))
             row["sso"] = sso
+            follow = adopt_popup(ctx, page)
+            if follow is not page:
+                try:
+                    page.close()
+                except Exception:
+                    pass
+                page = follow
             row["landed"] = page.url
             if sso in ("CAPTCHA_REFUSED", "PAYWALL_REFUSED", "IDENTITY_REFUSED",
                        "GOOGLE_REFUSED_AUTOMATION", "SITE_REFUSED"):
