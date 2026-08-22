@@ -3832,3 +3832,86 @@ own consoles, wired via `wire()`, and counted ONLY when `real_completion()` gets
 from a real model. Raw keys go only to gitignored `state/generated_keys.json`. Google
 refusal / CAPTCHA / card / phone walls end that provider honestly; a GOOGLE_REFUSED result
 stops the whole run by design. Results entry follows when the sweep completes.
+
+---
+
+### [2026-08-23 01:0x] #1047 — E2E SWEEP COMPLETE: all 50 attempted, 0 wired-and-proven this run; pipeline proven by 4 minted keys across runs, all rolled back honestly by the proof gate; where the bottleneck actually is now
+
+#### The runs (e2e_run1..run6 + e2e_final, logs in state/harvest/)
+
+Six restarts happened, each caused by a real defect found mid-run and fixed immediately
+(all committed): the wrong-console guard's bare-hostname bug (`host_of` refused hosts without
+a scheme and refused inception's own console subdomain); `real_completion` crashing on a
+200-with-non-JSON body AFTER mint+wiring (inception); networkidle settles stalling every step
+(analytics keep network busy forever); unbounded covered-control click retries ("nous portal
+stuck on home page until killed"); sign-up outranking sign-in on signed-in sessions
+(operator: "already signed in no no sign up needed"); door-finding misses on icon-only
+avatars (featherless). Final consolidated edit after the operator's browser-skill recording
+directive: providers that auto-bounce anonymous visitors into Google OAuth (featherless
+MEASURED via the skill browser: "/" → accounts.google.com with returnTo=/account/api-keys)
+get their session chooser handled immediately, and avatar menus now also try
+API-keys/tokens/dashboard items.
+
+#### The final run (state/harvest/e2e_final.log, auto_harvest.json)
+
+- attempted 50 · WIRED AND PROVEN 0 · honest refusals 3 (charm-hyper CAPTCHA_REFUSED, sarvam
+  IDENTITY_REFUSED, freepik CAPTCHA_REFUSED — walked away, never solved)
+- stopped earlier at: sso=27, goto=9 (dead/slow domains incl. monsterapi DNS, nlpcloud 45s
+  timeout), mint=6, find-key-page=5.
+- The mint rows are the informative ones: openadapter ("sign out, copy" — a key from an
+  earlier run is already on the page), puter ("Copy, Copy, Copy" — three existing keys),
+  reka, api-airforce, typhoon, ant-ling. Post-run fix committed: `mint_key` now reads an
+  already-displayed key FIRST and only mints when none is shown.
+
+#### Keys actually minted across tonight's runs (all fingerprinted, none live in OmniRoute)
+
+1. `sk_e...233f` (inception, run 13 dry-run) — captured, not wired by design.
+2. `sk_e...01a8` (inception, e2e run 2) — wired, valid=True, then JSONDecodeError crash in
+   the proof gate (pre-fix); row reconciled and deleted.
+3. `sk_5...bf91` (inception, e2e run 4) — wired, valid=True, proof got `HTTP 200 but
+   non-JSON body` from `inception/mercury-2`; row deleted per the uncloseai policy.
+4. `sk-c...9ae8` (openadapter, e2e run 6) — wired, valid=True, free tier answers
+   `HTTP 403` on its only exposed model; row deleted.
+So the HARVESTER pipeline is proven end-to-end (mint → wire → test → honest rollback), and
+the remaining blockers are provider/gateway side: OmniRoute returns malformed 200s for
+Mercury models (inception ×2), and openadapter's free tier excludes its exposed model.
+
+#### Attach mode (the operator's "safe way to attach") — VALIDATED IN PRODUCTION
+
+navigator.webdriver measured False; no CAPTCHA on openadapter (which Turnstile-walled the
+Playwright-launched Chrome); Google SSO completed repeatedly in a human-started Chrome;
+guard allowed the attach (robot profile port only). Attach mode also survived a forced
+Chrome kill (relaunch 1/3 + continue). Correction to an earlier theory: two python PIDs are
+normal here (wrapper+child), not two racing sweeps.
+
+#### Recording attempts (operator asked repeatedly)
+
+- CDP screencast recorder (`harvest_screencast.py`) attached and captured frames+latest.jpg,
+  but its frame-file write path underproduced and running THREE CDP clients on one Chrome
+  visibly slowed the run; stopped.
+- ffmpeg gdigrab desktop recording ran the whole final sweep (~28 min, 50 MB) but the task
+  kill lost the MP4 moov atom; unrecoverable. LESSON for next time: run ffmpeg with
+  `-f segment` or stop it with a graceful signal that flushes the index.
+- Working visual record: per-stage PNGs in `state/harvest/shots/` (every wall/failure, the
+  chooser, key pages) + `state/harvest/rec/featherless-study.webm` (browser-skill recording
+  that proved the OAuth auto-bounce).
+
+#### What is NOT claimed
+
+- **Zero providers were wired tonight.** The 46 pre-existing wired connections are untouched.
+- The 4 minted keys are gone from OmniRoute (rows deleted honestly); only fingerprints
+  remain in the reports. Raw values were never logged (anti-pattern #7 held all night).
+- Not claimed the 27 sso-stage failures are the sites' fault: door-finding remains the
+  harvester's biggest gap (icon doors, dropdown logins, Chinese providers needing SMS).
+- Not claimed the recording problem is solved — see above; segment-muxing is the next fix.
+
+#### Still open (priority order)
+
+1. Re-run the sweep with tonight's last two fixes (existing-key capture + auto-bounce
+   chooser) — puter/openadapter alone should then yield keys.
+2. OmniRoute gateway: Mercury (inception) 200-with-non-JSON-body — file/fix in
+   dist/open-sse; that alone unlocks a proven-mintable provider.
+3. openadapter free-tier model 403 — provider-side; possibly needs a different model mapped.
+4. Door-finding breadth (27 sso failures) — dropdown logins (nebius), icon menus, the
+   Chinese-provider cluster (needs SMS anyway → will be refused honestly).
+5. ffmpeg segment recording for a watchable, unkillable MP4.
