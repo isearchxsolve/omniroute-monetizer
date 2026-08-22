@@ -49,6 +49,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -474,6 +476,146 @@ def _summary(results: dict) -> None:
     print()
 
 
+def _chrome_using_profile(udd: Path) -> int:
+    """Count running chrome.exe processes whose command line points at `udd`.
+
+    Needed because Popen.wait() is NOT a reliable "the window closed" signal on Windows: a
+    freshly launched chrome.exe can hand its arguments to an existing browser process and exit
+    straight away, so wait() returns while the window is still on screen. Reporting "the
+    profile is free" then would be a false statement, and the harvest step would fail on the
+    profile lock. So closure is confirmed by looking for the process, not by the exit code.
+
+    Returns -1 if the query itself could not run, so callers can tell "none" from "unknown".
+    """
+    needle = str(udd).lower()
+    ps = (
+        "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" "
+        "| Select-Object -ExpandProperty CommandLine"
+    )
+    try:
+        out = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", ps],
+            capture_output=True, text=True, timeout=30,
+        )
+    except Exception:
+        return -1
+    if out.returncode != 0:
+        return -1
+    return sum(1 for line in (out.stdout or "").splitlines() if needle in line.lower())
+
+
+def _find_chrome() -> Path | None:
+    """Locate the real installed chrome.exe. Never Playwright's bundled Chromium."""
+    candidates = [
+        Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+        / "Google/Chrome/Application/chrome.exe",
+        Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"))
+        / "Google/Chrome/Application/chrome.exe",
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Google/Chrome/Application/chrome.exe",
+    ]
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
+def run_manual_signin() -> int:
+    """Open the robot's profile in PLAIN Chrome so the operator can sign into Google by hand.
+
+    WHY THIS MODE EXISTS -- read before replacing it with a Playwright launch.
+
+    Google refuses its own password step in a Playwright-launched Chrome:
+    "Couldn't sign you in / This browser or app may not be secure" (measured 2026-08-22).
+    Playwright adds automation switches to the command line and Google checks for them. The
+    documented fix is NOT to hide those switches -- disguising the browser is how accounts get
+    flagged, and this repo refuses to do it. The fix is to not use automation for the sign-in
+    at all.
+
+    So this launches the ordinary installed chrome.exe as a plain subprocess, pointed at the
+    robot's own profile folder via `--user-data-dir`. That is a supported, everyday Chrome
+    feature: it is a completely normal Chrome, with no automation flags and no debugging port,
+    so Google sees nothing unusual and the operator signs in exactly as they always do.
+
+    The Google session then PERSISTS in that profile folder. Afterwards `run_interactive()`
+    can drive the same folder with Playwright and each provider's "Continue with Google"
+    button reuses the existing session cookie -- no Google password step is ever automated.
+
+    The profile is still `safe_profile_dir()`, so chrome_live_guard applies: this can never
+    point at the operator's live Chrome tree.
+    """
+    udd = safe_profile_dir(PROFILE_TAG)          # guard runs here
+    assert_safe(udd, who="run_manual_signin")    # and again, explicitly, at the call site
+
+    chrome = _find_chrome()
+    if not chrome:
+        _say("PROBLEM", "Could not find an installed chrome.exe. Nothing was opened.")
+        return 3
+
+    print()
+    print("=" * 74)
+    print("  SIGN IN ONCE -- then I can reach every provider without a password")
+    print("=" * 74)
+    print()
+    print("  A brand-new, EMPTY Chrome window is about to open.")
+    print("  It is the robot's own browser. It is NOT your normal Chrome, and nothing")
+    print("  you do in it can log you out of your own profiles.")
+    print()
+    print("  Please do these three things:")
+    print()
+    print("    1. Sign in with your Google account (the normal Google screen).")
+    print("    2. Wait until you can see your Google account page.")
+    print("    3. CLOSE that Chrome window.")
+    print()
+    print("  Step 3 matters: I cannot use the browser while it is still open.")
+    print("  When it is closed, tell me and I will visit each provider and press")
+    print("  'Continue with Google' for you.")
+    print()
+    print(f"  profile folder : {udd}")
+    print(f"  chrome         : {chrome}")
+    print()
+    print("  Waiting for you to close the window...")
+    print("-" * 74)
+
+    # Plain Chrome. No automation flags, no --remote-debugging-port, no Playwright.
+    proc = subprocess.Popen([
+        str(chrome),
+        f"--user-data-dir={udd}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--window-size=1280,900",
+        "--window-position=60,40",
+        "https://accounts.google.com/",
+    ])
+    try:
+        proc.wait()
+    except KeyboardInterrupt:
+        _say("info", "stopped by operator; the Chrome window may still be open.")
+        return 130
+
+    # proc.wait() returning is NOT proof the window closed -- see _chrome_using_profile().
+    # Poll for the real process before claiming the profile is free.
+    import time
+
+    waited = 0
+    still = _chrome_using_profile(udd)
+    while still > 0:
+        time.sleep(3)
+        waited += 3
+        still = _chrome_using_profile(udd)
+        if waited % 30 == 0:
+            print(f"  ...still open ({still} Chrome process(es) on this profile), waiting")
+
+    print("-" * 74)
+    if still < 0:
+        _say("ok", "Chrome's launcher process exited.")
+        _say("info", "I could not query running processes to double-check, so if that "
+                     "window is still on screen, please close it before I continue.")
+    else:
+        _say("ok", "Chrome closed. The profile is now free for me to use.")
+    _say("info", "Next: I visit each provider and press 'Continue with Google'.")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -483,7 +625,19 @@ def main(argv=None) -> int:
                     help="comma-separated subset, e.g. kie,segmind")
     ap.add_argument("--google", action="store_true",
                     help="offer an optional Google sign-in first so saved passwords autofill")
+    ap.add_argument("--manual-signin", action="store_true",
+                    help="open the robot's profile in PLAIN Chrome so you can sign into "
+                         "Google by hand (Google refuses automated browsers)")
     args = ap.parse_args(argv)
+
+    if args.manual_signin:
+        # Deliberately BEFORE the Playwright import check: this mode does not use Playwright.
+        try:
+            return run_manual_signin()
+        except LiveProfileRefused as exc:
+            _say("PROBLEM", "REFUSED by chrome_live_guard. The guard is right.")
+            print(exc)
+            return 2
 
     only = [s.strip() for s in args.only.split(",") if s.strip()] or None
     if only:
