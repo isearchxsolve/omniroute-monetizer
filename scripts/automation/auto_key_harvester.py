@@ -545,28 +545,58 @@ def dom_nav_links(page, kind: str) -> list[dict]:
     return out[:6]
 
 
-def nav_click(page, href: str) -> bool:
-    """Click the page's own anchor for this href. Navigation is CLICK-BASED (operator,
-    2026-08-22): press the link the page renders -- no address-bar reloads. Clicking carries
-    referrer and session context; a cold goto() at deep URLs is both unnatural and exactly the
-    traffic pattern WAFs blacklist. True when the click navigated or at least landed."""
+def _sibling_pages(page) -> list:
+    try:
+        return [p for p in page.context.pages if not p.is_closed()]
+    except Exception:
+        return [page]
+
+
+def nav_click(page, href: str):
+    """Click the page's own anchor for this href and FOLLOW where it went.
+
+    Navigation is CLICK-BASED (operator, 2026-08-22): press the link the page renders -- no
+    address-bar reloads. Clicking carries referrer and session context; a cold goto() at deep
+    URLs is both unnatural and exactly the traffic pattern WAFs blacklist.
+
+    Returns the page holding the destination: the SAME page for ordinary links, or the NEW TAB
+    for target=_blank links. MEASURED on docs.inceptionlabs.ai 2026-08-22: every console link
+    opens a new tab, and the old code kept probing the docs tab while the console sat unopened
+    in another tab. None when the click failed or went nowhere.
+    """
     try:
         loc = page.locator(f"a[href={json.dumps(href)}]").first
         if not (loc.count() and loc.is_visible()):
-            return False
+            return None
+        before_pages = {id(p) for p in _sibling_pages(page)}
+        url_before = page.url or ""
         try:
             loc.scroll_into_view_if_needed(timeout=3000)
         except Exception:
             pass
         loc.click(timeout=5000)
     except Exception:
-        return False
+        return None
+    follow = None
+    end = time.monotonic() + 8
+    while time.monotonic() < end:
+        fresh = [p for p in _sibling_pages(page)
+                 if id(p) not in before_pages and (p.url or "") not in ("", "about:blank")]
+        if fresh:
+            follow = fresh[-1]
+            break
+        if (page.url or "").rstrip("/") != url_before.rstrip("/"):
+            break
+        page.wait_for_timeout(500)
+    tgt = follow or page
     try:
-        page.wait_for_load_state("domcontentloaded", timeout=15000)
+        tgt.wait_for_load_state("domcontentloaded", timeout=15000)
     except Exception:
         pass
-    settle(page, 3000)
-    return True
+    settle(tgt, 3000)
+    if follow is None and (page.url or "").rstrip("/") == url_before.rstrip("/"):
+        return None   # the click went nowhere
+    return tgt
 
 
 def step_back(page) -> None:
@@ -918,14 +948,16 @@ def looks_signed_in(page) -> bool:
 
 
 def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
-    """Steps 2-4: get in via Continue with Google. Handles same-tab and popup flows.
+    """Steps 2-4: get in via Continue with Google. Handles same-tab, popup and new-tab flows.
 
     Hunts for the page that actually HAS the Google button instead of assuming the catalog's
     website is it. MEASURED on sambanova: the marketing homepage has no login anywhere, so the
     old 'click an entry label on the landing page' approach clicked a nav item and gave up.
+    Every helper takes the page it works on, because a click may move the action to a NEW TAB
+    (docs.inceptionlabs.ai measurement) and the flow must follow it there.
     """
-    def click_google() -> bool:
-        loc = find_google_control(page)
+    def click_google(p) -> bool:
+        loc = find_google_control(p)
         if loc is None:
             return False
         try:
@@ -934,20 +966,20 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
         except Exception:
             return False
 
-    def try_google() -> Optional[str]:
+    def try_google(p) -> Optional[str]:
         popup: dict[str, Any] = {}
         try:
             with ctx.expect_page(timeout=6000) as pi:
-                if not click_google():
+                if not click_google(p):
                     return None
             popup["p"] = pi.value
         except Exception:
             # No popup opened. Either the click failed, or it navigated in this tab.
-            if "accounts.google.com" not in page.url:
-                if not click_google():
+            if "accounts.google.com" not in p.url:
+                if not click_google(p):
                     return None
-                settle(page, 5000)
-        tgt = popup.get("p") or page
+                settle(p, 5000)
+        tgt = popup.get("p") or p
         try:
             tgt.wait_for_load_state("domcontentloaded", timeout=15000)
         except Exception:
@@ -960,43 +992,43 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
                 popup["p"].close()
             except Exception:
                 pass
-            settle(page, 6000)
-            await_callback(page)
+            settle(p, 6000)
+            await_callback(p)
         return st
 
-    def attempt_here() -> Optional[str]:
+    def attempt_here(p) -> Optional[str]:
         """Try this page: Google button? Already in? A door to click, then a Google button?
 
         The Google check runs FIRST on purpose. A visible "Continue with Google" is the single
         most reliable fact on any of these pages -- more reliable than nav text, more reliable
         than the URL -- so it decides before anything else gets a vote.
         """
-        dismiss_overlays(page)
-        seen = wait_for_auth_ui(page)
-        w = wall_page(page)
+        dismiss_overlays(p)
+        seen = wait_for_auth_ui(p)
+        w = wall_page(p)
         if w:
             return w
-        if seen == "google" or has_google_control(page):
-            return try_google()
-        if looks_signed_in(page):
+        if seen == "google" or has_google_control(p):
+            return try_google(p)
+        if looks_signed_in(p):
             return "ALREADY_SIGNED_IN"
-        if click_label(page, ENTRY_LABELS, timeout=4000):
-            settle(page, 5000)
-            dismiss_overlays(page)
+        if click_label(p, ENTRY_LABELS, timeout=4000):
+            settle(p, 5000)
+            dismiss_overlays(p)
             # Do not discard the poll: the password field paints before the Google button on
             # the same card (inception measurement above), so keep polling and use the result.
-            seen = wait_for_auth_ui(page)
-            w = wall_page(page)
+            seen = wait_for_auth_ui(p)
+            w = wall_page(p)
             if w:
                 return w
-            if seen == "google" or has_google_control(page):
-                return try_google()
-            if looks_signed_in(page):
+            if seen == "google" or has_google_control(p):
+                return try_google(p)
+            if looks_signed_in(p):
                 return "ALREADY_SIGNED_IN"
         return None
 
     start_url = page.url
-    st = attempt_here()
+    st = attempt_here(page)
     if st:
         return st
 
@@ -1013,13 +1045,20 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
             return "OUT_OF_TIME"
         if link["href"].rstrip("/") == (page.url or "").rstrip("/"):
             continue
-        if not nav_click(page, link["href"]):
+        follow = nav_click(page, link["href"])
+        if follow is None:
             continue
-        log(f"        clicking '{link['text']}' -> {page.url}")
-        st = attempt_here()
+        log(f"        clicking '{link['text']}' -> {follow.url}")
+        st = attempt_here(follow)
         if st:
             return st
-        step_back(page)
+        if follow is not page:
+            try:
+                follow.close()
+            except Exception:
+                pass
+        else:
+            step_back(page)
 
     # Last resort: the provider's own documented entry points -- the catalog's apiKeyUrl and
     # the URLs in the provider's notes. Never guesses. One open each, logged as such.
@@ -1035,7 +1074,7 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
             continue
         settle(page, 3000)
         log(f"        documented entry point: {url}")
-        st = attempt_here()
+        st = attempt_here(page)
         if st:
             return st
     return "NO_SSO_CONTROL_FOUND"
@@ -1059,26 +1098,38 @@ def looks_like_key_page(page) -> bool:
     return False
 
 
-def reach_key_page(page, target: dict) -> bool:
+def reach_key_page(page, target: dict):
     """Step 5, click-based: press the signed-in shell's own key/token nav link (DOM study).
+
+    Returns the PAGE where the action is -- the key page itself, or the login page the provider
+    bounced us to (run_one runs the Google flow there). A NEW TAB counts (docs.inceptionlabs.ai
+    opens its console with target=_blank). None when nothing was found.
 
     Falls back to the provider's documented apiKeyUrl / note URLs only when no on-page link
     leads there. Stock-path probing (/api-keys, /keys, ...) is gone with the rest of the URL
     guessing: it burned budget on pages that never existed and risked the IP.
     """
     if looks_like_key_page(page):
-        return True   # already standing on it -- MEASURED on inception 2026-08-22: an instant
+        return page   # already standing on it -- MEASURED on inception 2026-08-22: an instant
                       # consent redirect dropped the run straight onto /dashboard/api-keys and
                       # the old code still reported the provider a failure
+
     for link in dom_nav_links(page, "keys"):
-        if not nav_click(page, link["href"]):
+        follow = nav_click(page, link["href"])
+        if follow is None:
             continue
-        log(f"        clicking '{link['text']}' -> {page.url}")
-        if looks_like_key_page(page):
-            return True
-        if login_wall(page) or has_google_control(page):
-            return False   # the provider's own redirect answered the session question
-        step_back(page)
+        log(f"        clicking '{link['text']}' -> {follow.url}")
+        if looks_like_key_page(follow):
+            return follow
+        if login_wall(follow) or has_google_control(follow):
+            return follow   # the provider's own redirect answered the session question
+        if follow is not page:
+            try:
+                follow.close()
+            except Exception:
+                pass
+        else:
+            step_back(page)
 
     tried: set[str] = set()
     for url in [target.get("apiKeyUrl"), *note_urls(target)]:
@@ -1094,10 +1145,10 @@ def reach_key_page(page, target: dict) -> bool:
         dismiss_overlays(page)
         log(f"        documented entry point: {url}")
         if login_wall(page) or has_google_control(page):
-            return False
+            return page
         if looks_like_key_page(page):
-            return True
-    return False
+            return page
+    return None
 
 
 def mint_key(page) -> tuple[Optional[str], str]:
@@ -1197,7 +1248,19 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
         # order a person uses, and it removes all guessing about session state: instead of
         # deciding "am I signed in?" from page furniture -- which produced a false positive on
         # sambanova's public pricing page -- we let the provider's own redirect answer it.
-        reached = reach_key_page(page, target)
+        # reach_key_page may move the action to a NEW TAB (target=_blank console links); adopt
+        # that page so every later step works where the action actually is.
+        def adopt(reached_page) -> bool:
+            nonlocal page
+            if reached_page is not None and reached_page is not page:
+                try:
+                    page.close()
+                except Exception:
+                    pass
+                page = reached_page
+            return reached_page is not None
+
+        reached = adopt(reach_key_page(page, target))
         row["key_page_attempt"] = page.url
 
         if login_wall(page) or has_google_control(page) or not reached:
@@ -1222,7 +1285,7 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
             if sso not in ("RETURNED", "ALREADY_SIGNED_IN") and not looks_like_key_page(page):
                 row.update(ok=False, stage="sso", detail=sso, shot=shot(page, f"{slug}-sso"))
                 return row
-            reached = reach_key_page(page, target)
+            reached = adopt(reach_key_page(page, target))
 
         if not reached or login_wall(page):
             row.update(ok=False, stage="find-key-page",
