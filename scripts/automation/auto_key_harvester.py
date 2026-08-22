@@ -252,9 +252,18 @@ def wall(text: str, url: str = "") -> Optional[str]:
     return None
 
 
-def click_label(page, labels: tuple[str, ...], timeout: int = 4000) -> Optional[str]:
-    """Click the first control matching any label. Returns the label that worked, or None."""
+def click_label(page, labels: tuple[str, ...], timeout: int = 1500) -> Optional[str]:
+    """Click the first control matching any label. Returns the label that worked, or None.
+
+    Deadline-aware, with SHORT per-click timeouts. MEASURED on the nous portal 2026-08-22
+    (operator: "stuck on home page until killed"): a matching-but-covered control makes every
+    click retry for its full timeout, and 12 labels x 2 passes x 2 roles x 4s silently burned
+    minutes on one page with no budget check inside the loop. 1.5s per click and an
+    out_of_time() check between labels bounds the whole call.
+    """
     for label in labels:
+        if out_of_time():
+            return None
         pat = re.compile(rf"^\s*{re.escape(label)}\s*$", re.I)
         for role in ("button", "link"):
             try:
@@ -269,6 +278,8 @@ def click_label(page, labels: tuple[str, ...], timeout: int = 4000) -> Optional[
     # 'Login' anchor whose accessible name had extra text, the exact pass missed it, and the
     # next label in line ('get started') walked the run into the model playground instead.
     for label in labels:
+        if out_of_time():
+            return None
         pat = re.compile(re.escape(label), re.I)
         for role in ("button", "link"):
             try:
