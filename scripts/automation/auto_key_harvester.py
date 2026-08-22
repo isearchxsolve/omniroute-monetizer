@@ -1316,9 +1316,39 @@ def reach_key_page(page, target: dict):
     return None
 
 
+def _keys_in_inputs(page, exclude=frozenset()) -> set[str]:
+    """Keys sitting in inputs/code blocks the body-text extractor cannot see."""
+    out: set[str] = set()
+    try:
+        for sel in ("input[readonly]", "input[type=text]", "textarea", "code", "pre"):
+            loc = page.locator(sel)
+            for i in range(min(loc.count(), 12)):
+                v = (loc.nth(i).input_value(timeout=1500)
+                     if sel.startswith("input") or sel == "textarea"
+                     else loc.nth(i).inner_text(timeout=1500))
+                if looks_like_key(v) and v.strip() not in exclude:
+                    out.add(v.strip())
+    except Exception:
+        pass
+    return out
+
+
 def mint_key(page) -> tuple[Optional[str], str]:
-    """Steps 6-7: create the key, then copy it. Returns (key or None, detail)."""
+    """Steps 6-7: create the key, then copy it. Returns (key or None, detail).
+
+    MEASURED on the final 50-provider sweep 2026-08-22: puter's key page showed three Copy
+    buttons and openadapter's showed 'sign out, copy' -- keys minted in EARLIER runs already
+    exist on those pages. Hunting a create control there is wrong: read what is displayed
+    first, and only mint a fresh key when no full key is on screen.
+    """
     before = keys_in(body_text(page))
+    if before:
+        best = max(before, key=len)
+        return best, "existing key read from the page (no new mint needed)"
+    shown = _keys_in_inputs(page)
+    if shown:
+        best = max(shown, key=len)
+        return best, "existing key read from an input on the page (no new mint needed)"
     # Poll for the control to appear before clicking (wait_for_control docstring: the
     # featherless.ai measurement). Falls back to the broader substring matcher for icon buttons.
     clicked = wait_for_control(page, CREATE_LABELS, ms=15000) \
@@ -1376,17 +1406,10 @@ def mint_key(page) -> tuple[Optional[str], str]:
         return best, f"clicked '{clicked}', read from page"
 
     # Some providers put the key in an input the text extractor cannot see.
-    try:
-        for sel in ("input[readonly]", "input[type=text]", "textarea", "code", "pre"):
-            loc = page.locator(sel)
-            for i in range(min(loc.count(), 12)):
-                v = (loc.nth(i).input_value(timeout=1500)
-                     if sel.startswith("input") or sel == "textarea"
-                     else loc.nth(i).inner_text(timeout=1500))
-                if looks_like_key(v) and v.strip() not in before:
-                    return v.strip(), f"clicked '{clicked}', read from {sel}"
-    except Exception:
-        pass
+    fresh_inputs = _keys_in_inputs(page, exclude=before)
+    if fresh_inputs:
+        best = max(fresh_inputs, key=len)
+        return best, f"clicked '{clicked}', read from an input"
     return None, f"clicked '{clicked}' but no key appeared"
 
 
