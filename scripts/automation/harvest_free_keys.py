@@ -345,7 +345,16 @@ def real_completion(slug: str, timeout: int = 120) -> tuple[bool, str]:
             last = f"{mid}: {type(exc).__name__}"
             continue
         if r.status_code == 200:
-            txt = ((r.json().get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+            # MEASURED on the first e2e sweep (inception, 2026-08-22): OmniRoute can answer
+            # HTTP 200 with a non-JSON body, and an unguarded r.json() then crashed the whole
+            # provider row as JSONDecodeError -- after the key was minted and the connection
+            # created. A malformed 200 is an answer: record it and move on.
+            try:
+                payload = r.json()
+            except Exception:
+                last = f"{mid}: HTTP 200 but non-JSON body"
+                continue
+            txt = ((payload.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
             if str(txt).strip():
                 return True, f"{mid} answered with real text"
             last = f"{mid}: HTTP 200 but empty content"
