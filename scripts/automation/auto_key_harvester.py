@@ -425,6 +425,45 @@ def icon_login_click(page) -> bool:
     return False
 
 
+HEADER_ICON_JS = """() => {
+    // Header-region icon controls with no text and no href: the last-resort door. SaaS
+    // landings put a bare avatar button (JS-routed, no link) top-right; there is nothing for
+    // label clicks or href navigation to hold on to. Operator: "sweeping too fast without
+    // creating keys" -- those doors were being walked past in seconds.
+    const out = [];
+    for (const el of document.querySelectorAll("button, a, [role=button]")) {
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0 || r.top > 260) continue;      // header band only
+        if (r.right < innerWidth * 0.55) continue;                        // right side only
+        const text = (el.innerText || el.getAttribute('aria-label') || '').trim();
+        if (text) continue;                                               // icon-only
+        if (!el.querySelector("svg, img, i")) continue;                   // must carry an icon
+        out.push({tag: el.tagName, x: Math.round(r.x), y: Math.round(r.y)});
+        if (out.length >= 3) break;
+    }
+    return out;
+}"""
+
+
+def header_icon_click(page) -> bool:
+    """Click the first icon-only control in the page's top-right header band (JS-routed doors).
+
+    Returns True if one was clicked. The caller re-polls for auth UI afterwards, so a wrong
+    guess costs seconds, not the provider.
+    """
+    try:
+        spots = page.evaluate(HEADER_ICON_JS) or []
+    except Exception:
+        return False
+    for s in spots[:3]:
+        try:
+            page.mouse.click(s["x"] + 8, s["y"] + 8)
+            return True
+        except Exception:
+            continue
+    return False
+
+
 def wait_for_control(page, labels: tuple[str, ...], roles: tuple[str, ...] = ("button", "link"),
                      ms: int = 15000) -> Optional[str]:
     """Poll until one of these labels exists as a visible control, then click it.
@@ -1067,9 +1106,15 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
             return try_google(p)
         if looks_signed_in(p):
             return "ALREADY_SIGNED_IN"
-        if click_label(p, ENTRY_LABELS, timeout=4000) or icon_login_click(p):
+        clicked = click_label(p, ENTRY_LABELS, timeout=4000) or icon_login_click(p)
+        via_header_icon = not clicked and header_icon_click(p)
+        if clicked or via_header_icon:
             settle(p, 5000)
             dismiss_overlays(p)
+            if via_header_icon:
+                # The icon may have opened a menu rather than navigated: press the login
+                # item inside it while it is open.
+                click_label(p, ENTRY_LABELS, timeout=3000)
             # Do not discard the poll: the password field paints before the Google button on
             # the same card (inception measurement above), so keep polling and use the result.
             seen = wait_for_auth_ui(p)
