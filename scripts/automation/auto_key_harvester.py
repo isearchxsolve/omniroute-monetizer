@@ -649,6 +649,8 @@ def wait_for_auth_ui(page, ms: int = 14000) -> str:
     """
     deadline = ms
     while deadline > 0:
+        if out_of_time():
+            return "unknown"   # the per-provider budget is a hard breadth-first promise
         if find_google_control(page) is not None:
             return "google"
         try:
@@ -873,6 +875,8 @@ def pick_google_account(page, want_email: Optional[str]) -> str:
     # Poll instead of guessing a duration.
     waited = 0
     while waited < 30000:
+        if out_of_time():
+            return "OUT_OF_TIME"
         if "accounts.google.com" not in page.url:
             return "RETURNED"
         if "signin/rejected" in page.url:
