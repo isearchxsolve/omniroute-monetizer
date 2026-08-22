@@ -262,6 +262,25 @@ def list_real_profiles() -> List[Dict[str, str]]:
     return sorted(rows, key=lambda r: r["dir"])
 
 
+def _is_junction(path: Path) -> bool:
+    """True for a Windows directory junction (reparse point).
+
+    pathlib.is_symlink()/os.path.islink return False for junctions on Windows — they only
+    detect real symlinks — so a working junction would be misread as a plain directory.
+    The reparse-point attribute is the authoritative tell.
+    """
+    if os.name != "nt":
+        return path.is_symlink()
+    try:
+        import stat as _stat
+        # lstat, NOT stat: stat() follows the junction and reports the target's plain
+        # directory attributes; lstat() reports the reparse point itself (0x410).
+        attrs = os.lstat(path).st_file_attributes  # type: ignore[attr-defined]
+        return bool(attrs & _stat.FILE_ATTRIBUTE_REPARSE_POINT)
+    except (AttributeError, OSError):
+        return path.is_symlink()
+
+
 def ensure_junction(alias: Path) -> bool:
     """
     Create a directory junction aliasing the real Chrome User Data root.
@@ -275,19 +294,20 @@ def ensure_junction(alias: Path) -> bool:
     import subprocess
 
     if alias.exists() or alias.is_symlink():
-        if not alias.is_symlink():
-            # A REAL directory here is a trap: Chrome would treat it as a brand-new user
-            # data dir and scaffold empty profiles inside it, so every probe would see a
-            # logged-out wall while appearing to "work". Refuse loudly instead.
-            raise RuntimeError(
-                f"user-data-root {alias} exists and is NOT a junction. Chrome would use it "
-                f"as a fresh empty profile dir. Move it aside (e.g. rename) and re-run so a "
-                f"real junction to {REAL_USER_DATA} can be created.")
-        return False
+        if _is_junction(alias):
+            log(f"reusing existing junction: {alias}")
+            return False
+        # A REAL directory here is a trap: Chrome would treat it as a brand-new user
+        # data dir and scaffold empty profiles inside it, so every probe would see a
+        # logged-out wall while appearing to "work". Refuse loudly instead.
+        raise RuntimeError(
+            f"user-data-root {alias} exists and is NOT a junction. Chrome would use it "
+            f"as a fresh empty profile dir. Move it aside (e.g. rename) and re-run so a "
+            f"real junction to {REAL_USER_DATA} can be created.")
     alias.parent.mkdir(parents=True, exist_ok=True)
     proc = subprocess.run(["cmd", "/c", "mklink", "/J", str(alias), str(REAL_USER_DATA)],
                           capture_output=True, text=True)
-    if proc.returncode != 0 or not (alias.exists() or alias.is_symlink()):
+    if proc.returncode != 0 or not _is_junction(alias):
         raise RuntimeError(f"mklink /J failed: {(proc.stderr or proc.stdout).strip()[:200]}")
     log(f"junction created: {alias} -> {REAL_USER_DATA}")
     return True
@@ -297,6 +317,9 @@ def remove_junction(alias: Path) -> None:
     """Unlink the alias only. NEVER delete through it."""
     import subprocess
 
+    if not _is_junction(alias):
+        log(f"NOT removing {alias}: it is not a junction (safety)", "warn")
+        return
     subprocess.run(["cmd", "/c", "rmdir", str(alias)], capture_output=True, text=True)
     log(f"junction removed: {alias}")
 
