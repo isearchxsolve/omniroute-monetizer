@@ -149,12 +149,21 @@ COOKIE_LABELS = (
 )
 # The catalog's `website` is a MARKETING homepage for most providers, not the signup console.
 # MEASURED on sambanova: https://sambanova.ai has no login at all; the console is
-# cloud.sambanova.ai. So the real login page is discovered from the page's own links first,
-# and only then guessed from conventional subdomains.
+# cloud.sambanova.ai. Navigation therefore follows EVIDENCE ONLY -- the provider's documented
+# URLs, the URLs named in its own catalog notes, and the anchors the page itself renders.
+# Conventional-subdomain fabrication (app./cloud./console.) and stock-path probing were REMOVED
+# 2026-08-22 on the operator's call: trying many invented URLs is the wrong way to find the
+# correct path, it burns the per-provider budget, and hammering 100+ provider domains with
+# guess-request after guess-request is exactly how an IP ends up blacklisted by their WAFs.
 AUTH_HREF_RE = re.compile(
     r"(?:^|[./_-])(?:log[-_]?in|sign[-_]?in|sign[-_]?up|signup|register|console|cloud|"
     r"platform|dashboard|developer|studio|workbench)(?:[./?#_-]|$)", re.I)
-CONSOLE_SUBDOMAINS = ("cloud", "console", "platform", "app", "dashboard", "dev", "studio", "api")
+# Anchor TEXT patterns for DOM-study navigation. A visible control that says "Sign in" is the
+# page telling us where the door is; that outranks any URL shape.
+ENTRY_TEXT_RE = re.compile(
+    r"sign ?in|sign ?up|log ?in|login|register|get started|console|dashboard|launch app", re.I)
+KEY_NAV_TEXT_RE = re.compile(r"api ?keys?|tokens?|credentials|developers?", re.I)
+KEY_PATH_RE = re.compile(r"/(?:api-?)?keys?|/tokens?|/credentials|/developers?", re.I)
 CREATE_LABELS = (
     "create api key", "create new api key", "create new key", "create key",
     "new api key", "new secret key", "new key", "generate api key", "generate key",
@@ -168,13 +177,9 @@ COPY_LABELS = ("copy", "copy key", "copy api key", "copy to clipboard", "copy se
 # Everything except an explicit sign-out link is furniture that public pages also render.
 SIGNED_IN_MARKERS = re.compile(r"\bsign ?out\b|\blog ?out\b|\blogout\b|\bmy account\b", re.I)
 
-# Where API keys usually live, tried in order after SSO lands. Cheap: one HEAD-ish goto each.
-KEY_PATHS = (
-    "/api-keys", "/settings/api-keys", "/account/api-keys", "/dashboard/api-keys",
-    "/keys", "/settings/keys", "/account/keys", "/dashboard/keys",
-    "/api", "/settings", "/account", "/dashboard", "/developer", "/tokens",
-)
-KEY_NAV_LABELS = ("api keys", "api key", "keys", "api", "tokens", "credentials", "developers")
+# Where API keys usually live -- NO LONGER probed as stock paths. Kept only as the URL-shape
+# half of DOM-study scoring: an anchor whose href matches this AND whose text says "API keys"
+# is evidence; an href alone, sprayed at the site, is a guess.
 
 KEY_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_\-]{16,}\b"),
@@ -443,17 +448,59 @@ def note_urls(target: dict) -> list[str]:
     return out
 
 
-def login_candidates(page, target: dict) -> list[str]:
-    """URLs likely to hold a real login form, best first.
+def host_of(url: str) -> str:
+    m = re.match(r"^https?://([^/?#]+)", url or "")
+    return re.sub(r"^www\.", "", m.group(1)).lower() if m else ""
 
-    Order matters and is deliberate:
-      1. the provider's own documented key URL, if the catalog has one;
-      2. URLs mined from the provider's own freeNote/authHint (see note_urls -- different-domain
-         consoles live here);
-      3. links ON the marketing page whose href looks like auth/console -- the site telling us
-         where its console is beats any guess;
-      4. conventional console subdomains, because many providers never link the console from
-         their marketing nav at all.
+
+def same_site(a: str, b: str) -> bool:
+    a, b = host_of(a), host_of(b)
+    return bool(a and b) and a.split(".")[-2:] == b.split(".")[-2:]
+
+
+def dom_nav_links(page, kind: str) -> list[dict]:
+    """DOM study: the page's own visible anchors that lead to auth ('auth') or key ('keys') pages.
+
+    Each hit is evidence the page itself rendered -- ranked by how explicit it is (the anchor's
+    visible text outranks the shape of its href). This is what guides navigation; nothing is
+    invented here. Cross-domain links are followed only when the anchor's own text names the
+    destination (e.g. a marketing site linking its console on another domain); an href shape
+    alone is not enough to leave the provider's site.
+    """
+    dom = dom_study(page)
+    page_host = host_of(dom.get("url") or page.url)
+    out: list[dict] = []
+    seen: set[str] = set()
+    for a in dom.get("anchors", []):
+        text = str(a.get("t") or "").strip()
+        href = str(a.get("h") or "").strip()
+        if not href or href.lower() in seen:
+            continue
+        text_hit = bool(ENTRY_TEXT_RE.search(text)) if kind == "auth" \
+            else bool(KEY_NAV_TEXT_RE.search(text))
+        href_hit = bool(AUTH_HREF_RE.search(href.split("//", 1)[-1])) if kind == "auth" \
+            else bool(KEY_PATH_RE.search(href))
+        if not (text_hit or href_hit):
+            continue
+        if not same_site(href, page_host) and not text_hit:
+            continue
+        seen.add(href.lower())
+        out.append({"text": text[:40] or "(icon link)", "href": href,
+                    "score": (4 if text_hit else 0) + (2 if href_hit else 0)})
+    out.sort(key=lambda x: -x["score"])
+    return out[:6]
+
+
+def login_candidates(page, target: dict) -> list[str]:
+    """Evidence-ordered auth navigation. NO guessing.
+
+    1. the provider's own documented key URL, if the catalog has one;
+    2. URLs the provider's own freeNote/authHint name (see note_urls -- different-domain
+       consoles live here);
+    3. the landing page's own visible login/console anchors, found by DOM study and ranked
+       (dom_nav_links).
+    Nothing else. Conventional-subdomain fabrication and stock-path probing are gone: guessed
+    URLs waste the budget and hammering 100+ domains with them is an IP-blacklist risk.
     """
     out: list[str] = []
     seen: set[str] = set()
@@ -469,42 +516,9 @@ def login_candidates(page, target: dict) -> list[str]:
     add(target.get("apiKeyUrl"))
     for u in note_urls(target):
         add(u)
-
-    try:
-        hrefs = page.eval_on_selector_all(
-            "a[href]", "els => els.map(e => e.href).filter(Boolean).slice(0, 400)")
-    except Exception:
-        hrefs = []
-    host = re.sub(r"^www\.", "", (re.match(r"^https?://([^/]+)", page.url) or
-                                  re.match(r"^https?://([^/]+)", target.get("website") or "") or
-                                  [None, ""])[1] if page.url or target.get("website") else "")
-    scored: list[tuple[int, str]] = []
-    for h in hrefs:
-        m = re.match(r"^https?://([^/]+)(/.*)?$", h or "")
-        if not m:
-            continue
-        hhost, hpath = re.sub(r"^www\.", "", m.group(1)), m.group(2) or "/"
-        if host and host.split(".")[-2:] != hhost.split(".")[-2:]:
-            continue  # stay on the provider's own registrable domain
-        score = 0
-        if AUTH_HREF_RE.search(hpath):
-            score += 3
-        if hhost.split(".")[0] in CONSOLE_SUBDOMAINS:
-            score += 4
-        if re.search(r"sign[-_]?up|register", hpath, re.I):
-            score += 2
-        if score:
-            scored.append((score, h))
-    for _, h in sorted(scored, key=lambda t: -t[0])[:8]:
-        add(h)
-
-    if host:
-        reg = ".".join(host.split(".")[-2:]) if host.count(".") >= 1 else host
-        for sub in CONSOLE_SUBDOMAINS[:5]:
-            add(f"https://{sub}.{reg}/login")
-            add(f"https://{sub}.{reg}")
-    add(target.get("website"))
-    return out[:14]
+    for link in dom_nav_links(page, "auth"):
+        add(link["href"])
+    return out[:8]
 
 
 def frames_of(page) -> list:
@@ -847,43 +861,64 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
     return "NO_SSO_CONTROL_FOUND"
 
 
-def reach_key_page(page, target: dict) -> bool:
-    """Step 5. Prefer the provider's own documented URL, then nav links, then common paths."""
-    for url in (target.get("apiKeyUrl"), ):
-        if url:
-            try:
-                page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                settle(page)
-                return True
-            except Exception:
-                pass
-    for label in KEY_NAV_LABELS:
-        try:
-            loc = page.get_by_role("link", name=re.compile(rf"^\s*{re.escape(label)}\s*$", re.I)).first
-            if loc.count() and loc.is_visible():
-                loc.click(timeout=5000)
-                settle(page)
-                if re.search(r"key|token|api|credential", page.url, re.I):
-                    return True
-        except Exception:
-            continue
-    base = re.match(r"^(https?://[^/]+)", page.url)
-    if not base:
+def looks_like_key_page(page) -> bool:
+    """Honest classification of the current page as a key-management page.
+
+    The sambanova lesson applies here too: public pages happily say "API keys" in their nav. So
+    either the URL we actually landed on is key-shaped, or the page says key words AND carries
+    signed-in-only furniture (looks_signed_in). A login wall in front disqualifies both.
+    """
+    if login_wall(page) or has_google_control(page):
         return False
-    for path in KEY_PATHS:
+    if KEY_PATH_RE.search(page.url or ""):
+        return True
+    t = body_text(page).lower()
+    if ("api key" in t or "secret key" in t or "personal access token" in t) \
+            and looks_signed_in(page):
+        return True
+    return False
+
+
+def reach_key_page(page, target: dict) -> bool:
+    """Step 5, evidence-first: the provider's documented key URL, the URLs its own notes name,
+    then the signed-in shell's key/token nav anchors found by DOM study.
+
+    Stock-path probing (/api-keys, /keys, /settings/keys, ...) was removed with the rest of the
+    URL guessing: it burned budget on pages that never existed and risked the IP. Every URL
+    visited here is either the provider's own documentation or a link the page renders.
+    """
+    def try_url(url: str) -> bool:
         try:
-            page.goto(base.group(1) + path, wait_until="domcontentloaded", timeout=20000)
-            settle(page, 2000)
-            # A redirect to a login page is the answer, not a failure: stop and let the caller
-            # run the Google flow, then come back here.
-            if login_wall(page) or has_google_control(page):
-                return False
-            if page.url.rstrip("/").endswith(path.rstrip("/")):
-                t = body_text(page).lower()
-                if "api key" in t or "secret key" in t or "token" in t:
-                    return True
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
         except Exception:
-            continue
+            return False
+        settle(page)
+        dismiss_overlays(page)
+        # A redirect to a login page is an answer, not a failure: stop, let the caller run the
+        # Google flow, then come back here.
+        if login_wall(page) or has_google_control(page):
+            return False
+        return looks_like_key_page(page)
+
+    tried: set[str] = set()
+
+    def fresh(u: Optional[str]) -> Optional[str]:
+        if not u:
+            return None
+        u = u.split("#")[0].rstrip("/")
+        if u in tried or u == (page.url or "").rstrip("/"):
+            return None
+        tried.add(u)
+        return u
+
+    for url in [target.get("apiKeyUrl"), *note_urls(target)]:
+        url = fresh(url)
+        if url and try_url(url):
+            return True
+    for link in dom_nav_links(page, "keys"):
+        url = fresh(link["href"])
+        if url and try_url(url):
+            return True
     return False
 
 
