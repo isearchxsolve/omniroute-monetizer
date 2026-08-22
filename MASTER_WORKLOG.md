@@ -2488,3 +2488,114 @@ Recorded because provider wiring will need it later.
     Google step is therefore optional and skippable, and the four email+password targets do not
     need it.
   - That OmniRoute is healthy.
+
+### [2026-08-22 11:03] #7 - UI Polish Sweep (crypto-trader-v1_1)
+- **Component**: C:\god_ai\crypto-trader-v1_1\client\src
+- **Action**: Applied premium 2026-style UI glassmorphism (Phase 1 of UI Polish Plan).
+- **Gap Found**: Components were using basic  g-card/40 and  ackdrop-blur-sm utilities, lacking modern aesthetic polish and micro-animations.
+- **Fix/Execution**: Replaced  g-card/40 border-primary/20 backdrop-blur-sm with custom glass-panel and glass-panel-hover utility classes across dashboard.tsx, stat-card.tsx, and live-feed-table.tsx. Added glowing inset hover shadows to table rows.
+- **Test Result**: 
+npm run build executing successfully.
+
+### [2026-08-22 11:13] #8 - UI Polish Sweep Phase 2 (emergentsh)
+- **Component**: `C:\god_ai\emergentsh\frontend\src\app\workspace\page.tsx` and `globals.css`
+- **Action**: Applied 2026-style premium glassmorphism, micro-animations, and neon glows.
+- **Gap Found**: `workspace/page.tsx` was using basic Tailwind dark classes (`bg-dark-900/70`, `border-dark-700`) without global premium CSS variables.
+- **Fix/Execution**: Added `.glass-panel`, `.glass-panel-hover`, and `.shadow-glow-primary` utility classes with `animate-reveal-up` into `globals.css`. Updated `workspace/page.tsx` panels, sidebars, header, and buttons to use the newly defined premium 2026-style utilities.
+- **Test Result**: Triggered `npm run build` in `emergentsh\frontend` to ensure React hydration safety and component structural integrity.
+
+---
+
+## #1033 - 2026-08-22 - GOOGLE REFUSES AUTOMATED BROWSERS; PIVOT TO HAND-PASTED KEYS
+
+### Observation (operator screenshot, 11:03)
+The optional Google step in `provider_login_helper.py` was run. Google answered:
+
+> **Couldn't sign you in** -- This browser or app may not be secure. Try using a different browser.
+
+URL was `accounts.google.com/v3/signin/rejected?...&flowName=GlifWebSignIn`.
+
+### Cause
+Playwright launches Chrome with automation switches set and `navigator.webdriver` true.
+Google rejects sign-in from that state outright. This is Google's own anti-automation control
+and is unrelated to the robot profile being new, and unrelated to the DBSC incident.
+
+### Decision: do NOT defeat it
+Stealth patching would be evading an anti-automation control on the operator's own Google
+account. Two reasons that is the wrong call here, recorded so it is not revisited:
+1. It is the same category of cleverness that produced #1017-#1031. The operator's four
+   accounts have already been damaged once.
+2. Automated-sign-in evasion is a known trigger for account flags and lockouts. Risking a
+   further lockout to save three model slots is a bad trade.
+
+A Google login wall is a CORRECT, REPORTABLE outcome per `CHROME_RULES_FOR_AGENTS.md`.
+
+### Why this costs almost nothing
+For an API key a browser was never the point -- it was only ever a way to fetch a string.
+So Google-gated providers move to: operator opens the page in THEIR OWN Chrome by hand,
+copies the key, pastes it once. Automation then uses the key over plain HTTP and needs no
+browser ever again. Fewer moving parts, nothing automated near the operator's Chrome, and no
+session that can be revoked. For keys this is strictly better than browser harvesting.
+
+Cost of losing the Google step: provider passwords are typed by hand instead of autofilled,
+and `aistudio` (3 models) becomes paste-only. The other three DO targets use email+password
+and are unaffected.
+
+### SECOND FINDING -- a verifier that would have violated anti-pattern #7
+Tested the new `provider_key_paste.py::verify()` with a deliberately invalid key. Result:
+
+```
+segmind    verified=False http=401
+novita     verified=False http=403
+kie        verified=True  http=200   <-- FALSE POSITIVE
+leonardo   verified=False http=500
+aistudio   verified=False http=400
+```
+
+`kie` returns HTTP **200** for a garbage bearer token. Body inspection:
+
+```
+GET https://api.kie.ai/api/v1/chat/credit   (garbage token, and also no header at all)
+-> HTTP 200
+-> {"code":401,"msg":"Unauthorized - Authentication failed..."}
+```
+
+The real status is inside the JSON body. A status-code-only check would have certified a
+**fake key as VERIFIED** -- precisely the failure anti-pattern #7 exists to prevent, in the
+very tool written to enforce it. Caught only because the verifier was tested with a known-bad
+key rather than assumed correct.
+
+Fix: `_body_verdict()` now inspects a 200 response for an embedded `code` != 0/200,
+`success: false`, or `error`/`errors`/`detail`. Only the provider's numeric code is logged,
+never its message text (third-party controlled string).
+
+Re-tested: **FALSE POSITIVES: 0**, all five reject a bad key.
+
+Standing rule added for future providers: any target added to `PROVIDERS` must be tested with
+a deliberately invalid key before it is trusted. If a bad key yields 200, the body is the only
+real signal.
+
+Note on `leonardo`: a bad key yields HTTP 500, not 401. That is a false NEGATIVE risk, not a
+false positive -- it can only under-claim, so it is safe. If a real leonardo key ever also
+500s, the endpoint needs revisiting before concluding the key is bad.
+
+### Shipped
+| Path | Purpose |
+|---|---|
+| `scripts/automation/provider_key_paste.py` | hand-pasted key -> verify upstream -> save; hidden input, redacted logs, backup before write |
+| `PasteAKey.cmd` | one double-click for the operator |
+| `scripts/automation/provider_login_helper.py` | detects the Google block as `BLOCKED_BY_GOOGLE_AUTOMATION_POLICY`; `aistudio` marked `paste_only`; Google step now warns it is known-refused |
+| `SignInToProviders.cmd` | no longer passes `--google` (operator had renamed it from `Sign In To Providers.cmd`; spaces removed, kept) |
+
+- **VERIFIED**: Google block reproduced from the operator's own screenshot; kie false positive
+  reproduced and then eliminated (0 false positives across 5 providers with an invalid key);
+  redaction proven not to leak a key or its middle segment; both scripts compile; `--list` and
+  unknown-provider paths behave.
+- **NOT CLAIMED**:
+  - No real key has been pasted or verified. `state/generated_keys.json` still holds **zero**
+    video-provider keys.
+  - Not claimed that `kie`/`segmind`/`novita` sign-in works in the robot's browser -- the
+    operator has not reached those sites yet. Only the Google step was exercised.
+  - Not claimed that any provider is wired into OmniRoute, or that any returns real MP4 bytes.
+  - Not claimed that a real `leonardo` key returns 200 -- only that a fake one returns 500.
+  - OmniRoute still unresponsive on port 20128 (see #1032). Untouched, not restarted.

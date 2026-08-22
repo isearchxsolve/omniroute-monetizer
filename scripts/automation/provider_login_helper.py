@@ -107,16 +107,17 @@ TARGETS = [
         "omniroute_provider": "vertex",
         "models": 3,
         "url": "https://aistudio.google.com/apikey",
-        "signin": "Google account (this site IS Google)",
-        "tier": "DO -- but needs a Google sign-in in the robot's browser",
+        "signin": "Google account -- BLOCKED in this browser, use PasteAKey.cmd",
+        "tier": "PASTE ONLY -- Google refuses automated browsers; copy the key by hand",
         "markers": ["create api key", "google ai studio", "api keys"],
+        "paste_only": True,
     },
     {
         "name": "leonardo",
         "omniroute_provider": "leonardo",
         "models": 1,
         "url": "https://app.leonardo.ai/api-access",
-        "signin": "email+password, or Google button",
+        "signin": "email+password (avoid the Google button -- it will be refused)",
         "tier": "MAYBE -- their API tier may demand a card; stop if it does",
         "markers": ["api access", "api key", "tokens"],
     },
@@ -134,6 +135,23 @@ GOOGLE_STEP = {
     "why": "Signing into Google here syncs your SAVED PASSWORDS into the robot's browser, "
     "so the provider logins below autofill instead of you typing them.",
 }
+
+# Measured 2026-08-22: Google refuses sign-in in a Playwright-launched Chrome with
+# "Couldn't sign you in / This browser or app may not be secure". Playwright starts Chrome
+# with automation switches and navigator.webdriver set, and Google rejects that outright.
+#
+# We do NOT try to disguise it. Defeating that check is exactly the class of trick that gets
+# an account flagged, and this operator's accounts have already been damaged once. A Google
+# login wall is a CORRECT, REPORTABLE outcome -- and for API keys it is not even a blocker,
+# because the operator can copy a key by hand in their own Chrome (PasteAKey.cmd) and the
+# automation then uses the key over plain HTTP with no browser at all.
+GOOGLE_BLOCK_MARKERS = (
+    "couldn't sign you in",
+    "couldn’t sign you in",
+    "this browser or app may not be secure",
+    "browser or app may not be secure",
+)
+GOOGLE_BLOCKED = "BLOCKED_BY_GOOGLE_AUTOMATION_POLICY"
 
 # Generic evidence that a page is past the login wall.
 SIGNED_IN_MARKERS = ("sign out", "log out", "logout", "my account")
@@ -182,7 +200,7 @@ def _say(tag: str, msg: str) -> None:
 
 
 def _classify(page, markers) -> str:
-    """Return PROVIDER_SESSION_AUTHENTICATED | LOGIN_WALL | UNCLEAR.
+    """Return PROVIDER_SESSION_AUTHENTICATED | LOGIN_WALL | UNCLEAR, or the Google block.
 
     Deliberately conservative. UNCLEAR is an honest answer and is preferred over guessing;
     the operator is standing right there and can overrule it.
@@ -194,6 +212,11 @@ def _classify(page, markers) -> str:
 
     if not body.strip():
         return "UNCLEAR"
+
+    # Checked first: this page looks like a login wall, but it is a categorically different
+    # thing. No amount of correct typing gets past it, so never report it as LOGIN_WALL.
+    if any(m in body for m in GOOGLE_BLOCK_MARKERS):
+        return GOOGLE_BLOCKED
 
     site_hit = any(m in body for m in markers)
     generic_hit = any(m in body for m in SIGNED_IN_MARKERS)
@@ -306,25 +329,29 @@ def run_interactive(only: list[str] | None, do_google: bool) -> int:
             if do_google:
                 print("-" * 74)
                 _say("info", "OPTIONAL STEP: Google sign-in")
-                print(f"       {GOOGLE_STEP['why']}")
-                print("       This creates a NEW session for the robot's browser. It does not")
-                print("       disturb the session in your own Chrome -- same as adding a phone.")
-                print("       Note: this machine has no Bluetooth, so the QR / passkey route will")
-                print("       not work. Use your password plus the prompt on your phone.")
-                print("       Type 's' to skip this entirely.")
+                _say("YOU", "MEASURED 2026-08-22: Google REFUSES this. You will get")
+                _say("YOU", "\"Couldn't sign you in / This browser or app may not be secure\".")
+                _say("YOU", "Playwright starts Chrome in a controlled mode and Google rejects")
+                _say("YOU", "sign-ins from it. We do not disguise that. Recommend: skip.")
+                print(f"       (If it ever starts working: {GOOGLE_STEP['why']})")
                 print()
-                choice = input("       Enter to open Google, or 's' to skip: ").strip().lower()
-                if choice != "s":
+                choice = input("       Type 'y' to try anyway, anything else skips: ")
+                if choice.strip().lower() == "y":
                     try:
                         page.goto(GOOGLE_STEP["url"], timeout=60000,
                                   wait_until="domcontentloaded")
                     except Exception as exc:
                         _say("PROBLEM", f"could not open Google ({type(exc).__name__})")
-                    input("       Sign in in the browser window, then press Enter here... ")
-                    results["google"] = _classify(page, ["google account", "manage your"])
-                    _say("info", f"google: {results['google']}")
+                    input("       Try it in the browser window, then press Enter here... ")
+                    state = _classify(page, ["google account", "manage your"])
+                    results["google"] = state
+                    if state == GOOGLE_BLOCKED:
+                        _say("YOU", "Confirmed: Google blocked it, as expected. Moving on.")
+                    else:
+                        _say("info", f"google: {state}")
                 else:
-                    results["google"] = "SKIPPED_BY_OPERATOR"
+                    results["google"] = "SKIPPED_BLOCKED_BY_GOOGLE_POLICY"
+                    _say("ok", "Skipped. You will type provider passwords by hand instead.")
 
             for i, t in enumerate(targets, 1):
                 print()
@@ -335,6 +362,14 @@ def run_interactive(only: list[str] | None, do_google: bool) -> int:
                 print(f"       why     : {t['tier']}")
                 print(f"       page    : {t['url']}")
                 print()
+
+                if t.get("paste_only"):
+                    _say("YOU", "Skipping this one on purpose. Google will not accept a")
+                    _say("YOU", "sign-in from this browser, and disguising it is not something")
+                    _say("YOU", "we do. Get this key by hand instead: open the page in YOUR")
+                    _say("YOU", "own Chrome, copy the key, then run PasteAKey.cmd.")
+                    results[t["name"]] = "PASTE_REQUIRED_GOOGLE_ONLY_SITE"
+                    continue
 
                 try:
                     page.goto(t["url"], timeout=60000, wait_until="domcontentloaded")
@@ -367,6 +402,10 @@ def run_interactive(only: list[str] | None, do_google: bool) -> int:
                 if after == "PROVIDER_SESSION_AUTHENTICATED":
                     _say("ok", f"{t['name']}: PROVIDER_SESSION_AUTHENTICATED "
                                "(this page is past the login wall)")
+                elif after == GOOGLE_BLOCKED:
+                    _say("YOU", f"{t['name']}: Google refused the sign-in because this is an")
+                    _say("YOU", "automated browser. If this site offers email+password, use")
+                    _say("YOU", "that instead. Otherwise get the key by hand: PasteAKey.cmd.")
                 elif after == "LOGIN_WALL":
                     _say("YOU", f"{t['name']}: still looks like a login page. "
                                 "The automation will report this as a login wall.")
@@ -406,6 +445,8 @@ def _write_report(results: dict, mode: str) -> None:
 
 def _summary(results: dict) -> None:
     ready = [k for k, v in results.items() if v == "PROVIDER_SESSION_AUTHENTICATED"]
+    paste = [k for k, v in results.items()
+             if v == GOOGLE_BLOCKED or v.startswith("PASTE_REQUIRED")]
     blocked = [(k, v) for k, v in results.items() if v.startswith("SKIPPED")
                or v == "LOGIN_WALL"]
     unclear = [k for k, v in results.items() if v == "UNCLEAR"]
@@ -416,11 +457,16 @@ def _summary(results: dict) -> None:
     print("=" * 74)
     if ready:
         print(f"  Signed in and ready for automation : {', '.join(sorted(ready))}")
+    if paste:
+        print(f"  Get the key by hand (PasteAKey.cmd): {', '.join(sorted(paste))}")
+        print("      Google will not accept an automated browser. Open the page in YOUR")
+        print("      own Chrome, copy the key, and paste it once. Nothing automated goes")
+        print("      near your Chrome -- you do the copying.")
     if unclear:
         print(f"  Could not tell (not claiming)      : {', '.join(sorted(unclear))}")
     for name, why in blocked:
         print(f"  Blocked                            : {name} -- {why}")
-    if not ready:
+    if not ready and not paste:
         print("  Nothing is signed in yet.")
     print()
     print("  What is NOT claimed: that any API key exists or works. Signing in is step 1.")

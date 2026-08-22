@@ -41,7 +41,11 @@ if not exist "%SCRIPT%" (
 )
 
 cls
-"%PY%" "%SCRIPT%" --google %*
+REM  --google is deliberately NOT passed. Google refuses sign-ins from an
+REM  automation-controlled browser ("Couldn't sign you in / This browser or app
+REM  may not be secure"), measured 2026-08-22. See MASTER_WORKLOG.md #1033.
+REM  Google-only sites are handled by PasteAKey.cmd instead.
+"%PY%" "%SCRIPT%" %*
 set "RC=%ERRORLEVEL%"
 
 echo.
