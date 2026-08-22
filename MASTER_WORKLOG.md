@@ -2375,3 +2375,116 @@ Branch `fix/chrome-live-profile-guard` left in place locally and on `origin` as 
 - **VERIFIED**: `origin/master` == local `master` == `5231890`; working tree clean.
 - **STATUS**: prevention work shipped. `GOOGLE_SYNC_AUTHENTICATED` = 4 of 4 (last measured #1030).
   Open: persistence-across-restart test, then `PROVIDER_SESSION_AUTHENTICATED`.
+
+---
+
+## #1032 - 2026-08-22 - PROVIDER AUTOMATION UNBLOCKED WITHOUT TOUCHING THE OPERATOR'S CHROME
+
+### The question that started this
+Operator: *"You can not open chrome profiles. So tell me how do we do the automation? We need to
+add the rest of the providers."*
+
+Fair question. #1026-#1031 shut the door on opening the live profile, and the provider harvest
+depended on exactly that. The harvest was left with no route.
+
+### The distinction that reopens it
+The 2026-08-22 incident was caused by **presenting an existing session from a foreign browser**.
+Google's Device Bound Session Credentials sees a session bound to browser A being offered by
+browser B and revokes it server-side.
+
+Creating a **new** login inside a second browser is a different operation. It is what happens when
+you sign in on a phone as well as a laptop: the account gains a second, independently bound
+session, and the first is untouched. Nothing about DBSC prohibits it.
+
+So: automation keeps its own browser, and the operator signs into it **by hand, once, per site**.
+Cookies then persist in the robot's own profile and every later run is unattended. The operator's
+Chrome is never opened, read, copied or aliased at any point.
+
+Operator does **not** need to close their own Chrome: ProcessSingleton locks are per-user-data-dir,
+so a separate profile is a separate Chrome instance.
+
+### Provider list, re-sorted by whether it is worth the operator's time
+Measured from `state/generated_keys.json` (no video-provider key present -- all 8 targets from
+`PROVIDER_HANDOFF.md` §7 are still open) and OmniRoute registry model counts.
+
+| Target | OmniRoute provider | Models | Decision |
+|---|---|---|---|
+| kie | `kie` | 16 | DO -- biggest single win |
+| segmind | `segmind` | 5 | DO -- plain email+password, no Google involved |
+| aistudio | `vertex` | 3 | DO -- needs a Google sign-in in the robot's browser |
+| novita | `novita` | 2 | DO -- plain email+password, no Google involved |
+| leonardo | `leonardo` | 1 | MAYBE -- API tier may demand a card; stop if it does |
+| haiper | `haiper` | 1 | DROP -- key page is a dead 404 |
+| runwayml | `runwayml` | **0** | DROP -- no models wired, so a key buys nothing |
+| deepinfra | `deepinfra` | 4 | DROP -- no funds, already rejected #2 scope policy |
+
+Four targets worth doing, ~26 models. Dropping runwayml/haiper on model-count and dead-link
+grounds is new; it saves the operator two sign-ins that could not pay off.
+
+### Defect found and fixed in the guard itself
+While proving the guard refuses a Playwright launch, the refusal was **not caught** by
+`except LiveProfileRefused`:
+
+```
+$ python -c "... BrowserType.launch_persistent_context(Stub(), str(LIVE_ROOT)) ..."
+RESULT: other error LiveProfileRefused -- guard did NOT refuse first
+```
+
+Root cause: this file is legitimately loaded twice under two module names --
+`chrome_live_guard` (scripts, via `sys.path`) and `_chrome_live_guard` (the site-packages `.pth`
+bootstrap, `chrome_live_guard_boot.py` line 28). Python builds two unrelated class objects, so the
+refusal raised by the bootstrap-armed Playwright patch was a different class from the one the
+calling script imported. `except` never matched.
+
+Consequence: any script catching a refusal from a Playwright launch would print a raw traceback
+instead of the explanation -- **or lead an agent to conclude the guard had not fired.** That second
+outcome is the dangerous one.
+
+Fix: `LiveProfileRefused` is now created once per interpreter and shared via
+`sys._chrome_live_guard_registry` (same trick already used for `sys._chrome_live_guard_hooked`),
+plus an identity-independent `is_refusal(exc)` helper for defensive `except Exception` blocks.
+
+Re-tested after the fix:
+
+```
+armed by .pth bootstrap : True
+  live root      REFUSED, caught by imported class  [correct]
+  live subdir    REFUSED, caught by imported class  [correct]
+  robot profile  AttributeError | is_refusal=False   (guard allowed it; error is the test stub)
+$ python scripts/automation/chrome_live_guard.py
+SELF-TEST FAILURES: 0
+```
+
+`chrome_selfheal.py:196-201` was audited for the same bug and is **not** affected: it raises via
+`assert_safe()` and catches, both from the same module copy. Its "guard actively refuses" line was
+never a false assurance.
+
+### Shipped
+| Path | Purpose |
+|---|---|
+| `scripts/automation/provider_login_helper.py` | one-time human sign-in into the robot's own profile; `--status` read-only mode; records states only |
+| `Sign In To Providers.cmd` | one double-click for the operator |
+| `scripts/automation/chrome_live_guard.py` | shared exception identity + `is_refusal()` |
+
+### Side observation, unrelated to Chrome
+OmniRoute is LISTENING on port 20128 (PID 3828) but did not answer `GET /` or `GET /v1/models`
+within 25 s. Not investigated, not touched -- the service is never restarted per standing rule.
+Recorded because provider wiring will need it later.
+
+- **VERIFIED**: guard refuses live root and live subdir, and the refusal is now catchable by the
+  class scripts import; guard self-test 0 failures; `provider_login_helper.py` compiles and rejects
+  unknown targets; guard confirmed armed automatically (`chrome_live_guard.pth` +
+  `chrome_live_guard_boot.py` present in the hermes venv site-packages).
+- **NOT CLAIMED**:
+  - That any provider is signed in. `PROVIDER_SESSION_AUTHENTICATED` is 0 of 5 -- the operator has
+    not run the sign-in file yet.
+  - That any API key exists, is valid, or is wired. Anti-pattern #7 stands: a key counts only after
+    HTTP 200 from the provider's own upstream endpoint.
+  - That the interactive walkthrough has been executed end-to-end. Only `--only <bad>` and the
+    compile path were exercised; **no browser was launched against any provider site**.
+  - That a fresh Google sign-in inside the robot's profile leaves the operator's session alone.
+    This follows from how DBSC binds per browser instance and from ordinary multi-device sign-in,
+    and it is the documented mechanism -- but it has **not** been measured on this machine. The
+    Google step is therefore optional and skippable, and the four email+password targets do not
+    need it.
+  - That OmniRoute is healthy.

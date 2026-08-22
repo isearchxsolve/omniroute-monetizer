@@ -34,10 +34,12 @@ See AGENTS.md items 5 and 14, and MASTER_WORKLOG.md #1026 / #1030.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 __all__ = [
     "LiveProfileRefused",
+    "is_refusal",
     "LIVE_ROOT",
     "resolve",
     "verdict",
@@ -48,8 +50,54 @@ __all__ = [
 ]
 
 
-class LiveProfileRefused(RuntimeError):
-    """Raised when something tries to point a browser at the operator's real Chrome."""
+def _shared_registry() -> dict:
+    """One dict per interpreter, shared across every copy of this module.
+
+    This file legitimately gets loaded twice under two different module names:
+      * `chrome_live_guard`  -- scripts that do `sys.path.insert(...); import chrome_live_guard`
+      * `_chrome_live_guard` -- the machine-wide `.pth` bootstrap in site-packages
+
+    Python treats those as two unrelated modules with two unrelated class objects. That
+    silently broke `except LiveProfileRefused`: the refusal raised by the bootstrap-armed
+    patch was a DIFFERENT class from the one the calling script imported, so the handler
+    never matched and callers got a raw traceback instead of the explanation -- or worse,
+    concluded the guard had not fired. Found 2026-08-22 while testing the guard itself.
+
+    Attaching the registry to `sys` is the same trick already used for
+    `sys._chrome_live_guard_hooked`, and `sys` is the one object both copies share.
+    """
+    registry = getattr(sys, "_chrome_live_guard_registry", None)
+    if registry is None:
+        registry = {}
+        sys._chrome_live_guard_registry = registry
+    return registry
+
+
+def _canonical_refusal() -> type:
+    """Return the ONE LiveProfileRefused class for this interpreter, creating it once."""
+    registry = _shared_registry()
+    existing = registry.get("LiveProfileRefused")
+    if existing is not None:
+        return existing
+
+    class LiveProfileRefused(RuntimeError):
+        """Raised when something tries to point a browser at the operator's real Chrome."""
+
+    registry["LiveProfileRefused"] = LiveProfileRefused
+    return LiveProfileRefused
+
+
+LiveProfileRefused = _canonical_refusal()
+
+
+def is_refusal(exc: BaseException) -> bool:
+    """True if `exc` is a live-profile refusal, whichever module copy raised it.
+
+    Belt and braces for the dual-identity problem described in `_shared_registry`. Prefer
+    `except LiveProfileRefused` (now correct), and use this in defensive `except Exception`
+    blocks that must not swallow a refusal and carry on.
+    """
+    return isinstance(exc, LiveProfileRefused) or type(exc).__name__ == "LiveProfileRefused"
 
 
 def _live_root() -> Path:
