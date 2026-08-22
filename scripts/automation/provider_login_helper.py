@@ -616,6 +616,74 @@ def run_manual_signin() -> int:
     return 0
 
 
+# The one local debugging port automation is ever allowed to attach to. It belongs to the
+# ROBOT profile only; chrome_live_guard refuses attach to any port advertised inside the
+# operator's live Chrome tree, so this number is what keeps the two worlds apart.
+ROBOT_CDP_PORT = 9333
+
+
+def run_harvest_browser() -> int:
+    """Open the robot's profile in PLAIN Chrome WITH a local debugging port, for --attach mode.
+
+    WHY THIS MODE EXISTS -- the operator's CAPTCHA concern, 2026-08-22: "all providers will be
+    captcha walled because of bot profile not real chrome profile". They were right to push: a
+    Playwright-LAUNCHED Chrome carries automation switches (--enable-automation, and
+    navigator.webdriver=true), and provider WAFs (Cloudflare Turnstile on openadapter,
+    measured) score exactly that as a bot.
+
+    Attaching to the OPERATOR'S live Chrome is forbidden (CHROME_RULES_FOR_AGENTS, the
+    2026-08-22 four-profile revocation) and stays forbidden. The safe attach is the ROBOT
+    profile: the operator double-clicks, and a completely normal Chrome opens on
+    state/automation_profiles/providers -- started by a human, no automation switches,
+    navigator.webdriver false -- plus one local debugging port bound to this profile only.
+
+    Risks considered, on the record:
+    * An open DevTools port has no authentication: while this window is open, ANY local
+      process could read the ROBOT profile's cookies. That profile holds only the robot's
+      harvest accounts and its one Google account -- never the operator's four Chrome Sync
+      identities -- and the window is closed between runs. Bounded and accepted.
+    * Chrome 136+ ignores debugging ports on the DEFAULT user-data dir; this is an explicit
+      non-default dir, so the port works by design.
+    * Automated activity can flag the ACCOUNT. The robot account exists to be used here.
+    """
+    udd = safe_profile_dir(PROFILE_TAG)          # guard runs here
+    assert_safe(udd, who="run_harvest_browser")  # and again, explicitly, at the call site
+
+    chrome = _find_chrome()
+    if not chrome:
+        _say("PROBLEM", "Could not find an installed chrome.exe. Nothing was opened.")
+        return 3
+
+    print()
+    print("=" * 74)
+    print("  HARVEST BROWSER -- a real Chrome the harvester can safely attach to")
+    print("=" * 74)
+    print()
+    print("  A Chrome window is opening on the ROBOT's profile. It is NOT your Chrome,")
+    print("  and nothing here can log you out of your own profiles.")
+    print()
+    print("  This time LEAVE THE WINDOW OPEN while the harvester works. Because YOU")
+    print("  started it (not automation), provider sites see a normal Chrome -- which")
+    print("  is the whole point: far fewer CAPTCHA walls.")
+    print()
+    print(f"  profile : {udd}")
+    print(f"  port    : {ROBOT_CDP_PORT}  (this Chrome only, local machine only)")
+    print()
+    subprocess.Popen([
+        str(chrome),
+        f"--user-data-dir={udd}",
+        f"--remote-debugging-port={ROBOT_CDP_PORT}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--window-size=1280,900",
+        "--window-position=60,40",
+        "about:blank",
+    ])
+    _say("ok", f"Chrome is starting on port {ROBOT_CDP_PORT}. Leave it open, then run the "
+               "harvester with --attach.")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -628,7 +696,19 @@ def main(argv=None) -> int:
     ap.add_argument("--manual-signin", action="store_true",
                     help="open the robot's profile in PLAIN Chrome so you can sign into "
                          "Google by hand (Google refuses automated browsers)")
+    ap.add_argument("--harvest-browser", action="store_true",
+                    help="open the robot's profile in PLAIN Chrome WITH a local debugging "
+                         "port (leave it open; run auto_key_harvester with --attach)")
     args = ap.parse_args(argv)
+
+    if args.harvest_browser:
+        # Like --manual-signin: no Playwright involved in this mode.
+        try:
+            return run_harvest_browser()
+        except LiveProfileRefused as exc:
+            _say("PROBLEM", "REFUSED by chrome_live_guard. The guard is right.")
+            print(exc)
+            return 2
 
     if args.manual_signin:
         # Deliberately BEFORE the Playwright import check: this mode does not use Playwright.

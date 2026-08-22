@@ -90,11 +90,13 @@ from harvest_free_keys import (  # noqa: E402
     KEYS_FILE,
     KNOWN_DEAD,
     card_stance,
+    find_chrome,
     fingerprint,
     load_targets,
     real_completion,
     wire,
 )
+from provider_login_helper import ROBOT_CDP_PORT  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REPORT = ROOT / "state" / "harvest" / "auto_harvest.json"
@@ -780,6 +782,53 @@ def launch(pw, headless: bool):
     return ctx
 
 
+def attach(pw):
+    """Attach to the ROBOT Chrome the OPERATOR started (HarvestChrome.cmd), instead of
+    launching our own.
+
+    WHY -- the operator's CAPTCHA concern, 2026-08-22: a Playwright-launched Chrome carries
+    automation switches (navigator.webdriver=true) and provider WAFs score it as a bot
+    (Turnstile on openadapter, measured). A Chrome started by a human on the same robot
+    profile is an ordinary browser -- webdriver false, warm profile -- and the harvester just
+    connects over the profile's own debugging port.
+
+    SAFETY -- this is NOT the forbidden attach: chrome_live_guard refuses connect_over_cdp to
+    any port advertised inside the operator's live Chrome tree; ROBOT_CDP_PORT belongs to
+    state/automation_profiles/providers only. The operator's four profiles are not read,
+    opened, or copied, ever.
+    """
+    browser = pw.chromium.connect_over_cdp(f"http://127.0.0.1:{ROBOT_CDP_PORT}", timeout=10000)
+    ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+    try:
+        ctx.grant_permissions(["clipboard-read", "clipboard-write"])
+    except Exception:
+        pass
+    return ctx
+
+
+def restart_attached(pw, wait_s: int = 25):
+    """The operator closed the harvest Chrome (or it died): start it again ourselves -- the
+    SAME command line HarvestChrome.cmd uses, robot profile + guard -- and re-attach."""
+    udd = safe_profile_dir(PROFILE_TAG)
+    assert_safe(udd, who="auto_key_harvester.attach")
+    chrome = find_chrome()
+    if not chrome:
+        raise RuntimeError("no installed chrome.exe found")
+    subprocess.Popen(
+        [str(chrome), f"--user-data-dir={udd}", f"--remote-debugging-port={ROBOT_CDP_PORT}",
+         "--no-first-run", "--no-default-browser-check",
+         "--window-size=1360,940", "--window-position=60,40", "about:blank"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    end = time.monotonic() + wait_s
+    while time.monotonic() < end:
+        time.sleep(2)
+        try:
+            return attach(pw)
+        except Exception:
+            continue
+    raise RuntimeError(f"robot Chrome did not come up on port {ROBOT_CDP_PORT} within {wait_s}s")
+
+
 def pick_google_account(page, want_email: Optional[str]) -> str:
     """Step 4: 'select profile'. Returns a status string; never types a password."""
     settle(page, 4000)
@@ -1237,6 +1286,9 @@ def main() -> int:
                          "one slow site must not eat a sweep of 100+.")
     ap.add_argument("--headless", action="store_true",
                     help="not recommended: Google treats headless far more harshly")
+    ap.add_argument("--attach", action="store_true",
+                    help="attach to the ROBOT Chrome you started with HarvestChrome.cmd "
+                         "(a real, non-automation-flagged browser) instead of launching one")
     ap.add_argument("--list", action="store_true", help="show the queue and exit")
     args = ap.parse_args()
 
@@ -1278,7 +1330,17 @@ def main() -> int:
     rows: list[dict] = []
     relaunches = 0
     with sync_playwright() as pw:
-        ctx = launch(pw, args.headless)
+        if args.attach:
+            try:
+                ctx = attach(pw)
+                log(f"[*] attached to the robot Chrome on port {ROBOT_CDP_PORT} -- a real "
+                    "browser you started, not an automation-flagged one")
+            except Exception as exc:
+                log(f"[-] could not attach on port {ROBOT_CDP_PORT}: {type(exc).__name__}: {exc}")
+                log("    Double-click HarvestChrome.cmd first and LEAVE that Chrome open.")
+                return 2
+        else:
+            ctx = launch(pw, args.headless)
         try:
             for i, t in enumerate(queue, 1):
                 log(f"\n[{i}/{len(queue)}] {t['id']}  ({t.get('website') or 'no site'})")
@@ -1311,7 +1373,7 @@ def main() -> int:
                     log(f"    [!] browser context died -- relaunching the robot profile "
                         f"(relaunch {relaunches}/{MAX_RELAUNCHES}); moving to the next provider")
                     try:
-                        ctx = launch(pw, args.headless)
+                        ctx = restart_attached(pw) if args.attach else launch(pw, args.headless)
                     except Exception as exc2:
                         log(f"    [-] relaunch failed: {exc2} -- stopping the sweep.")
                         break
@@ -1323,10 +1385,15 @@ def main() -> int:
                     break
                 time.sleep(1.0)
         finally:
-            try:
-                ctx.close()
-            except Exception:
-                pass
+            if args.attach:
+                # The Chrome window belongs to the operator; attach mode only ever
+                # disconnects, never closes it.
+                log("[*] harvest Chrome left open (attach mode) -- close it whenever you like")
+            else:
+                try:
+                    ctx.close()
+                except Exception:
+                    pass
 
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(rows, indent=2), encoding="utf-8")
