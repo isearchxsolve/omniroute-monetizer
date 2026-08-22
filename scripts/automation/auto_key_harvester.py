@@ -527,7 +527,14 @@ def note_urls(target: dict) -> list[str]:
 
 def host_of(url: str) -> str:
     m = re.match(r"^https?://([^/?#]+)", url or "")
-    return re.sub(r"^www\.", "", m.group(1)).lower() if m else ""
+    if m:
+        return re.sub(r"^www\.", "", m.group(1)).lower()
+    # Bare hostname (no scheme): same_site() and the wrong-console guard pass hosts, not just
+    # URLs. MEASURED on the first e2e sweep: the guard refused inception's own console because
+    # host_of('platform.inceptionlabs.ai') returned '' and same_site therefore never matched.
+    if re.match(r"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$", (url or "").strip()):
+        return re.sub(r"^www\.", "", (url or "").strip()).lower()
+    return ""
 
 
 def same_site(a: str, b: str) -> bool:
