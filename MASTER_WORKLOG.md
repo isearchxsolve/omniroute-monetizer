@@ -3456,3 +3456,9 @@ ids. Video 429 reproduced on 2 projects × 3 models. Nothing here is inferred fr
 6. `pollinations` — the only FREE video provider — still fails inside OmniRoute with
    "Unsupported video format: pollinations-video". This is an OmniRoute-side gap, **not money**,
    and is therefore the only remaining video lead that costs nothing.
+
+### [2026-08-22 18:25] #999 — OiiOii Next.js UI & Smoke Test Fix
+- **Action:** Fixed frontend directory conflict and executed end-to-end smoke test.
+- **Gap Found:** Next.js compiler failed due to an pp/ (React Native) vs src/app/ (Next.js) directory conflict. Additionally, the Pydantic schema in the backend failed validation during mock tests for the characters list format.
+- **Fix/Execution:** Renamed the root pp/ folder to pp_react_native/ in C:\god_ai\oioi\oioi to allow Next.js 15 to build the frontend correctly on port 3002. Adjusted 	est_agent_pipeline.py MockChatAdapter to return a list of strings instead of dicts specifically for the ScriptwriterOutput validation. Ran the UI and triggered a generation run.
+- **Test Result:** The backend tests pass. The UI successfully hits the FastAPI backend and fails elegantly exactly at the real LLM generation step (scriptwriter) because live providers are currently exhausted, confirming healthy UI-to-API connectivity.
