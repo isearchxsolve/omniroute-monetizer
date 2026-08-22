@@ -123,6 +123,13 @@ IDENTITY_MARKERS = re.compile(
     r"identity verification|upload (?:your )?(?:id|passport)|\bkyc\b",
     re.I,
 )
+# The site refusing to serve us at all. MEASURED on blackbox 2026-08-22: blackbox.ai served a
+# bare "Error: Forbidden / 403: Forbidden" page, and the run spent its whole budget hunting for a
+# Google button that could never be there. A blocked page is an answer; name it and move on.
+# Guarded by body length in wall_page(): a real block page is tiny, while a dashboard that merely
+# mentions "403" somewhere in its docs text is not blocked.
+BLOCKED_MARKERS = re.compile(
+    r"error: forbidden|403[^0-9]{0,3}forbidden|access denied|request blocked", re.I)
 
 GOOGLE_SSO_LABELS = (
     "continue with google", "sign in with google", "sign up with google",
@@ -206,6 +213,9 @@ def log(msg: str) -> None:
 # A hard per-provider time budget. Without it one slow site eats the sweep, which is exactly the
 # failure the operator called out: "we have 100s yet to cover". Breadth beats depth here.
 _deadline: float = 0.0
+# Current provider slug, so deep helpers (chooser handling) can name their screenshots without
+# threading a parameter through five call layers.
+_shot_prefix: str = "page"
 
 
 def out_of_time() -> bool:
@@ -266,6 +276,120 @@ def settle(page, ms: int = 2500) -> None:
         page.wait_for_timeout(min(ms, 1500))
 
 
+# --------------------------------------------------------------------------------------------
+# DOM study -- navigation is guided by the DOM the page actually has, not by guessing labels.
+# Anti-pattern #11 (Visual & DOM Diagnosis Protocol): screenshot first, study the DOM second,
+# act third, screenshot after. Everything below feeds both the acting and the diagnosis trail.
+# --------------------------------------------------------------------------------------------
+DOM_STUDY_JS = """() => {
+    const vis = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
+        return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+    const anchors = [...document.querySelectorAll('a[href]')].filter(vis).slice(0, 120)
+        .map(a => ({t: (a.innerText || a.getAttribute('aria-label') || '').trim().slice(0, 60),
+                    h: a.href}));
+    const buttons = [...document.querySelectorAll('button, [role=button], input[type=submit]')]
+        .filter(vis).slice(0, 80)
+        .map(b => ({t: (b.innerText || b.getAttribute('aria-label') || b.value || '')
+                    .trim().slice(0, 60)}));
+    const forms = [...document.querySelectorAll('form')].slice(0, 10).map(f => f.action);
+    const inputs = [...document.querySelectorAll('input')].slice(0, 30).map(i => i.type);
+    const iframes = [...document.querySelectorAll('iframe')].map(f => f.src).slice(0, 10);
+    return {url: location.href, title: document.title, anchors, buttons, forms, inputs, iframes};
+}"""
+
+
+def dom_study(page) -> dict:
+    """One structured look at the page's interactive surface: visible anchors with hrefs,
+    buttons with names, forms, input types, iframes. Returns {} if the DOM will not talk.
+
+    This is what GUIDES NAVIGATION: candidate login links are scored from these anchors, and
+    when a step fails the button inventory goes into the report, so the next agent can see what
+    the page offered instead of re-guessing.
+    """
+    try:
+        return page.evaluate(DOM_STUDY_JS) or {}
+    except Exception:
+        return {}
+
+
+def dom_button_names(dom: dict) -> list[str]:
+    return [b.get("t", "") for b in dom.get("buttons", []) if b.get("t")]
+
+
+CARD_INPUT_SEL = (
+    "input[name*=card i], input[id*=card i], input[placeholder*=card i], "
+    "input[autocomplete*='cc-' i], input[name*=cvc i], input[name*=cvv i], "
+    "input[id*=cvc i], input[id*=cvv i], input[name*=expir i], input[id*=expir i], "
+    "input[placeholder*=expir i], input[name*=cardholder i], input[id*=cardholder i]"
+)
+
+
+def card_form_present(page) -> bool:
+    """Is there an actual card FORM in the DOM (any frame, Stripe iframes included)?
+
+    MEASURED on inception 2026-08-22: docs.inceptionlabs.ai's landing page was refused as
+    PAYWALL_REFUSED because its marketing copy matched CARD_MARKERS ('start your free trial'
+    in a navbar) -- while the screenshot shows no card form anywhere on the page. Marketing
+    words are not a paywall; an input that wants card digits is.
+    """
+    for fr in frames_of(page):
+        try:
+            if fr.locator(CARD_INPUT_SEL).count():
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def wall_page(page) -> Optional[str]:
+    """wall() for a live page: text markers backed by DOM evidence where DOM evidence exists.
+
+    Differences from wall(), both measured 2026-08-22:
+    * PAYWALL_REFUSED additionally requires card_form_present() -- see that docstring.
+    * SITE_REFUSED recognises a tiny blocked page (403 Forbidden) instead of hunting a Google
+      button on an error page that will never have one (blackbox).
+    """
+    txt = body_text(page)
+    if "signin/rejected" in page.url or "This browser or app may not be secure" in txt:
+        return "GOOGLE_REFUSED_AUTOMATION"
+    if len(txt) < 1200 and BLOCKED_MARKERS.search(txt):
+        return "SITE_REFUSED"
+    if CAPTCHA_MARKERS.search(txt):
+        return "CAPTCHA_REFUSED"
+    if CARD_MARKERS.search(txt) and card_form_present(page):
+        return "PAYWALL_REFUSED"
+    if IDENTITY_MARKERS.search(txt):
+        return "IDENTITY_REFUSED"
+    return None
+
+
+def wait_for_control(page, labels: tuple[str, ...], roles: tuple[str, ...] = ("button", "link"),
+                     ms: int = 15000) -> Optional[str]:
+    """Poll until one of these labels exists as a visible control, then click it.
+
+    The Auth0 lesson (wait_for_auth_ui) applies to key pages too. MEASURED on featherless.ai
+    2026-08-22: mint_key ran the instant reach_key_page returned, the 'New API Key' button had
+    not rendered yet, click_label found nothing, and the run reported 'no create control found'
+    about a page whose screenshot shows the button plain as day. The control appearing is the
+    signal; domcontentloaded is not.
+    """
+    end = time.monotonic() + ms
+    while True:
+        for label in labels:
+            pat = re.compile(rf"^\s*{re.escape(label)}\s*$", re.I)
+            for role in roles:
+                try:
+                    loc = page.get_by_role(role, name=pat).first
+                    if loc.count() and loc.is_visible():
+                        loc.click(timeout=4000)
+                        return label
+                except Exception:
+                    continue
+        if time.monotonic() >= end or out_of_time():
+            return None
+        page.wait_for_timeout(1000)
+
+
 def dismiss_overlays(page) -> list[str]:
     """Step zero: clear cookie/consent banners so later clicks reach the real controls.
 
@@ -304,14 +428,31 @@ def dismiss_overlays(page) -> list[str]:
     return gone
 
 
+def note_urls(target: dict) -> list[str]:
+    """URLs the provider's own catalog note points at.
+
+    MEASURED on openadapter 2026-08-22: the marketing site openadapter.dev has no login, but its
+    freeNote literally says 'Get your API key at https://dashboard.openadapter.in' -- a different
+    registrable domain, so same-domain link scraping could never find it. The provider's own
+    words are the best navigation hint there is; mine them.
+    """
+    out: list[str] = []
+    for field in ("freeNote", "authHint"):
+        for m in re.finditer(r"https?://[^\s'\"<>)\]]+", str(target.get(field) or "")):
+            out.append(m.group(0).rstrip(".,;"))
+    return out
+
+
 def login_candidates(page, target: dict) -> list[str]:
     """URLs likely to hold a real login form, best first.
 
     Order matters and is deliberate:
       1. the provider's own documented key URL, if the catalog has one;
-      2. links ON the marketing page whose href looks like auth/console -- the site telling us
+      2. URLs mined from the provider's own freeNote/authHint (see note_urls -- different-domain
+         consoles live here);
+      3. links ON the marketing page whose href looks like auth/console -- the site telling us
          where its console is beats any guess;
-      3. conventional console subdomains, because many providers never link the console from
+      4. conventional console subdomains, because many providers never link the console from
          their marketing nav at all.
     """
     out: list[str] = []
@@ -326,6 +467,8 @@ def login_candidates(page, target: dict) -> list[str]:
             out.append(u)
 
     add(target.get("apiKeyUrl"))
+    for u in note_urls(target):
+        add(u)
 
     try:
         hrefs = page.eval_on_selector_all(
@@ -375,7 +518,13 @@ def frames_of(page) -> list:
 
 
 def find_google_control(page):
-    """The actual clickable 'Continue with Google', searched across frames. None if absent."""
+    """The actual clickable 'Continue with Google', searched across frames. None if absent.
+
+    Two detection layers, because role-name matching alone misses icon-only buttons:
+    * accessible-name match against GOOGLE_SSO_LABELS;
+    * DOM-shape match (DOM study): aria-labels mentioning google, buttons/links wrapping an
+      img[alt*=google] -- the standard rendered 'G' logo button many SPAs ship unlabeled.
+    """
     for fr in frames_of(page):
         for label in GOOGLE_SSO_LABELS:
             pat = re.compile(re.escape(label), re.I)
@@ -386,6 +535,14 @@ def find_google_control(page):
                         return loc
                 except Exception:
                     continue
+        for sel in ("[aria-label*='google' i]", "button:has(img[alt*='google' i])",
+                    "a:has(img[alt*='google' i])", "[data-provider*='google' i]"):
+            try:
+                loc = fr.locator(sel).first
+                if loc.count() and loc.is_visible():
+                    return loc
+            except Exception:
+                continue
     return None
 
 
@@ -547,6 +704,7 @@ def pick_google_account(page, want_email: Optional[str]) -> str:
                     break
         chosen = tiles.nth(idx).get_attribute("data-identifier") or "(unnamed tile)"
         log(f"        profile chooser: {n} account(s), picking {chosen}")
+        shot(page, f"{_shot_prefix}-chooser")   # proof of step 4 before the click (anti-pattern 11)
         tiles.nth(idx).click(timeout=8000)
     else:
         # Some flows skip the chooser and go straight to consent.
@@ -648,7 +806,7 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
         """
         dismiss_overlays(page)
         seen = wait_for_auth_ui(page)
-        w = wall(body_text(page), page.url)
+        w = wall_page(page)
         if w:
             return w
         if seen == "google" or has_google_control(page):
@@ -659,7 +817,7 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
             settle(page, 5000)
             dismiss_overlays(page)
             wait_for_auth_ui(page)
-            w = wall(body_text(page), page.url)
+            w = wall_page(page)
             if w:
                 return w
             if has_google_control(page):
@@ -732,9 +890,15 @@ def reach_key_page(page, target: dict) -> bool:
 def mint_key(page) -> tuple[Optional[str], str]:
     """Steps 6-7: create the key, then copy it. Returns (key or None, detail)."""
     before = keys_in(body_text(page))
-    clicked = click_label(page, CREATE_LABELS, timeout=6000)
+    # Poll for the control to appear before clicking (wait_for_control docstring: the
+    # featherless.ai measurement). Falls back to the broader substring matcher for icon buttons.
+    clicked = wait_for_control(page, CREATE_LABELS, ms=15000) \
+        or click_label(page, CREATE_LABELS, timeout=4000)
     if not clicked:
-        return None, "no create control found on the key page"
+        dom = dom_study(page)
+        btns = ", ".join(dom_button_names(dom))[:300]
+        return None, (f"no create control found on the key page; visible buttons: "
+                      f"{btns or '(none)'}")
     settle(page, 4000)
 
     # Many providers open a modal whose own button does the real creating. Press it too.
@@ -752,12 +916,12 @@ def mint_key(page) -> tuple[Optional[str], str]:
         pass
 
     txt = body_text(page)
-    w = wall(txt, page.url)
+    w = wall_page(page)
     if w:
         return None, w
 
     # Clipboard first: it is the only way to get a key a provider shows masked.
-    if click_label(page, COPY_LABELS, timeout=4000):
+    if wait_for_control(page, COPY_LABELS, ms=8000) or click_label(page, COPY_LABELS, timeout=4000):
         page.wait_for_timeout(700)
         cb = read_clipboard(page)
         if looks_like_key(cb):
@@ -787,9 +951,10 @@ def mint_key(page) -> tuple[Optional[str], str]:
 # One provider, end to end
 # --------------------------------------------------------------------------------------------
 def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
-    global _deadline
+    global _deadline, _shot_prefix
     _deadline = time.monotonic() + budget
     slug = target["id"]
+    _shot_prefix = slug
     name = target.get("name") or slug
     site = target.get("apiKeyUrl") or target.get("website")
     row: dict[str, Any] = {"provider": slug, "name": name, "url": site,
@@ -810,7 +975,7 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
         if dropped:
             row["overlays_dismissed"] = dropped
 
-        w = wall(body_text(page), page.url)
+        w = wall_page(page)
         if w:
             row.update(ok=False, stage="wall-on-landing", detail=w, shot=shot(page, f"{slug}-wall"))
             return row
@@ -827,7 +992,7 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
             row["sso"] = sso
             row["landed"] = page.url
             if sso in ("CAPTCHA_REFUSED", "PAYWALL_REFUSED", "IDENTITY_REFUSED",
-                       "GOOGLE_REFUSED_AUTOMATION"):
+                       "GOOGLE_REFUSED_AUTOMATION", "SITE_REFUSED"):
                 row.update(ok=False, stage="wall-at-sso", detail=sso,
                            shot=shot(page, f"{slug}-sso"))
                 return row
@@ -843,8 +1008,9 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
                        shot=shot(page, f"{slug}-nokeypage"))
             return row
         row["key_page"] = page.url
+        row["key_page_shot"] = shot(page, f"{slug}-keypage")   # proof the key page was reached
 
-        w = wall(body_text(page), page.url)
+        w = wall_page(page)
         if w:
             row.update(ok=False, stage="wall-at-key-page", detail=w, shot=shot(page, f"{slug}-wall2"))
             return row
@@ -877,6 +1043,22 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
             page.close()
         except Exception:
             pass
+
+
+def context_dead(ctx) -> bool:
+    """True when the persistent context can no longer open a page (Chrome died / was closed)."""
+    try:
+        p = ctx.new_page()
+    except Exception:
+        return True
+    try:
+        p.close()
+    except Exception:
+        pass
+    return False
+
+
+MAX_RELAUNCHES = 3
 
 
 def main() -> int:
@@ -933,6 +1115,7 @@ def main() -> int:
         return 0
 
     rows: list[dict] = []
+    relaunches = 0
     with sync_playwright() as pw:
         ctx = launch(pw, args.headless)
         try:
@@ -948,6 +1131,29 @@ def main() -> int:
                 rows.append(row)
                 mark = "WORKING" if row.get("ok") else f"no ({row.get('stage')})"
                 log(f"        -> {mark}: {str(row.get('detail'))[:110]}")
+
+                # THE 21:17 LESSON: one dead context must not burn the rest of the queue. That
+                # run lost ~45 providers to instant TargetClosedError crashes because nothing
+                # relaunched the browser. The profile is persistent, so a relaunch keeps every
+                # session (they live in state/automation_profiles/providers, not the process).
+                # The crashed provider is NOT retried -- the one-attempt rule stands; we move on.
+                if not row.get("ok") and context_dead(ctx):
+                    if relaunches >= MAX_RELAUNCHES:
+                        log(f"\n[!] Chrome died again after {MAX_RELAUNCHES} relaunches -- "
+                            "stopping the sweep honestly instead of looping on a dying browser.")
+                        break
+                    relaunches += 1
+                    try:
+                        ctx.close()
+                    except Exception:
+                        pass
+                    log(f"    [!] browser context died -- relaunching the robot profile "
+                        f"(relaunch {relaunches}/{MAX_RELAUNCHES}); moving to the next provider")
+                    try:
+                        ctx = launch(pw, args.headless)
+                    except Exception as exc2:
+                        log(f"    [-] relaunch failed: {exc2} -- stopping the sweep.")
+                        break
 
                 if row.get("detail") == "GOOGLE_REFUSED_AUTOMATION":
                     log("\n[!] Google refused the automated browser at the sign-in step.")
