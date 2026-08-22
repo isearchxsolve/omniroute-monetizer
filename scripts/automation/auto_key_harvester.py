@@ -1218,11 +1218,25 @@ def mint_key(page) -> tuple[Optional[str], str]:
                       f"{btns or '(none)'}")
     settle(page, 4000)
 
-    # Many providers open a modal whose own button does the real creating. Press it too.
-    # This is the defect that made video_key_harvester stop one click short on AI Studio.
+    # Many providers open a modal that asks for a NAME before the real create (operator,
+    # 2026-08-22: "create api key will always ask for a name"). Fill the modal's name field
+    # with the blueprint convention omniroute-auto-<timestamp>, THEN press the modal's own
+    # create button. This is also the defect that made video_key_harvester stop one click
+    # short on AI Studio.
+    key_name = f"omniroute-auto-{time.strftime('%Y%m%d-%H%M%S')}"
     try:
         modal = page.locator("[role=dialog], .modal, [aria-modal=true]").first
         if modal.count() and modal.is_visible():
+            for sel in ("input[placeholder*='name' i]", "input[aria-label*='name' i]",
+                        "input[id*='name' i]", "input[type=text]", "input:not([type])"):
+                box = modal.locator(sel).first
+                try:
+                    if box.count() and box.is_visible():
+                        box.fill(key_name, timeout=3000)
+                        clicked = f"{clicked} (named {key_name})"
+                        break
+                except Exception:
+                    continue
             inner = click_label(page, ("create key", "create", "generate", "confirm",
                                       "create api key", "create secret key", "done", "submit"),
                                 timeout=5000)
