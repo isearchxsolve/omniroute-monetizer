@@ -1141,6 +1141,11 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
         most reliable fact on any of these pages -- more reliable than nav text, more reliable
         than the URL -- so it decides before anything else gets a vote.
         """
+        # Any click that lands on Google itself is the chooser/consent step (featherless
+        # study 2026-08-22: the provider bounces visitors into OAuth with returnTo pointing
+        # at the key page). Handle it instead of hunting buttons on Google's own page.
+        if "accounts.google.com" in (p.url or ""):
+            return pick_google_account(p, want_email)
         dismiss_overlays(p)
         seen = wait_for_auth_ui(p)
         w = wall_page(p)
@@ -1155,10 +1160,14 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
         if clicked or via_header_icon:
             settle(p, 2500)
             dismiss_overlays(p)
-            if via_header_icon:
-                # The icon may have opened a menu rather than navigated: press the login
-                # item inside it while it is open.
-                click_label(p, ENTRY_LABELS, timeout=3000)
+        if via_header_icon:
+            # The icon opened a menu rather than navigating. Signed-in avatar menus hold
+            # "API keys"/"Tokens"/"Dashboard" items as often as sign-in items (featherless
+            # study, 2026-08-22) -- try both while the menu is open.
+            click_label(p, ENTRY_LABELS, timeout=2500) or click_label(
+                p, ("api keys", "api key", "tokens", "keys", "dashboard", "console"),
+                timeout=2500)
+        if clicked or via_header_icon:
             # Do not discard the poll: the password field paints before the Google button on
             # the same card (inception measurement above), so keep polling and use the result.
             seen = wait_for_auth_ui(p)
@@ -1431,7 +1440,22 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
                 page = reached_page
             return reached_page is not None
 
-        reached = adopt(reach_key_page(page, target))
+        # Some providers walk anonymous visitors straight into Google OAuth (MEASURED on
+        # featherless.ai 2026-08-22 via browser-skill study: "/" redirects to
+        # accounts.google.com with returnTo=/account/api-keys in the OAuth state). On the robot
+        # profile that page is the session CHOOSER -- one tile-click from the key page. Handle
+        # it immediately instead of hunting for a "Continue with Google" button that is not
+        # on this page.
+        if "accounts.google.com" in (page.url or ""):
+            sso = pick_google_account(page, target.get("google_email"))
+            row["sso"] = f"auto-bounce: {sso}"
+            if sso != "RETURNED":
+                row.update(ok=False, stage="sso", detail=f"auto-bounce {sso}",
+                           shot=shot(page, f"{slug}-autobounce"))
+                return row
+            reached = adopt(reach_key_page(page, target))
+        else:
+            reached = adopt(reach_key_page(page, target))
         row["key_page_attempt"] = page.url
 
         if login_wall(page) or has_google_control(page) or not reached:
