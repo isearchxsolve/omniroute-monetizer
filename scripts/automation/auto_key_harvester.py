@@ -137,9 +137,13 @@ GOOGLE_SSO_LABELS = (
     "continue with google", "sign in with google", "sign up with google",
     "log in with google", "login with google", "google",
 )
+# Sign-in comes FIRST and sign-up comes LAST, on purpose. MEASURED on openadapter 2026-08-22
+# (operator: "already signed in no no sign up needed"): the robot already holds sessions from
+# earlier SSO runs, and clicking Sign Up on a signed-in session is worse than useless -- it can
+# fork a duplicate account. We only ever sign UP when sign-in paths have all failed.
 ENTRY_LABELS = (
-    "sign in", "sign up", "log in", "login", "get started", "get api key",
-    "start for free", "try for free", "console", "dashboard", "register",
+    "sign in", "log in", "login", "console", "dashboard", "get started",
+    "start for free", "try for free", "get api key", "register", "sign up",
 )
 # Cookie/consent overlays. MEASURED on sambanova 2026-08-22: a TrustArc banner ("We Value Your
 # Privacy" / "Agree & Proceed") covered the viewport, so every later click either hit the banner
@@ -627,9 +631,20 @@ def dom_nav_links(page, kind: str) -> list[dict]:
             continue
         if not same_site(href, page_host) and not text_hit:
             continue
+        score = 0
+        if kind == "auth" and text:
+            # Sign-in outranks sign-up (the ENTRY_LABELS lesson): on a signed-in session the
+            # Sign Up link is the wrong door, and it must never outrank Sign In in a tie.
+            if re.search(r"sign ?in|log ?in|login", text, re.I):
+                score += 6
+            else:
+                score += 3
+        elif text_hit:
+            score += 4
+        if href_hit:
+            score += 2
         seen.add(href.lower())
-        out.append({"text": text[:40] or "(icon link)", "href": href,
-                    "score": (4 if text_hit else 0) + (2 if href_hit else 0)})
+        out.append({"text": text[:40] or "(icon link)", "href": href, "score": score})
     out.sort(key=lambda x: -x["score"])
     return out[:6]
 
@@ -1051,12 +1066,21 @@ def looks_signed_in(page) -> bool:
     provider_login_helper._classify() produces for kie. So the rule is now one-directional:
     ANY evidence of a login wall wins over ALL evidence of being signed in. Reporting "signed
     in" while looking at a login form is the exact dishonesty this project keeps banning.
+
+    MEASURED on openadapter 2026-08-22 (operator: "already signed in"): SPAs often render an
+    avatar chip instead of the words "Sign out", so the marker set missed genuinely signed-in
+    consoles and the flow went hunting for a login -- clicking Sign Up on a live session. An
+    account-chip avatar (img alt containing an email) now counts as signed-in evidence.
     """
     if login_wall(page) or has_google_control(page):
         return False
     txt = body_text(page)
     if not SIGNED_IN_MARKERS.search(txt):
-        return False
+        try:
+            if not page.locator("img[alt*='@']").count():
+                return False
+        except Exception:
+            return False
     low = txt.lower()
     return not any(m in low for m in ("sign in", "sign up", "log in", "create an account"))
 
