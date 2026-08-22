@@ -276,8 +276,13 @@ def ensure_junction(alias: Path) -> bool:
 
     if alias.exists() or alias.is_symlink():
         if not alias.is_symlink():
-            log(f"user-data-root {alias} exists but is NOT a junction — Chrome will treat it "
-                f"as a fresh profile", "warn")
+            # A REAL directory here is a trap: Chrome would treat it as a brand-new user
+            # data dir and scaffold empty profiles inside it, so every probe would see a
+            # logged-out wall while appearing to "work". Refuse loudly instead.
+            raise RuntimeError(
+                f"user-data-root {alias} exists and is NOT a junction. Chrome would use it "
+                f"as a fresh empty profile dir. Move it aside (e.g. rename) and re-run so a "
+                f"real junction to {REAL_USER_DATA} can be created.")
         return False
     alias.parent.mkdir(parents=True, exist_ok=True)
     proc = subprocess.run(["cmd", "/c", "mklink", "/J", str(alias), str(REAL_USER_DATA)],

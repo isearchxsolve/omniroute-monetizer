@@ -1281,3 +1281,43 @@ User directive: "create a repo for the in cli system has all credentials". gh CL
 - Already-remote repos confirmed: god_ai (emergentsh lives here as subdir), ideation_to_prototype, omniroute-monetizer.
 
 All five repos now have GitHub remotes; the earlier "no remote" caveat for neon_unified/ases_v3_1 is resolved.
+
+
+---
+
+### [2026-08-22 07:45] #1013 — ROOT CAUSE of live-run NOT_SIGNED_IN: junction never existed; Chrome scaffolded a FRESH empty profile dir (plus cookie-store fingerprint of all 4 profiles)
+
+- **TRIGGER**: Operator intervened: previous agents kept opening blank/garbage profiles. New
+  firm direction: (a) search for the logged-in/legitimate Chrome profiles and open ONLY those;
+  (b) provider logins are NOT required — Google SSO from the legitimate profile does the signup.
+- **KILLED**: the blanket 4-profile probe sweep started at 07:33 (task exec_1a4449d4) was
+  stopped mid-Default-profile per operator direction.
+- **ROOT CAUSE FOUND (the handoff's "connected live but NOT_SIGNED_IN" mystery)**:
+  state/live_link was NOT a junction — it was a REAL DIRECTORY (cmd dir shows <DIR>, not
+  <JUNCTION>). mklink /J in the previous session's Git Bash evidently failed silently, Chrome
+  launched against the literal fresh path, and because --profile-directory names existed under
+  it, Chrome SCAFFOLDED brand-new empty profiles inside (found Default/Profile 14/16/17 each
+  with fresh History + Login Data, no Cookies; 118MB of caches). Every "live" probe therefore
+  saw a logged-out wall — it was probing empty profiles, never the real bytes. The DBSC theory
+  in the handoff was not disproven; it was never actually tested.
+  FIX 1: moved the scaffold aside to state/_orphan_live_link_scaffold_20260822 (NOT deleted —
+  preserved for inspection). FIX 2: ensure_junction() now RAISES instead of warning when the
+  alias path exists as a real directory, so this failure class can never silently recur.
+- **COOKIE-STORE FINGERPRINT (read-only, Chrome closed; copied each Network/Cookies + journal
+  to temp and queried; values live in encrypted_value on Windows, so presence checks used
+  length(encrypted_value)>0)**:
+  | profile | cookies | google.com | PSID live | provider cookies |
+  |---|---|---|---|---|
+  | Default (kunal.colab@gmail.com) | 242 | 49 | 2/2 live | none |
+  | Profile 14 ("Person 1") | 54 | 5 | 0 | kie.ai 6, segmind 1, novita 4, fal 2 |
+  | Profile 16 (niloydassana@gmail.com) | 446 | 41 | 2/2 live | none |
+  | Profile 17 (isearch.xsolve@gmail.com) | 3518 | 140 | 2/2 live | aistudio 4, kie 5, leonardo 4, fal 25, replicate 6 |
+  NOTE: the handoff claimed Profile 14 = xxpertcomments@gmail.com with 2859 cookies — does NOT
+  match reality (54 cookies, no Google session, Local State user_name empty). Profile 17's
+  3518-cookie scale matches that description better; the handoff's profile mapping was likely
+  wrong.
+- **DECISION (per operator)**: legitimate profiles = live Google PSID = Default, Profile 16,
+  Profile 17. Profile 14 EXCLUDED (no Google session -> SSO impossible; only stale provider
+  cookies). Probe order: Profile 17 first (richest + existing provider cookies), then Default,
+  then Profile 16. Provider signups will be driven via "Continue with Google" SSO.
+- **NEXT**: junction (verified this time) + probe sweep of the 3 legitimate profiles.
