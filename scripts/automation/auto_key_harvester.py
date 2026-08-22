@@ -646,7 +646,7 @@ def dom_nav_links(page, kind: str) -> list[dict]:
         seen.add(href.lower())
         out.append({"text": text[:40] or "(icon link)", "href": href, "score": score})
     out.sort(key=lambda x: -x["score"])
-    return out[:6]
+    return out[:4]   # bounded: candidates cost ~45s each (nav_click + attempt_here)
 
 
 def _sibling_pages(page) -> list:
@@ -1546,7 +1546,7 @@ def main() -> int:
                     help="only providers whose own notes say no credit card")
     ap.add_argument("--google-email", help="which account to pick in the chooser (default: first)")
     ap.add_argument("--dry-run", action="store_true", help="get keys but do not wire them")
-    ap.add_argument("--budget", type=int, default=180,
+    ap.add_argument("--budget", type=int, default=120,
                     help="seconds per provider before moving on (default 180). Breadth first: "
                          "one slow site must not eat a sweep of 100+.")
     ap.add_argument("--headless", action="store_true",
