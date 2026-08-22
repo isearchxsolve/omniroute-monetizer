@@ -3630,3 +3630,81 @@ reason, so no one spends a click rediscovering it.
 5. Third-party SSO for kie / segmind / novita / leonardo still not driven.
 6. `pollinations` has a documented **keyless free tier** (`anonymousFallback`) — the only free
    video lead, still blocked by OmniRoute's missing `pollinations-video` handler, not by money.
+
+---
+
+### [2026-08-22 21:39] #1044 — "fix auto_key_harvester.py": diagnosis only so far (no code changed); the 21:17 run burned ~45 providers on one dead browser, and a comment archaeology of how the script evolved
+
+Operator ask: *"fix the automation script scripts/automation/auto_key_harvester.py"*. Nothing has
+been changed yet. This entry records what was measured and read, and the proposed fix, before any
+edit is made.
+
+#### What was done
+
+1. **Rule 0 compliance:** read `CHROME_RULES_FOR_AGENTS.md` in full before touching the file.
+   Confirmed the script already routes every launch through `safe_profile_dir("providers")` +
+`assert_safe()` (`auto_key_harvester.py:494-517`), so it is inside the Chrome safety contract.
+2. **Shallow sweep first (anti-pattern #0):** `python -m py_compile` → clean. All seven symbols
+   imported from `harvest_free_keys.py` (`KEYS_FILE`, `KNOWN_DEAD`, `card_stance`, `fingerprint`,
+   `load_targets`, `real_completion`, `wire`) verified present (`harvest_free_keys.py:100-357`).
+   Git history: file created in commits `6931a26` ("new latest") and `daba4cf` ("lattest") — it
+   postdates every worklog entry; this is its first worklog coverage.
+3. **Read the last run's own report**, `state/harvest/auto_harvest.json` (written ~21:17 tonight,
+   breadth sweep of the free-tier queue):
+   - `nous-research` → `NO_SSO_CONTROL_FOUND`, landed back on `portal.nousresearch.com/help` after
+     `/tokens` bounced it (shot: `state/harvest/shots/nous-research-sso.png`).
+   - `openadapter` → `NO_SSO_CONTROL_FOUND` on `https://openadapter.dev/` (shot:
+     `state/harvest/shots/openadapter-sso.png`).
+   - `inception` → `PAYWALL_REFUSED` **on the landing page of `docs.inceptionlabs.ai`** — a docs
+     site, before any auth flow. Suspected `CARD_MARKERS` false positive on marketing copy such as
+     "start your free trial" in a navbar. NOT yet visually confirmed.
+   - `featherless-ai` → crash `TargetClosedError: Page.wait_for_timeout` — the persistent Chrome
+     context died mid-provider.
+   - **Every provider after that (~45 of them: blackbox, pioneer, ai21, monsterapi, zenmux,
+     routeway, api-airforce, navy, dgrid, typhoon, agentrouter, modal, baseten, reka, scaleway,
+     hyperbolic, nebius, …) → crash `BrowserContext.new_page: Target page, context or browser has
+     been closed`.** One dead context converted the rest of the sweep into instant crashes; the
+     loop has no relaunch, no browser-death detection, no early stop. This is the primary defect.
+4. **Comment archaeology** (the operator then asked how the script evolved per its comments) —
+   summarized in the reply; the phases are: (0) scars predate the file — the live-profile incident
+   (#1026) is why `chrome_live_guard` wraps every launch, #1033's "This browser or app may not be
+   secure" refusal is why no password is ever typed and why the human-click `harvest_free_keys.py`
+   existed first, #1042's robot-profile AI Studio success is why full automation was retried;
+   (1) birth from the operator's "no human click over 109 providers" mandate as an 8-step ladder;
+   (2) one measured sambanova failure after another, each becoming a mechanism: TrustArc banner →
+   `dismiss_overlays()` step zero; marketing-homepage-vs-console → `login_candidates()` link
+   discovery; public pricing page faking "signed in" → sign-out-only markers + one-directional
+   `looks_signed_in()` + keys-first ordering; unpainted Auth0 card → `wait_for_auth_ui()` polling;
+   fixed 6s settle dying in Google's redirect chain → 30s poll; (3) operator's "park it, we have
+   100s to cover" → `PARKED` dict + hard per-provider deadline; (4) sibling scars —
+   `video_key_harvester`'s stop-one-click-short modal bug → `mint_key()` presses the modal's own
+   create button; `uncloseai`'s test_connection lie → the `real_completion()` proof gate.
+
+#### Diagnosis (primary defect to fix)
+
+`main()`'s provider loop treats a dead browser as a per-provider crash and never relaunches. The
+fix must: detect context death (TargetClosedError / closed context), relaunch
+`launch()` on the SAME persistent robot profile (sessions survive — they live in the profile, not
+the process), continue with the NEXT provider without retrying the crashed one (the one-attempt
+rule stays), and cap relaunches (e.g. 3) so a crashing Chrome ends the run honestly instead of
+spinning. Secondary: `CARD_MARKERS` firing on landing-page marketing text (`inception`) needs
+form-level evidence (card-ish inputs) or auth-flow context before refusing.
+
+#### What is NOT claimed
+
+- **No fix applied yet** — no code was changed in this entry; the script is unmodified.
+- **The three screenshots were NOT visually inspected** — they exist on disk (and were uploaded to
+  a CDN by the Read tool), but no analysis of their pixels was performed, so the `inception`
+  false-positive theory and both `NO_SSO_CONTROL_FOUND` verdicts remain unverified hypotheses.
+- Not claimed the context died of OOM vs operator closing the window vs Chrome crash — cause
+  unknown; only the *absence of recovery* is established, from the report itself.
+- Not claimed any provider was actually attempted after `featherless-ai` — the report's `crash`
+  rows for them mean the opposite, which is exactly the defect.
+
+#### Still open
+
+1. Implement browser-death recovery in `auto_key_harvester.py::main()` (relaunch-and-continue,
+   capped), then re-run the burned providers.
+2. Visually verify `inception-wall.png` / `nous-research-sso.png` / `openadapter-sso.png` before
+   trusting `PAYWALL_REFUSED` / `NO_SSO_CONTROL_FOUND` as true negatives.
+3. Tighten `CARD_MARKERS` to require a card form/input (across frames), not marketing text.
