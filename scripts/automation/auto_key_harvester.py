@@ -334,6 +334,29 @@ CARD_INPUT_SEL = (
 )
 
 
+# CAPTCHA by DOM shape, not just text. MEASURED on openadapter 2026-08-22 (operator: 'captcha
+# wall'): dashboard.openadapter.in threw a Cloudflare challenge whose page text is EMPTY -- the
+# widget renders inside an iframe from challenges.cloudflare.com, so every text marker missed
+# it and the run sat on the challenge instead of walking away. These selectors see what the
+# operator sees.
+CAPTCHA_DOM_SEL = (
+    "iframe[src*='challenges.cloudflare.com']", "iframe[src*='recaptcha']",
+    "iframe[src*='hcaptcha']", ".cf-turnstile", "[data-sitekey]", ".g-recaptcha",
+    ".h-captcha", "#challenge-running", "[class*='cf-chl']",
+)
+
+
+def captcha_dom_present(page) -> bool:
+    for fr in frames_of(page):
+        for sel in CAPTCHA_DOM_SEL:
+            try:
+                if fr.locator(sel).count():
+                    return True
+            except Exception:
+                continue
+    return False
+
+
 def card_form_present(page) -> bool:
     """Is there an actual card FORM in the DOM (any frame, Stripe iframes included)?
 
@@ -364,7 +387,11 @@ def wall_page(page) -> Optional[str]:
         return "GOOGLE_REFUSED_AUTOMATION"
     if len(txt) < 1200 and BLOCKED_MARKERS.search(txt):
         return "SITE_REFUSED"
-    if CAPTCHA_MARKERS.search(txt):
+    # A DOM-detected challenge widget counts as a wall only when the page offers NOTHING else:
+    # full-page interstitials (openadapter's Turnstile) have near-empty text. Ordinary login
+    # pages often embed an invisible reCAPTCHA next to a perfectly usable form -- those are NOT
+    # walls, and refusing them would nuke the whole sweep.
+    if CAPTCHA_MARKERS.search(txt) or (captcha_dom_present(page) and len(txt) < 600):
         return "CAPTCHA_REFUSED"
     if CARD_MARKERS.search(txt) and card_form_present(page):
         return "PAYWALL_REFUSED"
@@ -628,7 +655,7 @@ def wait_for_auth_ui(page, ms: int = 14000) -> str:
         except Exception:
             pass
         txt = body_text(page)
-        if wall(txt, page.url):
+        if wall_page(page):
             return "wall"
         if SIGNED_IN_MARKERS.search(txt):
             return "signed_in"
