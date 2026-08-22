@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Backup', 'List', 'Finalize', 'Restore')]
+    [ValidateSet('Backup', 'List', 'Finalize', 'RepairRegistry', 'Restore')]
     [string]$Mode = 'Backup',
 
     [string]$ChromeUserData = (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data'),
@@ -9,7 +9,9 @@ param(
 
     [string]$Snapshot,
 
-    [switch]$ConfirmRestore
+    [switch]$ConfirmRestore,
+
+    [switch]$ConfirmRegistryRepair
 )
 
 Set-StrictMode -Version Latest
@@ -132,6 +134,71 @@ function Complete-StagingSnapshot {
     Write-Output "Backup finalized: $finalPath"
 }
 
+function Repair-ProfileRegistry {
+    param(
+        [Parameter(Mandatory)][string]$LiveRoot,
+        [Parameter(Mandatory)][string]$SourceRoot
+    )
+
+    Stop-ChromeForRecovery
+    $liveStatePath = Join-Path $LiveRoot 'Local State'
+    $sourceStatePath = Join-Path $SourceRoot 'Local State'
+    foreach ($path in $liveStatePath, $sourceStatePath) {
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Local State is missing: $path"
+        }
+    }
+
+    $live = Get-Content -LiteralPath $liveStatePath -Raw | ConvertFrom-Json
+    $source = Get-Content -LiteralPath $sourceStatePath -Raw | ConvertFrom-Json
+    $liveKey = [Convert]::FromBase64String($live.os_crypt.encrypted_key)
+    $sourceKey = [Convert]::FromBase64String($source.os_crypt.encrypted_key)
+    $hasher = [Security.Cryptography.SHA256]::Create()
+    try {
+        $liveHash = [BitConverter]::ToString($hasher.ComputeHash($liveKey)).Replace('-', '')
+        $sourceHash = [BitConverter]::ToString($hasher.ComputeHash($sourceKey)).Replace('-', '')
+    }
+    finally {
+        $hasher.Dispose()
+    }
+    if ($liveHash -ne $sourceHash) {
+        throw 'Refusing registry repair: source and live Chrome encryption keys do not match.'
+    }
+
+    $changed = @()
+    foreach ($profileName in 'Default', 'Profile 14', 'Profile 16', 'Profile 17') {
+        $liveEntry = $live.profile.info_cache.PSObject.Properties[$profileName]
+        $sourceEntry = $source.profile.info_cache.PSObject.Properties[$profileName]
+        if ($null -eq $liveEntry -or $null -eq $sourceEntry) { continue }
+        $liveUsername = [string]$liveEntry.Value.user_name
+        $sourceUsername = [string]$sourceEntry.Value.user_name
+        # Only fill a missing registration from a verified historical source; never replace
+        # a currently registered account with a different one.
+        if ([string]::IsNullOrWhiteSpace($liveUsername) -and -not [string]::IsNullOrWhiteSpace($sourceUsername)) {
+            $liveEntry.Value = $sourceEntry.Value
+            $changed += $profileName
+        }
+    }
+    if ($changed.Count -eq 0) {
+        Write-Output 'No missing Chrome profile registrations needed repair.'
+        return
+    }
+
+    $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $metadataBackup = Join-Path $LiveRoot "Local State.before_registry_repair_$stamp"
+    Copy-Item -LiteralPath $liveStatePath -Destination $metadataBackup -Force
+    try {
+        $json = $live | ConvertTo-Json -Depth 100
+        [System.IO.File]::WriteAllText($liveStatePath, $json, [System.Text.UTF8Encoding]::new($false))
+    }
+    catch {
+        Copy-Item -LiteralPath $metadataBackup -Destination $liveStatePath -Force
+        throw
+    }
+    Write-Output "Repaired missing registration metadata: $($changed -join ', ')"
+    Write-Output "Metadata-only rollback copy: $metadataBackup"
+}
+
 if ($Mode -eq 'List') {
     if (-not (Test-Path -LiteralPath $BackupRoot)) {
         Write-Output "No backup root exists yet: $BackupRoot"
@@ -161,6 +228,17 @@ if ($Mode -eq 'Finalize') {
         throw 'Finalize requires the explicit path of an .incomplete snapshot directory.'
     }
     Complete-StagingSnapshot -Path $Snapshot | Out-Null
+    exit 0
+}
+
+if ($Mode -eq 'RepairRegistry') {
+    if (-not $ConfirmRegistryRepair) {
+        throw 'Registry repair is intentionally blocked. Rerun with -ConfirmRegistryRepair and an explicit -Snapshot source root.'
+    }
+    if ([string]::IsNullOrWhiteSpace($Snapshot)) {
+        throw 'Registry repair requires -Snapshot pointing to a historical Chrome User Data root.'
+    }
+    Repair-ProfileRegistry -LiveRoot $ChromeUserData -SourceRoot ((Resolve-Path -LiteralPath $Snapshot).Path)
     exit 0
 }
 
