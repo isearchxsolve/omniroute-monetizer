@@ -1198,3 +1198,76 @@ eon_unified.
 - **VERIFICATION**: file written (10.6KB), all gap evidence cross-checked against worklog
   entries #1005–#1008 before inclusion; no fabricated file paths or line numbers.
 - **STATUS**: Delivered. Execution of the prompt itself awaits user go-ahead.
+
+### [2026-08-22] #1010 — REMEDIATION SWEEP: emergentsh EM-1 FIXED (SECRET_KEY fail-closed + route auth + bcrypt5 runtime break)
+
+**Context:** Executing MASTER_REMEDIATION_PROMPT.md across all four audited repos. neon_unified (NU-1..5,7 FIXED, NU-6 BLOCKED on NIM quota wall) and ases_v3_1 (AS-1..4 FIXED) already committed. Now in emergentsh (C:/god_ai monorepo, branch main).
+
+**Baseline (honest):** 8 failed, 68 passed, 1 skipped. Root-caused all 8 BEFORE touching code: 5 are a ROOT_DIR bug in tests/baseline/test_suite.py (parents[1] resolves to tests/ instead of repo root — the audited files all exist and are correct); 3 are a REAL pipeline bug = gap EM-3 (stream_run lacks run()'s 3-retry self-heal loop; pipeline dies at designer agent, 2 of 7).
+
+**EM-1 FIX (committed in god_ai, scoped to emergentsh/ paths only):**
+1. backend/app/core/auth.py — INSECURE_SECRET_KEYS frozenset + MIN_SECRET_KEY_LENGTH=32 + validate_secret_key() raising RuntimeError on missing/known-default/short keys.
+2. backend/app/main.py — lifespan calls validate_secret_key() before init_db(): served app refuses to boot on a forgeable JWT signing key (fail closed). Module import stays side-effect-free.
+3. backend/app/api/pipeline.py — all six routes (/run /stream /status /jobs /export /credits) now require get_current_active_user; jobs record user_id; _job_owner() enforces ownership with 404 (no existence leak); /jobs owner-scoped.
+4. LATENT RUNTIME BREAK found during testing: passlib 1.7.4 incompatible with installed bcrypt 5.0.0 — get_password_hash() raised ValueError for ANY password, so /api/auth/register was broken at runtime (never caught because the only TestAuth class lives inside a mock string literal in test_integration.py). Replaced passlib CryptContext with direct bcrypt.hashpw/checkpw + explicit 72-byte truncation.
+
+**Evidence:** new tests/test_em1_auth_fail_closed.py — 22/22 PASS (boot refusal x3, secret validation x6, 401 matrix across all six routes, cross-user job isolation, forged-token-with-old-default-key rejected, hash round trip x3). Full suite: 90 passed, same 8 pre-existing failures, ZERO regressions.
+
+**Infra notes:** pytest-asyncio 0.23.5 async fixtures crash on this pytest version ('FixtureDef' has no attribute 'unittest') — used sync client_factory fixture. Ambient shell carries stale DATABASE_URL=postgres://...crypto_db from another project (SQLAlchemy rejects postgres:// scheme); new tests pin sqlite before import. Secrets redacted per T11.
+
+**Worklog:** C:/god_ai/emergentsh/REMEDIATION_WORKLOG.md entries #1-2. Next: EM-2 per-user credit ledger.
+
+### [2026-08-22] #1011 — REMEDIATION SWEEP: emergentsh EM-2 FIXED (per-user persisted credit ledger)
+
+Deleted the process-global USER_CREDITS=10 from backend/app/api/pipeline.py (shared by all callers, lost on restart). /run now debits the caller's persisted User.credits via new _debit_credits() and writes a CreditTransaction(amount=-1, type="usage") audit row in the same commit (atomic); insufficient balance -> 402 with no job created. /credits now returns the caller's own persisted balance. Schema primitives (User.credits default 1000, CreditTransaction) already existed and were simply unwired.
+
+Evidence: new tests/test_em2_credit_ledger.py 6/6 PASS (global-gone guard, own-balance report, debit+audit-row, 402-no-job, cross-user independence, 3-run atomicity). Full suite: 96 passed, same 8 pre-existing failures, zero regressions. Worklog: emergentsh/REMEDIATION_WORKLOG.md #3. Next: EM-3 stream_run retry parity.
+
+### [2026-08-22] #1012 — REMEDIATION SWEEP: emergentsh EM-3/EM-4/EM-5 FIXED; suite driven 8 failures -> 0
+
+EM-3 (stream_run retry parity): extracted _run_agent_with_retry() used by BOTH run() and stream_run(); stream retries resume in-place so SSE consumers never see duplicated events; default chain is the documented 7-agent contract; DesignerAgent emits DESIGN.md. EM-4 (fake moat): replaced the 'backdrop-blur' string search with lint_frontend_design_tokens() (module structure, component def, >=3 style applications, motion primitives, designer palette fidelity). EM-5 (no sandbox): rewrote sandbox_executor.py sharing NU-3's hardened Docker design (--network none --read-only --tmpfs --cpus 1.0 --memory 512m), isolation=auto/docker/host, docker mode FAILS CLOSED when daemon down, path traversal/absolute paths rejected.
+
+Also fixed the test_integration.py mock fixture (route on system-prompt roles not user keywords; designer yields valid JSON; frontend passes EM-4 lint; QA yields self-contained passing test; added devops branch) and the baseline/test_suite.py ROOT_DIR bug (parents[1]->parents[2]).
+
+Evidence: test_em3_stream_retry_parity.py 7/7, test_em4_design_token_lint.py 14/14, test_em5_sandbox_executor.py 11/11. The 3 previously-failing TestFullPipeline tests now PASS. Full suite: 136 passed, 0 failed, 1 skipped (was 8 failed at baseline). ENV NOTE: Docker daemon down (500 on engine pipe) so container exec is unit-verified via mocks; QA path exercises honest auto->host fallback. Worklog: emergentsh/REMEDIATION_WORKLOG.md #4-5. Next: EM-6 dead buttons.
+
+
+---
+
+### [2026-08-22 07:31] #1012 — VIDEO KEY HARVESTER: live-profile fixes (single-page reuse, per-site signed-in markers, auto-junction, multi-profile sweep)
+
+- **CONTEXT**: Resumed from the provider-harvesting handoff prompt (pasted 07:17). Mission: wire
+  new video-generation providers into OmniRoute by harvesting keys from the operator's logged-in
+  Chrome profile via Playwright. Ground truth restored: OmniRoute up on :20128 (models 200 in
+  0.25s), 88 connections, only 3 video-related wired (alibaba/dashscope-video 6116ca06 active =
+  the only provider that ever returned real MP4; deepinfra 6964962e active but account has NO
+  FUNDS = REJECTED per policy; pollinations c35aa867 active but NO handler = always 400).
+  state/generated_keys.json has zero video-provider entries (only older chat-provider keys).
+  Last probe_report.json had only 1 entry (aistudio -> WALL_GOOGLE_SSO_AVAILABLE on the COPY
+  approach, DBSC session dead as expected).
+- **GAPS FIXED in scripts/automation/video_key_harvester.py** (all from handoff open-issues list):
+  1. **new_page() crash on live profiles** ("Protocol error Target.createTarget: Failed to open
+     a new tab" — the segmind crash): added _PageManager — reuses ctx.pages[0] (the tab Chrome
+     already has open), falls back to new_page() with 3x retry/backoff. probe() and harvest_one()
+     now drive ONE shared page sequentially; harvest_one no longer closes the page between
+     targets. Concurrency capped at 1 page as the handoff prescribed.
+  2. **False NOT_SIGNED_IN classification** (aistudio/kie/novita misread on the live run): added
+     SITE_SIGNED_IN_MARKERS per target (aistudio: "api keys"/"create api key"; kie/novita/
+     deepinfra: "api key"+"credits"; segmind: "api keys"/"credits"; leonardo: "api access"/
+     "personal access token"; runwayml: "api keys") AND an IdP-redirect guard: if page.url is on
+     accounts.google.com / /signin / /login / auth0 / /auth, classification is WALL_* regardless
+     of body text (prevents a Google sign-in page that mentions "google" from reading as
+     signed-in). New fields in classify output: site_signed_marker, idp_redirect.
+  3. **Junction lifecycle automated**: ensure_junction()/remove_junction() — if --profile-dir or
+     --profiles is given without --user-data-root, the script creates state/live_link -> real
+     User Data via mklink /J and removes it on exit (try/finally). Refuses to treat an existing
+     non-junction dir as the alias. rmdir only — never deletes through the junction.
+  4. **Multi-profile sweep**: new --profiles "Default,Profile 14,..." flag runs the probe
+     sequentially per profile (one launch each, same junction), tagging every result row and
+     screenshot with the profile dir. New --list-profiles prints Local State info_cache.
+- **VERIFICATION**: py_compile OK; _classify unit-tested with stub pages — 5/5 cases correct:
+  signed-in aistudio shell -> SIGNED_IN; accounts.google.com redirect -> WALL_GOOGLE_SSO_AVAILABLE;
+  provider login wall w/ Google SSO -> WALL_GOOGLE_SSO_AVAILABLE; sign-out marker -> SIGNED_IN;
+  captcha text -> HUMAN_REQUIRED_CAPTCHA.
+- **NEXT**: kill Chrome (ProcessSingleton lock), run live probe sweep across all 4 profiles to
+  map which profile holds which provider login, then harvest the signed-in ones.
