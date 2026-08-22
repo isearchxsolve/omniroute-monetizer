@@ -262,15 +262,20 @@ def click_label(page, labels: tuple[str, ...], timeout: int = 4000) -> Optional[
                     return label
             except Exception:
                 continue
-    # Second pass: substring match, for buttons with icons or extra words in them.
+    # Second pass: substring match, for controls with icons or extra words in their names.
+    # Links are included too -- MEASURED on featherless.ai 2026-08-22: the real door was a
+    # 'Login' anchor whose accessible name had extra text, the exact pass missed it, and the
+    # next label in line ('get started') walked the run into the model playground instead.
     for label in labels:
-        try:
-            loc = page.get_by_role("button", name=re.compile(re.escape(label), re.I)).first
-            if loc.count() and loc.is_visible():
-                loc.click(timeout=timeout)
-                return label
-        except Exception:
-            continue
+        pat = re.compile(re.escape(label), re.I)
+        for role in ("button", "link"):
+            try:
+                loc = page.get_by_role(role, name=pat).first
+                if loc.count() and loc.is_visible():
+                    loc.click(timeout=timeout)
+                    return label
+            except Exception:
+                continue
     return None
 
 
@@ -623,12 +628,31 @@ LOGIN_WALL_TEXT_RE = re.compile(
     r"create your account|email address\*", re.I)
 
 
+# SSO callback pages are TRANSIT, not walls. MEASURED on openadapter 2026-08-22: after Google
+# consent the run landed on accounts.openadapter.in/sign-in/sso-callback?...redirect_url=... --
+# which LOGIN_WALL_URL_RE happily matched ('sign-in') while the page was mid-redirect back to
+# the dashboard, so a completed login reported 'still behind a login wall after SSO'.
+CALLBACK_URL_RE = re.compile(r"sso-?callback|oauth-?callback|/auth/callback|/signin/callback", re.I)
+
+
+def await_callback(page, ms: int = 15000) -> None:
+    """Give an SSO callback page the time to finish walking us back to the provider."""
+    end = time.monotonic() + ms
+    while time.monotonic() < end:
+        if not CALLBACK_URL_RE.search(page.url or ""):
+            return
+        page.wait_for_timeout(1000)
+    settle(page, 3000)
+
+
 def login_wall(page) -> bool:
     try:
         if page.locator("input[type=password]").count():
             return True
     except Exception:
         pass
+    if CALLBACK_URL_RE.search(page.url or ""):
+        return False   # transit page -- see CALLBACK_URL_RE
     if LOGIN_WALL_URL_RE.search(page.url or ""):
         return True
     return bool(LOGIN_WALL_TEXT_RE.search(body_text(page)))
@@ -822,14 +846,15 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
         except Exception:
             pass
         st = pick_google_account(tgt, want_email)
+        if st == "RETURNED":
+            await_callback(tgt)   # the provider's sso-callback transit (openadapter lesson)
         if popup.get("p"):
             try:
-                if st == "RETURNED":
-                    popup["p"].wait_for_timeout(1500)
                 popup["p"].close()
             except Exception:
                 pass
             settle(page, 6000)
+            await_callback(page)
         return st
 
     def attempt_here() -> Optional[str]:
@@ -861,9 +886,16 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
                 return "ALREADY_SIGNED_IN"
         return None
 
+    start_url = page.url
     st = attempt_here()
     if st:
         return st
+
+    # An entry click may have dragged us off the landing page (MEASURED on featherless: 'Get
+    # Started' opened the model playground). The candidates below were ranked from the landing
+    # page; go back to it so they are actually clickable.
+    if (page.url or "") != start_url:
+        step_back(page)
 
     # Click-based hunt: press the landing page's own login links, best first, going back
     # between candidates. No URL reloads -- see nav_click for why.
@@ -925,6 +957,10 @@ def reach_key_page(page, target: dict) -> bool:
     leads there. Stock-path probing (/api-keys, /keys, ...) is gone with the rest of the URL
     guessing: it burned budget on pages that never existed and risked the IP.
     """
+    if looks_like_key_page(page):
+        return True   # already standing on it -- MEASURED on inception 2026-08-22: an instant
+                      # consent redirect dropped the run straight onto /dashboard/api-keys and
+                      # the old code still reported the provider a failure
     for link in dom_nav_links(page, "keys"):
         if not nav_click(page, link["href"]):
             continue
@@ -1071,7 +1107,10 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
                 row.update(ok=False, stage="wall-at-sso", detail=sso,
                            shot=shot(page, f"{slug}-sso"))
                 return row
-            if sso not in ("RETURNED", "ALREADY_SIGNED_IN"):
+            # An odd SSO verdict does not overrule the page we are standing on: if the
+            # provider's own redirects already dropped us on a key page, we are in (inception
+            # measured exactly this). Only fail when the page disagrees too.
+            if sso not in ("RETURNED", "ALREADY_SIGNED_IN") and not looks_like_key_page(page):
                 row.update(ok=False, stage="sso", detail=sso, shot=shot(page, f"{slug}-sso"))
                 return row
             reached = reach_key_page(page, target)
