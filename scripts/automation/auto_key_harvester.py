@@ -281,11 +281,20 @@ def click_label(page, labels: tuple[str, ...], timeout: int = 4000) -> Optional[
     return None
 
 
-def settle(page, ms: int = 2500) -> None:
+def settle(page, ms: int = 1200) -> None:
+    """Let the page breathe -- briefly.
+
+    networkidle is the WRONG signal on modern sites: analytics/websockets keep the network busy
+    forever, so every wait_for_load_state('networkidle') burned its whole timeout while the
+    page was long since usable (operator: "much delay between steps"). The file's own Auth0
+    lesson already says the control appearing is the signal, not a load state -- so this is a
+    short fixed pause plus a domcontentloaded that returns instantly once loaded.
+    """
     try:
-        page.wait_for_load_state("networkidle", timeout=ms)
+        page.wait_for_load_state("domcontentloaded", timeout=min(ms, 2000))
     except Exception:
-        page.wait_for_timeout(min(ms, 1500))
+        pass
+    page.wait_for_timeout(ms)
 
 
 # --------------------------------------------------------------------------------------------
@@ -465,7 +474,7 @@ def header_icon_click(page) -> bool:
 
 
 def wait_for_control(page, labels: tuple[str, ...], roles: tuple[str, ...] = ("button", "link"),
-                     ms: int = 15000) -> Optional[str]:
+                     ms: int = 10000) -> Optional[str]:
     """Poll until one of these labels exists as a visible control, then click it.
 
     The Auth0 lesson (wait_for_auth_ui) applies to key pages too. MEASURED on featherless.ai
@@ -647,7 +656,7 @@ def nav_click(page, href: str):
     except Exception:
         return None
     follow = None
-    end = time.monotonic() + 8
+    end = time.monotonic() + 3.5
     while time.monotonic() < end:
         fresh = [p for p in _sibling_pages(page)
                  if id(p) not in before_pages and (p.url or "") not in ("", "about:blank")]
@@ -656,13 +665,13 @@ def nav_click(page, href: str):
             break
         if (page.url or "").rstrip("/") != url_before.rstrip("/"):
             break
-        page.wait_for_timeout(500)
+        page.wait_for_timeout(400)
     tgt = follow or page
     try:
-        tgt.wait_for_load_state("domcontentloaded", timeout=15000)
+        tgt.wait_for_load_state("domcontentloaded", timeout=10000)
     except Exception:
         pass
-    settle(tgt, 3000)
+    settle(tgt, 1200)
     if follow is None and (page.url or "").rstrip("/") == url_before.rstrip("/"):
         return None   # the click went nowhere
     return tgt
@@ -745,7 +754,7 @@ def has_google_control(page) -> bool:
     return find_google_control(page) is not None
 
 
-def wait_for_auth_ui(page, ms: int = 14000) -> str:
+def wait_for_auth_ui(page, ms: int = 7000) -> str:
     """Poll until the page has decided what it is: a login card, or an authenticated page.
 
     MEASURED on cloud.sambanova.ai 2026-08-22: the Auth0 login card -- with 'Continue with
@@ -801,7 +810,7 @@ LOGIN_WALL_TEXT_RE = re.compile(
 CALLBACK_URL_RE = re.compile(r"sso-?callback|oauth-?callback|/auth/callback|/signin/callback", re.I)
 
 
-def await_callback(page, ms: int = 15000) -> None:
+def await_callback(page, ms: int = 10000) -> None:
     """Give an SSO callback page the time to finish walking us back to the provider."""
     end = time.monotonic() + ms
     while time.monotonic() < end:
@@ -811,7 +820,7 @@ def await_callback(page, ms: int = 15000) -> None:
     settle(page, 3000)
 
 
-def await_login_bounce(page, ms: int = 10000) -> None:
+def await_login_bounce(page, ms: int = 7000) -> None:
     """Post-SSO, a provider's /auth/login often bounces to the real destination a beat later
     (next-auth client-side redirect). MEASURED on inception 2026-08-22: the Google session was
     VALID -- /dashboard/api-keys loaded signed-in on a direct visit -- but the run judged the
@@ -966,7 +975,7 @@ def restart_attached(pw, wait_s: int = 25):
 
 def pick_google_account(page, want_email: Optional[str]) -> str:
     """Step 4: 'select profile'. Returns a status string; never types a password."""
-    settle(page, 4000)
+    settle(page, 2000)
     txt = body_text(page)
     w = wall(txt, page.url)
     if w:
@@ -1007,7 +1016,7 @@ def pick_google_account(page, want_email: Optional[str]) -> str:
     # was still bouncing through its redirect chain, so a working flow reported STUCK_ON_GOOGLE.
     # Poll instead of guessing a duration.
     waited = 0
-    while waited < 30000:
+    while waited < 20000:
         if "accounts.google.com" not in page.url:
             return "RETURNED"
         if "signin/rejected" in page.url:
@@ -1016,9 +1025,9 @@ def pick_google_account(page, want_email: Optional[str]) -> str:
         w = wall(txt, page.url)
         if w:
             return w
-        click_label(page, ("continue", "allow", "confirm", "next", "i agree"), timeout=2500)
-        page.wait_for_timeout(1500)
-        waited += 1500
+        click_label(page, ("continue", "allow", "confirm", "next", "i agree"), timeout=2000)
+        page.wait_for_timeout(1000)
+        waited += 1000
     return "STUCK_ON_GOOGLE"
 
 
@@ -1072,7 +1081,7 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
             if "accounts.google.com" not in p.url:
                 if not click_google(p):
                     return None
-                settle(p, 5000)
+                settle(p, 2500)
         tgt = popup.get("p") or p
         try:
             tgt.wait_for_load_state("domcontentloaded", timeout=15000)
@@ -1086,7 +1095,7 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
                 popup["p"].close()
             except Exception:
                 pass
-            settle(p, 6000)
+            settle(p, 3000)
             await_callback(p)
         return st
 
@@ -1109,7 +1118,7 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
         clicked = click_label(p, ENTRY_LABELS, timeout=4000) or icon_login_click(p)
         via_header_icon = not clicked and header_icon_click(p)
         if clicked or via_header_icon:
-            settle(p, 5000)
+            settle(p, 2500)
             dismiss_overlays(p)
             if via_header_icon:
                 # The icon may have opened a menu rather than navigated: press the login
@@ -1172,7 +1181,7 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
             page.goto(url, wait_until="domcontentloaded", timeout=20000)
         except Exception:
             continue
-        settle(page, 3000)
+        settle(page, 1500)
         log(f"        documented entry point: {url}")
         st = attempt_here(page)
         if st:
