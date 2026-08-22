@@ -20,10 +20,30 @@ REM ============================================================================
 setlocal
 cd /d "%~dp0"
 set PYTHONIOENCODING=utf-8
+
+REM Find Python the way SignInWithGoogleOnce.cmd does. A bare "python" is not on PATH in a
+REM plain cmd.exe window, which is why an earlier version of this file did nothing at all.
+set "PY=%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\python.exe"
+if not exist "%PY%" set "PY=%~dp0.venv\Scripts\python.exe"
+if not exist "%PY%" set "PY=python"
+if "%PY%"=="python" (
+  where python >nul 2>nul
+  if errorlevel 1 (
+    echo   [PROBLEM] Could not find Python on this computer.
+    echo   Looked in:
+    echo     %LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\python.exe
+    echo     %~dp0.venv\Scripts\python.exe
+    echo     and on PATH.
+    echo.
+    pause
+    exit /b 3
+  )
+)
+
 echo.
 echo   Starting with the providers that state NO CREDIT CARD is required.
 echo.
-python -u "scripts\automation\harvest_free_keys.py" %*
+"%PY%" -u "scripts\automation\harvest_free_keys.py" %*
 echo.
 echo   Finished. Nothing was paid for and no CAPTCHA was touched.
 pause

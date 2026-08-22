@@ -132,6 +132,22 @@ ENTRY_LABELS = (
     "sign in", "sign up", "log in", "login", "get started", "get api key",
     "start for free", "try for free", "console", "dashboard", "register",
 )
+# Cookie/consent overlays. MEASURED on sambanova 2026-08-22: a TrustArc banner ("We Value Your
+# Privacy" / "Agree & Proceed") covered the viewport, so every later click either hit the banner
+# or was refused as intercepted. Dismissing these is not optional -- it is step zero.
+COOKIE_LABELS = (
+    "agree & proceed", "agree and proceed", "accept all cookies", "accept all", "allow all",
+    "accept cookies", "accept", "i agree", "agree", "got it", "ok, got it", "understood",
+    "continue", "close", "dismiss", "reject all",  # reject-all is fine: we want it gone, not set
+)
+# The catalog's `website` is a MARKETING homepage for most providers, not the signup console.
+# MEASURED on sambanova: https://sambanova.ai has no login at all; the console is
+# cloud.sambanova.ai. So the real login page is discovered from the page's own links first,
+# and only then guessed from conventional subdomains.
+AUTH_HREF_RE = re.compile(
+    r"(?:^|[./_-])(?:log[-_]?in|sign[-_]?in|sign[-_]?up|signup|register|console|cloud|"
+    r"platform|dashboard|developer|studio|workbench)(?:[./?#_-]|$)", re.I)
+CONSOLE_SUBDOMAINS = ("cloud", "console", "platform", "app", "dashboard", "dev", "studio", "api")
 CREATE_LABELS = (
     "create api key", "create new api key", "create new key", "create key",
     "new api key", "new secret key", "new key", "generate api key", "generate key",
@@ -139,10 +155,11 @@ CREATE_LABELS = (
     "create", "+ new", "+ create", "new",
 )
 COPY_LABELS = ("copy", "copy key", "copy api key", "copy to clipboard", "copy secret")
-SIGNED_IN_MARKERS = re.compile(
-    r"\bsign ?out\b|\blog ?out\b|\bdashboard\b|\bapi keys?\b|\bbilling\b|\busage\b|\bsettings\b",
-    re.I,
-)
+# ONLY a sign-out control proves a session exists. MEASURED on cloud.sambanova.ai/plans/pricing
+# 2026-08-22: that page is PUBLIC, and its shell nav carries Dashboard / Billing / Settings /
+# "API keys", so the earlier, broader marker set reported ALREADY_SIGNED_IN while logged out.
+# Everything except an explicit sign-out link is furniture that public pages also render.
+SIGNED_IN_MARKERS = re.compile(r"\bsign ?out\b|\blog ?out\b|\blogout\b|\bmy account\b", re.I)
 
 # Where API keys usually live, tried in order after SSO lands. Cheap: one HEAD-ish goto each.
 KEY_PATHS = (
@@ -169,12 +186,30 @@ KEY_NOISE = re.compile(
     re.I,
 )
 
+# Parked by the operator mid-run, 2026-08-22: "lets park this provider and move on wasting our
+# time" / "we have 100s yet to cover". NOT a dead end -- sambanova is where the Google chooser
+# first proved it works under Playwright. It is parked because per-provider debugging does not
+# scale when 100+ providers have never been tried once. Revisit after the sweep.
+PARKED = {
+    "sambanova": "operator parked 2026-08-22 after its chooser proved the Google flow works; "
+                 "breadth first, single-provider polish later",
+}
+
 
 # --------------------------------------------------------------------------------------------
 # Small helpers
 # --------------------------------------------------------------------------------------------
 def log(msg: str) -> None:
     print(msg, flush=True)
+
+
+# A hard per-provider time budget. Without it one slow site eats the sweep, which is exactly the
+# failure the operator called out: "we have 100s yet to cover". Breadth beats depth here.
+_deadline: float = 0.0
+
+
+def out_of_time() -> bool:
+    return _deadline > 0 and time.monotonic() > _deadline
 
 
 def body_text(page) -> str:
@@ -229,6 +264,182 @@ def settle(page, ms: int = 2500) -> None:
         page.wait_for_load_state("networkidle", timeout=ms)
     except Exception:
         page.wait_for_timeout(min(ms, 1500))
+
+
+def dismiss_overlays(page) -> list[str]:
+    """Step zero: clear cookie/consent banners so later clicks reach the real controls.
+
+    Runs after every navigation. Only ever presses the banner's own dismiss control -- it does
+    not hunt for hidden elements or rip nodes out of the DOM.
+    """
+    gone: list[str] = []
+    for _ in range(3):
+        hit = None
+        for sel in ("#truste-consent-track", "[id*=cookie i]", "[class*=cookie i]",
+                    "[id*=consent i]", "[class*=consent i]", "[aria-label*=cookie i]",
+                    "[role=dialog]", ".cc-window", "#onetrust-banner-sdk"):
+            try:
+                box = page.locator(sel).first
+                if not (box.count() and box.is_visible()):
+                    continue
+                for label in COOKIE_LABELS:
+                    btn = box.get_by_role("button", name=re.compile(re.escape(label), re.I)).first
+                    if btn.count() and btn.is_visible():
+                        btn.click(timeout=3000)
+                        hit = f"{sel}:{label}"
+                        break
+                if not hit:
+                    x = box.locator("button[aria-label*=close i], button[aria-label*=dismiss i]").first
+                    if x.count() and x.is_visible():
+                        x.click(timeout=3000)
+                        hit = f"{sel}:close"
+                if hit:
+                    break
+            except Exception:
+                continue
+        if not hit:
+            break
+        gone.append(hit)
+        page.wait_for_timeout(500)
+    return gone
+
+
+def login_candidates(page, target: dict) -> list[str]:
+    """URLs likely to hold a real login form, best first.
+
+    Order matters and is deliberate:
+      1. the provider's own documented key URL, if the catalog has one;
+      2. links ON the marketing page whose href looks like auth/console -- the site telling us
+         where its console is beats any guess;
+      3. conventional console subdomains, because many providers never link the console from
+         their marketing nav at all.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(u: Optional[str]) -> None:
+        if not u:
+            return
+        u = u.split("#")[0].rstrip("/")
+        if u.startswith("http") and u.lower() not in seen:
+            seen.add(u.lower())
+            out.append(u)
+
+    add(target.get("apiKeyUrl"))
+
+    try:
+        hrefs = page.eval_on_selector_all(
+            "a[href]", "els => els.map(e => e.href).filter(Boolean).slice(0, 400)")
+    except Exception:
+        hrefs = []
+    host = re.sub(r"^www\.", "", (re.match(r"^https?://([^/]+)", page.url) or
+                                  re.match(r"^https?://([^/]+)", target.get("website") or "") or
+                                  [None, ""])[1] if page.url or target.get("website") else "")
+    scored: list[tuple[int, str]] = []
+    for h in hrefs:
+        m = re.match(r"^https?://([^/]+)(/.*)?$", h or "")
+        if not m:
+            continue
+        hhost, hpath = re.sub(r"^www\.", "", m.group(1)), m.group(2) or "/"
+        if host and host.split(".")[-2:] != hhost.split(".")[-2:]:
+            continue  # stay on the provider's own registrable domain
+        score = 0
+        if AUTH_HREF_RE.search(hpath):
+            score += 3
+        if hhost.split(".")[0] in CONSOLE_SUBDOMAINS:
+            score += 4
+        if re.search(r"sign[-_]?up|register", hpath, re.I):
+            score += 2
+        if score:
+            scored.append((score, h))
+    for _, h in sorted(scored, key=lambda t: -t[0])[:8]:
+        add(h)
+
+    if host:
+        reg = ".".join(host.split(".")[-2:]) if host.count(".") >= 1 else host
+        for sub in CONSOLE_SUBDOMAINS[:5]:
+            add(f"https://{sub}.{reg}/login")
+            add(f"https://{sub}.{reg}")
+    add(target.get("website"))
+    return out[:14]
+
+
+def frames_of(page) -> list:
+    """The page plus any child frames. Some providers render the login card in an iframe."""
+    out = [page]
+    try:
+        out += [f for f in page.frames if f is not page.main_frame]
+    except Exception:
+        pass
+    return out
+
+
+def find_google_control(page):
+    """The actual clickable 'Continue with Google', searched across frames. None if absent."""
+    for fr in frames_of(page):
+        for label in GOOGLE_SSO_LABELS:
+            pat = re.compile(re.escape(label), re.I)
+            for role in ("button", "link"):
+                try:
+                    loc = fr.get_by_role(role, name=pat).first
+                    if loc.count() and loc.is_visible():
+                        return loc
+                except Exception:
+                    continue
+    return None
+
+
+def has_google_control(page) -> bool:
+    return find_google_control(page) is not None
+
+
+def wait_for_auth_ui(page, ms: int = 14000) -> str:
+    """Poll until the page has decided what it is: a login card, or an authenticated page.
+
+    MEASURED on cloud.sambanova.ai 2026-08-22: the Auth0 login card -- with 'Continue with
+    Google' plainly on it -- had not painted yet when a 3s settle() expired, so the run reported
+    NO_SSO_CONTROL_FOUND about a page that visibly HAD the control. domcontentloaded is not a
+    useful signal for these SPA logins; the control appearing is.
+    """
+    deadline = ms
+    while deadline > 0:
+        if find_google_control(page) is not None:
+            return "google"
+        try:
+            if page.locator("input[type=password]").count():
+                return "password"
+        except Exception:
+            pass
+        txt = body_text(page)
+        if wall(txt, page.url):
+            return "wall"
+        if SIGNED_IN_MARKERS.search(txt):
+            return "signed_in"
+        page.wait_for_timeout(1000)
+        deadline -= 1000
+    return "unknown"
+
+
+# A login wall is decisive. If any of these hold, the page is NOT an authenticated page, no
+# matter how much dashboard-looking furniture the SPA shell is still rendering around it.
+LOGIN_WALL_URL_RE = re.compile(
+    r"/login|/signin|/sign-in|/sign_in|/signup|/sign-up|/register|/auth(?:/|$|\?)|"
+    r"auth0\.com|/u/login|okta\.com|/oauth", re.I)
+LOGIN_WALL_TEXT_RE = re.compile(
+    r"log ?in to |sign ?in to |don'?t have an account|already have an account\?|"
+    r"forgot (?:your )?password|continue with (?:google|microsoft|github|apple)|"
+    r"create your account|email address\*", re.I)
+
+
+def login_wall(page) -> bool:
+    try:
+        if page.locator("input[type=password]").count():
+            return True
+    except Exception:
+        pass
+    if LOGIN_WALL_URL_RE.search(page.url or ""):
+        return True
+    return bool(LOGIN_WALL_TEXT_RE.search(body_text(page)))
 
 
 def shot(page, name: str) -> Optional[str]:
@@ -343,50 +554,81 @@ def pick_google_account(page, want_email: Optional[str]) -> str:
         if not clicked:
             return "GOOGLE_UNKNOWN_PAGE"
 
-    # Consent screen, if the provider asks for scopes.
-    for _ in range(3):
-        settle(page, 4000)
+    # Consent screen, then the hand-off back to the provider. MEASURED on sambanova 2026-08-22:
+    # the chooser worked and the account was clicked, but a fixed 6s settle expired while Google
+    # was still bouncing through its redirect chain, so a working flow reported STUCK_ON_GOOGLE.
+    # Poll instead of guessing a duration.
+    waited = 0
+    while waited < 30000:
         if "accounts.google.com" not in page.url:
-            break
+            return "RETURNED"
+        if "signin/rejected" in page.url:
+            return "GOOGLE_REFUSED_AUTOMATION"
         txt = body_text(page)
         w = wall(txt, page.url)
         if w:
             return w
-        if not click_label(page, ("continue", "allow", "confirm", "next", "i agree"), timeout=5000):
-            break
-
-    settle(page, 6000)
-    if "signin/rejected" in page.url:
-        return "GOOGLE_REFUSED_AUTOMATION"
-    return "RETURNED" if "accounts.google.com" not in page.url else "STUCK_ON_GOOGLE"
+        click_label(page, ("continue", "allow", "confirm", "next", "i agree"), timeout=2500)
+        page.wait_for_timeout(1500)
+        waited += 1500
+    return "STUCK_ON_GOOGLE"
 
 
-def do_sso(ctx, page, want_email: Optional[str]) -> str:
-    """Steps 2-4: get in via Continue with Google. Handles same-tab and popup flows."""
+def looks_signed_in(page) -> bool:
+    """True only when there is no login wall AND the page shows account-only furniture.
+
+    MEASURED on sambanova 2026-08-22: the first version of this returned True for an Auth0
+    login card that had "Continue with Google" printed on it, because the SPA shell still
+    carried nav words like Dashboard/Billing. That is the same false positive as
+    provider_login_helper._classify() produces for kie. So the rule is now one-directional:
+    ANY evidence of a login wall wins over ALL evidence of being signed in. Reporting "signed
+    in" while looking at a login form is the exact dishonesty this project keeps banning.
+    """
+    if login_wall(page) or has_google_control(page):
+        return False
     txt = body_text(page)
-    if SIGNED_IN_MARKERS.search(txt) and not any(
-            m in txt.lower() for m in ("sign in", "sign up", "log in")):
-        return "ALREADY_SIGNED_IN"
+    if not SIGNED_IN_MARKERS.search(txt):
+        return False
+    low = txt.lower()
+    return not any(m in low for m in ("sign in", "sign up", "log in", "create an account"))
+
+
+def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
+    """Steps 2-4: get in via Continue with Google. Handles same-tab and popup flows.
+
+    Hunts for the page that actually HAS the Google button instead of assuming the catalog's
+    website is it. MEASURED on sambanova: the marketing homepage has no login anywhere, so the
+    old 'click an entry label on the landing page' approach clicked a nav item and gave up.
+    """
+    def click_google() -> bool:
+        loc = find_google_control(page)
+        if loc is None:
+            return False
+        try:
+            loc.click(timeout=6000)
+            return True
+        except Exception:
+            return False
 
     def try_google() -> Optional[str]:
         popup: dict[str, Any] = {}
         try:
             with ctx.expect_page(timeout=6000) as pi:
-                if not click_label(page, GOOGLE_SSO_LABELS, timeout=5000):
+                if not click_google():
                     return None
             popup["p"] = pi.value
         except Exception:
             # No popup opened. Either the click failed, or it navigated in this tab.
             if "accounts.google.com" not in page.url:
-                if not click_label(page, GOOGLE_SSO_LABELS, timeout=5000):
+                if not click_google():
                     return None
                 settle(page, 5000)
-        target = popup.get("p") or page
+        tgt = popup.get("p") or page
         try:
-            target.wait_for_load_state("domcontentloaded", timeout=15000)
+            tgt.wait_for_load_state("domcontentloaded", timeout=15000)
         except Exception:
             pass
-        st = pick_google_account(target, want_email)
+        st = pick_google_account(tgt, want_email)
         if popup.get("p"):
             try:
                 if st == "RETURNED":
@@ -397,21 +639,54 @@ def do_sso(ctx, page, want_email: Optional[str]) -> str:
             settle(page, 6000)
         return st
 
-    st = try_google()
+    def attempt_here() -> Optional[str]:
+        """Try this page: Google button? Already in? A door to click, then a Google button?
+
+        The Google check runs FIRST on purpose. A visible "Continue with Google" is the single
+        most reliable fact on any of these pages -- more reliable than nav text, more reliable
+        than the URL -- so it decides before anything else gets a vote.
+        """
+        dismiss_overlays(page)
+        seen = wait_for_auth_ui(page)
+        w = wall(body_text(page), page.url)
+        if w:
+            return w
+        if seen == "google" or has_google_control(page):
+            return try_google()
+        if looks_signed_in(page):
+            return "ALREADY_SIGNED_IN"
+        if click_label(page, ENTRY_LABELS, timeout=4000):
+            settle(page, 5000)
+            dismiss_overlays(page)
+            wait_for_auth_ui(page)
+            w = wall(body_text(page), page.url)
+            if w:
+                return w
+            if has_google_control(page):
+                return try_google()
+            if looks_signed_in(page):
+                return "ALREADY_SIGNED_IN"
+        return None
+
+    st = attempt_here()
     if st:
         return st
 
-    # No Google control on the landing page. Click a way in first, then look again.
-    entered = click_label(page, ENTRY_LABELS, timeout=5000)
-    if not entered:
-        return "NO_SSO_CONTROL_FOUND"
-    settle(page, 5000)
-    txt = body_text(page)
-    w = wall(txt, page.url)
-    if w:
-        return w
-    st = try_google()
-    return st or "NO_GOOGLE_BUTTON_AFTER_ENTRY"
+    for url in login_candidates(page, target):
+        if url.rstrip("/") == page.url.rstrip("/"):
+            continue
+        if out_of_time():
+            return "OUT_OF_TIME"
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=20000)
+        except Exception:
+            continue
+        settle(page, 3000)
+        log(f"        looking for a login at {url}")
+        st = attempt_here()
+        if st:
+            return st
+    return "NO_SSO_CONTROL_FOUND"
 
 
 def reach_key_page(page, target: dict) -> bool:
@@ -441,6 +716,10 @@ def reach_key_page(page, target: dict) -> bool:
         try:
             page.goto(base.group(1) + path, wait_until="domcontentloaded", timeout=20000)
             settle(page, 2000)
+            # A redirect to a login page is the answer, not a failure: stop and let the caller
+            # run the Google flow, then come back here.
+            if login_wall(page) or has_google_control(page):
+                return False
             if page.url.rstrip("/").endswith(path.rstrip("/")):
                 t = body_text(page).lower()
                 if "api key" in t or "secret key" in t or "token" in t:
@@ -507,7 +786,9 @@ def mint_key(page) -> tuple[Optional[str], str]:
 # --------------------------------------------------------------------------------------------
 # One provider, end to end
 # --------------------------------------------------------------------------------------------
-def run_one(ctx, api, target: dict, dry_run: bool) -> dict:
+def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
+    global _deadline
+    _deadline = time.monotonic() + budget
     slug = target["id"]
     name = target.get("name") or slug
     site = target.get("apiKeyUrl") or target.get("website")
@@ -525,25 +806,40 @@ def run_one(ctx, api, target: dict, dry_run: bool) -> dict:
             row.update(ok=False, stage="goto", detail=f"{type(exc).__name__}: {str(exc)[:120]}")
             return row
         settle(page)
+        dropped = dismiss_overlays(page)
+        if dropped:
+            row["overlays_dismissed"] = dropped
 
         w = wall(body_text(page), page.url)
         if w:
             row.update(ok=False, stage="wall-on-landing", detail=w, shot=shot(page, f"{slug}-wall"))
             return row
 
-        sso = do_sso(ctx, page, target.get("google_email"))
-        row["sso"] = sso
-        if sso in ("CAPTCHA_REFUSED", "PAYWALL_REFUSED", "IDENTITY_REFUSED",
-                   "GOOGLE_REFUSED_AUTOMATION"):
-            row.update(ok=False, stage="wall-at-sso", detail=sso, shot=shot(page, f"{slug}-sso"))
-            return row
-        if sso not in ("RETURNED", "ALREADY_SIGNED_IN"):
-            row.update(ok=False, stage="sso", detail=sso, shot=shot(page, f"{slug}-sso"))
-            return row
+        # Go where the keys are FIRST, and only sign in if the site actually asks. This is the
+        # order a person uses, and it removes all guessing about session state: instead of
+        # deciding "am I signed in?" from page furniture -- which produced a false positive on
+        # sambanova's public pricing page -- we let the provider's own redirect answer it.
+        reached = reach_key_page(page, target)
+        row["key_page_attempt"] = page.url
 
-        if not reach_key_page(page, target):
+        if login_wall(page) or has_google_control(page) or not reached:
+            sso = do_sso(ctx, page, target, target.get("google_email"))
+            row["sso"] = sso
+            row["landed"] = page.url
+            if sso in ("CAPTCHA_REFUSED", "PAYWALL_REFUSED", "IDENTITY_REFUSED",
+                       "GOOGLE_REFUSED_AUTOMATION"):
+                row.update(ok=False, stage="wall-at-sso", detail=sso,
+                           shot=shot(page, f"{slug}-sso"))
+                return row
+            if sso not in ("RETURNED", "ALREADY_SIGNED_IN"):
+                row.update(ok=False, stage="sso", detail=sso, shot=shot(page, f"{slug}-sso"))
+                return row
+            reached = reach_key_page(page, target)
+
+        if not reached or login_wall(page):
             row.update(ok=False, stage="find-key-page",
-                       detail="signed in, but no API-keys page found",
+                       detail=("still behind a login wall after SSO" if login_wall(page)
+                               else "no API-keys page found"),
                        shot=shot(page, f"{slug}-nokeypage"))
             return row
         row["key_page"] = page.url
@@ -593,6 +889,9 @@ def main() -> int:
                     help="only providers whose own notes say no credit card")
     ap.add_argument("--google-email", help="which account to pick in the chooser (default: first)")
     ap.add_argument("--dry-run", action="store_true", help="get keys but do not wire them")
+    ap.add_argument("--budget", type=int, default=180,
+                    help="seconds per provider before moving on (default 180). Breadth first: "
+                         "one slow site must not eat a sweep of 100+.")
     ap.add_argument("--headless", action="store_true",
                     help="not recommended: Google treats headless far more harshly")
     ap.add_argument("--list", action="store_true", help="show the queue and exit")
@@ -607,7 +906,10 @@ def main() -> int:
         return 2
     have = {str(c.get("provider", "")).lower() for c in api.get_connections()}
 
-    queue = [t for t in targets if t["id"].lower() not in have and t["id"] not in KNOWN_DEAD]
+    queue = [t for t in targets
+             if t["id"].lower() not in have
+             and t["id"] not in KNOWN_DEAD
+             and t["id"] not in PARKED]
     skipped_wired = len(targets) - len(queue)
     if args.no_card_only:
         queue = [t for t in queue if card_stance(t.get("freeNote", "")) == "no-card"]
@@ -638,7 +940,8 @@ def main() -> int:
                 log(f"\n[{i}/{len(queue)}] {t['id']}  ({t.get('website') or 'no site'})")
                 t = dict(t, google_email=args.google_email)
                 try:
-                    row = run_one(ctx, api, t, dry_run=args.dry_run or bool(args.probe))
+                    row = run_one(ctx, api, t, dry_run=args.dry_run or bool(args.probe),
+                                  budget=args.budget)
                 except Exception as exc:
                     row = {"provider": t["id"], "ok": False, "stage": "crash",
                            "detail": f"{type(exc).__name__}: {str(exc)[:200]}"}
