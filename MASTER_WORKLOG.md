@@ -1321,3 +1321,83 @@ All five repos now have GitHub remotes; the earlier "no remote" caveat for neon_
   cookies). Probe order: Profile 17 first (richest + existing provider cookies), then Default,
   then Profile 16. Provider signups will be driven via "Continue with Google" SSO.
 - **NEXT**: junction (verified this time) + probe sweep of the 3 legitimate profiles.
+
+---
+
+### [2026-08-22 08:06] #1014 — Chrome profile recovery triage: live data intact; registration state is inconsistent
+
+- **REQUEST / SAFETY BOUNDARY**: Operator asked to restore four Chrome profiles to a logged-in
+  state. Per recovery safety, all work so far was read-only. No Chrome profile directory, cookie
+  database, Local State registry, account setting, credential, or backup has been altered;
+  Chrome was already closed (zero `chrome` processes), so no lock/contention issue currently
+  prevents safe inspection.
+- **LIVE ROOT CONFIRMED**: The authentic profile root is
+  `C:\Users\Admin\AppData\Local\Google\Chrome\User Data`, not the prior accidental
+  `state/live_link` scaffold described in #1013. All four requested registered directories are
+  present and non-empty: Default (Cookies 557,056 bytes; History 12,058,624 bytes), Profile 14
+  (1,507,328; 25,919,488), Profile 16 (262,144; 4,030,464), and Profile 17 (2,195,456;
+  76,578,816). This rules out a simple empty-profile/scaffold replacement of these live paths.
+- **CHROME REGISTRY FINDING**: `Local State > profile.info_cache` retains all four profile
+  entries. Default is registered to `kunal.colab@gmail.com`; Profile 17 is registered to
+  `isearch.xsolve@gmail.com`; Profile 14 (Person 1) and Profile 16 (Niloy) have blank
+  `user_name` / Gaia account metadata. This is the strongest present evidence that the visible
+  "logged in" problem is Chrome profile-account registration/display state for two profiles,
+  rather than loss of all browser data. Existing cookie fingerprints from #1013 additionally
+  show live Google-session cookies on Default, Profile 16, and Profile 17, and provider cookies
+  on Profile 14 and Profile 17.
+- **RECOVERY SOURCES AUDITED**: Found older alternative Chrome trees, none proven safe as a
+  complete four-profile restore: `D:\omniroute-chrome-profile` (Default, 14, 17; last write
+  Aug 19), `D:\omniroute-chrome-profile-v2` (Default, 14; Aug 18),
+  `D:\omniroute-pure-chrome` (Default, 14; Aug 18), and automation state profiles (partial,
+  latest Aug 21). They are incomplete and predate the live root, so overwriting live state from
+  them could discard newer browsing/session data and cannot restore all four profiles.
+- **TOOL LIMITATION / HONESTY**: The host lacks `sqlite3`, so `PRAGMA integrity_check` could
+  not be run in this pass; no integrity conclusion was fabricated. The checked files do exist
+  and have nonzero sizes. A non-destructive launch/visual check of each exact live directory is
+  the next appropriate diagnostic before considering any restore. The master worklog contains
+  historical non-UTF-8 bytes, which makes the mandated patch editor refuse to open it; this
+  entry was therefore appended as UTF-8 bytes without rewriting earlier history, preserving the
+  existing record intact.
+- **NEXT ACTION**: Create a fresh, timestamped recovery copy of the exact live Local State plus
+  four profile directories (never modify originals), then launch/verify the genuine live
+  profiles one at a time. If Chrome itself presents normal reauthentication, it must be done
+  with the operator's legitimate account controls; no authentication bypass or fake credentials
+  will be attempted.
+---
+
+### [2026-08-22 08:16] #1015 — Added fail-safe Chrome profile backup and restore utility; current live repair remains non-destructive
+
+- **COMPONENT / BLUEPRINT REVIEW**: Reviewed the existing `scripts/automation` conventions and
+  the recovery evidence in entry #1014 before implementation. The product requirement is not
+  merely a file copier: it must preserve an exact pre-restore recovery point, make the operator
+  select a known snapshot explicitly, and never claim that copied Windows-encrypted cookies
+  will create a login under another Windows account.
+- **IMPLEMENTED**: Added `scripts/automation/restore_chrome_profiles.ps1`. Its default
+  `-Mode Backup` discovers Default and every `Profile N` under the genuine Chrome User Data
+  directory; stops Chrome before copying; copies `Local State` plus whole profile directories;
+  validates that every copied profile includes `Network\\Cookies`; writes a timestamped
+  `snapshot.json`; and finalizes only by renaming an `.incomplete` staging directory. `-Mode
+  List` enumerates only finalized snapshots. `-Mode Restore` requires both an explicit snapshot
+  path and `-ConfirmRestore`, validates the snapshot, creates a fresh full pre-restore snapshot
+  first, and has rollback logic for each profile if copy fails. It refuses destructive implicit
+  restore paths and warns that normal sign-in is required where a site rejects an old session.
+- **VERIFICATION**: PowerShell AST parser completed with zero parse errors. `-Mode List` ran
+  successfully and correctly reported no finalized snapshot under the new dedicated backup
+  root. Negative safety test PASS: invoking Restore without `-ConfirmRestore` raised the
+  intended hard refusal (`Restore is intentionally blocked...`). `git diff --check` produced no
+  whitespace errors. A first live full-backup invocation began correctly (created
+  `D:\omniroute-backups\chrome-profiles\chrome_profile_20260822_075651.incomplete`, copied
+  Local State, then began Default) but this desktop command runner ended it at its 30-second
+  execution limit before completion. The partial directory is deliberately retained and is not
+  listed as usable; no live Chrome data was changed. Measured full live backup size is about
+  5.53 GiB across 45,937 files (Default 0.72 GiB, Profile 14 1.58 GiB, Profile 16 0.48 GiB,
+  Profile 17 2.75 GiB), explaining why it cannot safely finish in the bounded runner window.
+- **CURRENT RECOVERY STATUS**: No old/partial snapshot was restored because the available
+  sources are incomplete/older and could lose newer account/browser state. Live directories and
+  databases remain in place. The profile registry inconsistency remains the diagnosis to address
+  through a normal Chrome launch and normal account reauthentication if Chrome requests it; no
+  password, token, MFA, or SSO bypass was attempted.
+- **NEXT ACTION**: Commit this tested recovery utility. For a durable current snapshot, run the
+  documented backup command in an ordinary interactive PowerShell session, which is not limited
+  to the desktop tool's 30-second command window. Inspect Chrome's four real profiles only after
+  that backup is finalized.
