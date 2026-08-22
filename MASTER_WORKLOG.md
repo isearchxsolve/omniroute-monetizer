@@ -2326,3 +2326,52 @@ with a space - `cmd /c call ".\Fix Chrome.cmd"` works; the file itself was never
 - **VERIFIED**: `GOOGLE_SYNC_AUTHENTICATED` = 4 of 4, re-measured after every test above.
 - **STATUS**: recurrence prevention now enforced structurally, not by discipline.
   Persistence-across-restart test still the one open item the operator must trigger.
+
+---
+
+## #1031 - 2026-08-22 - COMMITTED AND MERGED TO MASTER
+
+### What was done
+- Branch `fix/chrome-live-profile-guard` created off `master`, work committed as `5231890`
+  (15 files, +1737 / -4), pushed to `origin`.
+- Operator reviewed and said "merge". `git merge --ff-only` onto `master` -- verified beforehand
+  with `git merge-base --is-ancestor master HEAD` that it was a clean fast-forward, so no merge
+  commit and no possibility of conflict.
+- Pushed: `origin/master` `c2aa82a..5231890`.
+
+### Verification
+```
+branch        : master
+local  master : 5231890
+remote master : 5231890   <- identical, push confirmed
+uncommitted   : 0
+```
+`state/` is covered by `.gitignore` line 3, confirmed with `git check-ignore -v`, so no Chrome
+profile data, no `state/automation_profiles/` browser files and no report JSON were committed.
+
+### Shipped in this commit
+| Path | Purpose |
+|---|---|
+| `scripts/automation/chrome_live_guard.py` | the guard; refuses live-profile paths, patches Playwright + subprocess |
+| `scripts/automation/chrome_selfheal.py` | diagnose + self-heal engine |
+| `Fix Chrome.cmd` | one-click wrapper for the above |
+| `Set Up Phone Login.cmd` | passkey launcher (blocked by missing Bluetooth, #1028 -- kept for a future dongle) |
+| `CHROME_RULES_FOR_AGENTS.md` | agent instructions, now **rule 0** in `AGENTS.md` |
+| `AGENTS.md` | rule 0 added; 14.1 extended to mandate the guard |
+| `wire_provider.py` | live-profile fallback replaced with `safe_profile_dir()` |
+| 6 × `scratch/test_*.py` | guard headers, each individually verified to refuse |
+| `video_key_harvester.py` | junction block from #1026 |
+
+### Not committed, by design
+The machine-wide arming files live outside the repo, in the hermes venv's `site-packages`:
+`chrome_live_guard.pth` and `chrome_live_guard_boot.py`. They are **not** version-controlled
+because they are machine state, not project source. A fresh clone therefore has the guard module
+and the explicit per-file headers, but **not** the automatic arming. Documented in
+`CHROME_RULES_FOR_AGENTS.md`. If this repo is ever cloned to another machine, re-create those two
+files or the global safety net is absent.
+
+Branch `fix/chrome-live-profile-guard` left in place locally and on `origin` as a record. Harmless.
+
+- **VERIFIED**: `origin/master` == local `master` == `5231890`; working tree clean.
+- **STATUS**: prevention work shipped. `GOOGLE_SYNC_AUTHENTICATED` = 4 of 4 (last measured #1030).
+  Open: persistence-across-restart test, then `PROVIDER_SESSION_AUTHENTICATED`.
