@@ -3260,3 +3260,199 @@ will work. Not claimed that the freshly written keys pass OmniRoute's own test �
 Not claimed that `github` is wired. Not claimed to know the allowlist's contents beyond the
 measured ON/OFF split above.
 
+---
+
+### [2026-08-22 16:26] #1042 — Pruned Alibaba Quota Traps from Combos & Build Advance to Task 6
+
+**What:** Removed `alibaba/qwen3.7-max` and `alibaba/qwen3.7-plus` from all 13 master combos in `scripts/automation/apply_master_healthy_combos.py`. Re-applied combos via OmniRoute management API and verified live 200 OK responses on `frontier` routing to `nvidia/nemotron-3-super-120b-a12b`. Verified `run-011` autonomous build passing Tasks 0 through 5, actively building Task 6 (`k8s_manifests`).
+
+**Key Root Cause & Fix:**
+- In Zed chat, user encountered `[alibaba/qwen3.7-max] [403]: The free quota has been exhausted...` when using `👑 [FREE FRONTIER]`.
+- Alibaba's free tier quota exhaustion caused upstream 403 blocks whenever requests reached the Alibaba model node in the combo cascade.
+- Pruned `alibaba/*` across all 13 combos in `apply_master_healthy_combos.py` and promoted `nvidia/nemotron-3-super-120b-a12b`, `kimi-coding-default`, `groq/llama-3.3-70b-versatile`, `mistral/codestral-2508`, and `gemini/gemini-2.5-pro`.
+- Re-ran `apply_master_healthy_combos.py` (13/13 combos updated). Tested `frontier` on live endpoint: confirmed 200 OK directly from `nvidia/nemotron-3-super-120b-a12b`.
+
+**Files touched:**
+- `D:\omniroute-monetizer\scripts\automation\apply_master_healthy_combos.py`
+- `D:\omniroute-monetizer\MASTER_WORKLOG.md`
+
+
+
+
+### [2026-08-22 16:35] #1042 — Google session proved on AI Studio; three Gemini keys verified live; TEXT now works end-to-end through OmniRoute; Veo blocked by zero free quota
+
+**Numbering note:** my previous entry was appended as `#1038` (line 3166) but another agent had
+already used `#1038`–`#1041` for the Zed/SSE work. Their numbers stand; mine is the duplicate.
+Next free number after this entry is `#1043`.
+
+**A correction I owe first.** In the previous turn I reported to the operator:
+
+```
+[ok] kie        PROVIDER_SESSION_AUTHENTICATED
+[ok] aistudio   PROVIDER_SESSION_AUTHENTICATED
+```
+
+**The kie line was WRONG.** `provider_login_helper.py::_classify` (line 227) returns
+`PROVIDER_SESSION_AUTHENTICATED` when *any* site marker appears in the body text, and site markers
+are checked **before / instead of** the login-wall markers. kie's markers are
+`["api key", "credits", "dashboard"]` — all three of those words appear on kie.ai's **public
+marketing homepage**, which requires no login at all. So the helper declared a session that did
+not exist. `video_key_harvester.py` checks the wall first and correctly reported
+`WALL_NO_GOOGLE_SSO` / `NOT_SIGNED_IN` for kie. The harvester is right; the helper has a
+false-positive bug that is NOT yet fixed (see "Still open").
+
+**Root cause of the earlier harvest failures (two separate bugs, both now understood):**
+
+1. **Wrong profile.** `video_key_harvester.py:55` hardcodes
+   `PROFILE_DIR = state/browser_profile`, but the operator signed into
+   `state/automation_profiles/providers`. Two different browsers.
+2. **`--user-data-root` is silently ignored on its own.** At `video_key_harvester.py:817-838`
+   that flag is only read *inside* the `--profiles` or `--profile-dir` branches. Passing it alone
+   leaves `user_data_dir = None` and `_launch()` falls back to `PROFILE_DIR`. The log line
+   `udd=existing` was the tell. Correct invocation is both flags together:
+
+```
+python scripts/automation/video_key_harvester.py --harvest aistudio \
+  --user-data-root "D:\omniroute-monetizer\state\automation_profiles\providers" \
+  --profile-dir Default --channel chrome
+```
+```
+[*] harvesting ['aistudio'] (udd=D:\omniroute-monetizer\state\automation_profiles\providers, channel=chrome, profile=Default)
+```
+
+**The operator's one-Google-sign-in plan is CONFIRMED WORKING on Google's own property.**
+With the correct flags, aistudio returned `entry_state: SIGNED_IN`,
+`create_clicked: "button:create api key"`, `status: KEY_NOT_REVEALED`. The screenshot
+`state/harvest/aistudio_harvest_result.png` shows the real AI Studio API-keys page, signed in,
+**4 existing keys** in the table, with a modal open:
+
+```
+Create a new key
+  Name your key:              Gemini API Key
+  Choose an imported project: Gemini Project
+  [ Cancel ]  [ Create key ]
+```
+
+So the harvester clicked "Create API key", which only *opens* the dialog, and then searched the
+page for a key. It never pressed the **"Create key"** button inside the modal. One missing click.
+Not fixed in this pass (see "Still open").
+
+**The important distinction this measurement establishes:** signing into Google gives the profile
+a *Google* cookie. Google's own properties (AI Studio) accept it as a full session. Third-party
+sites (kie, segmind, novita, leonardo) still each need their own one-time
+"Continue with Google" click to mint a provider-side session. That is why aistudio reached
+`SIGNED_IN` and kie did not, from the *same* profile in the *same* minute.
+
+**Three Gemini keys already on disk are LIVE — no harvest was needed.**
+`state/generated_keys.json` held `gemini`, `aistudio`, `aistudio2`. All three are the newer
+`AQ.`-prefixed AI Studio format, 53 chars (an earlier filter of mine looked for `AIza` and
+therefore found nothing — that filter was wrong, not the keys). Tested directly against the
+provider's own endpoint, `GET generativelanguage.googleapis.com/v1beta/models?key=…`:
+
+| stored key | upstream result |
+|---|---|
+| `gemini` | **HTTP 200 VALID**, 50 models listed |
+| `aistudio` | **HTTP 200 VALID**, 50 models listed |
+| `aistudio2` | **HTTP 200 VALID**, 50 models listed |
+
+Keys masked here and in all console output, per Anti-pattern #7. Raw values remain only in
+`state/generated_keys.json`, which is gitignored.
+
+**TEXT: `GOOGLE_SYNC_AUTHENTICATED` is not claimed, but `PROVIDER_SESSION_AUTHENTICATED` and a
+working text path ARE — verified end-to-end.**
+
+Upstream single call: `gemini-flash-latest:generateContent` → **HTTP 200**, reply `working`.
+(`gemini-2.5-flash` → HTTP 404 "no longer available to new users … use models/gemini-3.6-flash".)
+
+Wired the upstream-verified `gemini` key into OmniRoute connection
+`fb276999-1370-473a-97e9-12807162fd05` (`provider=gemini`, `authType=apikey`) with
+`{"apiKey": <verified>, "isActive": true}`:
+
+```
+[*] PUT  -> http_status 200
+[*] TEST -> http_status 200  {'valid': True, 'error': None,
+             'diagnosis': {'type': 'ok', 'source': 'upstream'}, 'latencyMs': 802}
+AFTER: active=True testStatus=active hasKey=True
+```
+
+Then proved it through OmniRoute's own OpenAI-compatible endpoint,
+`POST http://localhost:20128/v1/chat/completions`:
+
+| model | result |
+|---|---|
+| `gemini/gemini-flash-latest` | **HTTP 200 OK**, real streamed content returned |
+| `gemini/gemini-3.6-flash` | **HTTP 200 OK**, real streamed content returned |
+| `gemini/gemini-2.5-pro` | HTTP 404 — "no longer available to new users … use `gemini-3.1-pro-preview`" |
+
+That 404 explains the connection's pre-existing `lastError: "Model gemini-2.5-pro not_found"`
+(`errorCode 404.0`, `2026-08-22T11:04:10Z`). The key was never the only problem — OmniRoute has
+**retired** Gemini model ids registered.
+
+**Registry-vs-live model id comparison** (92 connections; OmniRoute `/v1/models` filtered to
+`gemini/`, against the 50 ids the live key returns): only **3** registered ids are absent from
+Google's listing entirely — `gemini/imagen-4.0-fast-generate-001`,
+`gemini/imagen-4.0-generate-001`, `gemini/imagen-4.0-ultra-generate-001`.
+
+**But the listing is NOT a permission list, and I nearly mis-stated this.** `gemini-2.5-pro` and
+`gemini-2.5-flash` both *appear* in the live listing yet 404 as "no longer available to new users"
+when actually called. So the true unusable set is larger than 3 and can only be found by calling
+each id. I am not claiming a clean id list — only that `gemini-flash-latest` and
+`gemini-3.6-flash` are **measured callable**.
+
+**VIDEO: blocked by money, now confirmed on two independent projects.**
+The live key exposes exactly three video models, all via `predictLongRunning`:
+`veo-3.1-generate-preview`, `veo-3.1-fast-generate-preview`, `veo-3.1-lite-generate-preview`.
+These are also already registered in OmniRoute as `gemini/veo-3.1-*`.
+
+```
+veo-3.1-lite-generate-preview   HTTP 429  You exceeded your current quota, please check your plan and billing details
+veo-3.1-fast-generate-preview   HTTP 429  (same)
+veo-3.1-generate-preview        HTTP 429  (same)
+veo-3.1-lite  via aistudio2 project key   HTTP 429  (same)
+```
+
+Re-running on the **second, independent project** (`aistudio2`) also returned 429. That
+distinguishes "today's allowance is used up" from "this tier is never allowed": Veo's free-tier
+quota is **zero**, a per-account billing policy. No prompt, retry, or config change moves it.
+This is the same money wall as kie / segmind / novita / deepinfra / alibaba from `#1038`.
+
+**What changed on disk:**
+- `scripts/automation/wire_verified_gemini_key.py` — NEW. Wires the upstream-verified Gemini key
+  into the `gemini` connection. Verifies upstream **before** writing, masks the key in every line.
+- `MASTER_WORKLOG.md` — this entry.
+
+**Verification:** upstream `models` 200 ×3 keys; upstream `generateContent` 200; OmniRoute
+connection test `valid: True, source: upstream`; OmniRoute `/v1/chat/completions` 200 on two model
+ids. Video 429 reproduced on 2 projects × 3 models. Nothing here is inferred from local metadata.
+
+**Status:**
+- `LOCAL_DATA_PRESENT` — yes, `state/automation_profiles/providers` holds the Google session.
+- `PROVIDER_SESSION_AUTHENTICATED` — **YES for AI Studio** (`entry_state: SIGNED_IN`, screenshot).
+  **NO for kie** (earlier "yes" was the false positive corrected above). segmind / novita /
+  leonardo: not re-measured this pass, treat as unknown.
+- `GOOGLE_SYNC_AUTHENTICATED` — **NOT CLAIMED.** Untouched by this work; this is the robot's own
+  profile, not the operator's four Chrome profiles.
+- `MONETIZER_READY` — **partially, for TEXT ONLY.** A free Gemini text path is live end-to-end
+  through OmniRoute on `gemini/gemini-flash-latest` and `gemini/gemini-3.6-flash`.
+- `MONETIZER_BLOCKED` — **for VIDEO.** Every measured video path is a paid wall. Zero of 14 in
+  `#1038`, plus Veo 429 here. No account on this box has credit.
+
+**What is NOT claimed:**
+- No video file has been produced. `bytes[4:8] == b"ftyp"` has never passed.
+- No provider password, MFA, CAPTCHA or consent screen was bypassed or automated.
+- No key was fabricated; every key reported was read from disk and proven against the provider's
+  own endpoint first.
+- kie/segmind/novita/leonardo SSO sessions do **not** exist yet.
+
+**Still open:**
+1. `provider_login_helper.py::_classify` false positive — site markers must not outrank login-wall
+   markers, and kie's markers ("api key", "credits", "dashboard") are too generic to be evidence.
+2. `video_key_harvester.py` aistudio flow must press **"Create key"** inside the modal.
+3. `video_key_harvester.py:817-838` — `--user-data-root` silently no-ops unless paired with
+   `--profile-dir`. Should either honour it alone or refuse loudly.
+4. Third-party SSO clicks (kie, segmind, novita, leonardo) not yet driven.
+5. `huggingface`, `deepseek`, `friendliai` (no key), `chutes` (invalid), `fal-ai` (junk value) —
+   still unwired; `leonardo` still has no OmniRoute connection at all.
+6. `pollinations` — the only FREE video provider — still fails inside OmniRoute with
+   "Unsupported video format: pollinations-video". This is an OmniRoute-side gap, **not money**,
+   and is therefore the only remaining video lead that costs nothing.
