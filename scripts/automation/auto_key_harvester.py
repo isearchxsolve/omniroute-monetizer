@@ -438,18 +438,38 @@ def dismiss_overlays(page) -> list[str]:
     return gone
 
 
+def is_api_endpoint(url: str) -> bool:
+    """True for raw inference/API endpoints (api.openadapter.in/v1, inference-api.nousresearch.com).
+    The catalog's authHint documents the provider's API base for WIRING purposes; opening it in
+    a browser just renders raw JSON (operator: 'why hitting this url', 2026-08-22). Login pages
+    never live there, so note-guided navigation must skip them."""
+    host = host_of(url)
+    m = re.match(r"^https?://[^/]+(/.*)?$", url or "")
+    path = (m.group(1) if m else "") or "/"
+    return bool(
+        host and (
+            host.startswith("api.") or host.startswith("api-")
+            or host.startswith("inference-api.") or host.startswith("inference.")
+            or bool(re.match(r"^/v\d+($|/)", path))
+        )
+    )
+
+
 def note_urls(target: dict) -> list[str]:
-    """URLs the provider's own catalog note points at.
+    """URLs the provider's own catalog note points at, EXCLUDING raw API endpoints.
 
     MEASURED on openadapter 2026-08-22: the marketing site openadapter.dev has no login, but its
     freeNote literally says 'Get your API key at https://dashboard.openadapter.in' -- a different
     registrable domain, so same-domain link scraping could never find it. The provider's own
-    words are the best navigation hint there is; mine them.
+    words are the best navigation hint there is; mine them. But authHint ALSO names the API base
+    (https://api.openadapter.in/v1) -- that one is for wiring, not for visiting.
     """
     out: list[str] = []
     for field in ("freeNote", "authHint"):
         for m in re.finditer(r"https?://[^\s'\"<>)\]]+", str(target.get(field) or "")):
-            out.append(m.group(0).rstrip(".,;"))
+            u = m.group(0).rstrip(".,;")
+            if not is_api_endpoint(u):
+                out.append(u)
     return out
 
 
