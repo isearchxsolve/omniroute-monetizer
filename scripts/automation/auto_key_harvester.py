@@ -632,8 +632,14 @@ def step_back(page) -> None:
         pass
 
 
-def adopt_popup(ctx, page):
-    """A click that opened a new tab is still click-based navigation: follow the trail into it."""
+def adopt_popup(ctx, page, preexisting: frozenset = frozenset()):
+    """A click that opened a new tab is still click-based navigation: follow the trail into it.
+
+    `preexisting` is the set of page ids that existed before this provider's run started. Only
+    pages born DURING the run may be adopted. MEASURED 2026-08-22: run 12 was cancelled
+    mid-provider and left an orphan console tab open; run 13's featherless-ai then adopted that
+    INCEPTION tab and nearly minted the wrong provider's key under the featherless name.
+    """
     try:
         pages = [p for p in ctx.pages if not p.is_closed()]
     except Exception:
@@ -642,7 +648,8 @@ def adopt_popup(ctx, page):
         return page
     for p in reversed(pages):
         try:
-            if p is not page and p.url not in ("about:blank", "", page.url):
+            if p is not page and id(p) not in preexisting \
+                    and p.url not in ("about:blank", "", page.url):
                 return p
         except Exception:
             continue
@@ -1295,6 +1302,7 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
         return row
 
     page = ctx.new_page()
+    preexisting = frozenset(id(p) for p in _sibling_pages(page))
     try:
         try:
             page.goto(site, wait_until="domcontentloaded", timeout=45000)
@@ -1333,7 +1341,7 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
         if login_wall(page) or has_google_control(page) or not reached:
             sso = do_sso(ctx, page, target, target.get("google_email"))
             row["sso"] = sso
-            follow = adopt_popup(ctx, page)
+            follow = adopt_popup(ctx, page, preexisting)
             if follow is not page:
                 try:
                     page.close()
@@ -1366,6 +1374,22 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
         w = wall_page(page)
         if w:
             row.update(ok=False, stage="wall-at-key-page", detail=w, shot=shot(page, f"{slug}-wall2"))
+            return row
+
+        # Wrong-console guard: NEVER mint a key from another provider's console and wire it
+        # under this provider's name. MEASURED near-miss 2026-08-22: an orphaned inception
+        # tab got adopted for featherless-ai and the run stood on the wrong /api-keys page.
+        allowed_hosts = {host_of(target.get("apiKeyUrl") or "") ,
+                         host_of(target.get("website") or "")} \
+                        | {host_of(u) for u in note_urls(target)}
+        allowed_hosts.discard("")
+        page_host = host_of(page.url or "")
+        if page_host and not any(same_site(page_host, a) for a in allowed_hosts):
+            row.update(ok=False, stage="wrong-console",
+                       detail=f"key page is on {page_host}, not this provider's site "
+                              f"({', '.join(sorted(allowed_hosts))}); refusing to mint another "
+                              f"provider's key under the {slug} name",
+                       shot=shot(page, f"{slug}-wrongconsole"))
             return row
 
         key, detail = mint_key(page)
