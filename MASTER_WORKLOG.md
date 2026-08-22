@@ -1401,3 +1401,34 @@ All five repos now have GitHub remotes; the earlier "no remote" caveat for neon_
   documented backup command in an ordinary interactive PowerShell session, which is not limited
   to the desktop tool's 30-second command window. Inspect Chrome's four real profiles only after
   that backup is finalized.
+---
+
+### [2026-08-22 08:12] #1016 — Chrome backup utility Windows PowerShell compatibility fixed; user’s 5.53 GiB snapshot finalized
+
+- **OBSERVED FAILURE (USER-SUPPLIED SCREENSHOT)**: The user ran the documented `-Mode Backup`
+  command in Windows PowerShell 5.1. Copying all live profile data completed, but the script
+  stopped at `Set-Content ... -Encoding utf8NoBOM`: Windows PowerShell 5.1 does not recognize
+  the PowerShell 7+ `utf8NoBOM` encoding name. The script behaved safely: it retained the
+  staging directory with `.incomplete` suffix and did not advertise it as restorable. The
+  unrelated PSReadLine cursor-render exception at the top of the screenshot is a console UI
+  issue, not a script or Chrome-data error.
+- **FIX IMPLEMENTED**: Updated `restore_chrome_profiles.ps1` to write the JSON manifest with
+  `-Encoding UTF8`, which works in both Windows PowerShell 5.1 and PowerShell 7; a UTF-8 BOM is
+  valid for the tool's JSON metadata. Added `-Mode Finalize -Snapshot <*.incomplete path>`:
+  this is deliberately narrow, refuses non-staging paths and any existing final destination,
+  validates Local State plus every profile's Cookies database, writes only the missing manifest,
+  then renames the staging directory atomically. It does not recopy, delete, or alter Chrome's
+  live User Data.
+- **VERIFICATION / RESULT**: Inspected the user-created staging directory
+  `D:\omniroute-backups\chrome-profiles\chrome_profile_20260822_080520.incomplete`: all four
+  expected directories (Default, Profile 14, Profile 16, Profile 17) and Local State were
+  present; measured 46,043 files totaling 5.53 GiB. Ran the Windows PowerShell 5.1 `Finalize`
+  command against that exact path. Follow-up `-Mode List` PASS: it reports finalized
+  `D:\omniroute-backups\chrome-profiles\chrome_profile_20260822_080520` with
+  `ManifestPresent=True`. `git diff --check` PASS. This is now the first verified recoverable
+  snapshot of all four actual live profiles.
+- **CURRENT STATUS / NEXT**: A complete backup now exists. No restore was performed because
+  source equals the current live data and none of the older snapshots are a demonstrated
+  repair source. The user can now open Chrome normally without risk of losing the before-state;
+  any profile that asks to reauthenticate must use its account's normal sign-in flow. The fixed
+  script will create future backups correctly in Windows PowerShell 5.1.

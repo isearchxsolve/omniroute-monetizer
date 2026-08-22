@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Backup', 'List', 'Restore')]
+    [ValidateSet('Backup', 'List', 'Finalize', 'Restore')]
     [string]$Mode = 'Backup',
 
     [string]$ChromeUserData = (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data'),
@@ -94,7 +94,10 @@ function New-Snapshot {
             profiles = @($copiedProfiles.Name)
             note = 'Browser cookies remain protected by the original Windows user account. Restore under the same Windows account.'
         } | ConvertTo-Json
-        Set-Content -LiteralPath (Join-Path $staging 'snapshot.json') -Value $manifest -Encoding utf8NoBOM
+        # `utf8NoBOM` exists in PowerShell 7+, but the operator's Windows PowerShell 5.1
+        # accepts only `UTF8`. JSON readers accept the resulting UTF-8 BOM, so favor broad
+        # compatibility for an emergency-recovery tool.
+        Set-Content -LiteralPath (Join-Path $staging 'snapshot.json') -Value $manifest -Encoding UTF8
         Move-Item -LiteralPath $staging -Destination $destination
         Write-Output "Backup complete: $destination"
         return $destination
@@ -103,6 +106,30 @@ function New-Snapshot {
         Write-Warning "Backup was not finalized; incomplete copy preserved at: $staging"
         throw
     }
+}
+
+function Complete-StagingSnapshot {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $stagingPath = (Resolve-Path -LiteralPath $Path).Path
+    if ($stagingPath -notmatch '\.incomplete$') {
+        throw "Refusing to finalize a non-staging directory: $stagingPath"
+    }
+    $profiles = Test-Snapshot -Path $stagingPath
+    $finalPath = $stagingPath -replace '\.incomplete$', ''
+    if (Test-Path -LiteralPath $finalPath) {
+        throw "Refusing to overwrite an existing finalized snapshot: $finalPath"
+    }
+    $manifest = [ordered]@{
+        schema = 1
+        createdAt = (Get-Date).ToString('o')
+        source = 'Finalized from a previously complete staging backup.'
+        profiles = @($profiles.Name)
+        note = 'Browser cookies remain protected by the original Windows user account. Restore under the same Windows account.'
+    } | ConvertTo-Json
+    Set-Content -LiteralPath (Join-Path $stagingPath 'snapshot.json') -Value $manifest -Encoding UTF8
+    Move-Item -LiteralPath $stagingPath -Destination $finalPath
+    Write-Output "Backup finalized: $finalPath"
 }
 
 if ($Mode -eq 'List') {
@@ -126,6 +153,14 @@ if ($Mode -eq 'List') {
 
 if ($Mode -eq 'Backup') {
     New-Snapshot -Source $ChromeUserData -DestinationRoot $BackupRoot | Out-Null
+    exit 0
+}
+
+if ($Mode -eq 'Finalize') {
+    if ([string]::IsNullOrWhiteSpace($Snapshot)) {
+        throw 'Finalize requires the explicit path of an .incomplete snapshot directory.'
+    }
+    Complete-StagingSnapshot -Path $Snapshot | Out-Null
     exit 0
 }
 
