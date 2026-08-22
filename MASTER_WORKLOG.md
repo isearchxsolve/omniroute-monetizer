@@ -2891,3 +2891,111 @@ unfinished rather than done quietly.
   in this entry; all work was file reads, an OmniRoute API call, and doc edits.
 - **Not claimed** that the #1026 persistence prediction is confirmed. The operator still has not
   closed and reopened Chrome. That remains the top open item and it requires them.
+
+---
+
+### [2026-08-22 15:0x] #1034 — End-to-end video proof run. The pipeline WORKS; three provider accounts are at zero.
+
+**What:** Operator said "go". Ran `scripts/automation/prove_video.py` end to end, twice, then queried
+each provider's own balance endpoint directly. Fixed two wrong model ids found along the way.
+
+**Why:** Every prior status was about credentials. Nobody had asked the only question that matters:
+does this produce a sellable artifact? It does, and it stopped for a reason nobody had named.
+
+#### VERIFIED: a real MP4 exists
+
+`state/video_proofs/kie_grok-imagine_text-to-video_6s.mp4` — 471,777 bytes, `bytes[4:8] == b"ftyp"`,
+written 2026-08-22 12:56 by `kie/grok-imagine/text-to-video`. I checked the magic bytes myself rather
+than trusting the in-code comment that claimed it. **`MONETIZER_READY` was true at 12:56 today**, for
+kie, at least once. OmniRoute -> provider -> real video file is a proven path, not a theory.
+
+#### Run 1 (14:48) — 0 of 4
+
+| provider | model | http | reading |
+|---|---|---|---|
+| kie | `kie/grok-imagine/text-to-video` | 502 | "Credits insufficient : Your current balance isn't enough" — **money** |
+| segmind | `segmind/ltx-video-t2v` | 404 | **wrong model id** — no such model |
+| novita | `novita/wan-t2v` | 403 | "insufficient balance" — **money** |
+| vertex | `vertex/veo-3.0-fast-generate-001` | 400 | **wrong provider** — veo lives under `gemini`, not `vertex` |
+
+All four answered in 2.8–13.8s. The OmniRoute restart the operator mentioned did **not** cause these.
+
+#### Two model ids were wrong, and both looked like account problems
+
+Cross-checked against `OmniRouteAPI().list_models()` (7,455 models):
+
+- segmind carries 11 models; the only t2v ones are `wan2.1-t2v` and `wan2.7-i2v`. `ltx-video-t2v`
+  does not exist -> 404.
+- `vertex` carries 61 models, all gemini/gemma text. The veo video models are under the `gemini`
+  provider (`gemini/veo-3.1-*`) -> 400.
+
+Corrected in `prove_video.py` with a comment recording the trap: **a 404/400 here means a wrong id;
+only 402/403/406/502-with-balance-text means money.** Reading a bad id as "out of credit" would have
+sent the operator to top up an account that was never the problem.
+
+#### Run 2 (14:55) — corrected ids, 0 of 2, but the failures moved
+
+| provider | model | http | reading |
+|---|---|---|---|
+| segmind | `segmind/wan2.1-t2v` | **406** (was 404) | id now valid; new failure downstream |
+| gemini | `gemini/veo-3.1-fast-generate-preview` | 400 | **OmniRoute's own** validator: "Invalid video model ... Use format: provider/model" |
+
+The gemini rejection comes from OmniRoute, not Google. OmniRoute's `/v1/videos/generations` has its
+own video-model allowlist that `gemini/veo-*` is not on, and `/v1/videos/models` is a 404 so the
+allowlist is not discoverable over the API. **Not diagnosed further** — that is OmniRoute's source,
+not this repo.
+
+#### Balances read from each provider's OWN endpoint (read-only, no spend)
+
+| provider | key still valid | balance | verdict |
+|---|---|---|---|
+| kie | HTTP 200 | **8.0 credits** | valid key, below the price of one grok-imagine clip |
+| segmind | auth accepted | **0.0 credits**, needs **0.86** for one clip | at zero |
+| novita | HTTP 200 | **`credit_balance: 0`** | at zero |
+| aistudio | HTTP 200 | not read | key fine; blocked by OmniRoute's allowlist, not money |
+
+Segmind returned it verbatim: `Insufficient credits. You have 0.0 credits, but need at least 0.86
+credits to proceed.` Novita's `/v3/user` returned `{"credit_balance":0,"free_trial":{"training":1}}`.
+
+`paste_provider_key.py --reverify`: all four keys still accepted. **The keys were never the problem.**
+
+#### OmniRoute defect found: upstream errors are truncated to one character
+
+`POST /v1/videos/generations` for segmind returned
+`{"error":{"message":"{","type":"upstream_error","code":"upstream_error"}}` — the upstream JSON body
+reduced to a single `{`. The real reason (a precise credit figure) was only visible by calling
+Segmind directly. Any agent diagnosing through OmniRoute alone will be flying blind on upstream
+failures. Worth fixing in OmniRoute; **not** fixed here.
+
+#### Files touched
+
+| File | Change |
+|---|---|
+| `scripts/automation/prove_video.py` | `segmind/ltx-video-t2v` -> `segmind/wan2.1-t2v`; `vertex/veo-3.0-fast-generate-001` -> `gemini/veo-3.1-fast-generate-preview`; added the http-code-to-cause note |
+| `MASTER_WORKLOG.md` | this entry |
+
+#### Status
+
+- Pipeline: **PROVEN** once today, kie, real mp4, verified by magic bytes.
+- Current blocker: **MONETIZER_BLOCKED — insufficient provider credit**, not auth, not Chrome, not code.
+- Cheapest known unblock: segmind needs **0.86 credits**. kie holds 8.0 but the clip costs more.
+- One non-money avenue left: OmniRoute's video allowlist excludes `gemini/veo-*` while the AI Studio
+  key is valid.
+
+#### What is NOT claimed
+
+- **Not claimed** that topping up will work. It is the most likely read of three separate
+  provider-side balance messages, but it is untested until money is added. No one should be told
+  "spend and it will work" as though it were verified.
+- **Not claimed** that any amount will suffice. Only segmind published a per-clip price (0.86). KIE's
+  clip price is unknown — 8.0 credits was not enough, and I did not determine what is.
+- **Not claimed** that a cheaper kie model would fit in 8.0 credits. Untested; per-model pricing was
+  not retrieved.
+- **Not claimed** that gemini/veo would produce a video if OmniRoute allowed it. The allowlist blocks
+  it before Google is ever contacted, so Google's answer is unknown.
+- **Not claimed** that the four Chrome profiles were touched. Chrome was not opened, copied, or read
+  in this entry beyond the read-only audit.
+- **No key value was printed, logged, or committed.** Keys were read from the gitignored store into
+  memory to call each provider's own balance endpoint; only balances and HTTP codes appear above.
+- **Not claimed** that OmniRoute's truncation bug or its video allowlist were fixed. Both are
+  recorded, neither is touched.

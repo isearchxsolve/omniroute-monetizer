@@ -38,10 +38,20 @@ GEN_URL = f"{BASE}/v1/videos/generations"
 # never assume a global duration -- carry the measured one per model.
 CANDIDATES = [
     ("kie",     "kie/grok-imagine/text-to-video", 6),   # PROVEN 2026-08-22: real mp4, 471777 bytes
-    ("segmind", "segmind/ltx-video-t2v",          5),
+    ("segmind", "segmind/wan2.1-t2v",             5),
     ("novita",  "novita/wan-t2v",                 5),
-    ("vertex",  "vertex/veo-3.0-fast-generate-001", 5),
+    ("gemini",  "gemini/veo-3.1-fast-generate-preview", 5),
 ]
+
+# Two ids in this list were wrong until 2026-08-22 and produced failures that LOOKED like
+# credential or credit problems but were neither:
+#   segmind/ltx-video-t2v            -> HTTP 404. No such model. OmniRoute's segmind registry has
+#                                       11 models; the only t2v ones are wan2.1-t2v and wan2.7-i2v.
+#   vertex/veo-3.0-fast-generate-001 -> HTTP 400 "Invalid resource field value". Vertex carries 61
+#                                       models here, all gemini/gemma text; the veo video models
+#                                       live under the `gemini` provider, not `vertex`.
+# Verify an id against `OmniRouteAPI().list_models()` before reading any failure as a money or
+# auth problem. A 404 or 400 here means the id is wrong; 402/403/502-with-balance-text means money.
 
 PROMPT = "a single red balloon drifting upward against a clear blue sky, slow steady shot"
 GEN_TIMEOUT = 420          # measured 35s (grok-imagine); leave headroom, never retry a 4xx
