@@ -308,7 +308,7 @@ def save_key(slug: str, key: str, verified: bool, detail: str) -> None:
     KEYS_FILE.write_text(json.dumps(store, indent=2), encoding="utf-8")
 
 
-def real_completion(slug: str, timeout: int = 120) -> tuple[bool, str]:
+def real_completion(slug: str, timeout: int = 60) -> tuple[bool, str]:
     """Ask OmniRoute for an actual answer from this provider. This is the only proof accepted.
 
     MEASURED 2026-08-22, and the reason this function exists: `uncloseai` was created, and

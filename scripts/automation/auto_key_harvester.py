@@ -1500,6 +1500,8 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
             row.update(ok=False, stage="dry-run", detail="key obtained; not wired (--dry-run)")
             return row
 
+        log("        key captured; wiring into OmniRoute and proving with a real completion "
+            "(browser sits idle during this -- server-side checks, up to a few minutes)")
         res = wire(api, slug, name, key)
         row.update(res)
         if res.get("ok"):
