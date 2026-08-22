@@ -1,3 +1,21 @@
+# --- 2026-08-22 CHROME INCIDENT GUARD (AGENTS.md 14.1) -------------------------------
+# This file targets the operator's LIVE Chrome profile. That is what revoked all four
+# Google sessions, over and over. The guard below makes the launch fail loudly instead.
+# Do not remove it. Give automation its own profile: chrome_live_guard.safe_profile_dir().
+import os as _guard_os
+import sys as _guard_sys
+_guard_sys.path.insert(0, _guard_os.path.join(
+    _guard_os.path.dirname(_guard_os.path.dirname(_guard_os.path.abspath(__file__))),
+    "scripts", "automation"))
+try:
+    import chrome_live_guard as _chrome_live_guard
+    _chrome_live_guard.install()
+except Exception as _guard_err:      # never let the guard itself be the crash
+    print("FATAL: chrome_live_guard could not load:", _guard_err)
+    print("Refusing to run, because this script points at the live Chrome profile.")
+    raise SystemExit(3)
+# -------------------------------------------------------------------------------------
+
 import os
 import subprocess
 import time

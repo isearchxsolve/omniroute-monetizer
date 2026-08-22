@@ -89,9 +89,20 @@ def main():
                 print("Connected to existing Chrome instance via CDP")
             except Exception as e:
                 print(f"Failed to connect to existing Chrome via CDP: {e}")
-                print("Falling back to launching Chrome with user data directory (may conflict if Chrome is already running)")
-                # Use the existing Chrome profile
-                user_data_dir = os.path.join(os.environ['USERPROFILE'], 'AppData', 'Local', 'Google', 'Chrome', 'User Data')
+                # 2026-08-22 INCIDENT FIX (AGENTS.md 14.1). This fallback used to launch a
+                # Playwright persistent context against the operator's LIVE Chrome profile:
+                #     user_data_dir = %USERPROFILE%\AppData\Local\Google\Chrome\User Data
+                # That is what revoked all four Google sessions, repeatedly. A persistent
+                # context WRITES, and Google kills a session presented by a foreign browser.
+                # Automation now gets its own profile and reports a login wall honestly.
+                import sys as _sys
+                _sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                 "scripts", "automation"))
+                from chrome_live_guard import safe_profile_dir
+                user_data_dir = str(safe_profile_dir("wire_provider"))
+                print(f"Using automation's own Chrome profile: {user_data_dir}")
+                print("If this profile is not logged in to OmniRoute, that is a login wall -- "
+                      "report it, do not open the operator's browser.")
                 browser = p.chromium.launch_persistent_context(
                     user_data_dir=user_data_dir,
                     channel="chrome",

@@ -293,6 +293,25 @@ def ensure_junction(alias: Path) -> bool:
     """
     import subprocess
 
+    # ---- HARD BLOCK (2026-08-22 incident, see AGENTS.md 14.1 / CHROME_PROFILE_RCA.md) ----
+    # Pointing automation at the operator's REAL Chrome user-data root is what destroyed four
+    # Chrome Sync sessions and made every sign-in evaporate on the next launch: a Playwright-
+    # driven browser opening the live profile causes Google to revoke the refresh token
+    # server-side, and a foreign Chromium build rewrites the profile's files.
+    # This function used to create exactly that junction. It must never do so again.
+    raise RuntimeError(
+        "REFUSED: creating a junction to the operator's live Chrome user-data root is "
+        f"permanently disabled.\n    target was: {REAL_USER_DATA}\n"
+        "Automation must use its own dedicated profile directory and sign itself in.\n"
+        "If you need the operator's cookies, ask the operator -- do not open their browser.\n"
+        "See AGENTS.md anti-pattern 5 and 14.1."
+    )
+
+
+def _disabled_create_junction(alias: Path) -> bool:
+    """Dead code, kept only to document what used to happen here. Never called."""
+    import subprocess
+
     if alias.exists() or alias.is_symlink():
         if _is_junction(alias):
             log(f"reusing existing junction: {alias}")
@@ -330,6 +349,29 @@ def _launch(pw, headless: bool, user_data_dir: Optional[Path] = None, channel: O
     real profile, the installed Chrome decrypts the carried Google/provider session.
     """
     udd = Path(user_data_dir) if user_data_dir else PROFILE_DIR
+
+    # ---- HARD BLOCK: never open the operator's live Chrome profile ----------------------
+    # 2026-08-22: this is the code path that destroyed four Chrome Sync sessions. Opening the
+    # real user-data root under Playwright made Google revoke the sessions server-side, so the
+    # operator was thrown back to "Sign in to Chrome" after every single launch, indefinitely.
+    # The comment below used to claim the live session "stays valid here because it is the
+    # actual on-device profile". That was wrong -- being the on-device profile is precisely
+    # why Google invalidates it when an automated client touches it.
+    try:
+        _resolved = Path(os.path.realpath(str(udd)))
+        _live = Path(os.path.realpath(str(REAL_USER_DATA)))
+        if _resolved == _live or _live in _resolved.parents:
+            raise RuntimeError(
+                "REFUSED: user_data_dir resolves inside the operator's LIVE Chrome profile.\n"
+                f"    requested : {udd}\n    resolves to: {_resolved}\n"
+                f"    live root  : {_live}\n"
+                "Automation gets its own profile directory. Being blocked by a login wall in "
+                "that dedicated profile is a correct, reportable outcome -- reaching into the "
+                "operator's browser is not. See AGENTS.md anti-pattern 5 and 14.1."
+            )
+    except OSError:
+        pass  # unresolvable path: let the normal launch path report it
+
     udd.mkdir(parents=True, exist_ok=True)
     launch_args = [
         "--disable-blink-features=AutomationControlled",

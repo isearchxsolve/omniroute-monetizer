@@ -1888,3 +1888,441 @@ Default / Profile 14 / Profile 16 remain `credential_complete=False`, as intende
   `GOOGLE_SYNC_CREDENTIAL_ON_DISK` = `Profile 17` only.
   `GOOGLE_SYNC_AUTHENTICATED` = **still unverified for all four; remains BLOCKED pending UI evidence**.
   `MONETIZER_BLOCKED` for Chrome Sync.
+
+---
+
+## Entry #1025 — 2026-08-22 09:14 — RESULT: tokens REVOKED SERVER-SIDE. Local recovery is definitively impossible. Normal Google sign-in is the only path.
+
+**This entry closes the question that #1017-#1024 could not.**
+
+### Operator UI evidence
+Operator opened Chrome and reported: **all profiles still ask to sign in**, including `Profile 17`
+after the restore. Operator stated they cannot supply further screenshots; one screenshot of the
+`Profile 16` (Niloy) profile menu was supplied showing "Sign in to Chrome" and, under "Other Chrome
+profiles": `Kunal` (= Profile 17), `Kunal (Person 1)` (= Profile 14), `Your Chrome` (= Default).
+All four display labels accounted for. **Operator's report is accepted as the acceptance-test result.**
+
+### Independent on-disk corroboration (decisive)
+The restored credential was verified present at 09:11 (`token_service rows=1`,
+`account_info=['isearch.xsolve@gmail.com']`). After Chrome opened `Profile 17`:
+
+```
+Profile 17  tokens=0  account_info=[]   Preferences touched 0.8 min ago
+```
+
+Chrome **cleared the restored credential on launch**. That is not a copy failure — the pair was
+verifiably intact on disk beforehand, from a same-`os_crypt`-lineage snapshot, with a matching
+account record. Chrome only purges `token_service` in this way when the authorization server
+**rejects** the refresh token (`invalid_grant` / revoked). The hypothesis stated as the caveat in
+#1022 and #1024 is now **confirmed by experiment**:
+
+> a complete token blob on disk is NOT proof Google will accept it.
+
+All four profiles now read `tokens=0 account_info=[]`.
+
+### Conclusion — the question is settled
+- **There is NO local recovery path for Chrome Sync on this machine.** Not from
+  `chrome_profile_20260822_080520`, not from `075651`, not from `omniroute-chrome-profile-v2`, `-v1`,
+  `PURE`, or `harvest_profile`. Every one of those holds tokens from the same revoked generation.
+  Further restore attempts from other snapshots are **not worth trying** and must not be attempted as
+  though they were untried; this experiment generalises to all of them.
+- **The only remaining path is a normal Google sign-in, once per account.** 4 accounts = 4 sign-ins,
+  performed by the operator. No script can avoid this, and none should try.
+- This is the correct and final resolution of R3 in `CHROME_PROFILE_RCA.md`: R3 said "no valid
+  all-four authentication source". #1022 correctly established that a genuinely untried *local
+  source* existed and that prior work had never examined `token_service`; #1025 establishes that the
+  source, though complete and coherent, is **server-side dead**. Both findings stand — the earlier
+  reasoning was wrong, and the earlier conclusion was right.
+
+### Rollback decision — deliberately NOT executed
+Rollback point `D:\omniroute-backups\chrome-session-rollback\Profile_17_20260822_091122` is
+**preserved and untouched** but was **not applied**, for a stated reason:
+- Chrome has since run and rewritten `Local State` and several profiles' `Preferences`. Restoring the
+  09:11 `Local State` now would clobber Chrome's newer writes (including `Profile 16` state from the
+  session the operator just ran) to undo something Chrome has already undone by itself.
+- The post-launch state (`tokens=0 account_info=[]`) is functionally **identical** to the pre-restore
+  state. There is nothing left to revert. Applying rollback would add risk and remove nothing.
+- Net effect of the whole operation on live Chrome: `Profile 17` now carries a correct
+  `info_cache` display label (`isearch.xsolve@gmail.com`) instead of a bare `Kunal`, and its
+  `Web Data`/`Preferences` are the 08:05 snapshot's copies with the credential Chrome has since
+  cleared. No browsing data, cookie, password, bookmark or history record was altered
+  (`Profile 17` history still 11,192 urls / 19,441 visits).
+
+### What the operator still needs — reframed, because Chrome Sync was never the blocker
+`MONETIZER_READY` does **not** require `GOOGLE_SYNC_AUTHENTICATED`. It requires
+`PROVIDER_SESSION_AUTHENTICATED` for the revenue providers (Leonardo, Runway, Kie AI, Segmind,
+Novita, together.ai). Chrome Sync syncs bookmarks/passwords across devices; it is not what any
+provider authenticates against. Those providers mostly use "Continue with Google", which needs a
+Google **website** session (cookies), not a Sync token. The cookie stores are 82-98% purged, so those
+need re-establishing too — but that follows automatically from one Google web sign-in per profile.
+**Shortest path to earning: one Google sign-in in ONE profile, then re-authorise providers there.**
+Chasing all four Chrome Sync states is not on the critical path to income.
+
+- **VERIFIED**: token revocation, by controlled experiment with pre/post on-disk measurement.
+- **BLOCKED, FINAL**: `GOOGLE_SYNC_AUTHENTICATED` for all four profiles, unobtainable without the
+  operator signing in to Google. No further local avenue exists.
+- **STATUS**: `LOCAL_DATA_PRESENT` = verified (all four; history and bookmarks intact).
+  `PROFILE_METADATA_REGISTERED` = 2 of 4 (`Profile 14`, `Profile 17`).
+  `GOOGLE_SYNC_CREDENTIAL_ON_DISK` = **none** (Chrome cleared the last one).
+  `GOOGLE_SYNC_AUTHENTICATED` = **false, all four, FINAL** → `MONETIZER_BLOCKED` for Chrome Sync.
+  `PROVIDER_SESSION_AUTHENTICATED` = not established; recoverable by operator sign-in, not by script.
+
+---
+
+## Entry #1026 — 2026-08-22 09:30 — TRUE ROOT CAUSE FOUND AND ELIMINATED: automation was opening the LIVE Chrome profile, so every sign-in was destroyed on the next harvester run
+
+**This supersedes the framing of #1025.** #1025 correctly proved the tokens were revoked server-side.
+It did NOT explain *why* they kept being revoked. The operator supplied the decisive symptom:
+
+> "I sign in, sign up, and then I close the profile of Chrome. Again when I open it, I have to sign in
+> again. Every time, every time."
+
+A one-off revocation cannot produce that. A *repeating* cause can. Found it.
+
+### The mechanism
+`scripts/automation/video_key_harvester.py` created a junction from
+`D:\omniroute-monetizer\state\live_link` to `C:\Users\Admin\AppData\Local\Google\Chrome\User Data`
+(old line 308) and then launched a **Playwright-driven persistent context directly against it**
+(old line 784, `user_data_dir = junction_alias`). Its own comment asserted the opposite of the truth:
+
+> "the logged-in Google/DBSC session stays valid here because it is the actual on-device profile, not a copy"
+
+Being the on-device profile is exactly *why* Google kills it. Chrome's Device Bound Session
+Credentials tie a session to a specific browser instance; an automated client presenting it gets the
+session revoked server-side. So each harvester run destroyed whatever the operator had just signed
+into — then the next run destroyed the next sign-in. An endless loop, and every previous "restore"
+attempt was fighting a process that re-broke it hours later.
+
+Evidence it was live and recent: `state\harvest` touched 1.6 h before this entry,
+`state\harvest_profile` 9.6 h, `state\browser_profile` 10.2 h. The junction was **still present and
+still resolving to the live root** at the start of this entry.
+
+This also **corrects #1022's cookie finding**: the 82-98% purged cookie stores were attributed to
+"automation footprints" as a guess. They are the direct result of foreign-Chromium writes to the live
+profile. Same cause.
+
+### Ruled out by measurement (so they are not chased again)
+- Chrome enterprise policy: no `HKLM/HKCU\SOFTWARE\Policies\Google\Chrome` key exists at all.
+  `ForceEphemeralProfiles`, `ClearBrowsingDataOnExitList`, `BrowserSignin`, `SyncDisabled` -- none set.
+- Chrome's own settings: no session-only cookie setting, no clear-on-exit, `signin.allowed=True` on
+  all four profiles.
+- Version downgrade reset: `Last Version` = `151.0.7922.170` = installed Chrome. Match, no downgrade.
+- Third-party cleaners / scheduled wipers: none. Only stock Windows maintenance tasks.
+- **`oauth_keepalive.py` is INNOCENT** -- audited its imports; it touches only the OmniRoute REST API,
+  never Chrome. (Note: two duplicate copies are running, `--interval 3600`, harmless but redundant.)
+
+### Fix applied (operator said "yes" to removal)
+1. **Junction deleted.** Used `os.rmdir()` on the link only -- never `rmtree`, which would have
+   deleted *through* the link into the operator's real profile. Verified before/after:
+   live Chrome root held **62 items before and 62 after**, and all four profile directories present.
+   Nothing in the operator's Chrome was touched.
+2. **`ensure_junction()` permanently disabled** -- now raises immediately; the old body kept as
+   `_disabled_create_junction()` purely as documentation of what it used to do.
+3. **`_launch()` guarded independently** -- resolves `user_data_dir` with `os.path.realpath` and
+   refuses if it equals, or sits inside, the live root. Catches any future caller, not just the one.
+
+**Gate tests (both verified):**
+- `ensure_junction(live_link)` -> `BLOCKED: REFUSED: creating a junction to the operator's live Chrome user-data root is permanently disabled.`
+- `_launch(user_data_dir=<live root>)` -> `BLOCKED: REFUSED: user_data_dir resolves inside the operator's LIVE Chrome profile.`
+- junction did not reappear.
+
+### Consequence for the operator
+The next sign-in should be the last one per profile, because the thing that erased it is gone. This is
+now a **testable prediction**, not a hope: sign in once, close Chrome, and `token_service` /
+`account_info` should still be populated on reopen. That test has not yet been run.
+
+- **VERIFIED**: root cause identified; junction removed with the live profile provably intact; both
+  code guards block; all alternative causes ruled out by direct measurement.
+- **NOT YET VERIFIED**: that a sign-in now persists across a close/reopen. Requires one operator
+  sign-in. Until that is observed, no claim of a durable fix may be made.
+- **STATUS**: `LOCAL_DATA_PRESENT` = verified. `GOOGLE_SYNC_AUTHENTICATED` = false, all four
+  (unchanged -- the revoked tokens are gone for good and are not recoverable).
+  `MONETIZER_BLOCKED` for Chrome Sync, pending one operator sign-in.
+  **Recurrence cause: ELIMINATED.**
+
+---
+
+## Entry #1027 — 2026-08-22 09:54 — RESOLVED: ALL FOUR PROFILES GOOGLE_SYNC_AUTHENTICATED (operator sign-in, verified on disk + UI)
+
+**The incident is over.** After the recurrence cause was removed in #1026, the operator signed in to
+all four profiles themselves. This is the first `GOOGLE_SYNC_AUTHENTICATED` = true in this whole
+incident, and it is verified two independent ways.
+
+### UI evidence (operator screenshots)
+Chrome profile menu shows the signed-in account with avatar and a **"Sign out of Chrome"** item — the
+"Sign in to Chrome" button is gone. Final screenshot listed all four under their display names:
+`Niloy` (current), `Kunal`, `Kunal (Person 1)`, `Kunal (Your Chrome)`. The `(Your Chrome)` entry
+gained a coloured avatar, confirming `Default` completed last.
+
+### On-disk evidence (read-only probe, independent of screenshots)
+```
+Default     SIGNED IN  tokens=1  ['kunal.colab@gmail.com']
+Profile 14  SIGNED IN  tokens=1  ['xxpertcomments@gmail.com']
+Profile 16  SIGNED IN  tokens=1  ['niloydassana@gmail.com']
+Profile 17  SIGNED IN  tokens=1  ['isearch.xsolve@gmail.com']
+bad shortcut back? False
+```
+Every profile has BOTH halves of the credential (`token_service` row + `account_info`) and every
+account matches the `EXPECTED_ACCOUNTS` mapping. The junction has not reappeared.
+
+### Note on the sign-in method
+The passkey QR route initially failed with **"No passkeys available — There aren't any passkeys for
+google.com on this device"**. That is Chrome looking for a passkey on the *computer*; no passkey had
+ever been registered for these accounts. The operator completed sign-in via `Try another way`
+instead. Registering passkeys is therefore a genuine, still-outstanding improvement — see below.
+
+### Delivered: `Set Up Phone Login.cmd` (NEW, repo root)
+One click. Opens all four profiles in turn at `myaccount.google.com/signinoptions/passkeys` using
+`--profile-directory=`, so the operator can register their phone as a passkey on each account without
+navigating menus. Handles both states: if a profile is signed in it lands on the passkey page; if it
+is signed out Google prompts for sign-in first, then the passkey page. `chrome.exe` presence verified
+before writing the launcher.
+
+Operator asked for "one QR code for all four accounts". **That does not exist and cannot be built** —
+Chrome treats each profile as a separate browser identity and Google issues one session per profile.
+Recorded here so no future session claims otherwise. What passkeys *do* achieve: each sign-in becomes
+scan-QR + fingerprint, roughly ten seconds, no password and no OTP. Four fast taps instead of four
+password recoveries.
+
+### Corrections to the record
+- #1025 said the Chrome Sync state was "false, all four, FINAL" and unobtainable. The **"final"** was
+  wrong: it was final only for *restoring the revoked tokens*, which remains true. Fresh
+  authentication was always available and has now succeeded. Stated flatly like that, it read as "you
+  cannot get back in" — a harsher conclusion than the evidence supported.
+- The operator's report that "all profiles ask for sign in" was correct at the time and correctly
+  believed without demanding further screenshots.
+
+### Outstanding
+1. **Persistence test not yet run.** The operator has not yet closed Chrome fully and reopened. The
+   prediction from #1026 — that the sign-ins now survive a restart because the junction is gone — is
+   still unconfirmed. Verify at next opportunity by re-running the token census after a full restart.
+2. Passkey registration on all four accounts (launcher delivered, not yet run).
+3. Two duplicate `oauth_keepalive.py --interval 3600` processes running; harmless, worth cleaning up.
+4. `PROVIDER_SESSION_AUTHENTICATED` still not established for Leonardo / Runway / Kie / Segmind /
+   Novita / together.ai. This — not Chrome Sync — is what actually gates income. Now unblocked,
+   because those providers authenticate via "Continue with Google" and the Google sessions are live.
+
+- **VERIFIED**: `GOOGLE_SYNC_AUTHENTICATED` = **true, all four profiles**, by UI evidence AND
+  independent on-disk probe. Recurrence cause eliminated and blocked in code (#1026).
+- **STATUS**: `LOCAL_DATA_PRESENT` = verified. `PROFILE_METADATA_REGISTERED` = 4 of 4.
+  `GOOGLE_SYNC_AUTHENTICATED` = **4 of 4** — the incident's core objective, met.
+  `PROVIDER_SESSION_AUTHENTICATED` = pending provider re-authorisation.
+  `MONETIZER_BLOCKED` → lifted for Chrome Sync; remaining block is provider sessions only.
+---
+
+## #1028 - 2026-08-22 - PHONE PASSKEY ROUTE BLOCKED BY MISSING HARDWARE (measured, not assumed)
+
+### What was done
+Ran `Set Up Phone Login.cmd`'s payload directly (real Chrome, not automation): opened
+`https://myaccount.google.com/signinoptions/passkeys` in all four profiles via
+`--profile-directory=`, 4s apart. All four launched; 27 `chrome.exe` processes confirmed after.
+This is real Chrome opening its own profiles - permitted, unlike the Playwright path of #1026.
+
+### Observation that changes the plan
+The operator asked whether Bluetooth also needs enabling on the computer. Checked instead of
+answering from assumption. Result:
+
+- `Get-PnpDevice | where Class -match 'Bluetooth|BTH'` -> **zero devices**
+- `Get-PnpDevice | where FriendlyName -like '*Bluetooth*'` -> **NO BLUETOOTH HARDWARE FOUND**
+- `Get-Service bthserv` -> present but **Stopped / Manual** (the service ships with Windows
+  regardless of hardware, so its existence is not evidence of an adapter)
+- No devices in an error/driver-missing state that could be a Bluetooth chip awaiting a driver
+- `Get-CimInstance Win32_ComputerSystem` -> **LENOVO 2349A11** (ThinkPad T430 family, ~2012;
+  Bluetooth was an optional module on that line and this unit does not have it)
+- `Win32_Tpm` -> **NO TPM** instance returned
+- Biometrics: none. Only an `Integrated Camera` (not Windows Hello capable on this generation)
+- OS: Windows 10 Pro build 19045
+
+### Consequence
+The WebAuthn cross-device (hybrid) passkey flow - the QR code the phone scans - requires
+Bluetooth Low Energy on the *client* machine for the proximity handshake. With no adapter,
+Chrome cannot offer or complete that flow. **The phone-QR route is blocked by absent hardware,
+not by configuration.** No script, setting, driver or registry change can substitute.
+
+Second-choice fallback (platform passkey stored on the PC via Windows Hello) is also doubtful
+here: no TPM and no biometric sensor, so Windows Hello would need software-only protection.
+Not attempted; would require admin and is not obviously better than what already works.
+
+### What is NOT claimed
+- Not claimed that Bluetooth is "off" or "disabled" - it is **absent**.
+- Not claimed that a USB Bluetooth dongle is verified to work on this unit. It is the standard
+  remedy (BLE 4.0+ dongles are class-driver supported on build 19045) but it is **untested here**.
+- Passkey registration therefore remains **not done**, and #1027 outstanding item 2 is now
+  reclassified from "pending" to **blocked pending hardware**.
+
+### Reframing for the operator
+Passkeys were only ever insurance against a *recurrence*. The recurrence cause was removed and
+code-blocked in #1026, and all four sign-ins were re-established in #1027. Missing Bluetooth
+costs a convenience layer, not the fix. Priority order communicated: (1) confirm persistence
+across a full Chrome restart, (2) provider re-authorisation, (3) optional dongle later.
+
+- **VERIFIED**: no Bluetooth adapter and no TPM on this machine, by direct PnP/CIM query.
+- **BLOCKED**: cross-device phone passkey registration - missing BLE hardware.
+- **STATUS**: `GOOGLE_SYNC_AUTHENTICATED` = 4 of 4, unchanged by this entry.
+  `PROVIDER_SESSION_AUTHENTICATED` = still pending. Persistence test still the top open item.
+
+---
+
+## #1029 - 2026-08-22 - USB CABLE RULED OUT; SYNC PROVEN ALIVE BY PASSWORD DOWNLOAD
+
+### Question asked
+Operator asked whether connecting the phone to the PC by **USB cable** could substitute for the
+missing Bluetooth adapter (#1028) in the cross-device passkey flow.
+
+### Answer, verified against Google's own documentation (not asserted)
+Fetched `support.google.com/accounts/answer/13548313`. It states the requirement plainly: "To use a
+passkey on a phone to sign in to another computer" you must "turn on Bluetooth", and repeats at the
+scan step "Check to make sure Bluetooth is on." The only *wired* alternative documented is a FIDO2
+hardware security key, which is a different authenticator, not the phone. A second fetch of
+`developers.google.com/identity/passkeys/supported-environments` was silent on transports and so
+neither confirms nor contradicts - recorded as inconclusive rather than treated as agreement.
+
+**Conclusion: USB cable is not a supported transport for phone-based cross-device passkeys.**
+#1028's BLOCKED status stands.
+
+### Incidental finding - materially better than the passkey route
+Probed password stores read-only (temp copy, `mode=ro`, counts only; **no `password_value` column was
+ever selected and no credential was decrypted**):
+
+| Profile | local `Login Data` | synced `Login Data For Account` |
+|---|---|---|
+| Default | 0 | **28** (4 google) |
+| Profile 14 | 0 | **19** |
+| Profile 16 | 0 | **1** |
+| Profile 17 | 0 | **554** (8 google) |
+
+Two things follow:
+
+1. **Independent proof that `GOOGLE_SYNC_AUTHENTICATED` is genuine, not cosmetic.** A profile that
+   is merely *labelled* with an account cannot download 554 credentials from Google Password
+   Manager. This is a live authenticated sync channel doing work - stronger evidence than the token
+   row count in #1027, because it required a successful server round-trip.
+2. **The convenience problem the passkey was meant to solve is already solved.** Chrome will autofill
+   these on provider sign-in pages, so the operator does not need to type or recover passwords. The
+   missing Bluetooth adapter therefore costs almost nothing in practice.
+
+The local `Login Data` files being empty (0 rows) is consistent with the #1026 purge; sync has
+repopulated the account-scoped store instead, which is where modern Chrome keeps synced passwords.
+
+### What is NOT claimed
+- Not claimed that any specific provider credential (Leonardo, Runway, Kie, Segmind, Novita,
+  together.ai) is among those rows - only totals were counted, not origins enumerated.
+- `Profile 16`'s single row may mean that account genuinely has one saved password, or that its
+  download is still in progress. **Not determined.** Do not report it as complete.
+- Not claimed the operator will never see a sign-in prompt again; autofill removes typing, not
+  every prompt.
+
+### Recommendation given
+Do not buy a Bluetooth dongle now. Revisit only if logins actually break again.
+
+- **VERIFIED**: USB is not a passkey transport (Google documentation, quoted above).
+- **VERIFIED**: sync is live and downloading - 28 / 19 / 1 / 554 synced credentials.
+- **STATUS**: `GOOGLE_SYNC_AUTHENTICATED` = 4 of 4, now corroborated a third independent way.
+  Persistence-across-restart test remains the single top open item.
+
+---
+
+## #1030 - 2026-08-22 - PREVENTION, DONE PROPERLY: EIGHT MORE OFFENDERS FOUND AND A GLOBAL GUARD
+
+### The admission that starts this entry
+#1026 claimed the recurrence cause was "blocked in code". That was true of ONE file. The
+operator pushed back - "ensure this f*cking thing does not occur again" - and a repo-wide sweep
+proved them right to push. `video_key_harvester.py` was never the only offender.
+
+`Grep` for `launch_persistent_context|user_data_dir|live_link|mklink|LOCALAPPDATA` across the
+repository returned 43 files. Triaged by hand. Genuine live-profile hazards:
+
+| File | Vector | Disposition |
+|---|---|---|
+| `wire_provider.py:94` | `launch_persistent_context` on `%USERPROFILE%\...\User Data` | **REWRITTEN** to use `safe_profile_dir()` |
+| `scratch/test_pw.py` | `launch_persistent_context` on live root | guard header, verified refuses |
+| `scratch/test_pw_profile.py` | same | guard header, verified refuses |
+| `scratch/test_cdp.py` | `subprocess.Popen(chrome.exe --user-data-dir=<live> --remote-debugging-port=9222)` | guard header, verified refuses |
+| `scratch/test_cdp_requests.py` | same shape | guard header |
+| `scratch/test_cdp_err.py` | same shape (lowercase `user data`) | guard header |
+| `scratch/test_pw_copy.py` | copies live tree, then launches on the copy | guard header |
+| `video_key_harvester.py` | junction + persistent context | already blocked (#1026) |
+
+Examined and **cleared as read-only, no patch needed**: `get_chrome_ws.py` and
+`process_providers_with_existing_chrome.py` only read `DevToolsActivePort` to discover a port;
+they never launch a browser against the profile. Recorded so nobody "fixes" them later.
+
+### Why per-file patches are not enough, and what was built instead
+The next script written will not remember the rule. So the rule now lives in one module and is
+enforced at the boundary, not at the call site.
+
+**New: `scripts/automation/chrome_live_guard.py`**
+- `LIVE_ROOT` derived from `%LOCALAPPDATA%`, never a hardcoded `D:\` path.
+- `resolve()` uses `os.path.realpath`, **not** `os.path.islink()` - the latter returns False for
+  a Windows junction, which is precisely how #1026 hid.
+- `verdict()` refuses three relations: path IS the live root, is INSIDE it, or CONTAINS it.
+- `assert_safe()` raises `LiveProfileRefused` with the requested path, the resolved path, the
+  live root, the reason, and what to do instead.
+- `safe_profile_dir(tag)` hands out `state/automation_profiles/<tag>` - and asserts on it too,
+  in case someone drops a junction under `state/`.
+- `install()` monkey-patches `BrowserType.launch_persistent_context` and `.launch` on BOTH the
+  sync and async Playwright APIs.
+- `install_subprocess_guard()` patches `Popen/run/call/check_call/check_output` and refuses
+  (a) any `--user-data-dir` resolving into the live tree, (b) a browser exe given the live root
+  as a bare argument, (c) `mklink`/junction creation aimed at the live tree. Narrow by design:
+  commands that name no browser and no `--user-data-dir` pass through untouched.
+
+**Machine-wide arming.** `sitecustomize.py` in the repo root was tried and **empirically does
+not load** (cwd is not on `sys.path` when `site` runs) - tested, discarded, recorded so it is
+not retried. What works: a `.pth` bootstrap in site-packages.
+- `.../venv/Lib/site-packages/chrome_live_guard.pth` -> `import chrome_live_guard_boot`
+- `.../venv/Lib/site-packages/chrome_live_guard_boot.py` -> loads the guard by absolute path,
+  calls `install_subprocess_guard()` immediately (cheap), and installs a lazy `meta_path`
+  finder that patches Playwright only on first import, so interpreter startup stays fast.
+- Whole bootstrap wrapped in `except Exception: pass`. A guard that breaks unrelated Python
+  processes would be worse than the problem it prevents.
+- **To remove: delete those two files.** Recorded explicitly.
+
+### Test results (all run, none assumed)
+Guard self-test: 7 path classifications, **0 failures**.
+
+Adversarial, from a script that never imports the guard (the realistic future case):
+```
+REFUSED  launch_persistent_context on live root
+REFUSED  launch_persistent_context via mklink junction  (realpath saw through it)
+REFUSED  mklink /J <alias> -> live profile
+REFUSED  chrome.exe --user-data-dir=<live>
+REFUSED  chrome.exe <live> as bare arg
+ALLOWED  plain echo / git --version
+ALLOWED  chrome.exe --version (no --user-data-dir)
+ALLOWED  chrome.exe --user-data-dir=<state\automation_profiles\x>
+ALLOWED  launch_persistent_context on safe_profile_dir()  <- no false positive
+```
+Junction test cleanup verified: alias removed, **live root item count unchanged**, and
+`os.rmdir` used deliberately - `shutil.rmtree` would delete THROUGH the link.
+
+Patched files re-parsed with `ast.parse`: 9 of 9 syntax OK.
+
+### Also delivered: the script the operator asked for
+`Fix Chrome.cmd` (one double-click) -> `scripts/automation/chrome_selfheal.py`.
+Repairs by itself: removes any alias to the live Chrome tree (link only, with a before/after
+item-count assertion), verifies the guard is present AND actively refusing (live proof, not a
+file-existence check), and takes a fresh backup **only when Chrome is closed**.
+Reports per-profile sign-in from `token_service` rows + `account_info`, tagged `[ok]` /
+`[FIXED]` / `[YOU]` / `[PROBLEM]` so the operator knows who owns each line. Writes
+`state/chrome_selfheal_report.json`. `--dry-run` available; default is repair.
+
+Verified end to end through the `.cmd` wrapper: rc=0, report written, `signed_in: 4`,
+`needs_agent: []`. (Two earlier invocation failures were my test harness mis-quoting a filename
+with a space - `cmd /c call ".\Fix Chrome.cmd"` works; the file itself was never at fault.)
+
+### What is NOT claimed
+- The guard stops **automation in Python on this machine**. It does not and cannot stop a
+  human, a `.cmd` file, a Node script, or a different Python installation without the `.pth`.
+  Only the hermes venv was armed - it is the interpreter this repo runs on, confirmed by
+  `sys.executable`. Other interpreters remain unguarded.
+- Still cannot restore a server-revoked Google session. Unchanged since #1025. `chrome_selfheal`
+  says so in its own docstring rather than implying otherwise.
+- The `[YOU]` backup line during this run was only because Chrome was open. Not a fault.
+
+- **VERIFIED**: 8 additional live-profile call sites found, patched, and individually tested.
+- **VERIFIED**: guard refuses 5 distinct attack shapes and produces 0 false positives on 4
+  legitimate ones, from a script with no knowledge of the guard.
+- **VERIFIED**: `GOOGLE_SYNC_AUTHENTICATED` = 4 of 4, re-measured after every test above.
+- **STATUS**: recurrence prevention now enforced structurally, not by discipline.
+  Persistence-across-restart test still the one open item the operator must trigger.

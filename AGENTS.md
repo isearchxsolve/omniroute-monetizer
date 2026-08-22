@@ -1,5 +1,6 @@
 # 🚨 TOP PRIORITY AGENT RULES 🚨
 
+0. **BEFORE TOUCHING ANYTHING CHROME-RELATED, READ [`CHROME_RULES_FOR_AGENTS.md`](CHROME_RULES_FOR_AGENTS.md).** On 2026-08-22 this project's own automation silently revoked the operator's Google sessions on all four profiles, repeatedly, for days — then a first "fix" patched one file out of nine and was reported as complete. That document is short, and it is not optional. Summary of the one rule: **automation never opens the operator's Chrome profile, for any reason.** A login wall in automation's own profile is a correct result — report it, do not route around it.
 1. **DETAILED WORKLOG SUMMARIES:** The `MASTER_WORKLOG.md` entry MUST NEVER be a simple one-line summary. Each and every action, observation, and step must be detailed extensively in the worklog. Make it a habit. This is the absolute top priority.
 2. **INCREMENTAL COMMITS:** Incremental commits should be done continuously. This is the second highest priority. Make it a habit.
 
@@ -293,6 +294,16 @@ To prevent new agents from searching blindly across the codebase, use these exac
     **14.1 -- One canonical root. No aliases.**
     - The only Chrome root is `%LOCALAPPDATA%\Google\Chrome\User Data`. Derive it from the environment; never hardcode a `D:\` profile path as "the" root.
     - Before launching Chrome through ANY alias (`state\live_link` and friends), assert BOTH: the path is genuinely a junction (`(Get-Item x).LinkType -eq 'Junction'`, or `os.path.islink()` / `os.path.realpath() != path` in Python), AND its resolved target equals the intended root. **A plain directory sitting at an alias path must ABORT the run**, never be silently used -- Chrome will happily scaffold empty profiles inside it and every subsequent probe becomes a lie. That is root cause R1.
+    - **Do not hand-roll this check (added 2026-08-22, worklog #1030).** Use `scripts\automation\chrome_live_guard.py`:
+      ```python
+      from chrome_live_guard import assert_safe, safe_profile_dir
+      udd = safe_profile_dir("my_task")     # automation's OWN profile, never the operator's
+      assert_safe(udd, who="my_task")       # raises LiveProfileRefused if it resolves into live
+      ```
+      Note `os.path.islink()` returns **False** for a Windows junction -- that is exactly how the 2026-08-22 incident hid. The guard resolves with `os.path.realpath()` instead. It refuses three relations: the path IS the live root, is INSIDE it, or CONTAINS it.
+    - The guard is also armed **machine-wide** via `chrome_live_guard.pth` + `chrome_live_guard_boot.py` in the hermes venv's `site-packages`. It patches Playwright's `launch_persistent_context` / `launch` and `subprocess.Popen/run/call/check_call/check_output`, so `chrome.exe --user-data-dir=<live>` and `mklink /J <alias> <live>` are refused even from a script that never imports it. **Do not remove those two files.** If a launch fails with `LiveProfileRefused`, the guard is correct and your code is wrong -- fix the profile path, do not disable the guard.
+    - A login wall inside automation's own profile is a **correct, reportable outcome**. Report it. Never reach for the operator's browser to get around it.
+    - One command diagnoses and self-heals: `Fix Chrome.cmd` (wraps `scripts\automation\chrome_selfheal.py`). Run it before and after any Chrome-adjacent work. It is read-only with respect to Chrome and never decrypts anything.
 
     **14.2 -- The credential is `Web Data > token_service` + `Preferences > account_info`. Together.**
     - Those two artifacts, per profile, ARE the Chrome Sync sign-in. Nothing else is.
