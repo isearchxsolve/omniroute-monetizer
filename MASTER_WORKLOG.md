@@ -1469,3 +1469,32 @@ All five repos now have GitHub remotes; the earlier "no remote" caveat for neon_
 - **NEXT**: Commit the compatibility and registry-recovery improvements. Operator can now open
   Chrome normally and should see all four named/signed-in profiles without entering passwords;
   site-level sessions remain governed by the preserved cookies and normal provider expiry rules.
+---
+
+### [2026-08-22 08:31] #1018 — One-click Chrome Profile Rescue launcher added for non-technical recovery
+
+- **USER NEED**: Operator stated that separate PowerShell commands, modes, paths, and recovery
+  concepts are confusing, and requested a single script that handles backup and restoration.
+  A fully automatic restore cannot safely select a pre-incident source on the operator's behalf,
+  so the delivery is a one-click guided launcher with plain-English decisions and an explicit
+  typed confirmation only immediately before destructive restore.
+- **IMPLEMENTED**: Added root-level `Chrome Profile Rescue.cmd`; operator can double-click it
+  in File Explorer. It locates the maintained PowerShell recovery engine relative to itself,
+  launches it with execution policy limited to that process, displays any error, and pauses so
+  messages remain visible. Added `-Mode Guided` to the engine with a single visual menu:
+  (1) Protect my Chrome now / full backup; (2) Restore from a displayed, numbered complete
+  backup, requiring typed `RESTORE`; (3) fix only missing Chrome profile names/accounts using
+  the vetted V2 source, requiring typed `FIX`; (4) exit. No commands, snapshot paths, or mode
+  names must be typed by the operator.
+- **SAFETY DESIGN**: Only finalized snapshots bearing `snapshot.json` appear in the restore
+  menu. A full profile restore still triggers the existing pre-restore safety snapshot and all
+  schema checks. The registry option keeps the prior guardrails (Chrome closed, encryption-key
+  equality, blank-registration-only repair, local-state rollback copy). The launcher performs
+  no action by default and cannot automatically overwrite the profile data.
+- **VERIFICATION**: End-to-end launcher smoke test PASS using `echo 4 | call
+  "D:\omniroute-monetizer\Chrome Profile Rescue.cmd"`. It rendered the exact four-option
+  menu and exited through option 4 without modifying Chrome. An earlier wrapper test had an
+  incorrect quote escape (`'\\' is not recognized`) and was discarded as a test-command typo,
+  not a launcher failure. `git diff --check` PASS.
+- **NEXT**: Commit the launcher. User instruction becomes one sentence: double-click
+  `D:\omniroute-monetizer\Chrome Profile Rescue.cmd`, then select the plain-English option.

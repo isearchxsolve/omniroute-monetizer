@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Backup', 'List', 'Finalize', 'RepairRegistry', 'Restore')]
+    [ValidateSet('Guided', 'Backup', 'List', 'Finalize', 'RepairRegistry', 'Restore')]
     [string]$Mode = 'Backup',
 
     [string]$ChromeUserData = (Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data'),
@@ -197,6 +197,77 @@ function Repair-ProfileRegistry {
     }
     Write-Output "Repaired missing registration metadata: $($changed -join ', ')"
     Write-Output "Metadata-only rollback copy: $metadataBackup"
+}
+
+function Get-FinalizedSnapshots {
+    param([Parameter(Mandatory)][string]$Root)
+
+    if (-not (Test-Path -LiteralPath $Root -PathType Container)) { return @() }
+    return @(Get-ChildItem -LiteralPath $Root -Directory |
+        Where-Object {
+            $_.Name -match '^chrome_profile_\d{8}_\d{6}$' -and
+            (Test-Path -LiteralPath (Join-Path $_.FullName 'snapshot.json') -PathType Leaf)
+        } |
+        Sort-Object LastWriteTime -Descending)
+}
+
+function Start-GuidedRecovery {
+    Write-Host ''
+    Write-Host '============================================' -ForegroundColor Cyan
+    Write-Host '       CHROME PROFILE RESCUE' -ForegroundColor Cyan
+    Write-Host '============================================' -ForegroundColor Cyan
+    Write-Host 'This tool protects your Chrome profiles first.'
+    Write-Host 'Chrome will close only if you choose a backup or repair action.'
+    Write-Host ''
+    Write-Host '[1] Protect my Chrome now (make a new backup)' -ForegroundColor Green
+    Write-Host '[2] Restore my Chrome from an earlier backup' -ForegroundColor Yellow
+    Write-Host '[3] Fix missing Chrome profile names/accounts' -ForegroundColor Yellow
+    Write-Host '[4] Exit'
+    $choice = Read-Host 'Type 1, 2, 3, or 4'
+
+    switch ($choice) {
+        '1' {
+            New-Snapshot -Source $ChromeUserData -DestinationRoot $BackupRoot | Out-Null
+            Write-Host 'Your Chrome backup is complete.' -ForegroundColor Green
+        }
+        '2' {
+            $snapshots = Get-FinalizedSnapshots -Root $BackupRoot
+            if ($snapshots.Count -eq 0) {
+                throw "There are no complete backups yet. Choose option 1 first. Backup folder: $BackupRoot"
+            }
+            Write-Host ''
+            Write-Host 'Choose a backup made BEFORE the problem began:' -ForegroundColor Yellow
+            for ($i = 0; $i -lt $snapshots.Count; $i++) {
+                Write-Host "[$($i + 1)] $($snapshots[$i].Name)  ($($snapshots[$i].LastWriteTime))"
+            }
+            $selection = Read-Host 'Type the backup number, or press Enter to cancel'
+            if ([string]::IsNullOrWhiteSpace($selection)) { return }
+            $number = 0
+            if (-not [int]::TryParse($selection, [ref]$number) -or $number -lt 1 -or $number -gt $snapshots.Count) {
+                throw 'That backup number is not valid. Nothing was changed.'
+            }
+            $selected = $snapshots[$number - 1]
+            $confirm = Read-Host "This will restore $($selected.Name). Type RESTORE to continue"
+            if ($confirm -ne 'RESTORE') { Write-Host 'Restore cancelled. Nothing was changed.'; return }
+            & $PSCommandPath -Mode Restore -Snapshot $selected.FullName -ConfirmRestore -ChromeUserData $ChromeUserData -BackupRoot $BackupRoot
+        }
+        '3' {
+            $source = 'D:\omniroute-chrome-profile-v2'
+            if (-not (Test-Path -LiteralPath $source -PathType Container)) {
+                throw "The known historical profile-registration source is unavailable: $source"
+            }
+            $confirm = Read-Host 'This preserves browser data and repairs only missing account names. Type FIX to continue'
+            if ($confirm -ne 'FIX') { Write-Host 'Repair cancelled. Nothing was changed.'; return }
+            & $PSCommandPath -Mode RepairRegistry -Snapshot $source -ConfirmRegistryRepair -ChromeUserData $ChromeUserData -BackupRoot $BackupRoot
+        }
+        '4' { return }
+        default { Write-Host 'Nothing was changed. Run the rescue tool again and choose 1, 2, or 3.' -ForegroundColor Yellow }
+    }
+}
+
+if ($Mode -eq 'Guided') {
+    Start-GuidedRecovery
+    exit 0
 }
 
 if ($Mode -eq 'List') {
