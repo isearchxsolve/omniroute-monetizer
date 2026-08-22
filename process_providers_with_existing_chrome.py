@@ -1,8 +1,67 @@
+"""RETIRED 2026-08-22 -- attaches to the operator's LIVE Chrome. Do not revive.
+
+This walked the provider ledger while driving the operator's OWN Chrome over CDP
+(`connect_over_cdp`, line ~134, falling back to `ws://localhost:9222`). It is retired for the
+same three reasons as `get_chrome_ws.py` -- read that file's docstring, it is the full argument:
+
+  1. Chrome 136+ ignores `--remote-debugging-port` for the default user-data directory, so on
+     Chrome 151 there is no port to attach to.
+  2. The obvious workaround -- a junction that resolves back to the live tree -- IS the
+     2026-08-22 incident that revoked the operator's Google sessions on all four profiles,
+     repeatedly, for days. MASTER_WORKLOG.md #1026.
+  3. An unauthenticated DevTools port exposes every cookie in every profile, and bot-like
+     activity on a real signed-in account risks a flag on the ACCOUNT, not just the session.
+
+The ledger logic below is still useful and worth porting. Do it against automation's OWN
+profile:
+
+    sys.path.insert(0, r"D:\\omniroute-monetizer\\scripts\\automation")
+    from chrome_live_guard import safe_profile_dir
+    udd = safe_profile_dir("providers")
+    ctx = pw.chromium.launch_persistent_context(str(udd), channel="chrome")
+
+The operator signs that profile in ONCE (`SignInToProviders.cmd`, which routes through
+`provider_login_helper.py` so the guard applies) and it stays signed in. If it hits a login wall,
+REPORT the login wall -- provider, URL, what the page asked for -- and stop. That is a correct
+result.
+
+Before porting any of this, check `paste_provider_key.py --status`. The ledger this file walks is a
+stale 2026-08-18 snapshot; the providers it calls EXTERNAL_ACCOUNT_REQUIRED are largely wired and
+active in OmniRoute already, and they need API keys rather than browser sessions.
+
+See CHROME_RULES_FOR_AGENTS.md, AGENTS.md 5 and 14, MASTER_WORKLOG.md #1032.
+"""
+
 import json
 import sys
 import time
 import os
-from playwright.sync_api import sync_playwright
+
+_REFUSAL = (
+    "REFUSED: process_providers_with_existing_chrome.py is permanently retired.\n"
+    "\n"
+    "It drove the operator's LIVE Chrome over CDP. Chrome 136+ blocks remote debugging on the\n"
+    "default profile directory, and working around that with a junction is exactly the\n"
+    "2026-08-22 bug that revoked all four Google sessions for days.\n"
+    "\n"
+    "Port the ledger logic in this file to automation's own profile instead:\n"
+    "    from chrome_live_guard import safe_profile_dir\n"
+    "    udd = safe_profile_dir('providers')\n"
+    "The operator signs that in once. A login wall there is a REPORTABLE result.\n"
+    "\n"
+    "See CHROME_RULES_FOR_AGENTS.md and MASTER_WORKLOG.md #1032."
+)
+
+if __name__ == "__main__":
+    print(_REFUSAL, file=sys.stderr)
+    sys.exit(2)
+
+# Importing is allowed so the ledger helpers below can be reused, but the Playwright attach
+# path must never run. `chrome_live_guard` would also refuse it at the boundary; this raise
+# makes the intent explicit at the call site rather than relying on the global guard.
+raise RuntimeError(_REFUSAL)
+
+from playwright.sync_api import sync_playwright  # noqa: E402  (unreachable, kept for context)
 
 # Path to the ledger
 LEDGER_PATH = "d:/omniroute-monetizer/state/all_296_providers_execution_ledger.json"

@@ -45,6 +45,8 @@ __all__ = [
     "verdict",
     "is_live",
     "assert_safe",
+    "assert_cdp_safe",
+    "live_devtools_ports",
     "install",
     "safe_profile_dir",
 ]
@@ -184,6 +186,123 @@ def safe_profile_dir(tag: str = "automation") -> Path:
 
 
 # --------------------------------------------------------------------------------------
+# CDP attach: the OTHER way into the operator's browser.
+# --------------------------------------------------------------------------------------
+#
+# `assert_safe` guards *launching*. It says nothing about ATTACHING over the DevTools
+# protocol to a Chrome the operator started themselves -- `connect_over_cdp("http://
+# 127.0.0.1:9222")`. That is a different door into the same room, and this repo already
+# contains two files built for it (`get_chrome_ws.py`, `process_providers_with_existing_
+# chrome.py`), so a future agent will find them and try.
+#
+# Honest note on severity, so nobody over- or under-reacts: attaching does NOT trigger the
+# 2026-08-22 revocation. That needed a *foreign* browser presenting the session; here the
+# browser is the operator's own Chrome, and Google sees nothing unusual. The reasons to
+# refuse are different and still sufficient:
+#   * an open DevTools port has NO authentication -- anything running locally can read every
+#     cookie in every profile, which is precisely why Google clamped down (see below),
+#   * automated clicking on a real signed-in account risks a flag on the ACCOUNT, which is
+#     strictly worse than a logged-out session,
+#   * it silently makes the operator's browser unusable while automation drives it.
+#
+# Chrome already blocks the common case. From Chrome 136 onward, `--remote-debugging-port`
+# and `--remote-debugging-pipe` are IGNORED when they target the default user-data directory
+# (developer.chrome.com/blog/remote-debugging-port). This machine runs Chrome 151, so the
+# straightforward attack does not work at all. This guard exists for the variant that does:
+# pointing Chrome at a junction that resolves back to the live tree, which defeats Chrome's
+# own directory check because the path string looks non-default.
+#
+# Detection: Chrome writes `DevToolsActivePort` into its own user-data directory whenever a
+# debugging port is active, with the port number on line 1. So if the live tree contains that
+# file and its port matches the endpoint being attached to, the target IS the operator's
+# browser. This resolves junctions, so the alias variant is caught too.
+
+
+def live_devtools_ports() -> set[int]:
+    """Ports advertised by any Chrome currently running on the operator's live profile.
+
+    Empty set is the normal, healthy answer -- it means no live Chrome has a debugging port
+    open. Never raises: a guard that crashes on an unreadable file is worse than useless.
+    """
+    ports: set[int] = set()
+    live = resolve(LIVE_ROOT)
+    candidates = [live / "DevToolsActivePort"]
+    try:
+        # Chrome writes it at the root, but check one level down too: a mis-scaffolded
+        # profile or an alias pointed at `User Data\Default` puts it elsewhere.
+        for child in live.iterdir():
+            if child.is_dir():
+                candidates.append(child / "DevToolsActivePort")
+    except OSError:
+        pass
+
+    for candidate in candidates:
+        try:
+            first = candidate.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except (OSError, ValueError):
+            continue
+        if first and first[0].strip().isdigit():
+            ports.add(int(first[0].strip()))
+    return ports
+
+
+def _endpoint_port(endpoint: str) -> int | None:
+    """Extract the TCP port from an http:// or ws:// DevTools endpoint. None if absent."""
+    text = str(endpoint)
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(text if "://" in text else "http://" + text)
+        if parsed.port:
+            return parsed.port
+    except (ValueError, ImportError):
+        pass
+    # Bare "9222" or a trailing ":9222" that urlparse choked on.
+    tail = text.rsplit(":", 1)[-1].split("/")[0].strip()
+    return int(tail) if tail.isdigit() else None
+
+
+def assert_cdp_safe(endpoint, who: str = "connect_over_cdp") -> str:
+    """Return the endpoint unchanged, or refuse if it points at the operator's Chrome."""
+    port = _endpoint_port(endpoint)
+    live_ports = live_devtools_ports()
+
+    if port is not None and port in live_ports:
+        raise LiveProfileRefused(
+            "REFUSED: {who} tried to ATTACH to the browser running on the operator's LIVE\n"
+            "Chrome profile.\n"
+            "    endpoint          : {ep}\n"
+            "    port              : {port}\n"
+            "    live Chrome ports : {live}\n"
+            "    live root         : {root}\n"
+            "\n"
+            "Matched by `DevToolsActivePort` inside the live user-data tree, so this is the\n"
+            "operator's own browser -- not automation's.\n"
+            "\n"
+            "Attaching does not revoke the session the way the 2026-08-22 launch bug did, but\n"
+            "it is still refused: an open DevTools port has no authentication and exposes every\n"
+            "cookie in every profile, automated activity on a real account risks a flag on the\n"
+            "ACCOUNT rather than just the session, and it takes over a browser the operator is\n"
+            "using.\n"
+            "\n"
+            "Do this instead: launch automation's OWN Chrome with its own profile and its own\n"
+            "debugging port, and attach to that.\n"
+            "    udd = safe_profile_dir('providers')\n"
+            "Sign that profile in ONCE, by hand, and it stays signed in.\n"
+            "\n"
+            "See CHROME_RULES_FOR_AGENTS.md and MASTER_WORKLOG.md #1032.".format(
+                who=who,
+                ep=endpoint,
+                port=port,
+                live=sorted(live_ports) or "none",
+                root=resolve(LIVE_ROOT),
+            )
+        )
+
+    return str(endpoint)
+
+
+# --------------------------------------------------------------------------------------
 # Global enforcement: wrap Playwright so no call site can forget.
 # --------------------------------------------------------------------------------------
 
@@ -318,17 +437,27 @@ def install_subprocess_guard() -> bool:
 
 
 def install(verbose: bool = False) -> bool:
-    """Monkey-patch Playwright's launch entry points to enforce the guard repo-wide.
+    """Monkey-patch Playwright's launch/attach entry points to enforce the guard repo-wide.
 
-    Idempotent. Returns True if the guard is active, False if Playwright is not installed
-    (in which case there is nothing to guard and no error is appropriate).
+    Idempotent. Returns True if the guard is active on Playwright -- INCLUDING the case where
+    another copy of this module already patched it. Returns False only when Playwright genuinely
+    cannot be imported, so there is nothing to guard.
+
+    That distinction matters and was wrong until 2026-08-22. This file loads twice under two
+    names (see `_shared_registry`), and the second copy found everything already patched, so
+    `patched_any` stayed False and it reported "playwright not installed" -- while the guard was
+    in fact fully armed. A caller doing `if not install(): panic()` would have drawn exactly the
+    wrong conclusion, and an agent reading that output might have "fixed" a guard that was working.
     """
     global _INSTALLED
     if _INSTALLED:
         return True
 
-    patched_any = False
     install_subprocess_guard()  # covers chrome.exe / mklink spawned outside Playwright
+
+    playwright_present = False
+    newly_patched = False
+    already_patched = False
 
     for module_name, label in (("playwright.sync_api", "sync"), ("playwright.async_api", "async")):
         try:
@@ -337,45 +466,72 @@ def install(verbose: bool = False) -> bool:
         except Exception:
             continue
 
-        original_persistent = getattr(browser_type, "launch_persistent_context", None)
-        if original_persistent is not None and not getattr(
-            original_persistent, "_live_guard", False
+        playwright_present = True
+
+        # (attribute name, wrapper factory)
+        for attr, factory in (
+            ("launch_persistent_context", "persistent"),
+            ("launch", "launch"),
+            ("connect_over_cdp", "cdp"),
         ):
+            original = getattr(browser_type, attr, None)
+            if original is None:
+                continue
+            if getattr(original, "_live_guard", False):
+                already_patched = True
+                continue
 
-            def make_persistent(orig):
-                def guarded(self, user_data_dir, *a, **kw):
-                    assert_safe(user_data_dir, who="launch_persistent_context")
-                    return orig(self, user_data_dir, *a, **kw)
+            if factory == "persistent":
 
-                guarded._live_guard = True
-                guarded.__doc__ = orig.__doc__
-                guarded.__name__ = getattr(orig, "__name__", "launch_persistent_context")
-                return guarded
+                def make(orig):
+                    def guarded(self, user_data_dir, *a, **kw):
+                        assert_safe(user_data_dir, who="launch_persistent_context")
+                        return orig(self, user_data_dir, *a, **kw)
 
-            browser_type.launch_persistent_context = make_persistent(original_persistent)
-            patched_any = True
+                    return guarded
 
-        original_launch = getattr(browser_type, "launch", None)
-        if original_launch is not None and not getattr(original_launch, "_live_guard", False):
+            elif factory == "launch":
 
-            def make_launch(orig):
-                def guarded(self, *a, **kw):
-                    _scan_launch_args(kw.get("args"), who="launch(args=...)")
-                    return orig(self, *a, **kw)
+                def make(orig):
+                    def guarded(self, *a, **kw):
+                        _scan_launch_args(kw.get("args"), who="launch(args=...)")
+                        return orig(self, *a, **kw)
 
-                guarded._live_guard = True
-                guarded.__doc__ = orig.__doc__
-                guarded.__name__ = getattr(orig, "__name__", "launch")
-                return guarded
+                    return guarded
 
-            browser_type.launch = make_launch(original_launch)
-            patched_any = True
+            else:  # cdp -- the attach vector. Safe for the async API: the check runs
+                # before `orig`, and whatever it returns (coroutine included) passes through.
 
-        if verbose and patched_any:
-            print(f"[chrome_live_guard] armed on playwright {label} API")
+                def make(orig):
+                    def guarded(self, endpoint_url=None, *a, **kw):
+                        target = (
+                            endpoint_url if endpoint_url is not None else kw.get("endpoint_url")
+                        )
+                        if target is not None:
+                            assert_cdp_safe(target, who="connect_over_cdp")
+                        if endpoint_url is None:
+                            return orig(self, *a, **kw)
+                        return orig(self, endpoint_url, *a, **kw)
 
-    _INSTALLED = patched_any
-    return patched_any
+                    return guarded
+
+            wrapper = make(original)
+            wrapper._live_guard = True
+            wrapper.__doc__ = getattr(original, "__doc__", None)
+            wrapper.__name__ = getattr(original, "__name__", attr)
+            setattr(browser_type, attr, wrapper)
+            newly_patched = True
+
+        if verbose:
+            print(f"[chrome_live_guard] playwright {label} API: armed")
+
+    active = playwright_present and (newly_patched or already_patched)
+    _INSTALLED = active
+
+    if verbose and not playwright_present:
+        print("[chrome_live_guard] playwright not importable -- nothing to patch")
+
+    return active
 
 
 def install_import_hook() -> None:
@@ -433,7 +589,13 @@ if __name__ == "__main__":
 
     print(f"live root        : {LIVE_ROOT}")
     print(f"resolves to      : {resolve(LIVE_ROOT)}")
-    print(f"playwright guard : {'ARMED' if install(verbose=True) else 'playwright not installed'}")
+    _armed = install(verbose=True)
+    print(f"interpreter      : {sys.executable}")
+    print(f"auto-armed at startup : {getattr(sys, '_chrome_live_guard_hooked', False)}")
+    print(
+        "playwright guard : "
+        + ("ARMED" if _armed else "playwright not importable here -- nothing to patch")
+    )
     print(f"safe profile dir : {safe_profile_dir('selftest')}")
     print()
 
@@ -456,6 +618,28 @@ if __name__ == "__main__":
             note = "  <-- WRONG, expected " + ("REFUSE" if expected else "allow")
             failures += 1
         print(f"{mark}  {path}\n        {reason}{note}")
+
+    print()
+    live_ports = live_devtools_ports()
+    print(f"live Chrome debug ports : {sorted(live_ports) or 'none (healthy)'}")
+
+    # A port the live tree is NOT advertising must be allowed -- that is automation's own
+    # browser, and refusing it would push the next agent toward the operator's profile.
+    unused = next(p for p in (9222, 9333, 9444, 9555) if p not in live_ports)
+    try:
+        assert_cdp_safe(f"http://127.0.0.1:{unused}", who="selftest")
+        print(f"  allow  cdp http://127.0.0.1:{unused}  (not a live Chrome port)")
+    except LiveProfileRefused:
+        print(f"  <-- WRONG: refused a non-live port {unused}")
+        failures += 1
+
+    for port in sorted(live_ports):
+        try:
+            assert_cdp_safe(f"http://127.0.0.1:{port}", who="selftest")
+            print(f"  <-- WRONG: allowed attach to live Chrome port {port}")
+            failures += 1
+        except LiveProfileRefused:
+            print(f"REFUSE  cdp http://127.0.0.1:{port}  (operator's live Chrome)")
 
     print()
     print("SELF-TEST FAILURES:", failures)

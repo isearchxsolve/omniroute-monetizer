@@ -54,10 +54,71 @@ assert_safe(udd, who="my_task")         # belt and braces
 ctx = pw.chromium.launch_persistent_context(user_data_dir=str(udd), channel="chrome")
 ```
 
+The profile directory for provider work already exists: `state/automation_profiles/providers`.
+**Reuse it. Do not create a fresh profile per script** — every new profile is another login the
+operator has to do. The launcher that opens it is `SignInToProviders.cmd`, which goes through
+`scripts/automation/provider_login_helper.py` **so the guard applies**. Launch it that way, never
+by calling `chrome.exe` from a `.cmd` — a `.cmd` bypasses the guard entirely (see the coverage note
+below).
+
+Do **not** assume that profile is signed in. As of 2026-08-22 nobody has signed it in, and for the
+current provider list nobody needs to — see the next section.
+
 **If that profile hits a login wall: report the login wall.** That is a correct, complete,
 professional result. It is not a failure to route around. Say which provider, which URL, and what
 the page asked for, then stop. The operator would far rather sign in once than be silently logged
 out forever.
+
+### Before you reach for a browser at all
+
+**First check what is already done.** On 2026-08-22 an agent (me) was one step away from handing the
+operator a launcher telling them to sign in to seven sites and collect API keys — when four of those
+keys were already collected and provider-verified. Do not repeat that. Run these two, in this order:
+
+```bash
+python scripts/automation/paste_provider_key.py --status   # which keys exist and verify
+python scripts/automation/paste_provider_key.py --list     # which sites still need a human
+```
+
+**There are two paste tools with near-anagram names. Read this before editing either.**
+
+| File | Launcher | Lines | Wires into OmniRoute | `--list` means |
+|---|---|---|---|---|
+| `scripts/automation/paste_provider_key.py` | `WireKeyFromClipboard.cmd` | 686 | **yes** | "print the sites to visit" |
+| `scripts/automation/provider_key_paste.py` | `PasteAKey.cmd` | 395 | no | "show saved keys, redacted" |
+
+`paste_provider_key.py` is the superset — clipboard mode, `--status`, `--reverify`, `--only`, and the
+only one that sets the key on the OmniRoute connection. **Prefer it.** Both write to the same
+`state/generated_keys.json`, so they do not corrupt each other, but the same flag means opposite
+things in each, and patching one leaves the other live. That pattern already caused one false "fixed"
+report in this repo. Consolidating them is unfinished work.
+
+Measured on 2026-08-22: `kie`, `segmind`, `novita`, `aistudio` all **VERIFIED** (the provider's own
+endpoint answered HTTP 200); `kie`, `segmind`, `novita` are **wired and active** in OmniRoute.
+Only `leonardo` has no key, and `--list` marks it SKIP — its API is behind a paid plan the operator
+hit on 2026-08-22, for 1 model. `runwayml`, `haiper` and `deepinfra` are also on the documented skip
+list. So the "six blocking providers" framing is out of date; do not resurrect it.
+
+**`state/all_296_providers_execution_ledger.json` is a stale snapshot, not current state.** The
+`evidence` fields are stamped `upstream-scan 2026-08-18` — four days before the keys were collected.
+It still reports `EXTERNAL_ACCOUNT_REQUIRED` and `in_db_connections=0` for providers that are now
+live in OmniRoute. Believe OmniRoute and `--status` over the ledger, and say which one you checked.
+
+The auth class lives inside `details.blocker` as a substring (`authClass=apikey`), **not** as a
+top-level `authClass` field — querying the top level returns `None` and will mislead you.
+
+These providers need an **API key in the vault**, not a browser session. A browser is only the means
+for a *human* to reach the dashboard once and copy the key. Novita is a separate case: its
+credential is verified and it returns `403 NOT_ENOUGH_BALANCE` — a **credit** problem, not a login
+problem, and no amount of automation fixes it.
+
+Reaching for browser automation when an API key would do is how this project ended up touching
+the operator's Chrome in the first place.
+
+**Reading a key back out of OmniRoute proves nothing about *which* key is set.** The management API
+returns a mask, shape `XX-XX-X.****XXXX`, a uniform 16 characters for every connection. `keyPresent`
+and `isActive` are all you can honestly conclude from it. To prove the key works, call the
+provider's endpoint (`--reverify`) or run an end-to-end job.
 
 ---
 
@@ -97,28 +158,72 @@ session.
 ## The guard, and why you must not disable it
 
 `scripts/automation/chrome_live_guard.py` refuses any path that **is**, is **inside**, or
-**contains** `%LOCALAPPDATA%\Google\Chrome\User Data`, resolving junctions first.
+**contains** `%LOCALAPPDATA%\Google\Chrome\User Data`, resolving junctions first. It also refuses
+**attaching** to a browser running on that tree.
 
-It is armed automatically for every Python process on this machine by two files in the hermes
-venv's `site-packages`:
+It is armed automatically by two files in each relevant interpreter's `site-packages`:
 
 - `chrome_live_guard.pth`
 - `chrome_live_guard_boot.py`
 
-It patches Playwright's `launch_persistent_context` / `launch`, and
-`subprocess.Popen/run/call/check_call/check_output`. Refused shapes, all individually tested:
+Installed in **both** interpreters on this machine, because getting this wrong is silent:
+
+| Interpreter | Has Playwright | Armed |
+|---|---|---|
+| `C:\Users\Admin\AppData\Local\hermes\hermes-agent\venv` (the `python` on PATH) | yes | yes |
+| `D:\omniroute-monetizer\.venv` (the project venv) | yes | yes — **added 2026-08-22** |
+
+The project venv was **unarmed until 2026-08-22** while the hermes venv was armed. Since the
+project venv is the one a script in this repo naturally runs under, the global net had a hole in
+exactly the place it mattered. If you add a third venv, copy those two files into it, then prove
+it with the checks below. Do not assume.
+
+It patches Playwright's `launch_persistent_context`, `launch`, `connect_over_cdp`, and
+`subprocess.Popen/run/call/check_call/check_output`. Refused shapes, each individually tested from
+a script that never imports the guard:
 
 - `launch_persistent_context(user_data_dir=<live>)`
-- the same through a junction alias
-- `mklink /J <alias> <live>`
-- `chrome.exe --user-data-dir=<live>`
+- `launch_persistent_context(<live>\Profile 17)`
+- `launch(args=["--user-data-dir=<live>"])`
+- `chrome.exe --user-data-dir=<live> --remote-debugging-port=9222`
+- `cmd /c mklink /J <alias> <live>`
 - `chrome.exe <live>` as a bare argument
+- `connect_over_cdp("http://127.0.0.1:<port>")` where `<port>` is advertised by
+  `DevToolsActivePort` inside the live tree — matched as `http://`, `ws://`, `localhost`, and bare
+  `host:port`
 
 **If you hit `LiveProfileRefused`, the guard is right and your code is wrong.** Fix the profile
 path. Do not delete those two files, do not add a bypass flag, do not catch and continue.
 
+`install()` returns True when the guard is active on Playwright — **including when another copy of
+the module already patched it**. Before 2026-08-22 it returned False in that case and printed
+"playwright not installed", which was flatly untrue and could have led an agent to "repair" a
+working guard. If you see that message now, Playwright genuinely is not importable.
+
 Not covered, so stay disciplined: `.cmd` files, Node scripts, and any Python interpreter without
 the `.pth`.
+
+### The attach vector, since it will occur to you
+
+`connect_over_cdp` against a Chrome the operator started themselves is a *different door into the
+same room*, and this repo used to contain two files built for it. Both are now retired with a
+loud refusal and a full explanation: `get_chrome_ws.py`,
+`process_providers_with_existing_chrome.py`. The ledger logic in the second is worth porting —
+port it to automation's own profile, not to theirs.
+
+Be accurate about the risk, because overstating it gets it dismissed. Attaching does **not**
+reproduce the 2026-08-22 revocation; that needed a *foreign* browser presenting the session, and
+here the browser is the operator's own Chrome. It is refused for three other reasons:
+
+1. **Chrome already blocks it.** From Chrome 136, `--remote-debugging-port` and
+   `--remote-debugging-pipe` are ignored when they target the default user-data directory
+   ([developer.chrome.com/blog/remote-debugging-port](https://developer.chrome.com/blog/remote-debugging-port)).
+   This machine runs Chrome 151, so it cannot work. The tempting workaround — a junction whose
+   path string looks non-default — is precisely the original bug.
+2. An open DevTools port has **no authentication**. Any local process could read every cookie in
+   every profile. That is why Google clamped down.
+3. Automated activity on a genuinely signed-in account risks a flag on the **account**, not just
+   the session. A session you can re-create; an account you may not.
 
 ---
 

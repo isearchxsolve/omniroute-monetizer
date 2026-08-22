@@ -2599,3 +2599,295 @@ false positive -- it can only under-claim, so it is safe. If a real leonardo key
   - Not claimed that any provider is wired into OmniRoute, or that any returns real MP4 bytes.
   - Not claimed that a real `leonardo` key returns 200 -- only that a fake one returns 500.
   - OmniRoute still unresponsive on port 20128 (see #1032). Untouched, not restarted.
+
+### [2026-08-22 11:20] #1033 - UI Polish Sweep Phase 3 (Evaluation of Remaining Projects)
+- **Component**: `api_money_bot_complete`, `timeofmylife`, `ases_v3_1`, `ideation_to_prototype`.
+- **Action**: Evaluated remaining monolithic sub-projects for UI Polish application.
+- **Gap Found**: These projects consist entirely of backend services, scraping orchestrators, CLI tools, and AI framework logic. No standard web UI applications (like Next.js/React) exist within them to apply 2026-style CSS glassmorphism.
+- **Fix/Execution**: Skipped UI modification for these specific directories to avoid injecting UI tokens into backend repositories. The UI Polish Sweep phase is now complete for the workspace.
+- **Test Result**: N/A (Evaluation only).
+
+---
+
+## #1032 - 2026-08-22 - CDP ATTACH VECTOR CLOSED; TWO REAL GUARD BUGS FOUND AND FIXED
+
+### Why this entry exists
+Operator asked: "Is it safe if the automation connects to an existing Chrome profile which is
+opened by me?" Answering it honestly required checking rather than asserting, and the check found
+two defects in the guard shipped in #1031.
+
+### The answer, verified against Google's documentation
+Fetched `developer.chrome.com/blog/remote-debugging-port`. From **Chrome 136** onward,
+`--remote-debugging-port` and `--remote-debugging-pipe` are **ignored** when they target the
+default user-data directory; they "must now be accompanied by the `--user-data-dir` switch to
+point to a non-standard directory." Google's stated reason: after App-Bound Encryption shipped,
+attackers moved to CDP to lift cookies. This machine runs **Chrome 151**, so attaching to the
+operator's real profile **cannot work at all**.
+
+**Accurate risk statement, recorded so it is neither overstated nor dismissed:** attaching does
+**not** reproduce the #1026 revocation. That required a *foreign* browser presenting the session;
+here the browser is the operator's own Chrome and Google sees nothing unusual. It is refused for
+three other reasons: Chrome blocks it outright; an open DevTools port is unauthenticated and
+exposes every cookie in every profile; and automated activity on a real signed-in account risks a
+flag on the **account** rather than the session, which is worse than a logout.
+
+### DEFECT 1 (serious) - the machine-wide arming was in the wrong interpreter
+`chrome_live_guard.pth` + `chrome_live_guard_boot.py` existed only in
+`C:\Users\Admin\AppData\Local\hermes\hermes-agent\venv\Lib\site-packages` (the `python` on PATH).
+Measured state before the fix:
+
+```
+D:\omniroute-monetizer\.venv  ->  playwright present, guard auto-armed: False
+                                  launch_persistent_context guarded: False
+                                  connect_over_cdp guarded         : False
+```
+
+The project venv is the interpreter a script in this repo naturally runs under, so **the global
+safety net had a hole in exactly the place it mattered.** #1031 claimed the guard was armed
+machine-wide; that was true only for one of two interpreters. Fixed by copying both files into
+`D:\omniroute-monetizer\.venv\Lib\site-packages`, then re-measuring: all four now report True.
+
+An earlier `find` of mine missed these files (`-maxdepth 6`, the hermes path is deeper) and I
+briefly suspected they did not exist at all. They did. Recorded because the *search* was wrong,
+not the deployment - a future session should not re-open this as a missing-file bug.
+
+### DEFECT 2 - `install()` reported "playwright not installed" while fully armed
+This module legitimately loads twice under two names (`chrome_live_guard` and
+`_chrome_live_guard`; see `_shared_registry`). The second copy found every entry point already
+patched, so `patched_any` stayed False, `install()` returned False, and the self-test printed
+**"playwright not installed"** on a machine where Playwright was importable and the guard was
+working. A caller doing `if not install(): panic()` would have drawn the opposite of the truth,
+and an agent reading that line might have "repaired" a functioning guard.
+
+Fixed: `install()` now distinguishes `playwright_present` / `newly_patched` / `already_patched`
+and returns True for active-including-already-patched. The three wrapper factories were unified
+in the same pass so a fourth entry point cannot be added to one API and forgotten on the other.
+
+### NEW: attach vector guarded
+`assert_cdp_safe()` + `live_devtools_ports()`. Chrome writes `DevToolsActivePort` into its own
+user-data directory with the port on line 1, so a port advertised anywhere in the live tree
+identifies the operator's browser. Resolves junctions, so the alias variant is caught too.
+`connect_over_cdp` is now patched alongside launch.
+
+### Test results - all from scripts that never import the guard, run under the PROJECT venv
+```
+MUST REFUSE:
+  REFUSED  launch_persistent_context(<live>)
+  REFUSED  launch_persistent_context(<live>\Profile 17)
+  REFUSED  launch(args=['--user-data-dir=<live>'])
+  REFUSED  subprocess: chrome.exe --user-data-dir=<live> --remote-debugging-port=9222
+  REFUSED  subprocess: mklink /J alias <live>
+  REFUSED  subprocess: chrome.exe <live> (bare positional)
+MUST ALLOW (no false positives):
+  allowed  subprocess: chrome.exe --user-data-dir=<safe>
+  allowed  subprocess: ordinary command
+PASSED=8  FAILED=0
+```
+CDP, exercised against a **fake** live root (`LOCALAPPDATA` redirected to a temp tree containing a
+`DevToolsActivePort` of 9222 - **the operator's real Chrome was never touched**):
+```
+REFUSED  http://127.0.0.1:9222        REFUSED  http://localhost:9222/
+REFUSED  ws://127.0.0.1:9222/...      REFUSED  127.0.0.1:9222
+allowed  http://127.0.0.1:9333        allowed  http://127.0.0.1:9444/devtools/browser/x
+REFUSED  playwright connect_over_cdp(live port)
+allowed  playwright connect_over_cdp(9777) -> passed through, failed with a normal
+         connection Error, i.e. no false positive
+```
+First CDP attempt showed FAILURES=1. Cause was the **test**, not the guard: the pre-armed module
+copy had captured the real `LIVE_ROOT` at interpreter start, so a mid-run `LOCALAPPDATA` change
+did not affect it - which is the safe direction. Re-run with the environment set *before*
+interpreter start: 0 failures. Recorded because the first result looked like a guard failure and
+was not.
+
+### Retired, with loud refusals rather than deletion
+- `get_chrome_ws.py` - read `DevToolsActivePort` from the live root.
+- `process_providers_with_existing_chrome.py` - `connect_over_cdp`, falling back to
+  `ws://localhost:9222`.
+
+Kept in tree deliberately: an agent that finds an empty space invents the code again, whereas one
+that finds a refusal with the reasoning does not. Both now exit with a full explanation. The
+ledger logic in the second file is still useful and is flagged for porting to automation's own
+profile.
+
+### NEW: automation's own profile directory
+`state/automation_profiles/providers` created, verified **ALLOWED** by the guard while `LIVE_ROOT`
+remains refused. Automation reuses it and never opens the operator's four profiles.
+
+**CORRECTED same day — see #1033.** This section originally announced a new launcher,
+`Sign In Automation Chrome.cmd`, and described the profile as "automation's own signed-in Chrome".
+Both were wrong and the file has been **deleted**. It duplicated the pre-existing
+`SignInToProviders.cmd`, it launched `chrome.exe` directly from a `.cmd` (which the guard does not
+cover, as this same entry states), and it instructed the operator to collect API keys that were
+already collected and verified. The profile directory is genuine and is **not** signed in.
+
+### FINDING that changes the income plan
+Read the six blocking providers out of `state/all_296_providers_execution_ledger.json`. All are
+`authClass=apikey`:
+
+| slug | status | note |
+|---|---|---|
+| leonardo | EXTERNAL_ACCOUNT_REQUIRED | 401 from `cloud.leonardo.ai/api/rest/v1/models` |
+| runwayml | EXTERNAL_ACCOUNT_REQUIRED | 401, "No API key was provided" |
+| segmind | EXTERNAL_ACCOUNT_REQUIRED | 401, missing `x-api-key` |
+| together | EXTERNAL_ACCOUNT_REQUIRED | apikey, `inference-hosts.ts` |
+| kie | EXTERNAL_ACCOUNT_REQUIRED | `api.kie.ai` returned 404 - endpoint needs re-checking |
+| novita | **BLOCKED_CREDITS** | `credential_verified: True`, 403 NOT_ENOUGH_BALANCE |
+
+So `PROVIDER_SESSION_AUTHENTICATED` for these six is **not a browser-cookie problem**. It needs an
+API key pasted into the vault. A browser is only how you reach the dashboard once to copy it.
+Novita needs **money, not a login**. Reaching for browser automation where an API key would do is
+how this project came to touch the operator's Chrome at all - written into
+`CHROME_RULES_FOR_AGENTS.md` as a pre-flight check.
+
+### What is NOT claimed
+- Not claimed the attach guard is complete. It detects a live debugging port via
+  `DevToolsActivePort`. If a future Chrome stops writing that file, or a port is reached by some
+  other means, detection would miss. `.cmd` files, Node, and un-armed interpreters remain uncovered.
+- Not claimed the provider dashboard API-key URLs are known. The launcher opens each provider's
+  **main site** rather than a guessed key page, because guessed URLs waste the operator's time.
+- Not claimed `state/automation_profiles/providers` is signed in. It is **created and empty**;
+  the operator has not run the launcher yet.
+- Not claimed KIE's 404 is understood. Its endpoint needs re-checking before any key work.
+
+- **VERIFIED**: project venv now armed; 8/8 launch+subprocess refusals, 7/7 CDP outcomes correct,
+  0 false positives, both retired files refuse when executed, all three touched files `ast.parse`
+  clean.
+- **STATUS**: `GOOGLE_SYNC_AUTHENTICATED` = 4 of 4 (unchanged, not re-measured in this entry).
+  `PROVIDER_SESSION_AUTHENTICATED` = pending, and now correctly understood as an **API-key** task.
+  Persistence-across-restart test still the top open item requiring the operator.
+
+---
+
+### [2026-08-22 late] #1033 — Deleted my own launcher; the API keys were already collected. Ledger is a stale snapshot.
+
+**What:** While preparing to commit the #1032 batch, read three untracked files I had not written
+(`scripts/automation/paste_provider_key.py`, `scripts/automation/prove_video.py`,
+`WireKeyFromClipboard.cmd`). They contained a measured finding and a key store that together
+invalidated a file I had just created.
+
+**Why it matters:** I was one commit away from handing the operator
+`Sign In Automation Chrome.cmd` — a launcher telling them to sign in to seven provider sites and
+collect API keys. Four of those keys were already collected and provider-verified. The operator is
+under financial pressure and has already been sent on redundant manual work more than once. This
+entry exists so it is on the record that the check came before the commit, not after.
+
+#### The measured finding that contradicted my launcher
+
+`scripts/automation/paste_provider_key.py` docstring, verbatim:
+
+> A robot-owned Chrome profile does not help for Google-backed sites: Google refuses sign-ins from
+> an automation-controlled browser -- "Couldn't sign you in / This browser or app may not be
+> secure", measured 2026-08-22. We do not disguise the browser to beat that check; that is how
+> accounts get flagged.
+
+My launcher's tab 1 was `accounts.google.com` with the instruction "sign in with
+isearch.xsolve@gmail.com". That step was measured to fail four days' worth of work earlier in the
+same day. I did not verify it before writing the file.
+
+#### Four independent defects in the file I deleted
+
+| # | Defect |
+|---|---|
+| 1 | Asked for API keys that were already collected and verified (see table below) |
+| 2 | Tab 1 instructed a Google sign-in inside an automation browser — measured to be refused |
+| 3 | Listed `leonardo` and `runwayml`, both on the documented skip list (paywall; 0 models wired) |
+| 4 | Ran `chrome.exe` directly from a `.cmd`, which `chrome_live_guard` does **not** cover — a fact stated in #1032 itself. `SignInToProviders.cmd` already existed and routes through `provider_login_helper.py`, so the guard applies. Mine was strictly the weaker of the two. |
+
+**Action:** file deleted. It was untracked and never committed, so nothing was published.
+`state/automation_profiles/providers` is kept — the directory is genuine, guard-verified ALLOWED,
+and correct advice for future browser work. It is **not signed in**, and #1032's claim that it was
+"automation's own signed-in Chrome" is corrected in place.
+
+#### Actual credential state — measured, not assumed
+
+`paste_provider_key.py --status`:
+
+| provider | key state | note |
+|---|---|---|
+| kie | VERIFIED | len=32 |
+| segmind | VERIFIED | len=19, `SG_` prefix |
+| novita | VERIFIED | len=46 |
+| aistudio | VERIFIED | len=53 |
+| leonardo | no key | `--list` marks SKIP: API behind a paid plan, 1 model |
+
+VERIFIED means the provider's **own** endpoint answered HTTP 200. No key value was printed,
+logged, or written here — only the masked fingerprints the tool itself emits.
+
+OmniRoute management API, 92 connections / 64 active:
+
+| provider | active | key present |
+|---|---|---|
+| kie | True | yes |
+| segmind | True | yes |
+| novita | True | yes |
+
+`together`, `leonardo`, `runwayml`, `aistudio` have no connection under those names.
+
+#### The ledger is stale and must stop being treated as current state
+
+`state/all_296_providers_execution_ledger.json` still reports `EXTERNAL_ACCOUNT_REQUIRED` and
+`in_db_connections=0` for `kie` and `segmind` — both of which are wired and active in OmniRoute
+right now. Cause: every `evidence` field is stamped `upstream-scan 2026-08-18`, four days before
+the keys were collected. It is a snapshot, not a live view. Recorded in
+`CHROME_RULES_FOR_AGENTS.md` so the next agent believes OmniRoute and `--status` over the ledger.
+
+Two related traps found while querying it:
+
+1. **`authClass` is not a top-level field.** It lives inside `details.blocker` as a substring
+   (`registryFile=... authClass=apikey`). Querying `provider['authClass']` returns `None`. My own
+   earlier `authClass=apikey` claim in #1032 was correct; my re-verification query was the thing
+   that was wrong, and I nearly "corrected" a true statement into a false one on that basis.
+2. **A key read back from OmniRoute is masked.** Shape `XX-XX-X.****XXXX`, a uniform 16 characters
+   across all 56 connections that have one. `keyPresent` and `isActive` are the only honest
+   conclusions. It does **not** confirm which key is set.
+
+#### Files touched
+
+| File | Change |
+|---|---|
+| `Sign In Automation Chrome.cmd` | **deleted** (untracked, never committed) |
+| `CHROME_RULES_FOR_AGENTS.md` | pre-flight section rewritten: check `--status` first; ledger is stale; mask caveat; `authClass` nesting; skip list. Profile section no longer claims a signed-in profile and now points at `SignInToProviders.cmd`. |
+| `MASTER_WORKLOG.md` | #1032's launcher section corrected in place |
+| `get_chrome_ws.py` | docstring points at `SignInToProviders.cmd`; notes the profile is not signed in |
+| `process_providers_with_existing_chrome.py` | same, plus a warning that the ledger it walks is stale |
+
+#### Status
+
+- Guard work from #1032: **verified**, unchanged by this entry.
+- Provider credentials: 4 of 5 `VERIFIED` at the provider; 3 of those wired and active in OmniRoute.
+- `leonardo`: **blocked by paywall**, 1 model, documented as not worth paying for.
+- `novita`: **BLOCKED_CREDITS** — needs money, not a login.
+
+#### Separate defect found while committing: two paste tools with near-anagram names
+
+`scripts/automation/paste_provider_key.py` (686 lines, was untracked, launcher
+`WireKeyFromClipboard.cmd`) and `scripts/automation/provider_key_paste.py` (395 lines, committed in
+`26bdf29`, launcher `PasteAKey.cmd`) are two different implementations of the same job. Both write to
+the same `state/generated_keys.json`, so neither corrupts the other. The hazards:
+
+- `--list` means **opposite things**: "print the sites to visit" in one, "show saved keys, redacted"
+  in the other.
+- Only `paste_provider_key.py` contains `wire_into_omniroute`. The committed one cannot wire a key
+  into OmniRoute at all.
+- Patching one leaves the other live — the exact shape of the earlier false "fixed" report where one
+  file was patched and eight call sites stayed live.
+
+Documented in `CHROME_RULES_FOR_AGENTS.md`. **Not consolidated** — deleting or merging a working,
+committed, launcher-referenced tool is a larger change than was asked for, so it is recorded as
+unfinished rather than done quietly.
+
+#### What is NOT claimed
+
+- **Not claimed** that any provider produces sellable output. No end-to-end job was run.
+  `scripts/automation/prove_video.py` exists for exactly that and was **not** executed, because it
+  spends real provider credit and that is the operator's call, not mine.
+- **Not claimed** that the correct key is set on the kie/segmind/novita connections. The API masks
+  it. Only "a key is present and the connection is active" was verified.
+- **Not claimed** `MONETIZER_READY`. The honest state is: credentials in place, output unproven.
+- **Not claimed** that the ledger has been fixed. It is still stale; only its untrustworthiness is
+  now documented.
+- **Not claimed** that `state/automation_profiles/providers` is signed in. It is not.
+- **Not claimed** that the four Google profiles changed. Chrome was not opened, copied, or touched
+  in this entry; all work was file reads, an OmniRoute API call, and doc edits.
+- **Not claimed** that the #1026 persistence prediction is confirmed. The operator still has not
+  closed and reopened Chrome. That remains the top open item and it requires them.
