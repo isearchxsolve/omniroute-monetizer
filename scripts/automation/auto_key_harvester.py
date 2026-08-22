@@ -402,6 +402,29 @@ def wall_page(page) -> Optional[str]:
     return None
 
 
+# Icon-only account doors. MEASURED on featherless.ai 2026-08-22: the landing page's ONLY
+# login control is a circular user avatar with no text anywhere -- label clicks and text-ranked
+# DOM links all miss it. These press account-shaped icon controls; the follow-up poll decides
+# whether the press actually opened a door.
+ICON_LOGIN_SEL = (
+    "[aria-label*='sign in' i]", "[aria-label*='log in' i]", "[aria-label*='login' i]",
+    "[aria-label*='account' i]", "[aria-label*='user' i]", "[aria-label*='profile' i]",
+    "a:has(i[class*='user' i])", "button:has(i[class*='user' i])",
+)
+
+
+def icon_login_click(page) -> bool:
+    for sel in ICON_LOGIN_SEL:
+        try:
+            loc = page.locator(sel).first
+            if loc.count() and loc.is_visible():
+                loc.click(timeout=5000)
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def wait_for_control(page, labels: tuple[str, ...], roles: tuple[str, ...] = ("button", "link"),
                      ms: int = 15000) -> Optional[str]:
     """Poll until one of these labels exists as a visible control, then click it.
@@ -735,6 +758,24 @@ def await_callback(page, ms: int = 15000) -> None:
     settle(page, 3000)
 
 
+def await_login_bounce(page, ms: int = 10000) -> None:
+    """Post-SSO, a provider's /auth/login often bounces to the real destination a beat later
+    (next-auth client-side redirect). MEASURED on inception 2026-08-22: the Google session was
+    VALID -- /dashboard/api-keys loaded signed-in on a direct visit -- but the run judged the
+    half-second-old /auth/login URL and reported 'still behind a login wall'. Give the bounce
+    time before judging; stop early if a real password form shows up (that IS a wall)."""
+    end = time.monotonic() + ms
+    while time.monotonic() < end:
+        try:
+            if page.locator("input[type=password]").count():
+                return
+        except Exception:
+            return
+        if not login_wall(page):
+            return
+        page.wait_for_timeout(1000)
+
+
 def login_wall(page) -> bool:
     try:
         if page.locator("input[type=password]").count():
@@ -1012,7 +1053,7 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
             return try_google(p)
         if looks_signed_in(p):
             return "ALREADY_SIGNED_IN"
-        if click_label(p, ENTRY_LABELS, timeout=4000):
+        if click_label(p, ENTRY_LABELS, timeout=4000) or icon_login_click(p):
             settle(p, 5000)
             dismiss_overlays(p)
             # Do not discard the poll: the password field paints before the Google button on
@@ -1113,6 +1154,18 @@ def reach_key_page(page, target: dict):
         return page   # already standing on it -- MEASURED on inception 2026-08-22: an instant
                       # consent redirect dropped the run straight onto /dashboard/api-keys and
                       # the old code still reported the provider a failure
+
+    # A post-SSO /auth/login with a valid session is a bounce, not a wall (inception
+    # measurement). Wait it out before judging -- but only when no password form is up.
+    if login_wall(page) and not has_google_control(page):
+        try:
+            no_pw = not page.locator("input[type=password]").count()
+        except Exception:
+            no_pw = False
+        if no_pw:
+            await_login_bounce(page)
+    if looks_like_key_page(page):
+        return page
 
     for link in dom_nav_links(page, "keys"):
         follow = nav_click(page, link["href"])
