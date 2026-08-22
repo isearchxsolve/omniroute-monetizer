@@ -3708,3 +3708,114 @@ form-level evidence (card-ish inputs) or auth-flow context before refusing.
 2. Visually verify `inception-wall.png` / `nous-research-sso.png` / `openadapter-sso.png` before
    trusting `PAYWALL_REFUSED` / `NO_SSO_CONTROL_FOUND` as true negatives.
 3. Tighten `CARD_MARKERS` to require a card form/input (across frames), not marketing text.
+
+---
+
+### [2026-08-22 23:0x] #1045 — auto_key_harvester FIXED AND PROVEN LIVE: key captured end-to-end on inception (attach mode), crash-recovery kill-tested, 13 measured defects fixed, safe-attach mode shipped
+
+Operator asks during this session: *"fix the automation script"* → *"you have to run it to diagnose and fix it taking screenshots all the way"* → *"dom study should be included to guide navigation"* → *"trying multiple urls to find correct navigation path wrong approach"* → *"navigation should e click ased no url reload"* → *"why hitting this url"* → *"captcha wall"* → *"i smell all providers will be captcha walled because of bot profile... need to find a safe way to attach to existing chrome profile"* → *"create api key will always ask for a name"* → *"is it stuck"*.
+
+#### Evidence chain (screenshots analyzed: inception-wall, nous-research-sso, openadapter-sso,
+#### featherless-ai-nokey, blackbox-sso, inception-sso, featherless-ai-sso, plus two live CDP probes)
+
+1. **THE 21:17 CASCADE (from #1044):** dead context burned ~45 providers as instant crashes.
+   FIXED: `context_dead()` + capped relaunch (MAX 3), one-attempt rule kept. **PROVEN LIVE**:
+   killed the attached Chrome root process (PID 1328) mid-run in run 8; the log shows
+   `[!] browser context died -- relaunching the robot profile (relaunch 1/3); moving to the
+   next provider`, and in attach mode `restart_attached()` restarted Chrome on port 9333 and
+   re-attached (no relaunch failure; sweep ended cleanly).
+2. **CAPTCHA-smell was Playwright's launch flags, not the profile.** Operator's theory
+   CONFIRMED by A/B evidence: Playwright-launched Chrome was Turnstile-walled on
+   dashboard.openadapter.in (operator screenshot); the operator-started Chrome was NOT
+   (Google SSO consented twice, `sso: RETURNED`, no challenge). Probe measured
+   `navigator.webdriver = False`, normal Chrome/151 UA, in the attached browser.
+3. **SAFE ATTACH MODE SHIPPED** (the operator's "safe way to attach"):
+   - `provider_login_helper.run_harvest_browser()` + `--harvest-browser`: plain chrome.exe on
+     the ROBOT profile with `--remote-debugging-port=9333`. Started by the human → no
+     automation switches. Risks documented in the code (open port reads ROBOT cookies only,
+     never the operator's four identities; Chrome 136+ default-dir restriction n/a; robot
+     account exists to be used).
+   - `HarvestChrome.cmd` (repo root): the one double-click.
+   - `auto_key_harvester --attach`: `connect_over_cdp` on 9333; never closes the operator's
+     window; `restart_attached()` on death. **The guard permits it**: port is not advertised
+     inside the live tree (measured -- attach succeeded with the guard armed). Live-tree
+     attach remains forbidden and guard-enforced.
+4. **Navigation is CLICK-BASED, evidence-only** (operator directives): `dom_nav_links()`
+   (DOM study: visible anchors, text-scored) → `nav_click()` presses the page's own link;
+   `step_back()` between candidates; subdomain fabrication and stock-path probing DELETED
+   (IP-blacklist risk, per operator); documented apiKeyUrl + note URLs (`note_urls`, minus
+   API endpoints via `is_api_endpoint`) are the only direct opens, logged as
+   `documented entry point`.
+5. **tab-following:** `nav_click` now returns the page the click landed on — SAME page or
+   NEW TAB. MEASURED: docs.inceptionlabs.ai console links are `target=_blank`
+   (probe-confirmed); the old code kept probing the docs tab while the console sat in
+   another tab. `reach_key_page()` returns that page; `run_one` adopts it (`adopt()`).
+6. **SSO timing fixes, all measured:** sso-callback URLs are transit not walls
+   (`CALLBACK_URL_RE` + `await_callback`, openadapter); post-SSO `/auth/login` bounce gets
+   10s (`await_login_bounce`, inception — session was valid, direct visit to
+   /dashboard/api-keys rendered SIGNED IN with "Create API Key" + "Sign Out" buttons);
+   password field paints BEFORE the Google button, so `wait_for_auth_ui` now settles for
+   "password" at deadline instead of returning early (inception screenshot showed the button
+   plainly while the run missed it); the entry-click branch no longer discards the poll.
+   Icon-only doors: `icon_login_click()` (featherless's only door is a textless avatar).
+7. **Walls need evidence now:** `wall_page()`: PAYWALL requires a card FORM
+   (`card_form_present`, inception false positive fixed); blocked pages classify as
+   `SITE_REFUSED` (blackbox 403, measured); CAPTCHA by DOM shape with a near-empty page
+   (Turnstile iframe selectors; login pages with an invisible reCAPTCHA beside a working
+   form are NOT walls).
+8. **MINT:** `wait_for_control()` polls up to 15s for the create/copy control (featherless
+   "New API Key" hadn't painted when mint ran); the create modal's NAME field is filled with
+   `omniroute-auto-<timestamp>` (operator: "create api key will always ask for a name")
+   before the modal's own create button is pressed; DOM button inventory goes into the
+   report on failure.
+9. **Wrong-console guard** (near-miss, measured): run 12 cancelled mid-provider left an
+   orphan inception tab; run 13's featherless-ai ADOPTED it and stood on inception's
+   /api-keys. FIXED: `adopt_popup` only adopts pages born during the current provider's run
+   (`preexisting` id snapshot), and run_one refuses to mint unless the page's host is
+   same-site with the provider's own site/note URLs (`stage: wrong-console`). Verified in
+   run 14: featherless stayed on featherless.ai.
+10. **HEADLINE PROOF (run 13, attach mode, dry-run):** inception → clicked the docs' own
+    'API Keys' link → NEW TAB → platform.inceptionlabs.ai/dashboard/api-keys (signed-in
+    session from Google SSO) → Create API Key → name filled → **key captured:
+    `sk_e...233f (len=35)`** → stopped at `dry-run` as designed. The operator's full flow
+    ("continue with google, select profile, create new api key, copy, wire") is automated
+    end-to-end for the first time. Chooser screenshot: `inception-chooser.png`; console
+    proof: `probe-inception-console.png`, `inception-keypage.png`.
+11. Budget: honored between candidates, not inside polls (the in-poll deadline checks
+    starved SSO after reach_key_page spent budget — measured on runs 9/10, reverted).
+
+#### Commits this session (all on master, incremental as required)
+
+`1a01910` crash recovery + DOM study + wait_for_control + evidence walls + note-URL mining ·
+`b426674` evidence-only navigation (guessing deleted) · `fe9d0e5` click-based navigation ·
+`7ff88f5` callback transit + key-page short-circuit + entry-click links · `a0578f3` never
+navigate to raw API endpoints · `cb5f97f` DOM-shape CAPTCHA detection · `7f1014f` safe attach
+mode (HarvestChrome.cmd + --attach + restart_attached) · budget-honoring commit · `4df1978`
+paint-order poll fix · tab-following commit · bounce-wait + icon-door commit · name-fill
+commit · orphan-adoption + wrong-console guard commit.
+
+#### What is NOT claimed
+
+- **No key was WIRED.** All proof runs were `--dry-run`. The inception key was captured and
+  fingerprinted but not stored/wired; the real sweep must run without `--dry-run`.
+- **One provider proven end-to-end, not fifty.** featherless (icon-avatar door needs a
+  position-based click), openadapter (SSO returns but its handoff bounces to a Google support
+  page — per-provider polish), nous-research (help page exposes no auth door we can find),
+  blackbox (site refuses our client: honest SITE_REFUSED) remain unwired.
+- Not claimed the robot Google account is safe from provider-side flags forever — the
+  robot account is the designated expendable.
+- Not claimed CAPTCHAs are gone globally — the attach-mode evidence is one provider
+  (openadapter) A/B'd twice plus zero challenges across runs 8-14.
+- `navigator.webdriver=False` measured in the attached Chrome; deeper CDP-runtime detection
+  by WAFs is possible and untested.
+
+#### Still open
+
+1. **Run the real sweep:** `HarvestChrome.cmd` → leave open →
+   `python scripts/automation/auto_key_harvester.py --attach` (no --dry-run) over the queue.
+2. featherless icon-avatar door (no aria-label; needs coordinate/shape click).
+3. openadapter SSO handoff quirk (lands on support.google.com article).
+4. nous-research: find the portal's real sign-in route.
+5. Mint-with-modal-already-open: wait_for_control label sweep can be starved by swallowed
+   click timeouts when a modal is up (minor; seen in run 13's wrong-console confusion).
+6. Attach-mode `restart_attached` proven once (run 8); not stress-tested.
