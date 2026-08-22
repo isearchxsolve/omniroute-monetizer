@@ -3462,3 +3462,171 @@ ids. Video 429 reproduced on 2 projects × 3 models. Nothing here is inferred fr
 - **Gap Found:** Next.js compiler failed due to an pp/ (React Native) vs src/app/ (Next.js) directory conflict. Additionally, the Pydantic schema in the backend failed validation during mock tests for the characters list format.
 - **Fix/Execution:** Renamed the root pp/ folder to pp_react_native/ in C:\god_ai\oioi\oioi to allow Next.js 15 to build the frontend correctly on port 3002. Adjusted 	est_agent_pipeline.py MockChatAdapter to return a list of strings instead of dicts specifically for the ScriptwriterOutput validation. Ran the UI and triggered a generation run.
 - **Test Result:** The backend tests pass. The UI successfully hits the FastAPI backend and fails elegantly exactly at the real LLM generation step (scriptwriter) because live providers are currently exhausted, confirming healthy UI-to-API connectivity.
+
+---
+
+### [2026-08-22 19:4x] #1043 — Why "wire all 296" is impossible, the 51 free providers that ARE reachable, and the one-click Google-SSO harvester
+
+**Numbering note:** #1042 is used twice above by two different agents. This is #1043.
+
+#### The operator's correction, and it was right
+
+> *"I have been trying to tell you, convince you for last three days to get the 296, it did not
+> do, you only fidgeted."*
+> *"this the whole point of our exercise create accounts in new providers using google sso create
+> keys and wire them"*
+> *"you forgot everything read the work log"*
+
+I had drifted into a plan to bulk-create empty connection rows. That plan is dead, and the
+operator's plan is the only one that works. Proof below, measured, not argued.
+
+#### MEASURED: OmniRoute refuses to create a keyless row. There is no bulk shortcut.
+
+Ran `wire_all_providers.py --free --test` then `--park` against all 296 catalog providers.
+
+| Attempt | Result |
+|---|---|
+| `POST /api/providers` `{provider, authType:'none', name, isActive}` | **201** for 23 providers |
+| Same, for the other 191 | **400** `{"field":"apiKey","message":"API key is required"}` |
+| `apiKey: ""` | 400, same message |
+| `apiKey: " "` (single space) | 400, same message |
+| `authType` = `none` / `oauth` / `custom`, no key | 400, same message |
+| 6 catalog slugs (`aihorde`, `chipotle`, `duckduckgo-web`, `felo-web`, `theoldllm`, `veoaifree-web`) | 400 `Invalid provider` — in the catalog, absent from the running build's enum |
+
+So **191 of 296 providers cannot be wired at all without a real API key for each.** Not parked,
+not pre-created, not stubbed. My "--park everything inactive" idea was impossible, and had it
+been possible it would still have been worthless. The operator's route — sign up, get a key,
+wire it — is not the slow option. It is the only option.
+
+`DELETE /api/providers/{id}` → **200** `Connection deleted successfully`. Newly useful: probes
+are now reversible, which is what made the cleanup below safe.
+
+#### NEW: OmniRoute's own tables name the free providers, and they were never read before
+
+`state/all_295_providers_catalog.json` carries **no auth field** — every entry reads `auth=?` —
+which is why "which of these are free" had been unanswerable. `dist/open-sse/mcp-server/server.js`
+is not minified and holds the real tables. `APIKEY_PROVIDERS` is assembled from six sub-tables
+(`_FRONTIER`, `_INFERENCE`, `_ENTERPRISE`, `_REGIONAL`, `_SPECIALTY`, `_GATEWAYS`) via spreads, so
+evaluating it alone throws `ReferenceError: APIKEY_PROVIDERS_GATEWAYS is not defined`; all six must
+be resolved and prepended. Done, and dumped to `state/apikey_providers.json` (195 entries).
+
+Fields that matter, and were sitting there unused:
+
+| field | present on | why it matters |
+|---|---|---|
+| `hasFree` | 110 | OmniRoute's own flag for "this has a free tier" |
+| `freeNote` | 99 | what exactly is free, in the provider's words |
+| `website` | 195 | where to sign up |
+| `authHint` | 80 | what the key looks like |
+| `apiKeyUrl` | 1 | only `dahl` has one |
+
+**96 `hasFree` providers. 44 already wired. 52 still to get a key for** →
+`state/free_key_targets.json`.
+
+#### MEASURED: `valid=True` from OmniRoute's own test is NOT proof a provider works
+
+`uncloseai`'s `authHint` reads *"No auth required. API accepts any non-empty string as key for
+identification."* Nothing to bypass, so it was wired with the plainly non-secret identifier
+`omniroute-free`:
+
+```
+create -> 201  id=e7b394a1-07fb-4e66-8c64-9115b452c3a5
+test   -> valid=True  source=None
+```
+
+Then asked it for actual text:
+
+```
+uncloseai/adamo1139/Hermes-3-Llama-3.1-8B-FP8-Dynamic  HTTP 404  model does not exist
+uncloseai/qwen3.6:27b                                  HTTP 404  model does not exist
+uncloseai/gemma4:31b                                   HTTP 404  model does not exist
+```
+
+All three models 404. `valid=True` was a **false positive**. The row was **deleted**. (Incidental
+OmniRoute bug: all three errors echo the *first* model id regardless of which was requested.)
+
+This is the whole reason anti-pattern #7 exists, and it changed the design of the new tool: a
+provider is reported as working only when a real `/v1/chat/completions` returns real text.
+
+#### Cleanup: today's junk rows removed
+
+`auggie` (Auggie CLI not installed), `copilot-web` (wants a pasted DevTools cookie), `gitlawb`,
+`gitlawb-gmi` (both `Invalid API key`), `searxng-search` (`Blocked private or local provider URL`),
+`opencode` (×2, my earlier probe) — **all deleted**. An ACTIVE keyless row is worse than no row,
+because OmniRoute's router selects it and the request fails. 116 rows → **109 rows / 93 distinct
+providers**.
+
+12 LOCAL providers (`comfyui`, `ollama-local`, `lm-studio`, `vllm`, `sdwebui`, `triton`,
+`llama-cpp`, `llamafile`, `lemonade`, `oobabooga`, `xinference`, `docker-model-runner`) were
+created **inactive**, deliberately: they need no key but point at localhost ports that are not
+listening. `wire_all_providers.py` was changed so `--free` no longer activates them;
+`--activate-local` is now required and documented as "only once the server is actually up".
+
+#### SHIPPED: `harvest_free_keys.py` + `GetFreeKeys.cmd` — the operator's plan, one double-click
+
+The blank robot profile already holds the Google session. Verified by host, values never read:
+
+```
+state/automation_profiles/providers/Default/Network/Cookies   57344 bytes
+   17 .google.com      7 accounts.google.com      3 myaccount.google.com
+    4 .aistudio.google.com        google-domain cookies: 34
+```
+
+Loop: open the provider's site in **plain** `chrome.exe` in that profile → operator clicks
+"Continue with Google" (no password typed) → creates a key, copies it → Enter → the connection is
+created **with** the key in one POST → a real completion is demanded → kept if it answers,
+**deleted** if it does not.
+
+Standing rules, implemented literally rather than described:
+
+- **Never the live profile.** `safe_profile_dir()` + `assert_safe()` at the call site. The
+  operator's `...\Google\Chrome\User Data` is never opened, read, copied or aliased.
+- **Plain Chrome, never Playwright, for anything Google sees.** Google refuses automation-flagged
+  browsers (#1033) and this repo does not disguise them.
+- **Card demanded → `p` → `PAYWALL_REFUSED`, walk away.** Nothing is ever paid.
+- **CAPTCHA / phone / KYC → `c` → `CAPTCHA_REFUSED`, walk away.** Nothing solved, nothing bypassed.
+- **No retries anywhere in the file, by design.** One attempt per provider; a 404 or 401 is an
+  answer, and re-asking is hammering.
+- `--no-card-only` queues only the providers whose own note promises no card, so a card prompt is
+  never even met. Card-free first, `may-ask-for-card` last.
+- Keys: `first4...last4` fingerprints in all output; raw values only to gitignored
+  `state/generated_keys.json`.
+
+Queue with `--no-card-only`, best first: `nous-research` (50 RPM / 500k TPM), `openadapter`,
+`inception` (10M tokens), `featherless-ai`, `blackbox`, `pioneer` ($75), `sambanova` ($5),
+`ai21` ($10), `monsterapi`. `uncloseai` is dropped via a `KNOWN_DEAD` entry carrying the measured
+reason, so no one spends a click rediscovering it.
+
+#### Status
+
+- `LOCAL_DATA_PRESENT` — yes; robot profile holds the Google session (34 Google cookies).
+- `PROVIDER_SESSION_AUTHENTICATED` — Google/AI Studio **yes** (unchanged from #1042). kie, segmind,
+  novita, leonardo: still **no**.
+- `GOOGLE_SYNC_AUTHENTICATED` — **NOT CLAIMED.** Untouched; this is the robot's profile, not the
+  operator's four.
+- `MONETIZER_READY` — **TEXT only**, unchanged: free Gemini path still live.
+- `MONETIZER_BLOCKED` — video, unchanged. No MP4 has ever been produced.
+
+#### What is NOT claimed
+
+- **No new provider is working yet.** The harvester has not been run against a live signup; it
+  needs the operator's Google click. Net provider count went **down** (116→109 rows) because the
+  honest move was deleting rows that could not answer.
+- Not claimed that all 51 remaining targets support Google SSO. Roughly 18 need a Chinese phone,
+  WeChat, Alibaba id, KYC or Discord; they are queued last for that reason, and will be refused
+  per the rules above rather than worked around.
+- Not claimed `hasFree` is accurate — it is OmniRoute's claim about the provider, not a measurement.
+  Every one still has to answer a real request before it counts.
+- Not claimed the 6 `Invalid provider` slugs can ever be wired on this build.
+- Not claimed `uncloseai` is broken *upstream*; only that the 3 models OmniRoute exposes for it 404.
+
+#### Still open
+
+1. **Run `GetFreeKeys.cmd`.** Needs the operator. Everything else is ready.
+2. `provider_login_helper.py::_classify` false positive — site markers still outrank login-wall
+   markers (the kie bug). Unfixed.
+3. `video_key_harvester.py` aistudio flow still never presses "Create key" inside the modal.
+4. `video_key_harvester.py:817-838` — `--user-data-root` still silently no-ops when alone.
+5. Third-party SSO for kie / segmind / novita / leonardo still not driven.
+6. `pollinations` has a documented **keyless free tier** (`anonymousFallback`) — the only free
+   video lead, still blocked by OmniRoute's missing `pollinations-video` handler, not by money.
