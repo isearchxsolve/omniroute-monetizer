@@ -229,8 +229,11 @@ To prevent new agents from searching blindly across the codebase, use these exac
    - Frontier and free-tier models reject invalid/tiny payloads, causing false negatives. ALWAYS use valid, standard chat completion payloads.
 4. **VERIFY AUTHENTICATION BEFORE CASCADING:**
    - NEVER inject models into front-end routing configs (like `settings.json`) without verifying that the underlying provider's OAuth token or API key is actually alive. 
-5. **FEARLESS AUTOMATION (No Human Handoffs):**
-   - Use `launch_persistent_context` to hijack the active Chrome profile and bypass MFA/CAPTCHA automatically without blocking or prompting for human handoffs.
+5. **FEARLESS AUTOMATION -- BUT NEVER AGAINST THE OPERATOR'S LIVE CHROME PROFILE (REWRITTEN 2026-08-22):**
+   - **This item, as originally written, caused the 2026-08-22 four-profile sign-out incident.** It said to "hijack the active Chrome profile and bypass MFA/CAPTCHA." Doing that is what put automation inside the operator's own browser and destroyed four Chrome Sync credentials. See `CHROME_PROFILE_RCA.md` and anti-pattern 14 below.
+   - NEVER point `launch_persistent_context` / `--user-data-dir` at `C:\Users\Admin\AppData\Local\Google\Chrome\User Data`, and never at a copy of it that will be written to. A persistent context WRITES: it rewrites `Web Data`, `Preferences`, `Cookies`, and `Local State`, and a token refresh performed by an automation-driven Chrome invalidates the operator's own refresh token server-side.
+   - Automation gets a DEDICATED profile root under `D:\omniroute-monetizer\state\`, created fresh, signed in on its own. Being blocked by a login wall in that dedicated profile is a correct, reportable outcome -- not a reason to reach into the live profile.
+   - "Fearless" means: do not stop to ask permission for reversible work in your own sandbox. It has never meant: bypass account protections, or treat the operator's authenticated browser as a credential source.
 6. **OAUTH KEEP-ALIVE REALITY:**
    - Sending inference requests does NOT refresh OAuth sessions. Server-side timers dictate expiry. Do not spam APIs with pings to keep them alive if the token is dead.
 7. **NEVER FABRICATE CREDENTIAL EXTRACTION OR MASK BLOCKS WITH PLACEHOLDERS (CRITICAL SELF-CORRECTION):**
@@ -265,13 +268,63 @@ To prevent new agents from searching blindly across the codebase, use these exac
     - **Step 2: DOM Diagnosis:** Combine visual screenshots with DOM snapshot / selector analysis to target exact hit points or click points (locators / bounding boxes).
     - **Step 3: Post-Action Verification:** Take a screenshot immediately after every interaction to visually verify that the expected UI transition occurred (e.g. account picker -> consent -> redirect). Never issue blind sequential clicks or actions without visual proof.
 12. **CHROME PROFILE ACCOUNT ISOLATION (No Cross-Account Profile Mixing):**
-    - Google OAuth sessions are strictly bound to specific Chrome user profiles (e.g. `C:\Users\Admin\AppData\Local\Google\Chrome\User Data`: `Default` = `kunal.colab@gmail.com`, `Profile 14` = `xxpertcomments@gmail.com`, `Profile 16` = `niloydassana@gmail.com` / `isearch.xsolve@gmail.com`, `Profile 17` = `kunal_nit@yahoo.co.in`).
+    - **CORRECTED 2026-08-22** -- the mapping previously recorded here was wrong (it listed two accounts for `Profile 16` and a Yahoo address for `Profile 17`). A wrong mapping in these instructions is itself a cross-account-mixing hazard: it is how a credential gets restored into the wrong person's profile. The verified mapping, read from each profile's own `Preferences > account_info` in the 2026-08-22 snapshots, is:
+
+      | Profile dir | Account |
+      |---|---|
+      | `Default` | `kunal.colab@gmail.com` |
+      | `Profile 14` | `xxpertcomments@gmail.com` |
+      | `Profile 16` | `niloydassana@gmail.com` |
+      | `Profile 17` | `isearch.xsolve@gmail.com` |
+
+      Root: `C:\Users\Admin\AppData\Local\Google\Chrome\User Data`. This table is the single source of truth and is enforced in code by `EXPECTED_ACCOUNTS` in `scripts/automation/chrome_auth_audit.py` and `chrome_session_restore.py` -- if you change one, change all three.
     - NEVER attempt to trigger OAuth for account *B* inside a Chrome instance/profile logged into account *A*. Google will display a password challenge or login wall.
     - ALWAYS verify the underlying Chrome Profile and User Data directory mapping before launching or attaching CDP sessions for provider re-authentication.
+    - `state\harvest_profile\Default` holds `xxpertcomments@gmail.com`, NOT `kunal.colab@gmail.com`. Directory name does not imply account. Read `account_info`; never infer ownership from a folder called `Default`.
 13. **PERSISTENT AUTOMATED HOURLY OAUTH KEEP-ALIVE WINDOWS SERVICE (VERIFIED):**
     - **Verified Status:** Active & Operational 24/7.
     - **Mechanism:** `C:\Users\Admin\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\omniroute_oauth_keepalive_service.vbs` executes `d:\omniroute-monetizer\.venv\Scripts\python.exe d:\omniroute-monetizer\scripts\automation\oauth_keepalive.py --interval 3600` continuously in 0-window silent background mode on Windows startup.
     - **Interval:** Executes an hourly token-refresh pass (every 3,600s) via OmniRoute's native REST endpoint `POST /api/providers/{id}/refresh` across all 14 active OAuth provider connections (`antigravity`, `agy`, `codex`, `kilocode`, `kiro`, `grok-cli`, `kimi-coding`, `xai-oauth`, `amazon-q`, `clinepass`, `cline`), eliminating manual re-authentication exercises completely.
+
+14. **CHROME SIGN-IN STATE: HARD RULES (2026-08-22 INCIDENT -- READ BEFORE TOUCHING ANY CHROME FILE):**
+
+    Four live profiles lost their Google Chrome Sync credential, and the repair was falsely reported as complete three separate times. Full analysis: `CHROME_PROFILE_RCA.md`, `MASTER_WORKLOG.md` #1017-#1022. These rules are not advisory.
+
+    **14.1 -- One canonical root. No aliases.**
+    - The only Chrome root is `%LOCALAPPDATA%\Google\Chrome\User Data`. Derive it from the environment; never hardcode a `D:\` profile path as "the" root.
+    - Before launching Chrome through ANY alias (`state\live_link` and friends), assert BOTH: the path is genuinely a junction (`(Get-Item x).LinkType -eq 'Junction'`, or `os.path.islink()` / `os.path.realpath() != path` in Python), AND its resolved target equals the intended root. **A plain directory sitting at an alias path must ABORT the run**, never be silently used -- Chrome will happily scaffold empty profiles inside it and every subsequent probe becomes a lie. That is root cause R1.
+
+    **14.2 -- The credential is `Web Data > token_service` + `Preferences > account_info`. Together.**
+    - Those two artifacts, per profile, ARE the Chrome Sync sign-in. Nothing else is.
+    - They must be backed up together, restored together, and from the SAME snapshot. Chrome clears one when the other is missing.
+    - `token_service` was never even examined during the first three repair attempts. That omission is why "no local recovery source exists" was reported for a whole day while three of four credentials sat in `D:\omniroute-backups\` the entire time.
+    - NEVER edit, INSERT into, or DELETE from a Chrome SQLite table to manufacture a session. Read-only, always: copy the DB to temp and open `file:...?mode=ro`.
+
+    **14.3 -- `info_cache` is a display label. Repairing it is not a fix.**
+    - `Local State > profile.info_cache` controls the name/email Chrome DRAWS. Chrome reconciles it against `Preferences > account_info` at startup and **wipes any label with no credential behind it**.
+    - So a label repair looks successful, survives a screenshot, and is gone after the next launch. Three "restored" claims died exactly this way. Never repair a label without also restoring the credential pair.
+
+    **14.4 -- Never health-check a database by its file size.**
+    - SQLite does not shrink on DELETE; freed pages go on the freelist and the file keeps its high-water mark. All four live cookie stores were 82.5-98.1% free pages with 54-72 rows left, while still measuring 262 KB - 2.1 MB. Every byte-size check called them healthy.
+    - Use `SELECT COUNT(*)` plus `PRAGMA page_count` / `PRAGMA freelist_count`. A store with high `freelist_count` and near-zero rows has been emptied, whatever it weighs.
+
+    **14.5 -- The five states are different. Name the one you verified.**
+    - `LOCAL_DATA_PRESENT` -- profile dir, History, Preferences exist.
+    - `PROFILE_METADATA_REGISTERED` -- `info_cache` shows a label. Cosmetic and transient.
+    - `GOOGLE_SYNC_AUTHENTICATED` -- requires ALL THREE: non-empty `account_info`, `token_service` rows > 0, AND the operator confirming Chrome's profile menu no longer says "Sign in to Chrome". On-disk evidence alone is `GOOGLE_SYNC_CREDENTIAL_ON_DISK` -- a token blob is not proof Google will still accept it.
+    - `PROVIDER_SESSION_AUTHENTICATED` -- a specific site's cookies work. Unrelated to Chrome Sync.
+    - `MONETIZER_READY` / `MONETIZER_BLOCKED`.
+    - The bare word "signed in" is banned. Provider cookies and Google website cookies certify nothing about Chrome Sync -- do not use a cookie harvester as a Chrome health check.
+
+    **14.6 -- Run the gate before any Chrome work; verify with the UI after.**
+    - Start with `Chrome Health Check.cmd` (read-only, one click, `scripts/automation/chrome_auth_audit.py`). It reports Chrome-running state, alias sanity, per-profile credential completeness, purged cookie stores, and which backup can restore which profile.
+    - Repair with `scripts/automation/chrome_session_restore.py` -- ONE profile at a time, dry-run by default, six fail-closed gates, timestamped auto-rollback. Never restore all four profile trees from one snapshot to fix an auth problem; that reverts every profile's browsing data to fix two files.
+    - Chrome must be fully closed (no `chrome.exe` in Task Manager) before any profile file is copied.
+    - **Do not write "restored" anywhere until the operator has looked at the profile menu and reported the account visible.** If it still says "Sign in to Chrome", the token was revoked server-side and a normal Google sign-in is the only remaining path -- say so plainly and mark it blocked. A blocked status honestly reported is a correct outcome; a false green is not.
+
+    **14.7 -- Preserve every backup. Prefer one real sign-in over a clever workaround.**
+    - Never delete or overwrite a snapshot in `D:\omniroute-backups\`. They were the only reason recovery was possible at all.
+    - There is no local file that can mint a Google session. When no usable source exists (e.g. `Profile 16`), the answer is "sign in to that account once," not a workaround. Do not fabricate tokens, inject placeholder cookies, or bypass MFA/CAPTCHA.
 
 ---
 
