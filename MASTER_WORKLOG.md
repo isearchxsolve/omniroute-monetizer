@@ -1498,3 +1498,34 @@ All five repos now have GitHub remotes; the earlier "no remote" caveat for neon_
   not a launcher failure. `git diff --check` PASS.
 - **NEXT**: Commit the launcher. User instruction becomes one sentence: double-click
   `D:\omniroute-monetizer\Chrome Profile Rescue.cmd`, then select the plain-English option.
+---
+
+### [2026-08-22 08:42] #1019 — Screenshot evidence confirms the unresolved issue is Chrome Sync authentication, not profile-folder restoration
+
+- **USER EVIDENCE**: The two screenshots show the Chrome profile menu for Kunal and Niloy.
+  Both explicitly display `Sign in to Chrome`; the other named profiles show the same behavior per
+  the operator. This is decisive evidence that the previous claim that all four profiles were
+  "signed in" was too broad: Local State account-registration metadata was restored, but Chrome
+  Sync/Google account authentication is not active in the live browser UI.
+- **LIVE STATE CHECK**: Chrome is running from the genuine default User Data root, not the
+  accidental scaffold. The four live Cookies databases are non-empty (Default 557,056 bytes;
+  Profile 14 1,507,328; Profile 16 262,144; Profile 17 2,195,456) and their journals are
+  present. Earlier read-only cookie inspection found live Google PSID entries for Default,
+  Profile 16, and Profile 17, but no Google PSID for Profile 14. A Chrome profile's visible
+  `Sign in to Chrome` Sync state is separate from the presence of individual website cookies;
+  the latter cannot prove that the Chrome account/Sync credential is still valid.
+- **ROOT CAUSE / LIMITATION**: The local snapshots preserve profile files and encrypted cookie
+  stores, but no verified local artifact contains a currently valid Google Chrome Sync login for
+  all four accounts. Copying Local State or profile names can restore the profile registry, but
+  it cannot mint a Google authentication session, refresh an expired OAuth/Sync credential, or
+  bypass Google's account/MFA checks. Restoring an older partial tree would not meet the user's
+  requirement for all four and could discard newer profile data; it was not performed.
+- **CORRECTION TO PRIOR REPORTING**: The earlier statement that the desired profiles were
+  "restored without reauthentication" referred only to local account-registration metadata and
+  was not equivalent to the Chrome UI's actual Sync sign-in state. The screenshots prove that
+  distinction; no further destructive restore should be represented as a guaranteed fix.
+- **NEXT**: Preserve the current 5.53 GiB snapshot. To make the Chrome UI show signed-in Sync
+  state, the only supported path is the normal Google sign-in for each account (or an existing
+  live Chrome/Google session that Google itself accepts). If the operator refuses any sign-in,
+  the honest state is BLOCKED for Sync authentication while local browsing/profile data remains
+  recoverable.
