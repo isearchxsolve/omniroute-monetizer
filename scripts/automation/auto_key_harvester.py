@@ -646,16 +646,22 @@ def wait_for_auth_ui(page, ms: int = 14000) -> str:
     Google' plainly on it -- had not painted yet when a 3s settle() expired, so the run reported
     NO_SSO_CONTROL_FOUND about a page that visibly HAD the control. domcontentloaded is not a
     useful signal for these SPA logins; the control appearing is.
+
+    MEASURED on platform.inceptionlabs.ai 2026-08-22: the password field paints BEFORE the
+    'Continue with Google' button on the same card, so returning "password" on first sight gave
+    up early. The password field is now what we SETTLE for when the deadline expires, not a
+    reason to stop looking for the Google button.
     """
     deadline = ms
+    saw_password = False
     while deadline > 0:
         if out_of_time():
-            return "unknown"   # the per-provider budget is a hard breadth-first promise
+            return "password" if saw_password else "unknown"
         if find_google_control(page) is not None:
             return "google"
         try:
             if page.locator("input[type=password]").count():
-                return "password"
+                saw_password = True
         except Exception:
             pass
         txt = body_text(page)
@@ -665,7 +671,7 @@ def wait_for_auth_ui(page, ms: int = 14000) -> str:
             return "signed_in"
         page.wait_for_timeout(1000)
         deadline -= 1000
-    return "unknown"
+    return "password" if saw_password else "unknown"
 
 
 # A login wall is decisive. If any of these hold, the page is NOT an authenticated page, no
@@ -976,11 +982,13 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
         if click_label(page, ENTRY_LABELS, timeout=4000):
             settle(page, 5000)
             dismiss_overlays(page)
-            wait_for_auth_ui(page)
+            # Do not discard the poll: the password field paints before the Google button on
+            # the same card (inception measurement above), so keep polling and use the result.
+            seen = wait_for_auth_ui(page)
             w = wall_page(page)
             if w:
                 return w
-            if has_google_control(page):
+            if seen == "google" or has_google_control(page):
                 return try_google()
             if looks_signed_in(page):
                 return "ALREADY_SIGNED_IN"
