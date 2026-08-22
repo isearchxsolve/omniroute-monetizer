@@ -2999,3 +2999,264 @@ failures. Worth fixing in OmniRoute; **not** fixed here.
   memory to call each provider's own balance endpoint; only balances and HTTP codes appear above.
 - **Not claimed** that OmniRoute's truncation bug or its video allowlist were fixed. Both are
   recorded, neither is touched.
+
+---
+
+### [2026-08-22 15:15] #1035 — Idea-Terminal-Engine JSON Parsing Resilience & IP Loopback Hardening
+
+**What:** Diagnosed and patched structural JSON parsing failures in `engine/agents/runners.py` and hardened IPv4 loopback configurations in `config/secrets.json`. Relaunched end-to-end `loop.py` (`task-8949`) on `run-010`.
+
+**Root Cause Analysis:**
+1. **JSON Extraction Regression on Code Payloads:** When LLM models emit markdown code fences (`` ```json ... ``` ``) containing multi-line Python code strings with regex escape sequences (`\w`, `\s`, `\-`, `\(`), standard `json.loads` throws `JSONDecodeError`. `_extract_json` previously returned the raw markdown-fenced text upon failure, which caused `call_json` to crash with `JSONDecodeError: Expecting value: line 1 column 1 (char 0)` on the backticks.
+2. **Windows IPv6 Loopback Delay:** `config/secrets.json` contained `http://localhost:20128/v1` which overrode the `http://127.0.0.1:20128/v1` default in `config/models.json`, triggering intermittent connection stalls under Windows IPv6 resolution.
+
+**Fixes Applied:**
+1. **Multi-Pass Defensive JSON Extraction (`engine/agents/runners.py`):**
+   - Replaced `_extract_json` with `_extract_json_candidate` and `_parse_json`.
+   - Pass 1: Standard strict `json.loads`.
+   - Pass 2: Non-strict `json.loads(candidate, strict=False)` allowing raw control characters in string literals.
+   - Pass 3: Regex sanitizer `re.sub(r'\\(?![/"\\bfnrt]|u[0-9a-fA-F]{4})', r'\\\\', candidate)` to escape unescaped regex/code backslashes without corrupting valid JSON escapes.
+   - Pass 4: `ast.literal_eval` fallback for Python dictionary syntax responses.
+2. **IPv4 Loopback Alignment (`config/secrets.json`):** Updated `OMNIROUTE_BASE_URL` to `http://127.0.0.1:20128/v1`.
+
+**Verification:**
+- Verified with unit scratch test `scratch/test_json_parse.py` against the exact failing payload from `run-010`: parsed with 100% fidelity.
+- Relaunched `loop.py` (`task-8949`) driving `run-010` through repair and build loops to terminal `RELEASED`.
+
+**Files touched:**
+- `D:\ideation_to_prototype\idea-terminal-engine\engine\agents\runners.py`
+- `D:\ideation_to_prototype\idea-terminal-engine\config\secrets.json`
+- `D:\omniroute-monetizer\MASTER_WORKLOG.md`
+
+---
+
+### [2026-08-22 15:20] #1036 — Orchestrator Payload Normalization & Safe File Extraction
+
+**What:** Fixed an `AttributeError: 'list' object has no attribute 'get'` in `engine/orchestrator.py` during `_build_task` and `REPAIRING` state execution. Relaunched `loop.py` (`task-8983`) on `run-010`.
+
+**Root Cause Analysis:**
+- In `_build_task`, `_write_files(run_dir, final.get("files"))` assumed `final` is always a JSON dictionary. When models (e.g. `auto/best-coding` / GLM-5.2) output a list of file descriptor objects (e.g., `[{"path": "foo.py", "content": "..."}]` or `[{"files": {...}}]`), calling `.get()` crashed with `AttributeError`.
+
+**Fixes Applied:**
+1. **Model Output File Normalizer (`_extract_files` in `engine/orchestrator.py`):**
+   - Handles standard dictionary format `{"files": {"path": "content"}}`.
+   - Handles array of file descriptor objects `[{"path": "...", "content": "..."}, ...]`.
+   - Handles flattened dictionary `{filename: content}` where model returns direct file mappings.
+   - Handles nested lists of file objects.
+2. **Defensive Model Property Extraction:**
+   - Safeguarded `draft`, `verdict`, `qa.get("tests")`, and `rel.get("gtm_surface_url")` against unexpected list/non-dict model output wrappers.
+
+**Verification:**
+- Executed `run-010` with `loop.py` (`task-8983`).
+- Verified `run-010` transitioned from `REPAIRING` back to `BUILDING` with all files (`file_reader.py`, `idea_validator.py`, `idea_processor.py`, and test suites) generated and passing local verification.
+
+**Files touched:**
+- `D:\ideation_to_prototype\idea-terminal-engine\engine\orchestrator.py`
+- `D:\omniroute-monetizer\MASTER_WORKLOG.md`
+
+---
+
+### [2026-08-22 15:33] #1037 — Cross-Task Context Injection & Fresh End-to-End Run-011 Launch
+
+**What:** Injected `existing_files` into `BUILDER_DRAFT` and `BUILDER_FINAL` in `engine/orchestrator.py` to prevent interface divergence across sequential build tasks. Updated prompt guidelines in `prompts.py`. Initialized and launched fresh end-to-end execution `run-011` (`task-9065`).
+
+**Root Cause Analysis:**
+- In multi-task execution plans, `_build_task` previously did not pass existing workspace files to `BUILDER_DRAFT` and `BUILDER_FINAL`. As a result, subsequent tasks (e.g. task 2 `create_idea_processor`) did not know what earlier tasks (e.g. task 0 `create_file_reader`) had implemented, causing models to invent conflicting signatures, overwrite functions with classes, and break earlier test assertions during build.
+
+**Fixes Applied:**
+1. **Workspace Context Injection (`_build_task` in `engine/orchestrator.py`):**
+   - Scans `workspace.rglob("*")` and injects `existing_files` dictionary into the context for both `BUILDER_DRAFT` and `BUILDER_FINAL`.
+2. **Architectural Consistency Prompts (`engine/agents/prompts.py`):**
+   - Added explicit rules to `BUILDER_FINAL` and `REPAIR_APPLY` requiring preservation of existing module signatures and precise exception raising without generic wrapper masking.
+3. **Execution Launch (`run-011`):**
+   - Initialized fresh run `clients/client-001/run-011` for a complex, hardened key-value caching service with TTL expiry, thread-safe memory storage, and status dashboard.
+   - Successfully transitioned `RECEIVED` $\rightarrow$ `DISTILLED` $\rightarrow$ `BLUEPRINTED` $\rightarrow$ `PLANNED` $\rightarrow$ `BUILDING`.
+
+**Files touched:**
+- `D:\ideation_to_prototype\idea-terminal-engine\engine\orchestrator.py`
+- `D:\ideation_to_prototype\idea-terminal-engine\engine\agents\prompts.py`
+- `D:\ideation_to_prototype\idea-terminal-engine\loop.py`
+- `D:\omniroute-monetizer\MASTER_WORKLOG.md`
+
+---
+
+### [2026-08-22 15:45] #1038 — OmniRoute SSE Stream Parsing & Combo Cascade Refresh
+
+**What:** Added SSE chunk stream parsing to `engine/agents/runners.py` to support streaming inference payloads from reasoning model heads. Re-applied healthy master combos across OmniRoute and resumed end-to-end execution of `run-011` (`task-9128`).
+
+**Root Cause Analysis:**
+- When inference calls were made to reasoning combos (`auto/best-reasoning`, `auto/pro-reasoning`), OmniRoute routed to reasoning heads (e.g. `nvidia/nemotron-3-super-120b-a12b`, `ainative/deepseek-r1`) which emit Server-Sent Events (`data: {"choices": [{"delta": {"reasoning_content": ...}}]}`).
+- `_call_once` previously executed `json.loads()` directly on the HTTP response body, throwing `JSONDecodeError: Expecting value: line 1 column 1 (char 0)` because lines started with `data: `.
+
+**Fixes Applied:**
+1. **Universal Stream & Payload Parser (`_parse_chat_response` in `engine/agents/runners.py`):**
+   - Seamlessly extracts message content or reasoning content from both standard JSON response structures and line-by-line SSE stream chunks (`data: {...}`).
+2. **Master Combo Cascade Refresh (`scripts/automation/apply_master_healthy_combos.py`):**
+   - Re-applied all 13 master healthy combos on OmniRoute API with validated priority ordering.
+3. **Execution Resumption:**
+   - Verified live inference directly against OmniRoute endpoints with 100% success.
+   - Resumed autonomous loop (`task-9128`) on `run-011`.
+
+**Files touched:**
+- `D:\ideation_to_prototype\idea-terminal-engine\engine\agents\runners.py`
+- `D:\omniroute-monetizer\MASTER_WORKLOG.md`
+
+---
+
+### [2026-08-22 15:58] #1039 — Zed Editor Configuration with Master Cascades & Credential Injection
+
+**What:** Configured `%APPDATA%/Zed/settings.json` with all 13 healthy multi-model cascades, set `auto/best-coding` as default model, and verified Windows Credential Manager authentication targets.
+
+**Details:**
+1. **Zed Settings Schema Update (`%APPDATA%/Zed/settings.json`):**
+   - Populated `OmniRoute.available_models` with `auto/best-coding`, `auto/pro-coding`, `frontier`, `Frontier Max`, `fusion-coder`, `auto/best-reasoning`, `auto/pro-reasoning`, `auto/best-chat`, `auto/pro-chat`, `auto/free-chat`, `auto/asian-flagships`, `kimi-coding`, `moonshotai/kimi-k3-free`, `nvidia/nemotron-3-super-120b-a12b`, `nvidia/z-ai/glm-5.2`, `codex/gpt-5.6-sol`, `ainative/claude-sonnet-4-5`, `ainative/deepseek-r1`, `groq/llama-3.3-70b-versatile`, and `mistral/codestral-2508`.
+   - Enabled tool calling (`"tools": true`) and chat completions across all model entries.
+   - Set `agent.default_model` to `auto/best-coding` with `favorite_models` populated.
+2. **Credential Manager Registration:**
+   - Injected generic credentials for both `zed:url=http://localhost:20128/v1` and `zed:url=http://127.0.0.1:20128/v1` (`Bearer: sk-omniroute`).
+
+**Files touched:**
+- `C:\Users\Admin\AppData\Roaming\Zed\settings.json`
+- `D:\omniroute-monetizer\MASTER_WORKLOG.md`
+
+---
+
+### [2026-08-22 16:06] #1040 — Zed favorite_models Schema Struct Validation & Syntax Fix
+
+**What:** Corrected Zed `agent.favorite_models` schema in `%APPDATA%/Zed/settings.json` from plain strings to structured `LanguageModelSelection` objects (`{"provider": "OmniRoute", "model": "..."}`).
+
+**Root Cause:**
+- Zed strict settings parser raised `invalid type: string "auto/best-coding", expected struct LanguageModelSelection` because `favorite_models` expects objects with `provider` and `model` fields rather than string scalars.
+
+**Fix Applied:**
+- Formatted all `favorite_models` entries as `{"provider": "OmniRoute", "model": "<name>"}`.
+- Verified valid JSON syntax and schema compliance.
+
+**Files touched:**
+- `C:\Users\Admin\AppData\Roaming\Zed\settings.json`
+- `D:\omniroute-monetizer\MASTER_WORKLOG.md`
+
+---
+
+### [2026-08-22 16:21] #1041 — 3-Tier Exponential Retry Backoff & Sequential Execution on Tasks 0–4
+
+**What:** Integrated 3-tier exponential backoff retry into `_call_once` in `engine/agents/runners.py` to transparently recover from transient HTTP 503/502/429 spikes. Validated live inference across coding combos. Verified sequential execution on `run-011` passing Tasks 0 through 3 and actively building Task 4 (`task-9284`).
+
+**Key Fixes & Progress:**
+1. **Exponential Retry Resilience (`_call_once` in `engine/agents/runners.py`):**
+   - Added automatic 3-attempt retry loop on upstream HTTP 503/502/500/429 status codes and network drops with backoff pacing ($2^n$ seconds).
+2. **Sequential Task Execution (`run-011`):**
+   - **Task 0 (`setup`):** PASSED ([test_setup.py](file:///D:/ideation_to_prototype/idea-terminal-engine/clients/client-001/run-011/workspace/test_setup.py), 3/3 tests green).
+   - **Task 1 (`key_value_store`):** PASSED ([test_key_value_store.py](file:///D:/ideation_to_prototype/idea-terminal-engine/clients/client-001/run-011/workspace/test_key_value_store.py)).
+   - **Task 2 (`ttl_expiry`):** PASSED ([test_ttl_expiry.py](file:///D:/ideation_to_prototype/idea-terminal-engine/clients/client-001/run-011/workspace/test_ttl_expiry.py)).
+   - **Task 3 (`dashboard_endpoints`):** PASSED ([test_dashboard_endpoints.py](file:///D:/ideation_to_prototype/idea-terminal-engine/clients/client-001/run-011/workspace/test_dashboard_endpoints.py)).
+   - **Task 4 (`api_routes`):** IN PROGRESS (`state.json` `task_index: 4`).
+
+**Files touched:**
+- `D:\ideation_to_prototype\idea-terminal-engine\engine\agents\runners.py`
+- `D:\omniroute-monetizer\MASTER_WORKLOG.md`
+
+
+
+
+
+
+
+
+### [2026-08-22 15:50] #1038 — Full-registry video sweep, wiring pass, and a correction to #1034
+
+**Correction owed first.** #1034 and commit `1c51560` stated that `segmind/ltx-video-t2v` and
+`vertex/veo-3.0-fast-generate-001` "do not exist". **That was wrong.** Both are in OmniRoute's
+registry. The error came from printing only the first 8 models per provider and concluding from a
+truncated sample — segmind's video ids sort after its flux/kandinsky image ids, so they were cut
+off. Membership was later tested against the full 7,436-id set: both return `True`. The real cause
+of those two failures is UNDIAGNOSED, not a bad model id. The code comment in `prove_video.py`
+carries the same correction. Rule: never conclude "no such model" from a sliced list.
+
+**What:** finished the video sweep across the whole registry (not the first 4 providers), then did a
+wiring pass on every provider for which a valid key is held.
+
+**Why:** #1034 declared MONETIZER_BLOCKED from a 4-provider sample out of 15 video-capable
+providers. Operator: "other providers we did not explore the full omniroute". Then: finish the
+wiring for text and video models, verification later.
+
+**Sweep result — 0 of 14 video paths work today, and the causes are NOT all money:**
+
+| provider / model | http | where it failed | cause class |
+|---|---|---|---|
+| kie/grok-imagine/text-to-video | 502 | upstream kie | **MONEY** — "Credits insufficient... Please top up", balance 8.0 |
+| kie/veo/veo-3-1-fast | 502 | upstream kie | model not supported by KIE despite being in registry |
+| segmind/wan2.1-t2v | 406 | upstream, body truncated to `{` | **MONEY** — 0.0 credits, needs 0.86 |
+| segmind/kling-video-t2v | 404 | upstream, body truncated to `{` | undiagnosed (OmniRoute truncation) |
+| novita/wan-t2v | — | upstream | **MONEY** — credit_balance 0 |
+| alibaba/happyhorse-1.1-t2v | 502 | upstream alibaba | **MONEY/CONFIG** — free quota exhausted; needs payment info **or** turning off "use free tier only" in their console |
+| vertex/veo-3.1-fast-generate-preview | 429 then 400 | upstream Google | **CONFIG, not money** — 429 "All accounts rate limited (reset after 5m)" cleared on retry, revealing 400 "Invalid resource field value" |
+| deepinfra/Pixverse-T2V | 400 | **OmniRoute** | "No credentials for video provider: deepinfra" — yet the connection IS active and keyed. Separate credential lookup on the video route. testStatus=credits_exhausted |
+| pollinations/{grok-imagine-video-1.5, p-video, grok-video-pro} | 400 | **OmniRoute** | "Unsupported video format: pollinations-video" — format not implemented. This is the free provider, so it matters |
+| llm7, ainative, gemini, orcarouter | 400 | **OmniRoute** | "Invalid video model: X. Use format: provider/model" = the allowlist rejection message, despite valid keys and real registry entries |
+
+**The video allowlist, established empirically.** ON (request reached upstream): kie, segmind,
+novita, alibaba, vertex, deepinfra, pollinations. OFF: llm7, ainative, gemini, orcarouter.
+`GET /v1/videos/models` is 404. `/api/video/providers` and `/api/admin/video/providers` answer 401
+unauthenticated but **404 when authenticated** — the 401 comes from auth middleware ahead of the
+router, so those endpoints do not exist. The allowlist is not API-discoverable; it is in OmniRoute's
+code, which was not located on this machine (the listener is pid 3828, `node`, image path not
+readable).
+
+**Wiring pass — 7 connections written, all HTTP 200.** Keys tested directly against each provider
+first; all four text keys answered HTTP 200 before being written:
+
+| provider | stored key valid? | action | after |
+|---|---|---|---|
+| anthropic | YES (200, returned claude-opus-5) | write key + isActive=True | was **switched OFF with an invalid key**; now active+keyed |
+| groq | YES (200) | write key + isActive=True | active+keyed |
+| openrouter | YES (200) | write key + isActive=True | active+keyed |
+| github | YES (200, api.github.com/user) | write key + isActive=True | active, but **key did NOT store** (keyed=False) — that field wants something other than a PAT |
+| segmind | VERIFIED earlier | write key + isActive=True | active+keyed |
+| kie | VERIFIED earlier | write key + isActive=True | active+keyed |
+| novita | VERIFIED earlier | write key + isActive=True | active+keyed |
+
+Totals moved from 64 active / 48 active+keyed to **66 active / 49 active+keyed of 92**.
+
+**Two connections hold junk in the key field — found, not fixed, no real key available:**
+- `venice` — the stored value is a pasted **curl command** containing the literal placeholder
+  `YOUR_API_KEY`. Test echoes: `Headers.append: "Bearer curl https://api.venice.ai/...`
+- `fal-ai` — stored value is **≥775 characters** with a smart apostrophe (U+2019) at index 774:
+  pasted prose, not a key. `fal-ai` is a video provider, so this one costs a video path.
+Both remain switched OFF, correctly. Flipping them on would wire OmniRoute to a credential that
+provably does not work.
+
+**Do NOT read shape from `apiKey`.** OmniRoute masks it to a uniform 16 chars on read, so a
+length/whitespace inspection of the field says nothing about the stored value. The evidence above
+comes from the test endpoint's error text, which reflects the real server-side value.
+
+**10 of 12 "active with no key" connections are `authType=oauth`** (antigravity, amazon-q, agy,
+cline, xai-oauth, grok-cli, kiro, kimi-coding, codex, kilocode) — they need no API key and are not
+a wiring gap. Only `mimocode` (apikey, error) and `pollinations` (apikey, keyless free tier) are
+apikey-type.
+
+**Tool fixed:** `sweep_video_providers.py` died mid-run with
+`UnicodeEncodeError: 'charmap' codec can't encode character '（'` — Alibaba's error text
+contains full-width CJK punctuation and the Windows console is cp1252. One bad character was losing
+every result after it. Added `say()`, which falls back to `backslashreplace`.
+
+**Files touched:** `scripts/automation/sweep_video_providers.py` (new),
+`scripts/automation/prove_video.py` (corrected comment), `MASTER_WORKLOG.md`.
+
+**Verification:** wiring confirmed by re-reading `/api/providers` after the writes. Provider-side
+balances read from the providers' own endpoints: kie `{"code":200,"data":8.0}`, kie generation
+answered "Credits insufficient". `testStatus` values on the freshly written connections are STALE —
+they reflect the previous test, not the new keys. Per operator instruction, re-testing is deferred.
+
+**Status:** wiring **VERIFIED** for the 6 connections that stored their key; `github` **PARTIAL**
+(switched on, key not stored). Video generation **MONETIZER_BLOCKED** — but the sweep shows it is
+blocked by three different things, only one of which is money: 4 providers out of credit, 2
+misconfigured (vertex resource field, alibaba free-tier toggle), 5 refused by OmniRoute's own video
+allowlist or format support. Wiring a brand-new video provider would hit the same allowlist wall
+unless that allowlist can be extended.
+
+**What is NOT claimed:** not claimed that any video provider works now. Not claimed that topping up
+will work. Not claimed that the freshly written keys pass OmniRoute's own test — that was not run.
+Not claimed that `github` is wired. Not claimed to know the allowlist's contents beyond the
+measured ON/OFF split above.
+

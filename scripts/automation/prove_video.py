@@ -43,15 +43,22 @@ CANDIDATES = [
     ("gemini",  "gemini/veo-3.1-fast-generate-preview", 5),
 ]
 
-# Two ids in this list were wrong until 2026-08-22 and produced failures that LOOKED like
-# credential or credit problems but were neither:
-#   segmind/ltx-video-t2v            -> HTTP 404. No such model. OmniRoute's segmind registry has
-#                                       11 models; the only t2v ones are wan2.1-t2v and wan2.7-i2v.
-#   vertex/veo-3.0-fast-generate-001 -> HTTP 400 "Invalid resource field value". Vertex carries 61
-#                                       models here, all gemini/gemma text; the veo video models
-#                                       live under the `gemini` provider, not `vertex`.
-# Verify an id against `OmniRouteAPI().list_models()` before reading any failure as a money or
-# auth problem. A 404 or 400 here means the id is wrong; 402/403/502-with-balance-text means money.
+# CORRECTED 2026-08-22, second pass. An earlier version of this comment claimed the two ids below
+# "do not exist". THAT WAS WRONG and it was committed before being checked properly. Both are in
+# OmniRoute's registry:
+#     segmind/ltx-video-t2v             EXISTS  (segmind has 11 models, 5 of them video)
+#     vertex/veo-3.0-fast-generate-001  EXISTS  (vertex has 6 veo models, 2.0 through 3.1)
+# The error came from printing only the first 8 models per provider and concluding from a truncated
+# sample -- segmind's video ids sort after its flux/kandinsky image ids, so they were cut off.
+# Never conclude "no such model" from a sliced list. Test membership against the full id set.
+#
+# So the real causes of those two failures are UNDIAGNOSED, not wrong ids:
+#     segmind/ltx-video-t2v            -> HTTP 404, cause unknown. Same key and route as
+#                                         wan2.1-t2v, which reaches segmind and reports credits.
+#     vertex/veo-3.0-fast-generate-001 -> HTTP 400 "Invalid resource field value in the request",
+#                                         which reads like a Vertex project/region config problem.
+# OmniRoute truncates upstream error bodies to a single "{", so neither can be diagnosed through it.
+# Read an http code as: 402/403/406/502-with-balance-text = money; anything else = do not guess.
 
 PROMPT = "a single red balloon drifting upward against a clear blue sky, slow steady shot"
 GEN_TIMEOUT = 420          # measured 35s (grok-imagine); leave headroom, never retry a 4xx
