@@ -1271,3 +1271,13 @@ Evidence: test_em3_stream_retry_parity.py 7/7, test_em4_design_token_lint.py 14/
   captcha text -> HUMAN_REQUIRED_CAPTCHA.
 - **NEXT**: kill Chrome (ProcessSingleton lock), run live probe sweep across all 4 profiles to
   map which profile holds which provider login, then harvest the signed-in ones.
+
+### [2026-08-22] #1013 — REPOS CREATED: neon_unified + ases_v3_1 now on GitHub (private), pushed
+
+User directive: "create a repo for the in cli system has all credentials". gh CLI authenticated as isearchxsolve (repo scope). Pre-push safety: scanned tracked text files in both repos for credential patterns (sk-/sk-ant-/ghp_/AKIA/password=/api_key= literals) — CLEAN (the only grep hits were binary WASM/base64 blobs, not credentials).
+
+- Created https://github.com/isearchxsolve/neon_unified (private); remote added; pushed master (full remediation history incl. NU-1..5,7 fixes).
+- Created https://github.com/isearchxsolve/ases_v3_1 (private); remote added; pushed master (AS-1..4 fixes).
+- Already-remote repos confirmed: god_ai (emergentsh lives here as subdir), ideation_to_prototype, omniroute-monetizer.
+
+All five repos now have GitHub remotes; the earlier "no remote" caveat for neon_unified/ases_v3_1 is resolved.
