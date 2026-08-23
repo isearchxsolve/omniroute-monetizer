@@ -1,3 +1,18 @@
+### [2026-08-23 10:09] #1052 — AGENTROUTER MODELS ADDED TO LATEST CATEGORY ACROSS ZED & VS CODE
+
+- **Action**: Integrated the active `agentrouter` multi-model routing gateway into the client configurations across Zed, VS Code, and ZCode, bringing the total verified configured models under `[LATEST]` to **57 models**.
+- **AgentRouter Models Added**:
+  - `agentrouter/auto`: `⚡ [LATEST] AgentRouter Auto Multi-Model Gateway` (context 128k, output 16k)
+  - `agentrouter/claude-3-5-sonnet`: `👑 [LATEST] AgentRouter Claude 3.5 Sonnet` (context 200k, output 32k)
+  - `agentrouter/deepseek-v3`: `🧠 [LATEST] AgentRouter DeepSeek V3` (context 128k, output 16k)
+  - `agentrouter/gpt-4o`: `👑 [LATEST] AgentRouter GPT-4o Flagship` (context 128k, output 16k)
+- **Target Environments Updated**:
+  - **Zed Editor** (`%APPDATA%/Zed/settings.json`): Updated to **57 available models** under OmniRoute custom provider.
+  - **VS Code** (`%APPDATA%/Code/User/chatLanguageModels.json`): Updated to **57 models** under `OmniRoute Monetizer (Latest)`.
+  - **ZCode Client** (`%USERPROFILE%/.zcode/v2/config.json`): Updated with **57 models**.
+- **Artifacts Updated**:
+  - `scripts/automation/configure_latest_in_clients.py`
+
 ### [2026-08-23 09:59] #1051 — ALL HEALTHY MODELS TESTED AND CONFIGURED UNDER CATEGORY 'LATEST' ACROSS ZED & VS CODE
 
 - **Action**: Compiled and verified all 53 flagship models and routing cascades across the 62 healthy providers and configured them individually in Zed, VS Code, and ZCode under the category `[LATEST]`.

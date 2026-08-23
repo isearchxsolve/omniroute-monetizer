@@ -49,6 +49,12 @@ LATEST_MODELS = [
     ("reka/reka-flash", "⚡ [LATEST] Reka Flash Fast Multimodal", 128000, 16384),
     ("reka/reka-edge", "⚡ [LATEST] Reka Edge Ultra Low-Latency", 128000, 8192),
 
+    # --- AGENTROUTER MULTI-MODEL GATEWAY ---
+    ("agentrouter/auto", "⚡ [LATEST] AgentRouter Auto Multi-Model Gateway", 128000, 16384),
+    ("agentrouter/claude-3-5-sonnet", "👑 [LATEST] AgentRouter Claude 3.5 Sonnet", 200000, 32000),
+    ("agentrouter/deepseek-v3", "🧠 [LATEST] AgentRouter DeepSeek V3", 128000, 16384),
+    ("agentrouter/gpt-4o", "👑 [LATEST] AgentRouter GPT-4o Flagship", 128000, 16384),
+
     # --- OPENADAPTER & GROQ ---
     ("openadapter/0G-DeepSeek-V3", "⚡ [LATEST] OpenAdapter DeepSeek V3 Flagship", 128000, 16384),
     ("openadapter/0G-DeepSeek-v4-Flash", "⚡ [LATEST] OpenAdapter DeepSeek v4 Flash", 128000, 8192),
