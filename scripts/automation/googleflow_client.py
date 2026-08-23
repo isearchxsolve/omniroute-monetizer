@@ -52,6 +52,13 @@ MEDIA_URL = "https://labs.google/fx/api/trpc/media.getMediaUrlRedirect?name={}"
 
 RECAPTCHA_SITEKEY = "6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV"
 
+# The action label the Flow frontend passes to grecaptcha.enterprise.execute, read off the frontend's
+# own call. It is NOT optional and NOT interchangeable: minting with no action, or with a plausible
+# alternative (`generate`, `GENERATE_VIDEO`, `video_generation`, `PINHOLE`), makes the backend's
+# assessment fail and the submit answer 403 PUBLIC_ERROR_UNUSUAL_ACTIVITY -- the same error a genuine
+# abuse block produces, which is why this cost several wrong turns to pin down.
+RECAPTCHA_ACTION = "VIDEO_GENERATION"
+
 # The observed model keys. /v1/flow/models/statuses reports health under the short names on the left
 # of each pair; the submit RPC wants the t2v key on the right.
 MODELS = {
@@ -124,7 +131,7 @@ class FlowSession:
             self.refresh()
         return self._token  # type: ignore[return-value]
 
-    def mint_captcha(self, action: str | None = None) -> str:
+    def mint_captcha(self, action: str | None = RECAPTCHA_ACTION) -> str:
         opts = json.dumps({"action": action}) if action else "{}"
         with Page(self.match) as p:
             r = json.loads(p.evaluate(MINT_JS % (json.dumps(RECAPTCHA_SITEKEY), opts), timeout=60))
@@ -137,18 +144,31 @@ class FlowSession:
 
 
 def request(url: str, token: str, payload: dict | None = None, method: str = "POST",
-            timeout: int = 120) -> tuple[int, str]:
+            timeout: int = 120, retries: int = 4) -> tuple[int, str]:
+    """One HTTP call, with retries on TRANSPORT failures only.
+
+    Polling a generation for minutes over a keep-alive connection does hit RemoteDisconnected in
+    practice -- observed once mid-poll on a run that was otherwise fine. Retrying a transport error is
+    safe because a dropped connection means the request was never answered; retrying an HTTP status is
+    NOT safe (a repeated submit would mint a second video and charge again), so statuses are returned
+    to the caller untouched.
+    """
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
-    req = urllib.request.Request(
-        url, method=method, data=data,
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")
-    except Exception as e:
-        return 0, f"{type(e).__name__}: {e}"
+    last = (0, "no attempt")
+    for attempt in range(retries):
+        req = urllib.request.Request(
+            url, method=method, data=data,
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}",
+                     "Connection": "close"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.status, r.read().decode("utf-8", "replace")
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode("utf-8", "replace")
+        except Exception as e:
+            last = (0, f"{type(e).__name__}: {e}")
+            time.sleep(1.5 * (attempt + 1))
+    return last
 
 
 def build_submit_body(prompt: str, captcha: str, project_id: str, *,
@@ -235,8 +255,51 @@ def wait(sess: FlowSession, media_id: str, *, budget: int = 600, every: int = 10
     raise TimeoutError(f"still {last} after {budget}s")
 
 
-# --------------------------------------------------------------------------- commands
+# --------------------------------------------------------------------------- bytes
 
+OUT_DIR = pathlib.Path(r"D:\omniroute-monetizer\state\harvest\flow")
+
+
+def session_cookie_header(match: str = "tools/flow") -> tuple[str, list[str]]:
+    """Cookie header for labs.google, read out of the live tab over CDP.
+
+    The finished video is served by labs.google/fx/api/trpc/media.getMediaUrlRedirect, which is
+    COOKIE-authenticated (not bearer) and redirects to a signed URL on another origin. That redirect
+    is why an in-page fetch cannot be used -- the final response carries no CORS headers, so the
+    browser reports a bare "Failed to fetch". Python has no such restriction, so the bytes are pulled
+    server-side with the session's own cookies.
+
+    Returns (header, names). Only the NAMES are ever safe to display; the header is a credential.
+    """
+    with Page(match) as p:
+        p.send("Network.enable", {}, timeout=30)
+        r = p.send("Network.getCookies", {"urls": ["https://labs.google/"]}, timeout=30)
+    cookies = r.get("cookies", [])
+    header = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
+    return header, [c["name"] for c in cookies]
+
+
+def download(media_id: str, dest: pathlib.Path | None = None) -> pathlib.Path:
+    header, names = session_cookie_header()
+    if not header:
+        raise RuntimeError("no labs.google cookies in the live tab")
+    print(f"  cookies: {len(names)} ({', '.join(sorted(names)[:6])}{'...' if len(names) > 6 else ''})")
+    req = urllib.request.Request(
+        MEDIA_URL.format(media_id),
+        headers={"Cookie": header,
+                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                 "Accept": "*/*"})
+    with urllib.request.urlopen(req, timeout=300) as r:
+        if r.status != 200:
+            raise RuntimeError(f"media fetch HTTP {r.status}")
+        data = r.read()
+    dest = dest or (OUT_DIR / f"{media_id}.mp4")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+    return dest
+
+
+# --------------------------------------------------------------------------- commands
 
 def cmd_probe(a) -> int:
     """Zero credits: does a MINTED captcha get accepted? Empty prompt guarantees no generation."""
@@ -274,11 +337,29 @@ def cmd_probe(a) -> int:
     return 1
 
 
+def cmd_poll(a) -> int:
+    """Resume an already-submitted generation. Safe to re-run: polling never charges."""
+    sess = FlowSession().refresh()
+    m = wait(sess, a.media_id, budget=a.budget)
+    print(f"  length={m.get('video', {}).get('dimensions', {}).get('length')}"
+          f"  bytes={m.get('mediaMetadata', {}).get('mediaBlobSize')}")
+    return 0
+
+
 def cmd_credits(a) -> int:
     sess = FlowSession().refresh()
     status, text = request(CREDITS_URL, sess.token, None, method="GET")
     print(f"{sess.email:<32} HTTP {status}  {scrub(text)[:200]}")
     return 0 if status == 200 else 1
+
+
+def cmd_fetch(a) -> int:
+    dest = download(a.media_id)
+    head = dest.read_bytes()[:16]
+    kind = "MP4" if b"ftyp" in head else f"UNKNOWN {head[:8]!r}"
+    print(f"  {dest}")
+    print(f"  {dest.stat().st_size} bytes, container={kind}")
+    return 0
 
 
 def cmd_generate(a) -> int:
@@ -315,6 +396,15 @@ def main() -> int:
     p.set_defaults(fn=cmd_probe)
 
     c = sub.add_parser("credits"); c.set_defaults(fn=cmd_credits)
+
+    q = sub.add_parser("poll", help="resume polling a submitted generation (never charges)")
+    q.add_argument("media_id")
+    q.add_argument("--budget", type=int, default=600)
+    q.set_defaults(fn=cmd_poll)
+
+    f = sub.add_parser("fetch", help="download a finished video's bytes (never charges)")
+    f.add_argument("media_id")
+    f.set_defaults(fn=cmd_fetch)
 
     g = sub.add_parser("generate", help="submit one real generation (spends credits)")
     g.add_argument("prompt")
