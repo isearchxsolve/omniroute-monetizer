@@ -889,6 +889,23 @@ def login_wall(page) -> bool:
     return bool(LOGIN_WALL_TEXT_RE.search(body_text(page)))
 
 
+def unfold(page, steps: int = 6) -> None:
+    """Scroll through the page's height so below-the-fold, lazily-rendered sections actually
+    enter the DOM. MEASURED 2026-08-23 (operator: "you have to scroll down to see the api key
+    section") -- the API-keys card was not in the DOM at all until the page was scrolled.
+    """
+    try:
+        h = page.evaluate("document.body.scrollHeight") or 0
+        vh = page.evaluate("window.innerHeight") or 900
+        for i in range(1, steps + 1):
+            page.evaluate(f"window.scrollTo(0, {min(h, int(vh * i * 1.2))})")
+            page.wait_for_timeout(450)
+        page.evaluate("window.scrollTo(0, 0)")
+        page.wait_for_timeout(400)
+    except Exception:
+        pass
+
+
 def shot(page, name: str) -> Optional[str]:
     SHOTS.mkdir(parents=True, exist_ok=True)
     p = SHOTS / f"{name}.png"
@@ -1573,6 +1590,7 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
         phase(page, f"{slug}: CAPTURING KEY")
         log("        on the key page -- pausing to capture the key before anything else")
         settle(page, 2500)
+        unfold(page)          # bring the below-fold API-keys card into the DOM
         dismiss_overlays(page)
 
         w = wall_page(page)
