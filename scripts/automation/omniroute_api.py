@@ -188,6 +188,28 @@ class OmniRouteAPI:
             body = {"raw": redact(r.text[:500])}
         return {"http_status": r.status_code, "body": body}
 
+    def create_connection(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """POST /api/providers to add a NEW provider connection.
+
+        There was no create path in this client before 2026-08-23 -- every provider we touched
+        already existed. Google Flow is the first genuinely new video connection: its `google-flow`
+        format is in OmniRoute's registry but no connection instance existed, so one has to be
+        created. The management route that backs the dashboard's "Add provider" button is
+        POST /api/providers; the body mirrors the fields a GET connection returns (provider,
+        apiKey, authType, name, isActive, priority). The token goes in `apiKey` exactly as the
+        vertex connection stores its harvested Google OAuth token (measured: vertex.apiKey begins
+        `AQ.` -- a Google token, not a GCP key), so google-flow follows the same convention.
+
+        Returns {http_status, body}. Never logs the token: the caller masks it.
+        """
+        self._ensure_login()
+        r = self.session.post(f"{self.api}/providers", json=payload, timeout=30)
+        try:
+            body = r.json()
+        except Exception:
+            body = {"raw": redact(r.text[:500])}
+        return {"http_status": r.status_code, "body": body}
+
     def test_connection(self, cid: str) -> Dict[str, Any]:
         self._ensure_login()
         try:

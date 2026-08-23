@@ -1,0 +1,10 @@
+{
+  "slug": "googleflow",
+  "recorded_by": "agent via drive.py",
+  "steps": [
+    {
+      "action": "goto",
+      "url": "https://labs.google/fx/tools/flow"
+    }
+  ]
+}

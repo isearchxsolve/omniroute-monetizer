@@ -1,0 +1,21 @@
+{
+  "slug": "kie-2",
+  "recorded_by": "agent via drive.py",
+  "steps": [
+    {
+      "action": "goto",
+      "url": "https://kie.ai/api-key"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Sign in with Google",
+      "frame": 2,
+      "popup": true
+    },
+    {
+      "action": "goto",
+      "url": "https://kie.ai/login"
+    }
+  ]
+}

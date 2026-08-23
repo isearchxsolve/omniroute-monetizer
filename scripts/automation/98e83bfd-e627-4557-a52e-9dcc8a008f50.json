@@ -7,22 +7,1344 @@
   "modelDiscoveryEnabled": false,
   "inferenceModels": [
     {
-      "name": "auto/best-free",
-      "labelOverride": "OmniRoute Auto (free)",
-      "anthropicFamilyTier": "opus",
+      "name": "ainative/claude-opus-4",
+      "labelOverride": "OmniRoute confirmed: ainative/claude-opus-4",
       "isFamilyDefault": true
     },
     {
-      "name": "auto/best-coding",
-      "labelOverride": "OmniRoute Coding",
-      "anthropicFamilyTier": "sonnet",
-      "isFamilyDefault": true
+      "name": "ainative/deepseek-v4-pro",
+      "labelOverride": "OmniRoute confirmed: ainative/deepseek-v4-pro",
+      "isFamilyDefault": false
     },
     {
-      "name": "auto/fast",
-      "labelOverride": "OmniRoute Fast",
-      "anthropicFamilyTier": "haiku",
-      "isFamilyDefault": true
+      "name": "ainative/deepseek-3.2",
+      "labelOverride": "OmniRoute confirmed: ainative/deepseek-3.2",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "ainative/deepseek-v3.2",
+      "labelOverride": "OmniRoute confirmed: ainative/deepseek-v3.2",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "ainative/kimi-k2-thinking",
+      "labelOverride": "OmniRoute confirmed: ainative/kimi-k2-thinking",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "ainative/mimo-v2.5-pro",
+      "labelOverride": "OmniRoute confirmed: ainative/mimo-v2.5-pro",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "ainative/gpt-4o",
+      "labelOverride": "OmniRoute confirmed: ainative/gpt-4o",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "ainative/kimi-k2",
+      "labelOverride": "OmniRoute confirmed: ainative/kimi-k2",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "ainative/gpt-4o-mini",
+      "labelOverride": "OmniRoute confirmed: ainative/gpt-4o-mini",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "ainative/llama-4-scout",
+      "labelOverride": "OmniRoute confirmed: ainative/llama-4-scout",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "ainative/llama-4-maverick",
+      "labelOverride": "OmniRoute confirmed: ainative/llama-4-maverick",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/x-ai/grok-4.3",
+      "labelOverride": "OmniRoute confirmed: openrouter/x-ai/grok-4.3",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/x-ai/grok-4.5",
+      "labelOverride": "OmniRoute confirmed: openrouter/x-ai/grok-4.5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/x-ai/grok-4.20",
+      "labelOverride": "OmniRoute confirmed: openrouter/x-ai/grok-4.20",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/morph/morph-v3-large",
+      "labelOverride": "OmniRoute confirmed: openrouter/morph/morph-v3-large",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/perplexity/sonar-pro-search",
+      "labelOverride": "OmniRoute confirmed: openrouter/perplexity/sonar-pro-search",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/google/gemini-3.1-flash-lite",
+      "labelOverride": "OmniRoute confirmed: openrouter/google/gemini-3.1-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/openai/gpt-5.2",
+      "labelOverride": "OmniRoute confirmed: openrouter/openai/gpt-5.2",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/openrouter/free",
+      "labelOverride": "OmniRoute confirmed: openrouter/openrouter/free",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/aion-labs/aion-2.0",
+      "labelOverride": "OmniRoute confirmed: openrouter/aion-labs/aion-2.0",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/aion-labs/aion-3.0",
+      "labelOverride": "OmniRoute confirmed: openrouter/aion-labs/aion-3.0",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/morph/morph-v3-fast",
+      "labelOverride": "OmniRoute confirmed: openrouter/morph/morph-v3-fast",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/openai/gpt-5.2-codex",
+      "labelOverride": "OmniRoute confirmed: openrouter/openai/gpt-5.2-codex",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/openai/gpt-5.3-codex",
+      "labelOverride": "OmniRoute confirmed: openrouter/openai/gpt-5.3-codex",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/aion-labs/aion-3.0-mini",
+      "labelOverride": "OmniRoute confirmed: openrouter/aion-labs/aion-3.0-mini",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/cohere/command-r-08-2024",
+      "labelOverride": "OmniRoute confirmed: openrouter/cohere/command-r-08-2024",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/google/gemma-4-31b-it:free",
+      "labelOverride": "OmniRoute confirmed: openrouter/google/gemma-4-31b-it:free",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/cohere/command-r-plus-08-2024",
+      "labelOverride": "OmniRoute confirmed: openrouter/cohere/command-r-plus-08-2024",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/aion-labs/aion-rp-llama-3.1-8b",
+      "labelOverride": "OmniRoute confirmed: openrouter/aion-labs/aion-rp-llama-3.1-8b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/nvidia/nemotron-3-nano-30b-a3b",
+      "labelOverride": "OmniRoute confirmed: openrouter/nvidia/nemotron-3-nano-30b-a3b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openrouter/nvidia/nemotron-3-super-120b-a12b",
+      "labelOverride": "OmniRoute confirmed: openrouter/nvidia/nemotron-3-super-120b-a12b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "alibaba/qwen3.7-max",
+      "labelOverride": "OmniRoute confirmed: alibaba/qwen3.7-max",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "alibaba/qwen3.5-plus",
+      "labelOverride": "OmniRoute confirmed: alibaba/qwen3.5-plus",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "gemini/gemini-3.1-flash-lite-preview",
+      "labelOverride": "OmniRoute confirmed: gemini/gemini-3.1-flash-lite-preview",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "gemini/gemini-robotics-er-1.6-preview",
+      "labelOverride": "OmniRoute confirmed: gemini/gemini-robotics-er-1.6-preview",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kiro/claude-sonnet-4.5",
+      "labelOverride": "OmniRoute confirmed: kiro/claude-sonnet-4.5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kiro/deepseek-3.2",
+      "labelOverride": "OmniRoute confirmed: kiro/deepseek-3.2",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kiro/qwen3-coder-next",
+      "labelOverride": "OmniRoute confirmed: kiro/qwen3-coder-next",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kiro/auto",
+      "labelOverride": "OmniRoute confirmed: kiro/auto",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/x-ai/grok-4.5",
+      "labelOverride": "OmniRoute confirmed: kilocode/x-ai/grok-4.5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/morph/morph-v3-large",
+      "labelOverride": "OmniRoute confirmed: kilocode/morph/morph-v3-large",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/google/gemini-3.1-flash-lite",
+      "labelOverride": "OmniRoute confirmed: kilocode/google/gemini-3.1-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/openrouter/free",
+      "labelOverride": "OmniRoute confirmed: kilocode/openrouter/free",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/aion-labs/aion-2.0",
+      "labelOverride": "OmniRoute confirmed: kilocode/aion-labs/aion-2.0",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/aion-labs/aion-3.0",
+      "labelOverride": "OmniRoute confirmed: kilocode/aion-labs/aion-3.0",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/morph/morph-v3-fast",
+      "labelOverride": "OmniRoute confirmed: kilocode/morph/morph-v3-fast",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/aion-labs/aion-3.0-mini",
+      "labelOverride": "OmniRoute confirmed: kilocode/aion-labs/aion-3.0-mini",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/cohere/command-r-08-2024",
+      "labelOverride": "OmniRoute confirmed: kilocode/cohere/command-r-08-2024",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/cohere/command-r7b-12-2024",
+      "labelOverride": "OmniRoute confirmed: kilocode/cohere/command-r7b-12-2024",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/cohere/command-r-plus-08-2024",
+      "labelOverride": "OmniRoute confirmed: kilocode/cohere/command-r-plus-08-2024",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/aion-labs/aion-rp-llama-3.1-8b",
+      "labelOverride": "OmniRoute confirmed: kilocode/aion-labs/aion-rp-llama-3.1-8b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/nvidia/nemotron-3-nano-30b-a3b",
+      "labelOverride": "OmniRoute confirmed: kilocode/nvidia/nemotron-3-nano-30b-a3b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "kilocode/nvidia/nemotron-3-super-120b-a12b",
+      "labelOverride": "OmniRoute confirmed: kilocode/nvidia/nemotron-3-super-120b-a12b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "labelOverride": "OmniRoute confirmed: nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/meta/llama-3.1-8b-instruct",
+      "labelOverride": "OmniRoute confirmed: nvidia/meta/llama-3.1-8b-instruct",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/mistralai/mistral-nemotron",
+      "labelOverride": "OmniRoute confirmed: nvidia/mistralai/mistral-nemotron",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/nvidia/nemotron-3-nano-30b-a3b",
+      "labelOverride": "OmniRoute confirmed: nvidia/nvidia/nemotron-3-nano-30b-a3b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/nvidia/nemotron-nano-12b-v2-vl",
+      "labelOverride": "OmniRoute confirmed: nvidia/nvidia/nemotron-nano-12b-v2-vl",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/nvidia/nemotron-mini-4b-instruct",
+      "labelOverride": "OmniRoute confirmed: nvidia/nvidia/nemotron-mini-4b-instruct",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/nvidia/nemotron-3-super-120b-a12b",
+      "labelOverride": "OmniRoute confirmed: nvidia/nvidia/nemotron-3-super-120b-a12b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/meta/llama-3.2-11b-vision-instruct",
+      "labelOverride": "OmniRoute confirmed: nvidia/meta/llama-3.2-11b-vision-instruct",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/meta/llama-3.2-90b-vision-instruct",
+      "labelOverride": "OmniRoute confirmed: nvidia/meta/llama-3.2-90b-vision-instruct",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/nvidia/nemotron-3.5-content-safety",
+      "labelOverride": "OmniRoute confirmed: nvidia/nvidia/nemotron-3.5-content-safety",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+      "labelOverride": "OmniRoute confirmed: nvidia/nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/nvidia/llama-3.1-nemoguard-8b-topic-control",
+      "labelOverride": "OmniRoute confirmed: nvidia/nvidia/llama-3.1-nemoguard-8b-topic-control",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/nvidia/llama-3.1-nemoguard-8b-content-safety",
+      "labelOverride": "OmniRoute confirmed: nvidia/nvidia/llama-3.1-nemoguard-8b-content-safety",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nvidia/nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
+      "labelOverride": "OmniRoute confirmed: nvidia/nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/devstral-2512",
+      "labelOverride": "OmniRoute confirmed: mistral/devstral-2512",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/devstral-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/devstral-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/codestral-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/codestral-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/mistral-medium-2505",
+      "labelOverride": "OmniRoute confirmed: mistral/mistral-medium-2505",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/mistral-medium-2508",
+      "labelOverride": "OmniRoute confirmed: mistral/mistral-medium-2508",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/mistral-medium-2604",
+      "labelOverride": "OmniRoute confirmed: mistral/mistral-medium-2604",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/mistral-medium-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/mistral-medium-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/voxtral-small-2507",
+      "labelOverride": "OmniRoute confirmed: mistral/voxtral-small-2507",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/ministral-3b-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/ministral-3b-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/ministral-8b-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/ministral-8b-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/mistral-code-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/mistral-code-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/ministral-14b-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/ministral-14b-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/mistral-small-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/mistral-small-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/voxtral-small-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/voxtral-small-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/mistral-vibe-cli-fast",
+      "labelOverride": "OmniRoute confirmed: mistral/mistral-vibe-cli-fast",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/magistral-small-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/magistral-small-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/mistral-code-fim-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/mistral-code-fim-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/mistral-vibe-cli-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/mistral-vibe-cli-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/mistral-code-agent-latest",
+      "labelOverride": "OmniRoute confirmed: mistral/mistral-code-agent-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "mistral/mistral-vibe-cli-with-tools",
+      "labelOverride": "OmniRoute confirmed: mistral/mistral-vibe-cli-with-tools",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "deepinfra/google/gemini-3.1-flash-lite",
+      "labelOverride": "OmniRoute confirmed: deepinfra/google/gemini-3.1-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/alibaba/qwen-max",
+      "labelOverride": "OmniRoute confirmed: requesty/alibaba/qwen-max",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/alibaba/qwen3-max",
+      "labelOverride": "OmniRoute confirmed: requesty/alibaba/qwen3-max",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/alibaba/qwen3.6-plus",
+      "labelOverride": "OmniRoute confirmed: requesty/alibaba/qwen3.6-plus",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/alibaba/qwen3-coder-plus",
+      "labelOverride": "OmniRoute confirmed: requesty/alibaba/qwen3-coder-plus",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/alibaba/qwen3-coder-flash",
+      "labelOverride": "OmniRoute confirmed: requesty/alibaba/qwen3-coder-flash",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/alibaba/qwen3-30b-a3b-instruct-2507",
+      "labelOverride": "OmniRoute confirmed: requesty/alibaba/qwen3-30b-a3b-instruct-2507",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/mistral/devstral-latest",
+      "labelOverride": "OmniRoute confirmed: requesty/mistral/devstral-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/mistral/codestral-latest",
+      "labelOverride": "OmniRoute confirmed: requesty/mistral/codestral-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/mistral/devstral-small-latest",
+      "labelOverride": "OmniRoute confirmed: requesty/mistral/devstral-small-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "labelOverride": "OmniRoute confirmed: requesty/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/mistral/mistral-medium-3-5",
+      "labelOverride": "OmniRoute confirmed: requesty/mistral/mistral-medium-3-5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/google/gemini-3.1-flash-lite",
+      "labelOverride": "OmniRoute confirmed: requesty/google/gemini-3.1-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/mistral/mistral-large-latest",
+      "labelOverride": "OmniRoute confirmed: requesty/mistral/mistral-large-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/mistral/mistral-medium-latest",
+      "labelOverride": "OmniRoute confirmed: requesty/mistral/mistral-medium-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/openai/gpt-5.1",
+      "labelOverride": "OmniRoute confirmed: requesty/openai/gpt-5.1",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/openai/gpt-5.2",
+      "labelOverride": "OmniRoute confirmed: requesty/openai/gpt-5.2",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/mistral/open-mistral-7b",
+      "labelOverride": "OmniRoute confirmed: requesty/mistral/open-mistral-7b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/mistral/mistral-small-2503",
+      "labelOverride": "OmniRoute confirmed: requesty/mistral/mistral-small-2503",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/mistral/mistral-small-2603",
+      "labelOverride": "OmniRoute confirmed: requesty/mistral/mistral-small-2603",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/mistral/mistral-small-latest",
+      "labelOverride": "OmniRoute confirmed: requesty/mistral/mistral-small-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/nvidia/nemotron-3-nano-30b-a3b",
+      "labelOverride": "OmniRoute confirmed: requesty/nvidia/nemotron-3-nano-30b-a3b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/nvidia/nemotron-3-super-120b-a12b",
+      "labelOverride": "OmniRoute confirmed: requesty/nvidia/nemotron-3-super-120b-a12b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "requesty/nvidia/nemotron-3.5-content-safety",
+      "labelOverride": "OmniRoute confirmed: requesty/nvidia/nemotron-3.5-content-safety",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "opencode-zen/qwen3.5-plus",
+      "labelOverride": "OmniRoute confirmed: opencode-zen/qwen3.5-plus",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "opencode-zen/gemini-3.1-pro",
+      "labelOverride": "OmniRoute confirmed: opencode-zen/gemini-3.1-pro",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "opencode-zen/hy3-free",
+      "labelOverride": "OmniRoute confirmed: opencode-zen/hy3-free",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "opencode-zen/big-pickle",
+      "labelOverride": "OmniRoute confirmed: opencode-zen/big-pickle",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "opencode-zen/laguna-s-2.1-free",
+      "labelOverride": "OmniRoute confirmed: opencode-zen/laguna-s-2.1-free",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "opencode-zen/nemotron-3.5-lightning-free",
+      "labelOverride": "OmniRoute confirmed: opencode-zen/nemotron-3.5-lightning-free",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "chatgpt-web/gpt-5.6-pro",
+      "labelOverride": "OmniRoute confirmed: chatgpt-web/gpt-5.6-pro",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "chatgpt-web/gpt-5.6-thinking",
+      "labelOverride": "OmniRoute confirmed: chatgpt-web/gpt-5.6-thinking",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "chatgpt-web/gpt-5.5-thinking",
+      "labelOverride": "OmniRoute confirmed: chatgpt-web/gpt-5.5-thinking",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "chatgpt-web/gpt-5.5-pro-extended",
+      "labelOverride": "OmniRoute confirmed: chatgpt-web/gpt-5.5-pro-extended",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "reka/reka-flash",
+      "labelOverride": "OmniRoute confirmed: reka/reka-flash",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "reka/reka-edge-2603",
+      "labelOverride": "OmniRoute confirmed: reka/reka-edge-2603",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/GPT-5.6-Luna",
+      "labelOverride": "OmniRoute confirmed: openadapter/GPT-5.6-Luna",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/DeepSeek-V4-Pro",
+      "labelOverride": "OmniRoute confirmed: openadapter/DeepSeek-V4-Pro",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/DeepSeek-V4-Flash",
+      "labelOverride": "OmniRoute confirmed: openadapter/DeepSeek-V4-Flash",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Qwen3.5-VL",
+      "labelOverride": "OmniRoute confirmed: openadapter/Qwen3.5-VL",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Qwen3.5-122B",
+      "labelOverride": "OmniRoute confirmed: openadapter/Qwen3.5-122B",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Qwen2.5-Coder",
+      "labelOverride": "OmniRoute confirmed: openadapter/Qwen2.5-Coder",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/0G-DeepSeek-V3",
+      "labelOverride": "OmniRoute confirmed: openadapter/0G-DeepSeek-V3",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Kimi-K2-Think",
+      "labelOverride": "OmniRoute confirmed: openadapter/Kimi-K2-Think",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Hy3",
+      "labelOverride": "OmniRoute confirmed: openadapter/Hy3",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/GLM-5",
+      "labelOverride": "OmniRoute confirmed: openadapter/GLM-5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Kimi-K2",
+      "labelOverride": "OmniRoute confirmed: openadapter/Kimi-K2",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Kimi-K2.5",
+      "labelOverride": "OmniRoute confirmed: openadapter/Kimi-K2.5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/M2-HerOS2",
+      "labelOverride": "OmniRoute confirmed: openadapter/M2-HerOS2",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/GPT-20-OSS",
+      "labelOverride": "OmniRoute confirmed: openadapter/GPT-20-OSS",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Gemma-2-27B",
+      "labelOverride": "OmniRoute confirmed: openadapter/Gemma-2-27B",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Gemma-3-12B",
+      "labelOverride": "OmniRoute confirmed: openadapter/Gemma-3-12B",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Gemma-3-27B",
+      "labelOverride": "OmniRoute confirmed: openadapter/Gemma-3-27B",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Hermes-4-14B",
+      "labelOverride": "OmniRoute confirmed: openadapter/Hermes-4-14B",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Llama-3.1-8B",
+      "labelOverride": "OmniRoute confirmed: openadapter/Llama-3.1-8B",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Mathstral-7B",
+      "labelOverride": "OmniRoute confirmed: openadapter/Mathstral-7B",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Hermes-4-405B",
+      "labelOverride": "OmniRoute confirmed: openadapter/Hermes-4-405B",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/0GM-1.0-35B-A3B",
+      "labelOverride": "OmniRoute confirmed: openadapter/0GM-1.0-35B-A3B",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Gemma-4-31B-TEE",
+      "labelOverride": "OmniRoute confirmed: openadapter/Gemma-4-31B-TEE",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/MiniMax-M2.5-TEE",
+      "labelOverride": "OmniRoute confirmed: openadapter/MiniMax-M2.5-TEE",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Llama-3.2-Vision-90B",
+      "labelOverride": "OmniRoute confirmed: openadapter/Llama-3.2-Vision-90B",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/Nemotron-3-Super-120B",
+      "labelOverride": "OmniRoute confirmed: openadapter/Nemotron-3-Super-120B",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "openadapter/OA-Robin-Mini-Preview",
+      "labelOverride": "OmniRoute confirmed: openadapter/OA-Robin-Mini-Preview",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agentrouter/gpt-5.6-sol",
+      "labelOverride": "OmniRoute confirmed: agentrouter/gpt-5.6-sol",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agentrouter/claude-opus-5",
+      "labelOverride": "OmniRoute confirmed: agentrouter/claude-opus-5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/gpt-5.6-sol",
+      "labelOverride": "OmniRoute confirmed: llm7/gpt-5.6-sol",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/claude-opus-5",
+      "labelOverride": "OmniRoute confirmed: llm7/claude-opus-5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/gpt-5.6-terra",
+      "labelOverride": "OmniRoute confirmed: llm7/gpt-5.6-terra",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "t3-web/claude-opus-4",
+      "labelOverride": "OmniRoute confirmed: t3-web/claude-opus-4",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gpt-5.6-sol",
+      "labelOverride": "OmniRoute confirmed: inference-net/gpt-5.6-sol",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gpt-5.6-luna",
+      "labelOverride": "OmniRoute confirmed: inference-net/gpt-5.6-luna",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/claude-opus-5",
+      "labelOverride": "OmniRoute confirmed: inference-net/claude-opus-5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gpt-5.6-terra",
+      "labelOverride": "OmniRoute confirmed: inference-net/gpt-5.6-terra",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/gpt-5.4",
+      "labelOverride": "OmniRoute confirmed: llm7/gpt-5.4",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/gpt-5.5",
+      "labelOverride": "OmniRoute confirmed: llm7/gpt-5.5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/gpt-5.4-mini",
+      "labelOverride": "OmniRoute confirmed: llm7/gpt-5.4-mini",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "lmarena/qwen3.7-max",
+      "labelOverride": "OmniRoute confirmed: lmarena/qwen3.7-max",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/claude-sonnet-5",
+      "labelOverride": "OmniRoute confirmed: llm7/claude-sonnet-5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gpt-5.4",
+      "labelOverride": "OmniRoute confirmed: inference-net/gpt-5.4",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gpt-5.5",
+      "labelOverride": "OmniRoute confirmed: inference-net/gpt-5.5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "bazaarlink/qwen3.7-max",
+      "labelOverride": "OmniRoute confirmed: bazaarlink/qwen3.7-max",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "t3-web/claude-sonnet-4",
+      "labelOverride": "OmniRoute confirmed: t3-web/claude-sonnet-4",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "lmarena/claude-sonnet-5",
+      "labelOverride": "OmniRoute confirmed: lmarena/claude-sonnet-5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "github/claude-sonnet-4.6",
+      "labelOverride": "OmniRoute confirmed: github/claude-sonnet-4.6",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "pollinations/qwen3.7-max",
+      "labelOverride": "OmniRoute confirmed: pollinations/qwen3.7-max",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "bazaarlink/claude-sonnet-4.5",
+      "labelOverride": "OmniRoute confirmed: bazaarlink/claude-sonnet-4.5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "bazaarlink/claude-sonnet-4.6",
+      "labelOverride": "OmniRoute confirmed: bazaarlink/claude-sonnet-4.6",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/deepseek-v4-pro",
+      "labelOverride": "OmniRoute confirmed: inference-net/deepseek-v4-pro",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/deepseek-v4-flash",
+      "labelOverride": "OmniRoute confirmed: inference-net/deepseek-v4-flash",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/grok-4.5",
+      "labelOverride": "OmniRoute confirmed: llm7/grok-4.5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/grok-4.6",
+      "labelOverride": "OmniRoute confirmed: llm7/grok-4.6",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "aimlapi/deepseek-chat",
+      "labelOverride": "OmniRoute confirmed: aimlapi/deepseek-chat",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/grok-4.5",
+      "labelOverride": "OmniRoute confirmed: inference-net/grok-4.5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/grok-4.6",
+      "labelOverride": "OmniRoute confirmed: inference-net/grok-4.6",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-3.6-flash-low",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-3.6-flash-low",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-3.6-flash-high",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-3.6-flash-high",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-3.6-flash-medium",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-3.6-flash-medium",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-3.6-flash-tiered",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-3.6-flash-tiered",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-3.7-flash-tiered",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-3.7-flash-tiered",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nous-research/x-ai/grok-4.3",
+      "labelOverride": "OmniRoute confirmed: nous-research/x-ai/grok-4.3",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nous-research/x-ai/grok-4.5",
+      "labelOverride": "OmniRoute confirmed: nous-research/x-ai/grok-4.5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nous-research/x-ai/grok-4.20",
+      "labelOverride": "OmniRoute confirmed: nous-research/x-ai/grok-4.20",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cloudflare-ai/@cf/qwen/qwq-32b",
+      "labelOverride": "OmniRoute confirmed: cloudflare-ai/@cf/qwen/qwq-32b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "antigravity/gemini-3.6-flash-low",
+      "labelOverride": "OmniRoute confirmed: antigravity/gemini-3.6-flash-low",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "antigravity/gemini-3.6-flash-high",
+      "labelOverride": "OmniRoute confirmed: antigravity/gemini-3.6-flash-high",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "orcarouter/deepseek/deepseek-chat",
+      "labelOverride": "OmniRoute confirmed: orcarouter/deepseek/deepseek-chat",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "antigravity/gemini-3.6-flash-medium",
+      "labelOverride": "OmniRoute confirmed: antigravity/gemini-3.6-flash-medium",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "sealion/aisingapore/Qwen-SEA-LION-v4-32B-IT",
+      "labelOverride": "OmniRoute confirmed: sealion/aisingapore/Qwen-SEA-LION-v4-32B-IT",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "publicai/aisingapore/Qwen-SEA-LION-v4-32B-IT",
+      "labelOverride": "OmniRoute confirmed: publicai/aisingapore/Qwen-SEA-LION-v4-32B-IT",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cloudflare-ai/@cf/qwen/qwen2.5-coder-32b-instruct",
+      "labelOverride": "OmniRoute confirmed: cloudflare-ai/@cf/qwen/qwen2.5-coder-32b-instruct",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/codestral-latest",
+      "labelOverride": "OmniRoute confirmed: llm7/codestral-latest",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-2.5-flash-thinking",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-2.5-flash-thinking",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cohere/command-a-reasoning-08-2025",
+      "labelOverride": "OmniRoute confirmed: cohere/command-a-reasoning-08-2025",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "antigravity/gemini-2.5-flash-thinking",
+      "labelOverride": "OmniRoute confirmed: antigravity/gemini-2.5-flash-thinking",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-2.5-flash",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-2.5-flash",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-pro-agent",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-pro-agent",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "morph/morph-dsv4flash",
+      "labelOverride": "OmniRoute confirmed: morph/morph-dsv4flash",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-3.1-pro-low",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-3.1-pro-low",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "t3-web/gemini-2.5-flash",
+      "labelOverride": "OmniRoute confirmed: t3-web/gemini-2.5-flash",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-3.5-flash-low",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-3.5-flash-low",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-2.5-flash-lite",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-2.5-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "agy/gemini-3.1-flash-lite",
+      "labelOverride": "OmniRoute confirmed: agy/gemini-3.1-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/gemini-3.5-flash-low",
+      "labelOverride": "OmniRoute confirmed: llm7/gemini-3.5-flash-low",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/gemini-3.1-flash-lite",
+      "labelOverride": "OmniRoute confirmed: llm7/gemini-3.1-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "pollinations/mimo-v2.5-pro",
+      "labelOverride": "OmniRoute confirmed: pollinations/mimo-v2.5-pro",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "antigravity/gemini-pro-agent",
+      "labelOverride": "OmniRoute confirmed: antigravity/gemini-pro-agent",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "lmarena/gemini-3.1-flash-lite",
+      "labelOverride": "OmniRoute confirmed: lmarena/gemini-3.1-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "antigravity/gemini-3.1-pro-low",
+      "labelOverride": "OmniRoute confirmed: antigravity/gemini-3.1-pro-low",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gemini-2.5-flash",
+      "labelOverride": "OmniRoute confirmed: inference-net/gemini-2.5-flash",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "antigravity/gemini-3.5-flash-low",
+      "labelOverride": "OmniRoute confirmed: antigravity/gemini-3.5-flash-low",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "orcarouter/google/gemini-2.5-flash",
+      "labelOverride": "OmniRoute confirmed: orcarouter/google/gemini-2.5-flash",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gemini-2.5-flash-lite",
+      "labelOverride": "OmniRoute confirmed: inference-net/gemini-2.5-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gemini-3.1-flash-lite",
+      "labelOverride": "OmniRoute confirmed: inference-net/gemini-3.1-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gemini-3.5-flash-lite",
+      "labelOverride": "OmniRoute confirmed: inference-net/gemini-3.5-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "vertex/gemini-3.1-flash-lite-preview",
+      "labelOverride": "OmniRoute confirmed: vertex/gemini-3.1-flash-lite-preview",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "orcarouter/google/gemini-3.1-flash-lite",
+      "labelOverride": "OmniRoute confirmed: orcarouter/google/gemini-3.1-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "bazaarlink/gemini-3.1-flash-lite-preview",
+      "labelOverride": "OmniRoute confirmed: bazaarlink/gemini-3.1-flash-lite-preview",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nous-research/google/gemini-3.1-flash-lite",
+      "labelOverride": "OmniRoute confirmed: nous-research/google/gemini-3.1-flash-lite",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "lmarena/hy3",
+      "labelOverride": "OmniRoute confirmed: lmarena/hy3",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "t3-web/gpt-4o",
+      "labelOverride": "OmniRoute confirmed: t3-web/gpt-4o",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "aimlapi/gpt-4o",
+      "labelOverride": "OmniRoute confirmed: aimlapi/gpt-4o",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "t3-web/gpt-4.1",
+      "labelOverride": "OmniRoute confirmed: t3-web/gpt-4.1",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "t3-web/kimi-k2",
+      "labelOverride": "OmniRoute confirmed: t3-web/kimi-k2",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "lmarena/glm-5.1",
+      "labelOverride": "OmniRoute confirmed: lmarena/glm-5.1",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/claude-fable-5",
+      "labelOverride": "OmniRoute confirmed: llm7/claude-fable-5",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gpt-4o",
+      "labelOverride": "OmniRoute confirmed: inference-net/gpt-4o",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "t3-web/llama-4-scout",
+      "labelOverride": "OmniRoute confirmed: t3-web/llama-4-scout",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gpt-4.1",
+      "labelOverride": "OmniRoute confirmed: inference-net/gpt-4.1",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "aion/aion-labs/aion-2.0",
+      "labelOverride": "OmniRoute confirmed: aion/aion-labs/aion-2.0",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "aion/aion-labs/aion-3.0",
+      "labelOverride": "OmniRoute confirmed: aion/aion-labs/aion-3.0",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "t3-web/llama-4-maverick",
+      "labelOverride": "OmniRoute confirmed: t3-web/llama-4-maverick",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cohere/command-a-03-2025",
+      "labelOverride": "OmniRoute confirmed: cohere/command-a-03-2025",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gpt-4o-mini",
+      "labelOverride": "OmniRoute confirmed: inference-net/gpt-4o-mini",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cohere/c4ai-aya-vision-32b",
+      "labelOverride": "OmniRoute confirmed: cohere/c4ai-aya-vision-32b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gpt-4.1-mini",
+      "labelOverride": "OmniRoute confirmed: inference-net/gpt-4.1-mini",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "inference-net/gpt-4.1-nano",
+      "labelOverride": "OmniRoute confirmed: inference-net/gpt-4.1-nano",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cohere/c4ai-aya-expanse-32b",
+      "labelOverride": "OmniRoute confirmed: cohere/c4ai-aya-expanse-32b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "aion/aion-labs/aion-3.0-mini",
+      "labelOverride": "OmniRoute confirmed: aion/aion-labs/aion-3.0-mini",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cohere/command-a-plus-05-2026",
+      "labelOverride": "OmniRoute confirmed: cohere/command-a-plus-05-2026",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cohere/command-a-vision-07-2025",
+      "labelOverride": "OmniRoute confirmed: cohere/command-a-vision-07-2025",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nous-research/aion-labs/aion-2.0",
+      "labelOverride": "OmniRoute confirmed: nous-research/aion-labs/aion-2.0",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nous-research/aion-labs/aion-3.0",
+      "labelOverride": "OmniRoute confirmed: nous-research/aion-labs/aion-3.0",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cohere/command-r7b-arabic-02-2025",
+      "labelOverride": "OmniRoute confirmed: cohere/command-r7b-arabic-02-2025",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cohere/command-a-translate-08-2025",
+      "labelOverride": "OmniRoute confirmed: cohere/command-a-translate-08-2025",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "aion/aion-labs/aion-rp-llama-3.1-8b",
+      "labelOverride": "OmniRoute confirmed: aion/aion-labs/aion-rp-llama-3.1-8b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "llm7/mistral-Small-24B-Instruct-2501",
+      "labelOverride": "OmniRoute confirmed: llm7/mistral-Small-24B-Instruct-2501",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nous-research/aion-labs/aion-3.0-mini",
+      "labelOverride": "OmniRoute confirmed: nous-research/aion-labs/aion-3.0-mini",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "novita/nvidia/nemotron-3-nano-30b-a3b",
+      "labelOverride": "OmniRoute confirmed: novita/nvidia/nemotron-3-nano-30b-a3b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "vertex/gemini-robotics-er-1.6-preview",
+      "labelOverride": "OmniRoute confirmed: vertex/gemini-robotics-er-1.6-preview",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nous-research/cohere/command-r-08-2024",
+      "labelOverride": "OmniRoute confirmed: nous-research/cohere/command-r-08-2024",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "publicai/swiss-ai/apertus-70b-instruct",
+      "labelOverride": "OmniRoute confirmed: publicai/swiss-ai/apertus-70b-instruct",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "g4f-nvidia/nvidia/nemotron-3-nano-30b-a3b",
+      "labelOverride": "OmniRoute confirmed: g4f-nvidia/nvidia/nemotron-3-nano-30b-a3b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nous-research/cohere/command-r-plus-08-2024",
+      "labelOverride": "OmniRoute confirmed: nous-research/cohere/command-r-plus-08-2024",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cloudflare-ai/@cf/meta/llama-3.2-3b-instruct",
+      "labelOverride": "OmniRoute confirmed: cloudflare-ai/@cf/meta/llama-3.2-3b-instruct",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nous-research/nvidia/nemotron-3-nano-30b-a3b",
+      "labelOverride": "OmniRoute confirmed: nous-research/nvidia/nemotron-3-nano-30b-a3b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "sealion/aisingapore/Gemma-SEA-LION-v4-27B-IT",
+      "labelOverride": "OmniRoute confirmed: sealion/aisingapore/Gemma-SEA-LION-v4-27B-IT",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "sealion/aisingapore/Llama-SEA-LION-v3-70B-IT",
+      "labelOverride": "OmniRoute confirmed: sealion/aisingapore/Llama-SEA-LION-v3-70B-IT",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "publicai/aisingapore/Gemma-SEA-LION-v4-27B-IT",
+      "labelOverride": "OmniRoute confirmed: publicai/aisingapore/Gemma-SEA-LION-v4-27B-IT",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "nous-research/nvidia/nemotron-3-super-120b-a12b",
+      "labelOverride": "OmniRoute confirmed: nous-research/nvidia/nemotron-3-super-120b-a12b",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cloudflare-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "labelOverride": "OmniRoute confirmed: cloudflare-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "cloudflare-ai/@cf/mistral/mistral-7b-instruct-v0.2-lora",
+      "labelOverride": "OmniRoute confirmed: cloudflare-ai/@cf/mistral/mistral-7b-instruct-v0.2-lora",
+      "isFamilyDefault": false
     }
   ]
 }

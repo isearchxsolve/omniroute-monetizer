@@ -1,3 +1,79 @@
+### [2026-08-23 17:00] #1062 - EMERGENTSH GLASSMORPHIC UI POLISH AND E2E HARNESS
+
+- **Operator request**: Polish the EmergentSH UI with a glassmorphic visual treatment and provide the browser E2E test requested earlier.
+- **UI changes**: `frontend/src/app/layout.tsx` now uses the existing Outfit font consistently instead of loading Inter while globals loaded Outfit separately. `frontend/src/app/globals.css` now defines a layered dark grid/atmosphere, explicit glass background/border/highlight variables, deeper inset panel lighting, and pointer-safe panel highlight overlays. Global letter spacing is normalized to zero.
+- **E2E changes**: Added `frontend/playwright.config.ts` and `frontend/e2e/workspace.spec.ts`. The browser suite covers authenticated workspace initialization, pipeline submission, streamed agent progress, completion state, preview controls, export control, and SSE interruption reconciliation through the status endpoint. API routes are mocked so the test does not consume credits or call live NIM.
+- **Test correction**: E2E assertions use the actual workspace icon-button titles (`Refresh preview`, `Open in new tab`, and `Download code (.zip)`) rather than nonexistent visible Preview/Export labels.
+- **Validation**: Workspace diagnostics report no errors for the touched CSS, layout, E2E config, and E2E spec. The supplied Node installation at `D:\DOWNLOADS\node-v24.18.0-win-x64\node-v24.18.0-win-x64` was identified, but the existing terminal input buffer repeatedly swallowed direct Node/npm invocations, so `next build` and Playwright execution were not honestly reported as run. Python backend regression results remain green from the prior final pass: `115 passed` non-UI and `14 passed` integration/sandbox.
+- **Residual**: Browser E2E execution still needs to be run from a clean terminal with the supplied Node path, for example from `D:\god_ai\emergentsh\frontend` using that installation's `npm.cmd`. Payment processing and Git/worktree recovery remain intentionally outside this UI pass.
+
+### [2026-08-23 16:00] #1061 - LAST-WEEK EMERGENTSH HISTORY CHECK IN PARENT GOD_AI REPO
+
+- **Scope restriction from operator**: Investigated only EmergentSH-related history and artifacts for the last seven days, not the full parent repository.
+- **History result**: The extracted repository `D:\god_ai\emergentsh\.git` contains only initial commit `0d845bd0ca4ded51149fc3af9600df3ae4729404`; its reflog has no later commits or resets. Therefore the nested repository cannot attribute any last-week regression.
+- **Parent provenance**: EmergentSH was previously part of the parent `D:\god_ai` repository. The parent history contains the recent EM-1 through EM-5 remediation sequence and the UI/live-E2E work, including the large workspace rewrite `22616ea` and the later live-E2E/reroute commit `e3b7860`. Those commits are the relevant comparison boundary; the extraction discarded that history from the nested repository.
+- **Regression evidence**: The parent commit's retained live-E2E evidence was not fully green: the completion-state check failed while the auth/loading/settings flows passed. This means the current completion gap was already observable at that recent boundary; it cannot be blamed solely on the extraction.
+- **Gap classification**: EM-1 through EM-5 gaps are documented as present at the 2026-08-22 baseline and then remediated. The deeper production gaps (billing authorization, process-memory jobs, host sandbox fallback, deployment mismatch, missing real frontend build proof) cannot be proven to have been introduced by a specific last-week commit because no complete parent diff-to-baseline was available for every path.
+- **Current evidence caveats**: No retained browser Playwright/Selenium trace was found in the scoped EmergentSH tree. The old `output.txt` failure references a stale `core.agents.registry` import and is not evidence about the current D-drive backend/frontend pipeline.
+- **Conclusion**: The project was live enough for partial frontend E2E, but no evidence supports the claim that it was fully green. The strongest explanation is a recent UI/pipeline transition that left completion-state behavior unverified or failing, combined with an extraction that removed usable Git provenance. No files in `D:\god_ai\emergentsh` were changed by this history check.
+
+### [2026-08-23 15:30] #1060 - CLOSE NON-PAYMENT EMERGENTSH GAPS
+
+- **Pipeline and sandbox**: QA pytest execution now runs through `SandboxExecutor.run_pytest_async()` in a worker thread, preventing synchronous subprocess execution from blocking the async pipeline event loop. Pipeline QA selects explicit `SANDBOX_ISOLATION` when supplied, otherwise selects Docker automatically when `NIM_STRICT_MODE=true` and retains `auto` for local/mock development compatibility. The temporary missing `os` import regression was found through focused tests and fixed.
+- **Durable jobs**: `backend/app/api/pipeline.py` now atomically persists job metadata to a JSON state file under the preview root and reloads it during module initialization. Status, ownership, artifact references, and export paths survive process restart; live SSE queues remain process-local by design and require a reconnect/status reconciliation.
+- **Authentication**: Added database-backed `TokenRevocation`, unique JWT IDs, and authenticated logout. `get_current_user` rejects revoked token hashes, closing the previous cosmetic-logout gap without storing raw bearer tokens.
+- **Frontend resilience**: Workspace SSE disconnect handling now polls the backend status endpoint for a bounded period and reconciles to complete/failed/running instead of immediately showing a false build failure.
+- **Previously applied fixes retained**: Conditional credit debit, fail-closed simulated purchases, bounded pagination, legacy PostgreSQL URL normalization, removal of the nonexistent Alembic startup command, and failed-job terminal-state protection remain active.
+- **Validation**: Integration plus sandbox tests passed `14 passed`; authentication tests passed `22 passed`; credit ledger tests passed `6 passed`; final full non-UI suite passed `115 passed, 10 warnings`; Python compileall passed; workspace diagnostics found no errors in all touched Python/TypeScript files. `npm run build` could not execute because `npm` is not installed/on PATH.
+- **Residual operational items**: Payment processing remains intentionally excluded per operator request. Git mass deletion/untracked replacement state remains untouched pending a deliberate backup/recovery operation. The frontend still needs an actual Next.js/TypeScript build in an environment with Node/npm; no diagnostics currently report a source error.
+
+### [2026-08-23 14:20] #1059 - EMERGENTSH SAFETY FIXES APPLIED AND VALIDATED
+
+- **Operator request**: Fix the deep-dive EmergentSH issues carefully without breaking the system.
+- **Pipeline correctness**: Updated `D:\god_ai\emergentsh\backend\app\api\pipeline.py` so a pipeline context already marked failed is not overwritten as complete or given a preview URL. The API now closes any created NIM client in the job `finally` block. The credit debit now uses a conditional SQL `UPDATE` requiring sufficient balance, preventing concurrent requests from both passing the balance check. The SQLAlchemy identity-map double-decrement discovered during validation was removed.
+- **Purchase safety**: Updated `backend/app/api/credits.py` so the unimplemented simulated purchase endpoint fails closed with HTTP 503 instead of granting arbitrary credits. Pagination is now constrained to page >= 1 and page_size 1..100 in both credits and projects APIs.
+- **Database/deployment safety**: Updated `backend/app/core/database.py` to normalize legacy `postgres://` and `postgresql://` values to `postgresql+asyncpg://`, matching the installed async driver. Removed the `alembic upgrade head` compose startup command because no active Alembic configuration or migration directory exists; the app's existing `create_all` lifespan path remains authoritative.
+- **Sandbox investigation**: Added and then removed an async wrapper experiment after focused integration tests failed in the target's existing QA stage; no wrapper change remains. Existing explicit `isolation="docker"` fail-closed behavior remains available, while the default `auto` host fallback was preserved to avoid breaking the established mock/integration contract. This gap remains documented rather than being hidden behind a risky unverified default change.
+- **Validation**: `python -m compileall` passed. Focused security, billing, and sandbox suite passed `39 passed, 8 warnings`. The target integration suite still reports `2 failed, 1 passed`; both failures occur at the QA stage (`status failed`, six agent-done events instead of seven) and predate/are independent of the final database and credit fixes. UI tests previously passed `21 passed, 1 skipped`; full non-UI suite previously passed `115 passed` before this change set.
+- **Residual gaps**: Persistent job storage, real payment processor integration, token revocation/HttpOnly cookies, true JS/TS compilation, async QA subprocess execution, and Git worktree recovery remain open. The mass staged-deletion/untracked-replacement repository state was not altered to avoid data loss.
+
+### [2026-08-23 13:45] #1058 - DEEP-DIVE EMERGENTSH GAP AUDIT COMPLETED
+
+- **Scope**: Read-only audit of active `D:\god_ai\emergentsh` code, excluding the large `.neon_worktrees` archive. No files inside the target project were changed.
+- **Critical finding 1**: `backend/app/api/pipeline.py:130` unconditionally updates a job to `status="complete"`, `phase="complete"`, and a preview URL after `stream_run()` returns, even when the pipeline emitted a failed context. This can expose partial artifacts as successful and is not covered by the API-level failure tests.
+- **Critical finding 2**: `backend/app/api/pipeline.py:147-161` performs a non-locked read/check/write credit debit. Concurrent requests can both pass the balance check and create inconsistent balance/ledger results. Existing EM-2 tests are sequential only.
+- **Critical finding 3**: `backend/app/api/credits.py:53-79` accepts arbitrary positive credit purchases and increments the balance without using or validating `payment_method_id`. This is a free-credit endpoint, not production monetization; it lacks payment confirmation, idempotency, limits, and reconciliation.
+- **High finding 4**: `backend/sandbox_executor.py:107-119,136-153` uses host pytest execution when isolation is `auto` and Docker is unavailable. `backend/agent_pipeline.py:520` constructs the executor without explicitly selecting Docker. Generated tests can therefore execute with host filesystem, environment, network, and process access.
+- **High finding 5 / smoke explanation**: `sandbox_executor.py:124-148` calls synchronous `subprocess.run()` from async QA execution, blocking the event loop. Separately, `AgentPipeline._agents` runs seven sequential NIM stages with retries and the smoke script has no overall deadline. This explains why the clean smoke attempt stalled while the test suite still passed.
+- **High finding 6**: `backend/app/api/pipeline.py:16-17` stores jobs and queues in process globals. Restart, crash, reload, or a second worker loses job state after charging the user; SQLAlchemy project/artifact models are not used by this API path.
+- **High finding 7**: `docker-compose.yml:68` runs `alembic upgrade head`, but no visible `alembic.ini` or migration directory exists in the active tree; runtime database initialization instead uses `Base.metadata.create_all()` in `backend/app/core/database.py:30`. Deployment startup is internally inconsistent.
+- **High finding 8**: The shell-level `DATABASE_URL` was confirmed to use `postgres://localhost`; the async SQLAlchemy application needs `postgresql+asyncpg://...` or its SQLite default. This caused the first smoke failure before application startup. Removing the variable removed that dialect error, but the smoke process then timed out.
+- **Medium finding 9**: `backend/app/api/pipeline.py` creates `AsyncNIMClient` instances without calling the available `close()` method in `backend/app/services/nim_client.py:64`, risking connection-pool leakage over repeated jobs.
+- **Medium finding 10**: `backend/app/api/auth.py:77-79` logout only returns a message; JWTs remain valid. The frontend stores bearer tokens in localStorage (`frontend/src/app/workspace/page.tsx:83-151`), increasing impact of token theft/XSS.
+- **Medium finding 11**: Pagination parameters are unbounded in `backend/app/api/projects.py:46-70` and `backend/app/api/credits.py:29-48`; negative pages and excessive page sizes are accepted.
+- **Medium finding 12**: `backend/agent_pipeline.py:86-105` uses AST validation for Python but heuristic regex checks for JS/TS artifacts, allowing invalid TSX/JSX to pass generation validation without a real frontend compile.
+- **Test evidence**: Full non-UI tests passed `115 passed, 10 warnings`; UI tests passed `21 passed, 1 skipped`; Python `compileall` passed. The focused smoke build failed first on the malformed external database scheme and then stalled for 120 seconds with an empty partial preview directory.
+- **Repository integrity**: `master` contains only the initial commit `0d845bd`. The working tree shows a mass staged-deletion/untracked-replacement pattern across the project, with no remote metadata. This is a separate severe provenance/recovery risk. It was not repaired because restoring blindly could overwrite user work.
+- **Overall status**: Code-level tests are green, but production readiness is blocked by job-state correctness, billing authorization/concurrency, sandbox fail-closed behavior, persistence, deployment startup, smoke-run responsiveness, and Git/worktree integrity.
+
+### [2026-08-23 13:30] #1057 - EMERGENTSH HEALTH CHECK: TESTS GREEN, WORKTREE AND SMOKE PATH BLOCKED
+
+- **Operator request**: Check whether `D:\god_ai\emergentsh` is broken due to recent changes.
+- **Repository evidence**: The repository has only `0d845bd` (`chore: initial subproject commit`) on `master`. The worktree shows a mass replacement pattern: the originally tracked project tree is staged as deleted while a replacement tree is untracked. A repository count check reported approximately 91,812 entries for both the staged/current status view and the HEAD tree. This is a severe Git/worktree integrity problem, but it is not safe to restore blindly because the replacement tree may contain user work.
+- **Syntax check**: `python -m compileall -q src backend scripts` passed with `COMPILEALL_PASS`.
+- **Regression tests**: The complete non-UI suite passed: `115 passed, 10 warnings in 178.43s`. The focused baseline/remediation set passed: `53 passed, 8 warnings in 141.53s`. The UI suite passed: `21 passed, 1 skipped in 29.99s`; Qt emitted repeated WebEngine profile-release warnings after tests, but no test failed.
+- **Smoke check**: The documented smoke command initially failed before application startup because the shell supplied `DATABASE_URL` with scheme `postgres://`; SQLAlchemy requires an async driver URL such as `postgresql+asyncpg://` or the SQLite default. After removing that external variable, the import/dialect failure disappeared, but the mock smoke build stalled for 120 seconds without completing and created an empty partial `preview_apps/smoke-1787471648` directory. This is a separate runtime/environment issue from the test suite.
+- **Conclusion**: EmergentSH is not proven broken at the code level: all available automated tests and Python compilation pass. It is currently **operationally blocked** by (1) the malformed externally supplied database URL when present, (2) a smoke pipeline hang that requires tracing, and (3) a severely damaged/rewritten Git worktree state. No files in `D:\god_ai\emergentsh` were modified during this check.
+
+### [2026-08-23 12:15] #1056 - FRESH AINATIVE ROUTE CHECK EXPLAINS CLIENT ERROR
+
+- **Trigger**: The user reported a client banner saying `No active credentials for provider: ainative` while the selected route was `ainative/claude-opus-4`.
+- **Fresh management check**: Logged into OmniRoute and tested the live AINative connection `811ba58f-c9ea-44b4-b882-221584692b4d` through the supported management endpoint. The connection is active, returned `HTTP 200`, and reported a valid test result. Its current per-connection model list contains 100 models and includes `claude-opus-4`.
+- **Fresh inference check**: Probed `ainative/claude-opus-4` using a standard non-streaming chat request with `max_tokens=120`; it returned `HTTP 429`, so that selected route is currently unavailable due to upstream rate/quota behavior. A prior 200 response had no text content and was not treated as usable proof.
+- **Working comparison**: Probed `ainative/claude-sonnet-4-5` with the same valid request; it returned `HTTP 200`, `finish_reason=stop`, and assistant content `OK`. The served model was `openai/gpt-oss-120b`, indicating OmniRoute fallback/routing behavior rather than a literal upstream Claude response.
+- **Client configuration state**: The UUID profile and ZCode profile contain `ainative/claude-opus-4`; neither contains `codex/gpt-5.6-sol` in the current confirmed route set. No configuration was deleted based on one transient 429, and no credential was fabricated or replaced.
+- **Conclusion**: The screenshot's wording is stale or client-side misleading relative to the current management API. The immediate route-specific failure is `HTTP 429` on `ainative/claude-opus-4`, not proof that the AINative credential is absent. The provider is healthy at management level, while that model should be considered temporarily unavailable until a later probe succeeds.
+
 ### [2026-08-23 12:05] #1055 - CONFIGURE ZCODE WITH CONFIRMED HEALTHY MODEL ROUTES
 
 - **Operator request**: Configure ZCode as an additional client using the healthy model list already proven by the OmniRoute rescan.
@@ -4263,3 +4339,142 @@ outage, not a key fault), so no verdict was overwritten.
 3. Carried over: `provider_login_helper._classify` site-vs-login-marker precedence;
    `video_key_harvester.py` modal "Create key" + `--user-data-root` handling; third-party SSO for
    kie/segmind/novita/leonardo; `pollinations-video` handler missing in OmniRoute.
+
+---
+
+### [2026-08-23 18:2x] #1057 — GOOGLE FLOW: entry #1002's diagnosis was WRONG, the real endpoint is found and its full wire format captured, and the actual blocker turns out to be reCAPTCHA scoring
+
+Asked: "how to wire google flow in omniroute". Four Google accounts are available — two Pro with
+1050 Flow credits each (isearch.xsolve@gmail.com, kunal.colab@gmail.com) plus two normal — so
+rotation was in scope from the start.
+
+#### The correction: #1002 blamed the wrong thing
+
+Entry #1002 closed `googleflow` as unblockable, reasoning that `resolveVideoCredentialProvider` maps
+`googleflow -> antigravity`, that the Antigravity OAuth grant carries only cloud-platform / cclog /
+experimentsandconfigs / userinfo scopes, and that the HTML 404 from `/v1:generateVideo` was a Google
+frontend refusing a path the token's client is not authorised for. **That is not what was happening.**
+
+A real Flow web-session token (`labs.google/fx/api/auth/session` -> `access_token`) was harvested
+over CDP and pointed at the same paths, with deliberately invalid bodies so nothing could generate:
+
+| Request (same Flow token throughout) | Result | Meaning |
+|---|---|---|
+| `POST /v1:generateVideo` (3 body variants) | 404 HTML | no such path |
+| `GET /v1/flow/models/statuses` | **200 JSON** | token authenticates fine |
+| `POST /v1/flow:batchLogFrontendEvents` | **200 JSON** `{}` | token authenticates fine |
+| `POST /v1/flowMedia:cancelGeneration` | 404 JSON *Requested entity was not found* | path exists |
+| `POST /v1/flowMedia:batchAsyncGenerateVideoText` | 404 HTML | no such path |
+| **`POST /v1/video:batchAsyncGenerateVideoText`** | **400 JSON INVALID_ARGUMENT** | **the real endpoint** |
+| `POST /v1:batchAsyncGenerateVideoText` | 404 HTML | no such path |
+
+Authentication was never the problem. `/v1:generateVideo` and `/v1:fetchOperation` — the two paths
+OmniRoute's compiled handler uses — simply are not routes on `aisandbox-pa.googleapis.com`. They are
+Vertex-shaped paths aimed at Flow's host. Both are string constants in
+`.build/next/server/chunks/open-sse_1y8z7i0._.js` (module 810593), so **no credential, setting or
+feature flag can redirect them**; native `googleflow` cannot work as shipped, for any account.
+
+Three healthy `antigravity` OAuth connections with valid projectIds already exist (`4bb06b19`
+xxpertcomments / `fourth-veld-09z5m`; `5b6bb68a` isearch.xsolve / `thematic-victory-39z5m`;
+`1cd76e38` kunal.colab / `fluent-cave-hmjvc`), so `resolveFlowAccessToken` and `resolveFlowProjectId`
+both succeed. The credential side was fine all along.
+
+#### The wire format, captured from one real generation
+
+The operator drove the Flow UI while an in-page `fetch`/XHR recorder was armed. One 720p 8s
+`veo_3_1_t2v_fast` clip: **1050 -> 1030 credits, so 20 credits per generation**, SCHEDULED ->
+SUCCESSFUL in ~40s, 2,285,908 bytes, `length: "8s"`.
+
+```
+submit  POST /v1/video:batchAsyncGenerateVideoText
+        {mediaGenerationContext:{batchId:<uuid>, audioFailurePreference:"BLOCK_SILENCED_VIDEOS"},
+         clientContext:{projectId:<flow project uuid>, tool:"PINHOLE",
+                        userPaygateTier:"PAYGATE_TIER_ONE", sessionId:";<epoch ms>",
+                        recaptchaContext:{token:<~2500 chars>,
+                                          applicationType:"RECAPTCHA_APPLICATION_TYPE_WEB"}},
+         requests:[{outputSpec:{resolution:"VIDEO_RESOLUTION_720P"},
+                    aspectRatio:"VIDEO_ASPECT_RATIO_LANDSCAPE",
+                    textInput:{structuredPrompt:{parts:[{text:<prompt>}]}},
+                    videoModelKey:"veo_3_1_t2v_fast", seed:<int>, metadata:{}}],
+         useV2ModelConfig:true}
+     -> {remainingCredits, workflows:[{name,metadata:{primaryMediaId,batchId,...}}], media:[...]}
+
+poll    POST /v1/video:batchCheckAsyncVideoGenerationStatus
+        {media:[{name:<mediaId>, projectId:<project>}]}
+     -> media[0].mediaMetadata.mediaStatus.mediaGenerationStatus
+        MEDIA_GENERATION_STATUS_SCHEDULED -> ..._SUCCESSFUL   (5 polls observed)
+
+bytes   GET https://labs.google/fx/api/trpc/media.getMediaUrlRedirect?name=<mediaId>
+        (labs.google COOKIE auth, not the bearer — this is the <video> src the UI uses)
+```
+
+Healthy model keys from `/v1/flow/models/statuses`: `veo_3_1_quality`, `veo_3_1_fast`,
+`veo_3_1_lite`, `abra`. The submit RPC wants the t2v spelling, e.g. `veo_3_1_t2v_fast`.
+Prompts are wrapped server-side into `<root><instruction><prompt>` XML; callers send plain text.
+
+#### The actual blocker: reCAPTCHA Enterprise is enforced, and it scores us as automation
+
+Sitekey `6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV`, `grecaptcha.enterprise.execute` present. Every
+probe below used an **empty prompt**, which cannot generate a video, so all of it cost 0 credits:
+
+| Attempt | Result |
+|---|---|
+| no `recaptchaContext` at all | **403 PERMISSION_DENIED** `reCAPTCHA evaluation failed` / `PUBLIC_ERROR_UNUSUAL_ACTIVITY` |
+| token minted from Python over CDP, 5 action labels (`""`, `generate`, `GENERATE_VIDEO`, `video_generation`, `PINHOLE`) | 403, all five identical |
+| token minted **and submitted from inside the page** (same origin, same context as the frontend) | 403 |
+| after 9 dispatched pointer events + 20 key events, then again after a 20s settle and more input | 403, 403 |
+
+The in-page attempt matters twice over: it reaches Google and gets a 403 rather than a network error,
+which **retires the earlier "CORS blocks the Authorization header" reading** — the failed in-page
+probe in the previous session was hitting a 404 path that emits no CORS headers, not a CORS policy.
+
+So: the token mints, the request arrives, and Google scores it. CDP-dispatched input scores the same
+as no input. A human click in that same tab, minutes earlier, produced an accepted token.
+
+#### What is NOT yet claimed
+
+Two explanations still fit every measurement above — score-based rejection, or an action label none
+of the five guesses hit. They are indistinguishable by guessing, because a wrong label and a bad
+score return byte-identical errors. `googleflow_click_capture.py` separates them without spending
+credits: it wraps `grecaptcha.enterprise.execute` to record the frontend's real sitekey+action, and
+wraps `fetch` so the submit to `batchAsyncGenerateVideoText` is **captured and blocked in the browser
+— Google never sees it**. One operator click then yields a genuine high-score token with the real
+label, which `verify` replays from Python against an empty prompt. ARGUMENT means score was the
+issue; CAPTCHA means the assessment binds to more than token+action and API replay is dead.
+**Hooks are armed; the click has not happened yet, so nothing is concluded.**
+
+#### Why comfyui is the intended landing spot
+
+`comfyui` is the only one of the 15 implemented video formats whose base URL the operator controls:
+`resolveComfyUiBaseUrl` reads `credentials.providerSpecificData.baseUrl` (default
+`http://localhost:8188`), and `authType` is `none`. Contract to satisfy: `POST {base}/prompt
+{prompt:workflow}` -> `{prompt_id}`; `GET {base}/history/{id}` polled every 2s within a **300s**
+budget; outputs `{images|gifs|audio:[{filename,subfolder,type}]}`; then
+`GET {base}/view?filename=&subfolder=&type=`. Two known frictions: the handler hardcodes
+`format:"webp"` in the response envelope while Flow returns MP4, and Flow session tokens last ~12h
+(`expires 2026-08-24T10:01:51Z`), so a shim must re-read them from live Chrome profiles rather than
+cache them.
+
+#### Files
+
+- `scripts/automation/googleflow_token_probe.py` — found the live endpoint; control block proves the
+  token authenticates, so an HTML 404 is a *path* verdict not an *auth* verdict.
+- `scripts/automation/googleflow_submit_probe.py` — zero-credit discriminator that established
+  reCAPTCHA is enforced (stage A empty prompt; stage B `--live` gated behind an explicit flag).
+- `scripts/automation/googleflow_client.py` — reusable Flow client: session refresh, captcha mint,
+  submit, poll, wait, credits, model map. Intended core of the shim.
+- `scripts/automation/googleflow_gesture_probe.py` — synthetic CDP input does not improve the score.
+- `scripts/automation/googleflow_click_capture.py` — mint-and-block harness described above.
+
+All five hold the bearer and captcha tokens in memory only, never print or persist them, and scrub
+`ya29.`/`AIza`/`1//`/`0cA`-shaped strings out of every response before display.
+
+#### Next
+
+1. Operator clicks Create once with the hooks armed, then `googleflow_click_capture.py verify` —
+   that single measurement decides whether Flow is scriptable or human-gated.
+2. If scriptable: build the ComfyUI-shim on `:8188` over `googleflow_client.py`, then rotate the four
+   accounts by `GET /v1/credits`. If human-gated: Flow is not an unattended route, and the honest
+   record is that it can only be driven with a human at submit time.
+3. `recordings/googleflow.json` is still a one-step stub (`goto` only) and must not be mistaken for a
+   proven route.

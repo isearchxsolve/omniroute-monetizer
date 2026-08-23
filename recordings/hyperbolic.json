@@ -1,0 +1,23 @@
+{
+  "slug": "hyperbolic",
+  "recorded_by": "agent via drive.py",
+  "status": "PARKED",
+  "steps": [
+    {
+      "action": "goto",
+      "url": "https://app.hyperbolic.ai"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Continue with Google",
+      "exact": true
+    },
+    {
+      "action": "google",
+      "email": "isearch.xsolve@gmail.com"
+    }
+  ],
+  "entry_url": "https://app.hyperbolic.ai/",
+  "notes": "PARKED 2026-08-23 mid-flow on the operator's instruction to concentrate on video models. NOTHING IS WRONG WITH THIS PROVIDER -- it was going well and is worth finishing. Verified so far: app.hyperbolic.xyz now redirects to app.hyperbolic.ai; the login page is clean (walls: none) and offers 'Continue with Google'; the Google chooser appeared and the account was picked with no password typed; SSO landed on https://app.hyperbolic.ai/onboarding/survey?redirect_uri=%2F titled 'Welcome to Hyperbolic', walls: none, with a 'Skip' button. Auth is via clerk.hyperbolic.ai. TO FINISH: click 'Skip' to clear the onboarding survey, then find the API-keys page (the nav showed 'Credits' and 'Docs'), mint a key, and prove it against Hyperbolic's own endpoint before wiring. Status PARKED (not BLOCKED) means no wall was hit -- replay.py skips PARKED so it costs nothing per run, and this file is the head start for whoever resumes it."
+}

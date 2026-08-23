@@ -152,6 +152,23 @@ PLAN_REQUIRED_RE = re.compile(
 CAPTCHA_RE = re.compile(
     r"captcha|recaptcha|hcaptcha|turnstile|i'?m not a robot|verify you(?:'| a)re human|"
     r"unusual traffic|checking your browser", re.I)
+# An actual challenge standing in the way -- these words only appear when a human is being asked
+# to prove something.
+CAPTCHA_HARD_RE = re.compile(
+    r"i'?m not a robot|verify you(?:'| a)re human|unusual traffic|checking your browser|"
+    r"solve the (?:captcha|challenge)|select all (?:images|squares)|type the (?:characters|code)",
+    re.I)
+# Boilerplate legal disclosure for INVISIBLE reCAPTCHA v3. Not a challenge and not a barrier.
+# MEASURED 2026-08-23 on cloud.cerebras.ai, whose login page reads "This site is protected by
+# reCAPTCHA and the Privacy Policy and Terms of Use apply." beneath a working GOOGLE button, with
+# both the recaptcha and hcaptcha iframes present but is_visible()==False. v3 scores silently and
+# never presents anything to solve, so there is nothing here to refuse or to hammer -- while the
+# bare word "recaptcha" appears on a large share of provider login pages, so firing on it would
+# walk away from most of the remaining catalog. Same mistake shape as reading "Upgrade to Pro" as
+# a card wall. If a real challenge ever appears, CAPTCHA_HARD_RE or a VISIBLE widget catches it.
+CAPTCHA_BADGE_RE = re.compile(
+    r"protected by (?:google )?(?:recaptcha|hcaptcha|cloudflare)|"
+    r"recaptcha and the (?:privacy policy|terms)", re.I)
 PHONE_RE = re.compile(
     r"phone number|mobile number|verify your phone|sms code|whatsapp|wechat", re.I)
 # Markers of a RENDERED SOURCE FILE rather than page copy. See looks_like_code().
@@ -428,6 +445,67 @@ def dialog_text(page) -> str:
     return "\n".join(chunks)
 
 
+def captcha_widget_visible(page) -> str:
+    """A captcha a human is actually being shown, or "". Hidden v3 script frames don't count."""
+    sels = ("iframe[src*='recaptcha/api2/anchor']", "iframe[src*='recaptcha/enterprise/anchor']",
+            "iframe[src*='hcaptcha.com/captcha']", "iframe[src*='challenges.cloudflare.com']",
+            "iframe[title*='recaptcha' i]", "iframe[title*='challenge' i]",
+            ".g-recaptcha", ".h-captcha", ".cf-turnstile")
+    for fr in frames_of(page):
+        if fr is not page.main_frame and not frame_showing(fr):
+            continue
+        for sel in sels:
+            try:
+                if fr.locator(sel).first.is_visible(timeout=400):
+                    return sel
+            except Exception:
+                continue
+    return ""
+
+
+DISMISS_RE = re.compile(
+    r"^(?:close|cancel|skip|skip for now|not now|maybe later|later|no thanks|dismiss|continue|"
+    r"got it|ok|okay|done|×|✕|x)$", re.I)
+
+
+def dialog_dismissable(page) -> bool:
+    """Does the open modal offer a way past it without paying?
+
+    MEASURED 2026-08-23 on cloud.cerebras.ai straight after Google SSO: a modal announced "Your
+    personal account has been migrated to a PayGo account. All your API keys, projects, and usage
+    history are unchanged and safe. Add a payment method to get a free one-time $5 credit." There is
+    no card form on the page, and the modal carries Close and CONTINUE. That is an ADVERT for a
+    bonus, not a barrier -- Cerebras' free tier still works -- yet CARD_SOFT_RE saw "Add a payment"
+    inside an open dialog and refused the provider outright, which would have thrown away one of the
+    best free tiers in the catalog. Same family as the "Upgrade to Pro" sidebar advert that nearly
+    cost us openadapter, one layer deeper.
+
+    A genuine wall has no free path: no dismissal, or a real card form (card_form_present() catches
+    that independently and is NOT softened by this).
+    """
+    for fr in frames_of(page):
+        if fr is not page.main_frame and not frame_showing(fr):
+            continue
+        for dsel in ("[role=dialog]", "[role=alertdialog]", "dialog[open]"):
+            try:
+                for node in fr.locator(dsel).all()[:6]:
+                    if not node.is_visible(timeout=400):
+                        continue
+                    for b in node.locator("button, [role=button], a").all()[:40]:
+                        try:
+                            if not b.is_visible():
+                                continue
+                            label = (b.inner_text(timeout=600) or
+                                     b.get_attribute("aria-label") or "").strip()
+                            if DISMISS_RE.match(label):
+                                return True
+                        except Exception:
+                            continue
+            except Exception:
+                continue
+    return False
+
+
 def walls(txt: str, page=None) -> list[str]:
     """The three things this tool refuses to touch, in the operator's words: "you reject, all
     paywall card requirements and all captcha. You do not hit them or hammer them."
@@ -440,7 +518,13 @@ def walls(txt: str, page=None) -> list[str]:
     inside an OPEN MODAL that is actually standing between us and the key.
     """
     hit = []
-    if CAPTCHA_RE.search(txt):
+    if CAPTCHA_HARD_RE.search(txt):
+        hit.append("CAPTCHA")
+    elif page is not None:
+        if captcha_widget_visible(page):
+            hit.append("CAPTCHA")
+    elif CAPTCHA_RE.search(txt) and not CAPTCHA_BADGE_RE.search(txt):
+        # Text-only caller: stay cautious, but never on the invisible-v3 disclosure alone.
         hit.append("CAPTCHA")
     if PHONE_RE.search(txt):
         hit.append("PHONE")
@@ -451,7 +535,7 @@ def walls(txt: str, page=None) -> list[str]:
         sel = card_form_present(page)
         if sel:
             hit.append("CARD")
-        elif CARD_SOFT_RE.search(dialog_text(page)):
+        elif CARD_SOFT_RE.search(dialog_text(page)) and not dialog_dismissable(page):
             hit.append("CARD")
     elif CARD_SOFT_RE.search(txt):
         # No page to inspect (text-only caller): keep the old, cautious reading.
