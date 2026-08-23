@@ -129,11 +129,32 @@ def click_masked_key(page, index: int, ms: int = 18000) -> bool:
         waited += 1000
 
 
+def settled_text(page, ms: int = 8000) -> str:
+    """Body text, once the SPA has actually painted something.
+
+    MEASURED 2026-08-23 on tokenfactory.nebius.com: immediately after domcontentloaded the body
+    text was EMPTY, so walls() saw nothing and reported no wall; ~10s later the same page read
+    "Billing details ... Card details* ... Add card" and walls() correctly returned ['CARD'].
+    Judging a wall against an unpainted page is how a paywall gets walked into instead of away
+    from, so wait for text before deciding. This is a WAIT, not a retry -- nothing is clicked.
+    """
+    waited = 0
+    txt = ""
+    while True:
+        txt = D.body_text(page)
+        if len(txt.strip()) >= 40:
+            return txt
+        if waited >= ms:
+            return txt
+        page.wait_for_timeout(500)
+        waited += 500
+
+
 def run_step(s: "D.Sess", step: dict, slug: str) -> tuple[bool, str]:
     page = s.page()
     action = step.get("action")
 
-    w = D.walls(D.body_text(page), page)
+    w = D.walls(settled_text(page), page)
     if w:
         return False, f"{'+'.join(w)}_REFUSED"
 

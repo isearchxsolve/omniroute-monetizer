@@ -1,25 +1,8 @@
 {
   "slug": "nebius",
   "recorded_by": "agent via drive.py",
-  "steps": [
-    {
-      "action": "goto",
-      "url": "https://studio.nebius.com/settings/api-keys"
-    },
-    {
-      "action": "goto",
-      "url": "https://tokenfactory.nebius.com/"
-    },
-    {
-      "action": "click",
-      "role": "button",
-      "name": "Log in",
-      "exact": true
-    },
-    {
-      "action": "click",
-      "role": "button",
-      "name": "Get started with Google"
-    }
-  ]
+  "status": "MONETIZER_BLOCKED",
+  "blocked_reason": "CARD",
+  "steps": [],
+  "notes": "WALKED AWAY 2026-08-23. Kept so the time is never spent again. Nebius AI Studio is now 'Nebius Token Factory' at tokenfactory.nebius.com (studio.nebius.com/settings/api-keys 404s). Google SSO SUCCEEDED via the robot profile: auth.tokenfactory.nebius.com -> 'Get started with Google' -> account chooser -> account created, 'default-project' present, avatar signed in. No password was typed and nothing was bypassed. NOTE for future runs: Google's chooser labelled the account 'Signed out', which refers to the SITE session, NOT the Google session -- an in-flight reading of that as an expired Google session was wrong; myaccount.google.com loads a full account page, so the robot profile's Google login is live. The blocker is what comes immediately AFTER sign-in: a mandatory 'Billing details' form with 'Card details*' required and an 'Add card' button ('We'll perform a temporary $0 authorization to verify the card'), gating the whole product before any API key exists. drive.walls() correctly reports ['CARD'] on it via the 'Add card' hard match, so replay would refuse automatically. No card was entered, no $0 authorization was triggered, no agreement was accepted."
 }

@@ -1,0 +1,225 @@
+# ============================================================
+# CODEX — OMNIROUTE GATEWAY
+# Long-horizon Neon Architect refactoring
+# ============================================================
+
+# model = "gpt-5.6-terra"  — previous, kept for revert
+model = "auto/best-coding"
+model_provider = "omniroute"
+model_reasoning_effort = "medium"
+model_verbosity = "high"
+model_reasoning_summary = "auto"
+
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+
+service_tier = "default"
+
+notify = [ "C:\\Users\\Admin\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\84464046935436b8\\bin\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
+
+# --- omniroute gateway ---
+# Codex Desktop reads top-level model + model_provider.
+# This table sits after top-level keys (before [tui] / [desktop]).
+[model_providers.omniroute]
+name                      = "OmniRoute"
+base_url                  = "http://127.0.0.1:20128/v1"
+experimental_bearer_token = "REPLACE_WITH_OMNIROUTE_KEY"
+requires_openai_auth      = false
+wire_api                  = "responses"
+# --- end omniroute gateway ---
+
+[tui]
+stream_reasoning_live = true
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+
+# ------------------------------------------------------------
+# MODEL UI AVAILABILITY
+# ------------------------------------------------------------
+
+[tui.model_availability_nux]
+"gpt-5.5" = 4
+"gpt-5.6-terra" = 4
+"gpt-5.6-sol" = 4
+
+# ------------------------------------------------------------
+# PROJECT TRUST
+# ------------------------------------------------------------
+
+[projects."d:\\neon_unified"]
+trust_level = "trusted"
+
+[projects."c:\\god_ai"]
+trust_level = "trusted"
+
+[projects."d:\\emergentai"]
+trust_level = "trusted"
+
+[projects."d:\\emergentsh_latest"]
+trust_level = "trusted"
+
+[projects."c:\\users\\admin\\downloads\\neon_unified"]
+trust_level = "trusted"
+
+[projects.'c:\users\admin\documents\codex\2026-08-06\files-mentioned-by-the-user-repomix']
+trust_level = "trusted"
+
+[projects.'c:\users\admin\documents\codex\2026-08-06\h']
+trust_level = "trusted"
+
+[projects.'c:\god_ai\lasthelp\lasthelp']
+trust_level = "trusted"
+
+[projects.'c:\users\admin\documents\codex\2026-08-08\h']
+trust_level = "trusted"
+
+[projects.'c:\users\admin\downloads']
+trust_level = "trusted"
+
+[projects.'c:\users\admin']
+trust_level = "trusted"
+
+[projects.'c:\users\admin\documents\codex\2026-08-11\hi']
+trust_level = "trusted"
+
+[projects.'c:\users\admin\documents\codex\2026-08-13\hi']
+trust_level = "trusted"
+
+[projects.'c:\users\admin\documents\codex\2026-08-14\h']
+trust_level = "trusted"
+
+[projects.'d:\omniroute-phase-a']
+trust_level = "trusted"
+
+[projects.'d:\ideation_to_prototype']
+trust_level = "trusted"
+
+[projects.'d:\omniroute-monetizer']
+trust_level = "trusted"
+
+[projects.'c:\god_ai\crypto-trader-v1_1']
+trust_level = "trusted"
+
+[projects.'d:\dev\antigravity-kandover']
+trust_level = "trusted"
+
+[projects.'d:\god_ai\voice_agent_avatar\voice-agent-clinic']
+trust_level = "trusted"
+
+# ------------------------------------------------------------
+# WINDOWS
+# ------------------------------------------------------------
+
+[windows]
+sandbox = "elevated"
+
+# ------------------------------------------------------------
+# PLUGINS
+# ------------------------------------------------------------
+
+[plugins."gmail@openai-curated"]
+enabled = true
+
+[plugins."google-calendar@openai-curated"]
+enabled = true
+
+[plugins."slack@openai-curated"]
+enabled = true
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[plugins."visualize@openai-bundled"]
+enabled = true
+
+[plugins."cowork-plugin-management@claude-cowork"]
+enabled = true
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."template-creator@openai-primary-runtime"]
+enabled = true
+
+[plugins."codex-app-tools@openai-bundled"]
+enabled = true
+
+[marketplaces.openai-bundled]
+last_updated = "2026-08-21T19:10:14Z"
+source_type = "local"
+source = '\\?\C:\Users\Admin\.codex\.tmp\bundled-marketplaces\openai-bundled'
+
+[marketplaces.claude-cowork]
+last_updated = "2026-08-11T03:43:11Z"
+source_type = "local"
+source = '\\?\C:\Users\Admin\.codex\plugins\cache\claude-cowork'
+
+[marketplaces.openai-primary-runtime]
+last_updated = "2026-08-19T22:57:01Z"
+source_type = "local"
+source = '\\?\C:\Users\Admin\.cache\codex-runtimes\codex-primary-runtime\plugins\openai-primary-runtime'
+
+# ------------------------------------------------------------
+# FEATURES
+# ------------------------------------------------------------
+
+[features]
+js_repl = false
+
+# ------------------------------------------------------------
+# NODE REPL
+# ------------------------------------------------------------
+
+[mcp_servers.node_repl]
+args = []
+command = 'C:\Users\Admin\AppData\Local\OpenAI\Codex\runtimes\cua_node\84464046935436b8\bin\node_repl.exe'
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = 'C:\Users\Admin\AppData\Local\OpenAI\Codex\runtimes\cua_node\84464046935436b8\bin\node_modules'
+NODE_REPL_NODE_PATH = 'C:\Users\Admin\AppData\Local\OpenAI\Codex\runtimes\cua_node\84464046935436b8\bin\node.exe'
+NODE_REPL_TRUSTED_CODE_PATHS = 'C:\Users\Admin\.codex;C:\Users\Admin\AppData\Local\OpenAI\Codex\runtimes\cua_node\84464046935436b8\bin\node_modules'
+CODEX_HOME = 'C:\Users\Admin\.codex'
+
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
+NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
+
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
+BROWSER_USE_CODEX_APP_VERSION = "26.814.41957"
+NODE_REPL_TRUSTED_SERVICES = '{"browser":"C:/Users/Admin/.codex/plugins/cache/openai-bundled/browser/26.814.41957/scripts/browser-service.mjs","sky":"@oai/sky/service"}'
+
+SKY_CUA_NATIVE_PIPE = "1"
+SKY_CUA_NATIVE_PIPE_DIRECTORY = '\\.\pipe\codex-computer-use-f13aad15-6fd2-4f31-8487-a90bad40a684'
+
+CODEX_CLI_PATH = 'C:\Users\Admin\AppData\Local\OpenAI\Codex\bin\f71e347eb70b3d24\codex.exe'
+
+# ------------------------------------------------------------
+# SHELL ENVIRONMENT
+# ------------------------------------------------------------
+
+[shell_environment_policy.set]
+
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "8e172ec9f458f2e636fc69a1b8c68c217f6bb8d10c41f70a05a0878b73863701"
+
+# ------------------------------------------------------------
+# DESKTOP
+# ------------------------------------------------------------
+
+[desktop]
+external-agent-import-sync-enabled = true
+conversationDetailMode = "STEPS_COMMANDS"
+ambient-suggestions-enabled = true
+enabled-reasoning-efforts = ["low", "medium", "high", "xhigh", "ultra", "max"]
+followUpQueueMode = "queue"
+keepRemoteControlAwakeWhilePluggedIn = true

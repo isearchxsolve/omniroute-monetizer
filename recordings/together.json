@@ -1,0 +1,25 @@
+{
+  "slug": "together",
+  "recorded_by": "agent via drive.py",
+  "steps": [
+    {
+      "action": "goto",
+      "url": "https://api.together.ai/settings/api-keys"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Continue with Google"
+    },
+    {
+      "action": "google",
+      "email": "isearch.xsolve@gmail.com"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Create key",
+      "exact": true
+    }
+  ]
+}
