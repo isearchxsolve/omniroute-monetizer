@@ -1,3 +1,32 @@
+### [2026-08-23 09:59] #1051 — ALL HEALTHY MODELS TESTED AND CONFIGURED UNDER CATEGORY 'LATEST' ACROSS ZED & VS CODE
+
+- **Action**: Compiled and verified all 53 flagship models and routing cascades across the 62 healthy providers and configured them individually in Zed, VS Code, and ZCode under the category `[LATEST]`.
+- **Target Environments Updated**:
+  1. **Zed Editor** (`%APPDATA%/Zed/settings.json`):
+     - Populated `language_models.openai_compatible.OmniRoute.available_models` with **53 distinct verified models**.
+     - Configured tool-calling (`tools: true`), vision (`images: true`), and standard context boundaries (`max_tokens: 200000`, `max_output_tokens: 32000`).
+     - Set `favorite_models` list and active agent model.
+  2. **VS Code** (`%APPDATA%/Code/User/chatLanguageModels.json`):
+     - Configured custom endpoint `OmniRoute Monetizer (Latest)` with all 53 models.
+     - Enabled `toolCalling: true`, `vision: true`, and proper chat completion routing to `http://localhost:20128/v1/chat/completions`.
+  3. **ZCode Client** (`%USERPROFILE%/.zcode/v2/config.json`):
+     - Configured `custom:omniroute` provider with all 53 models under `OmniRoute Monetizer (Latest)` with indexed priority hierarchy.
+- **Models Configured by Group**:
+  - **Routing Cascades**: `frontier`, `Frontier Max`, `auto/pro-coding`, `auto/best-coding`, `fusion-coder`, `auto/pro-reasoning`, `auto/best-reasoning`, `auto/pro-chat`, `auto/best-chat`, `auto/free-chat`, `auto/asian-flagships`, `kimi-coding`, `moonshotai/kimi-k3-free`.
+  - **NVIDIA Fleet**: `nvidia/nemotron-3-super-120b-a12b`, `nvidia/nemotron-nano-12b-v2-vl`, `nvidia/z-ai/glm-5.2`.
+  - **AGY & Antigravity**: `agy/gemini-3.6-flash-high`, `antigravity/gemini-3.6-flash-medium`.
+  - **Cloudflare AI**: `cloudflare-ai/@cf/qwen/qwq-32b`, `cloudflare-ai/@cf/meta/llama-3.2-3b-instruct`, `cloudflare-ai/@cf/deepseek-ai/deepseek-r1-distill-qwen-32b`.
+  - **Mistral & Reka**: `mistral/codestral-2508`, `mistral/mistral-large-latest`, `reka/reka-flash`, `reka/reka-edge`.
+  - **OpenAdapter & Groq**: `openadapter/0G-DeepSeek-V3`, `openadapter/0G-DeepSeek-v4-Flash`, `groq/llama-3.3-70b-versatile`, `groq/llama-3.1-8b-instant`.
+  - **Alibaba**: `alibaba/qwen3.7-max`, `alibaba/qwen3.7-plus`.
+  - **Codex, Kiro, KiloCode, AINative**: `codex/gpt-5.6-sol`, `kiro/claude-sonnet-4.5`, `kilocode/anthropic/claude-sonnet-5`, `ainative/claude-sonnet-4-5`, `ainative/deepseek-r1`.
+  - **OpenCode-Zen, Requesty, BazaarLink, DeepInfra, NScale**: `opencode-zen/gpt-5.1-codex-max`, `requesty/doubleword/deepseek-v4-flash:flex`, `bazaarlink/deepseek-v4-flash`, `deepinfra/deepseek-ai/DeepSeek-V3-0324`, `nscale/Qwen/Qwen3-4B-Thinking`.
+  - **Web Endpoints**: `chatgpt-web/gpt-5.6-pro`, `perplexity-web/pplx-gpt-5.6-sol`, `gemini-web/gemini-3.1-pro`.
+  - **G4F Nodes**: `g4f-gemini/gemini-2.5-flash`, `g4f-nvidia/nvidia/nemotron-3-super-120b-a12b`, `g4f-groq/llama-3.3-70b`, `g4f-ollama/qwen2.5:72b`, `g4f-pollinations/openai`.
+  - **Cohere, Fireworks, Bytez, Morph**: `cohere/command-r-plus`, `fireworks/deepseek-v4-flash`, `bytez/meta-llama/Llama-3.3-70B-Instruct`, `morph/morph-qwen35-397b`.
+- **Artifacts Created**:
+  - `scripts/automation/configure_latest_in_clients.py`
+
 ### [2026-08-23 09:41] #1050 — COMPREHENSIVE LIVE FLEET & MODEL PROBE RESULTS (62 HEALTHY PROVIDERS, 13/13 PASSING COMBOS)
 
 - **Action**: Performed an exhaustive live empirical probe of the entire OmniRoute fleet (:20128) across all 111 configured connections, 13 routing cascades/combos, and representative standalone models using `scripts/automation/master_fleet_prober.py`.
