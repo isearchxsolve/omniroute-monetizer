@@ -219,6 +219,16 @@ PARKED = {
 # --------------------------------------------------------------------------------------------
 # Small helpers
 # --------------------------------------------------------------------------------------------
+def phase(page, msg: str) -> None:
+    """Say the current phase where the operator is looking: the browser tab title.
+    A human watching stillness cannot tell 'working' from 'hung' (measured all night,
+    2026-08-22/23: every 'stuck' report was either this or a real hang)."""
+    try:
+        page.evaluate(f"document.title = {json.dumps('[' + msg + ']')}")
+    except Exception:
+        pass
+
+
 def log(msg: str) -> None:
     print(msg, flush=True)
 
