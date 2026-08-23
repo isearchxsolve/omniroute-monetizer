@@ -1,25 +1,8 @@
 {
   "slug": "together",
   "recorded_by": "agent via drive.py",
-  "steps": [
-    {
-      "action": "goto",
-      "url": "https://api.together.ai/settings/api-keys"
-    },
-    {
-      "action": "click",
-      "role": "button",
-      "name": "Continue with Google"
-    },
-    {
-      "action": "google",
-      "email": "isearch.xsolve@gmail.com"
-    },
-    {
-      "action": "click",
-      "role": "button",
-      "name": "Create key",
-      "exact": true
-    }
-  ]
+  "status": "MONETIZER_BLOCKED",
+  "blocked_reason": "CARD",
+  "steps": [],
+  "notes": "WALKED AWAY 2026-08-23, and this file exists so the time is never spent again. Google SSO SUCCEEDED via the robot profile (goto api.together.ai/settings/api-keys -> 'Continue with Google' -> chooser), landing signed in as KD, org 'isearchxsolve_438f', project proj_CeKFGtaqME17KJZua4hTU. No password was typed. The account banner reads: \"You're currently in read-only mode. Make an initial deposit to unlock full access.\" Clicking 'Create key' -- which IS genuinely enabled here, unlike featherless-ai -- opens a 'Purchase credits' dialog holding a REAL Stripe card form (Card number / Expiry date / Security code, 'By providing your card information, you allow Together Computer, Inc to charge your card for future payments'), default amount $5. That dialog also offers 'Skip for now'; two attempts to reach it timed out because the cookie-consent banner overlays the bottom of the viewport and the modal content scrolls, so it was abandoned rather than hammered. 'Purchase' was never touched and no card field was ever filled. THE DECISIVE PROOF came from a different, payment-free route: the account had an auto-provisioned 'Legacy API Key' (Deprecated, Active) whose only row action is 'Regenerate legacy key' -- no reveal, no copy -- so it was regenerated (free, on our own hours-old account, with nothing depending on the old value) to obtain the 64-hex-character key, tail ea1c, matching the masked display. Tested against Together's OWN upstream: GET https://api.together.xyz/v1/models -> HTTP 200 listing 279 models, so the key authenticates correctly; but EVERY POST https://api.together.xyz/v1/chat/completions -> HTTP 402 'Credit limit exceeded, please add credits', on all three models tried, and ZERO of the 279 model ids are marked free. So there is no free inference path here at any price but a deposit, and per the harvest rule (a key counts only when a real model returns real text) this key is NOT harvested -- its entry was removed from state/generated_keys.json so nothing downstream can mistake a 402 key for a working one. Nothing was paid, no card was entered, no $0 authorization was triggered, no plan was bought. steps:[] is intentional: replay skips MONETIZER_BLOCKED recordings, so this costs nothing per run. FOOTNOTE, because it cost real time and was a genuine tool bug rather than a Together quirk: while this page was open, drive.walls() reported CAPTCHA+PHONE+CARD on a page with none of the three. Stripe.js had been loaded as a DOCUMENT inside an iframe, so the browser rendered 605,964 characters of minified JavaScript as body text; body_text() returns the longest frame body, so walls() matched the literals 'hcaptcha' and 'Verify Phone Number' INSIDE THE SOURCE. Separately, after the purchase dialog was closed, leftover HIDDEN Stripe frames still contained a nested iframe[src*='js.stripe.com'] that reported is_visible()==True, because Playwright resolves visibility in the child frame's own coordinate space and cannot see the hidden ancestor -- so card_form_present() kept returning CARD forever. Both are fixed in drive.py (frame_showing(), looks_like_code()); left unfixed they would have silently refused every provider that merely loads Stripe.js."
 }

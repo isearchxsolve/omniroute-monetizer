@@ -154,6 +154,10 @@ CAPTCHA_RE = re.compile(
     r"unusual traffic|checking your browser", re.I)
 PHONE_RE = re.compile(
     r"phone number|mobile number|verify your phone|sms code|whatsapp|wechat", re.I)
+# Markers of a RENDERED SOURCE FILE rather than page copy. See looks_like_code().
+CODE_TEXT_RE = re.compile(
+    r"\"use strict\"|'use strict'|\bfunction\s*\(|=>\s*\{|\bvar\s+\w+\s*=|module\.exports|"
+    r"sourceMappingURL|webpackJsonp|/\*!", re.I)
 KEY_RE = re.compile(
     r"\b(?:sk-[A-Za-z0-9_\-]{16,}|AIza[0-9A-Za-z_\-]{30,}|SG_[A-Za-z0-9]{12,}|"
     r"nvapi-[A-Za-z0-9_\-]{16,}|gsk_[A-Za-z0-9]{20,}|r8_[A-Za-z0-9]{20,}|"
@@ -321,15 +325,71 @@ def frames_of(page) -> list:
     return fs
 
 
+def frame_showing(fr) -> bool:
+    """Is this frame really on screen? The main frame always is; a child only if its <iframe>
+    element -- and every iframe element above it -- is visible.
+
+    MEASURED 2026-08-23 on api.together.ai AFTER the purchase dialog had been closed: a leftover
+    hidden Stripe frame still held a nested iframe[src*='js.stripe.com'] that reported
+    is_visible() == True, because Playwright resolves visibility inside the child frame's own
+    coordinate space and knows nothing about the hidden ancestor holding it. card_form_present()
+    therefore reported CARD on a page with no card form on it at all -- and since Stripe.js is
+    loaded by a large share of providers, that is a permanent bogus refusal, i.e. free keys thrown
+    away over a vendor script.
+    """
+    depth = 0
+    while fr is not None and depth < 8:      # depth guard: never let a bad chain hang the run
+        try:
+            parent = fr.parent_frame
+        except Exception:
+            return False
+        if parent is None:
+            return True                      # walked all the way up to the main frame
+        try:
+            if not fr.frame_element().is_visible(timeout=400):
+                return False
+        except Exception:
+            return False                     # detached mid-check -> not on screen
+        fr = parent
+        depth += 1
+    return True
+
+
+def looks_like_code(t: str) -> bool:
+    """True when this "body text" is really a rendered source file, not page copy.
+
+    MEASURED 2026-08-23 on api.together.ai: a js.stripe.com bundle was loaded AS a document inside
+    an iframe, so the browser rendered 605,964 characters of minified JavaScript as body text. That
+    made it the longest text on the page, so body_text() returned it and walls() matched the
+    literals `hcaptcha` and "Verify Phone Number" INSIDE THE SOURCE -- reporting a CAPTCHA gate and
+    a phone gate on a page that has neither. Refusing a provider because of a string in a vendor's
+    minified bundle is the worst class of mistake available here: it is silent, and it looks
+    principled.
+    """
+    if len(t) < 2000:
+        return False
+    head = t[:4000]
+    if not CODE_TEXT_RE.search(head):
+        return False
+    # Prose separates words with spaces; minified code separates tokens with punctuation.
+    return sum(head.count(c) for c in "{}();=>,:") > head.count(" ")
+
+
 def body_text(page) -> str:
+    """The longest body text that a human could actually be looking at."""
     best = ""
     for fr in frames_of(page):
         try:
             t = fr.inner_text("body", timeout=2500) or ""
         except Exception:
             continue
-        if len(t) > len(best):
-            best = t
+        if len(t) <= len(best):
+            continue                         # cheap test first: skip the costly checks below
+        if fr is not page.main_frame and not frame_showing(fr):
+            continue
+        if looks_like_code(t):
+            continue
+        best = t
     return best
 
 
@@ -341,6 +401,8 @@ def card_form_present(page) -> str:
             "iframe[title*='card' i]", "iframe[name*='__privateStripe']",
             "iframe[src*='paddle']", "iframe[src*='razorpay']")
     for fr in frames_of(page):
+        if fr is not page.main_frame and not frame_showing(fr):
+            continue                          # a card field inside a HIDDEN iframe is not a wall
         for sel in sels:
             try:
                 if fr.locator(sel).first.is_visible(timeout=400):
@@ -354,6 +416,8 @@ def dialog_text(page) -> str:
     """Text of any OPEN modal/dialog only. An upsell inside a modal blocks; a sidebar link does not."""
     chunks = []
     for fr in frames_of(page):
+        if fr is not page.main_frame and not frame_showing(fr):
+            continue                          # same ancestor-blindness as card_form_present()
         for sel in ("[role=dialog]", "[role=alertdialog]", "dialog[open]"):
             try:
                 for node in fr.locator(sel).all()[:6]:

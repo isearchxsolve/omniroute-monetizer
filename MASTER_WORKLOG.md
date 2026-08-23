@@ -1,3 +1,20 @@
+### [2026-08-23 12:05] #1055 - CONFIGURE ZCODE WITH CONFIRMED HEALTHY MODEL ROUTES
+
+- **Operator request**: Configure ZCode as an additional client using the healthy model list already proven by the OmniRoute rescan.
+- **Implementation**: Extended `scripts/automation/sync_confirmed_models_to_clients.py` with an idempotent ZCode sync. It preserves the existing `custom:omniroute` provider settings and replaces only its model map with the same provider-qualified, power-ordered routes used by the UUID JSON profile and `codex omni.yml`.
+- **Result**: `C:\Users\Admin\.zcode\v2\config.json` now contains 268 confirmed routes under `provider.custom:omniroute.models`, with priorities 1 through 268. The first entries are the highest-ranked confirmed routes, beginning with `ainative/claude-opus-4` and other confirmed frontier routes from the rescan evidence.
+- **Preservation check**: ZCode remains configured with `baseURL = http://localhost:20128/v1`; no credentials or provider connection records were changed.
+- **Validation**: Python compilation passed, the sync completed with `synced_confirmed_routes=268`, ZCode JSON parsing passed, and the resulting provider model count was 268.
+
+### [2026-08-23 12:00] #1054 - SYNC 268 CONFIRMED HEALTHY MODEL ROUTES INTO CODEX PROFILES
+
+- **Operator request**: Update `scripts/automation/98e83bfd-e627-4557-a52e-9dcc8a008f50.json` and `scripts/automation/codex omni.yml` with the healthy model list, ordered from the most powerful models first.
+- **Pre-update health evidence**: Ran `python scripts/automation/fleet_provider_audit.py` through OmniRoute's supported management REST API. The live fleet contained 115 configured connections; 69 active connections returned valid management tests and 25 were inactive. No database or credential-store writes were performed.
+- **Model evidence**: Ran `scripts/automation/rescan_healthy_provider_models.py`. It tested 3,907 candidate provider/model routes using each healthy connection's own model endpoint followed by a real `/v1/chat/completions` request with a standard non-streaming payload. The result contained 296 successful connection-level probes and 180 unique model names; after retaining provider ownership in the route IDs, the client sync set contained 268 unique confirmed provider/model routes. Responses and credentials were not persisted; the report contains IDs, status, latency, and sanitized metadata only.
+- **Changes applied**: Added `scripts/automation/sync_confirmed_models_to_clients.py`, which reads `state/healthy_provider_models_rescan.json`, applies the configured provider/model power ordering, and updates both requested profiles reproducibly. The UUID profile now contains 268 `inferenceModels`; the Codex YAML `tui.model_availability_nux` block now contains the same 268 routes in the same order.
+- **Preservation checks**: The UUID profile remains configured for `http://127.0.0.1:20128` and the Codex profile retains `model_provider = "omniroute"`, the OmniRoute provider block, and `base_url = "http://127.0.0.1:20128/v1"`. The requested UUID was not a live provider connection, so no provider connection was mutated.
+- **Validation**: `python -m py_compile scripts/automation/sync_confirmed_models_to_clients.py` passed; the sync completed with `synced_confirmed_routes=268`; JSON parsing passed; workspace diagnostics reported no errors for the new sync script or UUID profile. The rescan showed no confirmed route owned by the live `codex` provider, so no unverified Codex model was fabricated or inserted.
+
 ### [2026-08-23 11:40] #1053 — RECORD/REPLAY TAKEOVER LANDED; REKA + OPENADAPTER BOTH MONETIZER_READY; FOUR PROOF-GATE BUGS THAT WERE DELETING WORKING ROWS
 
 - **Operator directive driving this**: *"you take over the full control of the automation ... we work the way selenium test cases work ... the qi tester records the whole flow test cases and then the selenium starts from there replaying the recording ... record it in the skip so that the next time the skip runs it runs flawlessly"*. Runtime discovery is no longer the primary path.
@@ -4113,3 +4130,136 @@ the next run (or the next agent) starts from proof, not guesses.
 1. Map a non-top-tier openadapter model in OmniRoute → the playbook then lands it in one pass.
 2. Manual takeover pass over featherless/reka/puter the same way (show buttons + "+ new key").
 3. Then let the script replay the playbooks in the foreground.
+
+---
+
+### [2026-08-23 13:0x] #1056 — Record/replay pass 2: nous-research + inception PROVEN (4 ready total), three dead ends documented instead of re-fought, four proof-gate/safety-net bugs fixed, and TWO LIVE KEYS FOUND IN GIT HISTORY
+
+Continues the operator's Selenium-recording model: *"you take over the control you do the full
+automation and then record it in the skip so that the next time the skip runs it runs flawlessly."*
+
+#### Providers that reached MONETIZER_READY (recorded + replayable)
+
+| provider | steps | proof upstream (provider's OWN endpoint) | proof through OmniRoute |
+|---|---|---|---|
+| `nous-research` | 4 | `inference-api.nousresearch.com/v1/models` -> **200, 373 models**; `poolside/laguna-s-2.1:free` -> real text | `nous-research/meituan/longcat-2.0:free` -> real streamed text |
+| `inception` | 6 | `api.inceptionlabs.ai/v1/models` -> **200, 1 model**; `mercury-2` -> the real word "Paris" | `inception/mercury-2` -> real streamed text |
+
+Total replayable recordings now **4**: reka, openadapter, nous-research, inception.
+
+#### Dead ends WALKED AWAY FROM — recorded so the time is never spent twice
+
+All three are `MONETIZER_BLOCKED` with `steps: []`; `replay.py` skips them and prints the reason,
+so no paywall is ever re-opened (*"you reject, all paywall card requirements and all captcha. You
+do not hit them or hammer them"*).
+
+- **featherless-ai — PLAN.** Signed in fine; page states *"No API Keys — Choose a plan to create
+  API keys."* Subscription-only, $10/mo minimum. The "New API Key" button renders enabled but is
+  inert, so the only symptom was a click timing out with no reason.
+- **nebius — CARD.** Now "Nebius Token Factory" (`studio.nebius.com/settings/api-keys` 404s).
+  Google SSO **succeeded** and created the account with `default-project`. The blocker is a
+  mandatory Billing details form — `Card details*`, "Add card", "temporary $0 authorization" —
+  gating everything before any key exists. Also corrected on the record: Google's chooser labelled
+  the account "Signed out", which refers to the SITE session, not the Google session; an in-flight
+  reading of that as an expired Google login was wrong.
+- **together — CARD.** Google SSO succeeded (org `isearchxsolve_438f`). Banner: *"You're currently
+  in read-only mode. Make an initial deposit to unlock full access."* `Create key` IS enabled here
+  and opens a **Purchase credits** dialog with a real Stripe card form; its "Skip for now" sits
+  below the fold behind the cookie banner and two attempts to reach it timed out, so it was
+  abandoned rather than hammered. **Proof came by a payment-free route instead:** the account's
+  auto-provisioned "Legacy API Key" offers only *Regenerate legacy key* (no reveal), so it was
+  regenerated on our own hours-old account to obtain the value (64 hex, tail `ea1c`, matching the
+  masked display). Result: `GET api.together.xyz/v1/models` -> **200 with 279 models** (the key
+  authenticates), but **every** `POST /v1/chat/completions` -> **HTTP 402 "Credit limit exceeded"**,
+  and **0 of 279** model ids are free-marked. Per the harvest rule the key is NOT harvested; its
+  entry was removed from `state/generated_keys.json` so nothing downstream can mistake a 402 key
+  for a working one.
+
+Nothing was paid anywhere. No card entered, no CAPTCHA solved, no $0 authorization triggered, no
+plan bought.
+
+#### Four bugs fixed — all four were SILENTLY THROWING AWAY GOOD PROVIDERS
+
+1. **`free_first()` was 2-tier** (`harvest_free_keys.py`). On nous-research — itself an aggregator
+   with 373 models, exactly 6 marked `:free` — `deepseek-v4-flash` matched the "flash" hint, tied
+   with `poolside/laguna-s-2.1:free`, and won on list position. It 404'd, and with
+   `MAX_MODEL_TRIES` out of 373 the free models were never reached, so a key that WAS authenticated
+   upstream had its row deleted as dead. Added `EXPLICIT_FREE_RE`: an id that literally says
+   `:free` now outranks everything.
+2. **Probe budget 12 -> 128 tokens** (`harvest_free_keys.py`). inception's `mercury-2` burned **39
+   reasoning tokens** before emitting anything, so a 16-token budget returned HTTP 200,
+   `finish_reason: "stop"`, content `""`. Same false-negative family as the SSE bug: it deletes
+   rows whose keys are perfectly good.
+3. **`body_text()` returned RENDERED SOURCE CODE** (`drive.py`). On api.together.ai, Stripe.js was
+   loaded **as a document** in an iframe, so the browser rendered **605,964 characters of minified
+   JavaScript as body text**. `body_text()` returns the longest frame body, so `walls()` matched the
+   literals `hcaptcha` and `"Verify Phone Number"` **inside the source** and reported a CAPTCHA gate
+   and a phone gate on a page that had neither. Fixed with `looks_like_code()`.
+4. **`card_form_present()` trusted HIDDEN iframes** (`drive.py`). After the purchase dialog was
+   closed, leftover hidden Stripe frames still held a nested `iframe[src*='js.stripe.com']`
+   reporting `is_visible() == True`, because Playwright resolves visibility in the child frame's own
+   coordinate space and cannot see the hidden ancestor. So CARD was reported forever on a page with
+   no card form. Fixed with `frame_showing()`, which walks the iframe chain up to the main frame.
+
+Bugs 3 and 4 together would have **silently refused every provider that merely loads Stripe.js** —
+a large share of the remaining ~193. Verified after the fix on the live page: body text back to
+1,009 chars, `card_form_present()` -> `""`, `walls()` -> none, while true positives still fire
+(real card copy -> CARD, captcha copy -> CAPTCHA; 4/4 `looks_like_code` unit cases pass).
+
+#### Three safety-net additions
+
+- **`PLAN` wall class** (`drive.py`, `PLAN_REQUIRED_RE`) — deliberately narrow: the wording must tie
+  a plan to *making a key*, so it cannot fire on a "Choose a plan" nav link, a pricing page, or the
+  "Upgrade to Pro" advert nearly every provider ships (the false positive that nearly cost us
+  openadapter). Retested 4/4 should-fire, 0/6 false positives. Turns featherless's mystery timeout
+  into an honest walk-away.
+- **`settled_text()`** (`replay.py`) — on tokenfactory.nebius.com the body text was EMPTY straight
+  after `domcontentloaded`, so `walls()` saw nothing; ~10s later the same page read "Billing
+  details ... Card details* ... Add card" and correctly returned `['CARD']`. Judging a wall against
+  an unpainted SPA is how a paywall gets walked *into* instead of away from. It is a WAIT, not a
+  retry — nothing is clicked.
+- **`cmd_copy`** (`drive.py`) — nous-research masks the key in the table and gives every row an
+  identical `title="Copy to clipboard"` icon button, so name-resolution picked the FIRST row (a key
+  from June) while the freshly minted key sat in the last row. Copying the wrong key and calling it
+  harvested is exactly the false claim the rules forbid, so copy controls are now addressable by
+  selector: `tr:last-child button[title='Copy to clipboard']`, verified to match exactly 1 element.
+
+#### SECURITY FINDING — needs the operator's decision
+
+`scripts/automation/wire_proven.py` held **two live provider keys as plaintext string literals**,
+and it **was committed and pushed** in `9ca01f0` ("LATEST MAAL"). Measured facts:
+
+- The GitHub repo `isearchxsolve/omniroute-monetizer` is **PRIVATE**, so exposure is limited to
+  whoever can read the repo — not the public. This is not an emergency.
+- The values are in git history permanently; deleting the file does not remove them.
+- **The exposed keys are NOT the ones in use.** Exposed: OpenAdapter `sk-c...9ae8` (len 38) and Reka
+  `4a5f...9bab`. Currently wired: OpenAdapter `sk-c...b197` and Reka `2d53...fafe`. The exposed pair
+  are older spares — which makes revoking them safe, and is exactly the spare-key cleanup already
+  on the list.
+- **Recommendation:** revoke *specifically* the OpenAdapter key ending `9ae8` and the Reka key
+  ending `9bab` at each provider's dashboard. The wired keys are untouched by that. Rewriting git
+  history is optional and secondary; rotation is the actual remedy. **Not done unilaterally** —
+  revoking a live credential is outward-facing and hard to reverse.
+
+Fixed in the source regardless: `wire_proven.py` now reads from the gitignored
+`state/generated_keys.json` (`.gitignore:3`), holds **0** key-shaped literals, and prints only
+fingerprints. Re-probe after the rewrite: reka -> `GET /v1/models` 200, completion **200 "OK"**,
+verdict saved; openadapter -> `GET /v1/models` 200 but completion **HTTP 503** (provider-side
+outage, not a key fault), so no verdict was overwritten.
+
+#### What is NOT claimed
+
+- Only **4** providers are replayable-and-proven; ~193 catalog providers still have no connection.
+- The drive.py wall fixes are verified by unit cases plus the live Together page — **not** by a full
+  4-provider replay, which was deliberately skipped because a dry run mints a fresh key on every
+  provider and the spares already need cleaning up.
+- together's key authenticates but cannot infer; it is recorded as blocked, not as harvested.
+
+#### Next
+
+1. Record the remaining candidates: clarifai, upstage, hyperbolic, baseten; revisit parked sambanova.
+2. Operator's call: revoke the two exposed spare keys (`9ae8`, `9bab`); tidy the other spares
+   (~4 reka, ~5 openadapter, 2 nous-research, 4 inception) and the two duplicate reka rows.
+3. Carried over: `provider_login_helper._classify` site-vs-login-marker precedence;
+   `video_key_harvester.py` modal "Create key" + `--user-data-root` handling; third-party SSO for
+   kie/segmind/novita/leonardo; `pollinations-video` handler missing in OmniRoute.
