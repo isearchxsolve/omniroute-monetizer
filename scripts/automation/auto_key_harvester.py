@@ -174,7 +174,7 @@ CREATE_LABELS = (
     "create api key", "create new api key", "create new key", "create key",
     "new api key", "new secret key", "new key", "generate api key", "generate key",
     "generate new key", "create token", "new token", "add key", "add new key",
-    "create", "+ new", "+ create", "new",
+    "create", "+ new", "+ new key", "+ create", "new",
 )
 COPY_LABELS = ("copy", "copy key", "copy api key", "copy to clipboard", "copy secret")
 # ONLY a sign-out control proves a session exists. MEASURED on cloud.sambanova.ai/plans/pricing
@@ -210,6 +210,26 @@ KEY_NOISE = re.compile(
 # time" / "we have 100s yet to cover". NOT a dead end -- sambanova is where the Google chooser
 # first proved it works under Playwright. It is parked because per-provider debugging does not
 # scale when 100+ providers have never been tried once. Revisit after the sweep.
+# PLAYBOOKS -- steps executed MANUALLY by the agent and recorded verbatim (operator directive,
+# 2026-08-23: "you do the automation not the script... write the story in the script"). The
+# sweep tries a provider's recorded story FIRST; generic exploration only when no story exists.
+PLAYBOOKS: dict[str, list[str]] = {
+    "openadapter": [
+        "goto https://dashboard.openadapter.in/keys   # session already lives in the robot profile",
+        "click button 'show' (first key row)          # reveals the masked key as plaintext in the body",
+        "read the sk-cv-... key from body text        # no clipboard needed",
+        "wire + real_completion proof",
+        # VERDICT 2026-08-23: capture works every time; OmniRoute maps only a top-tier model
+        # for openadapter and its free tier 403s top-tier -> fix the model mapping, then this
+        # playbook lands a provider in one pass.
+    ],
+    "featherless-ai": [
+        "goto https://featherless.ai/                 # auto-bounces into Google OAuth with returnTo=/account/api-keys",
+        "pick_google_account (session chooser)        # robot profile holds the session",
+        "land on /account/api-keys -> create flow",
+    ],
+}
+
 PARKED = {
     "sambanova": "operator parked 2026-08-22 after its chooser proved the Google flow works; "
                  "breadth first, single-provider polish later",
