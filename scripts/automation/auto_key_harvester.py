@@ -1345,6 +1345,15 @@ def mint_key(page) -> tuple[Optional[str], str]:
     if before:
         best = max(before, key=len)
         return best, "existing key read from the page (no new mint needed)"
+    # Masked keys (sk-...****) never match KEY_PATTERTERS, but their Copy button puts the real
+    # value on the clipboard -- MEASURED on openadapter 2026-08-23: "sign out, copy" on the key
+    # page, nothing readable in text or inputs. This is the operator's original step: copy to
+    # clipboard.
+    if click_label(page, COPY_LABELS, timeout=2000):
+        page.wait_for_timeout(600)
+        cb = read_clipboard(page)
+        if looks_like_key(cb):
+            return cb, "existing key copied to clipboard (masked on page)"
     shown = _keys_in_inputs(page)
     if shown:
         best = max(shown, key=len)
