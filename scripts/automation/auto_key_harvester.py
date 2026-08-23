@@ -1319,6 +1319,36 @@ def reach_key_page(page, target: dict):
     return None
 
 
+def copy_walk(page) -> tuple[Optional[str], str]:
+    """Walk EVERY Copy-labeled control and keep the first clipboard read that is a key.
+
+    MEASURED 2026-08-23 (operator: "copied the install command instead of api key"): key
+    pages routinely carry several Copy buttons -- one for an install command or snippet, one
+    for the key. Clicking the first match grabs the command; the key's own button is never
+    pressed. Key-shaped single-token values only (looks_like_key rejects spaces, so shell
+    snippets fall out naturally).
+    """
+    try:
+        copies = page.get_by_role("button", name=re.compile(r"copy", re.I))
+        n = min(copies.count(), 4)
+    except Exception:
+        return None, ""
+    for i in range(n):
+        if out_of_time():
+            break
+        try:
+            copies.nth(i).click(timeout=2500)
+        except Exception:
+            continue
+        for _ in range(2):
+            page.wait_for_timeout(900)
+            cb = read_clipboard(page)
+            if looks_like_key(cb):
+                shot(page, f"{_shot_prefix}-keycaptured")   # visual proof of the capture
+                return cb, f"existing key copied to clipboard (copy button {i + 1}/{n})"
+    return None, ""
+
+
 def _keys_in_inputs(page, exclude=frozenset()) -> set[str]:
     """Keys sitting in inputs/code blocks the body-text extractor cannot see."""
     out: set[str] = set()
@@ -1351,15 +1381,11 @@ def mint_key(page) -> tuple[Optional[str], str]:
         return best, "existing key read from the page (no new mint needed)"
     # Masked keys (sk-...****) never match KEY_PATTERNS, but their Copy button puts the real
     # value on the clipboard -- MEASURED on openadapter 2026-08-23: "sign out, copy" on the key
-    # page, nothing readable in text or inputs. This is the operator's original step: copy to
-    # clipboard. Deliberate pace: click, give the clipboard a real moment, read twice.
-    if click_label(page, COPY_LABELS, timeout=2500):
-        for _ in range(3):
-            page.wait_for_timeout(1000)
-            cb = read_clipboard(page)
-            if looks_like_key(cb):
-                shot(page, f"{_shot_prefix}-keycaptured")   # visual proof of the capture
-                return cb, "existing key copied to clipboard (masked on page)"
+    # page, nothing readable in text or inputs. Walk ALL Copy buttons (copy_walk): the first
+    # is often an install command's copy, not the key's (operator measured, same day).
+    cb, cb_detail = copy_walk(page)
+    if cb:
+        return cb, cb_detail
     shown = _keys_in_inputs(page)
     if shown:
         best = max(shown, key=len)
@@ -1408,15 +1434,11 @@ def mint_key(page) -> tuple[Optional[str], str]:
     if w:
         return None, w
 
-    # Clipboard first: it is the only way to get a key a provider shows masked. Same
-    # deliberate pace -- the clipboard write can lag the click.
-    if wait_for_control(page, COPY_LABELS, ms=6000) or click_label(page, COPY_LABELS, timeout=2500):
-        for _ in range(3):
-            page.wait_for_timeout(1000)
-            cb = read_clipboard(page)
-            if looks_like_key(cb):
-                shot(page, f"{_shot_prefix}-keycaptured")
-                return cb, f"clicked '{clicked}', copied from clipboard"
+    # Clipboard first: it is the only way to get a key a provider shows masked. Walk ALL
+    # Copy buttons -- the first is often an install command's copy (same lesson as above).
+    cb, cb_detail = copy_walk(page)
+    if cb:
+        return cb, f"clicked '{clicked}' -> {cb_detail}"
 
     fresh = keys_in(txt) - before
     if fresh:
