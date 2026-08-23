@@ -1344,16 +1344,19 @@ def mint_key(page) -> tuple[Optional[str], str]:
     before = keys_in(body_text(page))
     if before:
         best = max(before, key=len)
+        shot(page, f"{_shot_prefix}-keycaptured")   # visual proof of the capture
         return best, "existing key read from the page (no new mint needed)"
-    # Masked keys (sk-...****) never match KEY_PATTERTERS, but their Copy button puts the real
+    # Masked keys (sk-...****) never match KEY_PATTERNS, but their Copy button puts the real
     # value on the clipboard -- MEASURED on openadapter 2026-08-23: "sign out, copy" on the key
     # page, nothing readable in text or inputs. This is the operator's original step: copy to
-    # clipboard.
-    if click_label(page, COPY_LABELS, timeout=2000):
-        page.wait_for_timeout(600)
-        cb = read_clipboard(page)
-        if looks_like_key(cb):
-            return cb, "existing key copied to clipboard (masked on page)"
+    # clipboard. Deliberate pace: click, give the clipboard a real moment, read twice.
+    if click_label(page, COPY_LABELS, timeout=2500):
+        for _ in range(3):
+            page.wait_for_timeout(1000)
+            cb = read_clipboard(page)
+            if looks_like_key(cb):
+                shot(page, f"{_shot_prefix}-keycaptured")   # visual proof of the capture
+                return cb, "existing key copied to clipboard (masked on page)"
     shown = _keys_in_inputs(page)
     if shown:
         best = max(shown, key=len)
@@ -1402,12 +1405,15 @@ def mint_key(page) -> tuple[Optional[str], str]:
     if w:
         return None, w
 
-    # Clipboard first: it is the only way to get a key a provider shows masked.
-    if wait_for_control(page, COPY_LABELS, ms=8000) or click_label(page, COPY_LABELS, timeout=4000):
-        page.wait_for_timeout(700)
-        cb = read_clipboard(page)
-        if looks_like_key(cb):
-            return cb, f"clicked '{clicked}', copied from clipboard"
+    # Clipboard first: it is the only way to get a key a provider shows masked. Same
+    # deliberate pace -- the clipboard write can lag the click.
+    if wait_for_control(page, COPY_LABELS, ms=6000) or click_label(page, COPY_LABELS, timeout=2500):
+        for _ in range(3):
+            page.wait_for_timeout(1000)
+            cb = read_clipboard(page)
+            if looks_like_key(cb):
+                shot(page, f"{_shot_prefix}-keycaptured")
+                return cb, f"clicked '{clicked}', copied from clipboard"
 
     fresh = keys_in(txt) - before
     if fresh:
@@ -1522,6 +1528,14 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
             return row
         row["key_page"] = page.url
         row["key_page_shot"] = shot(page, f"{slug}-keypage")   # proof the key page was reached
+
+        # DWELL AT THE MONEY MOMENT (operator, 2026-08-23: "movement is too fast, killed
+        # before capturing the key"). Every speed trim exists to waste less time on hopeless
+        # pages -- this is the opposite moment: a reached key page. Breathe, let late UI
+        # finish, then capture deliberately.
+        log("        on the key page -- pausing to capture the key before anything else")
+        settle(page, 2500)
+        dismiss_overlays(page)
 
         w = wall_page(page)
         if w:
