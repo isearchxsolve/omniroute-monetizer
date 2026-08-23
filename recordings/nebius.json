@@ -1,0 +1,25 @@
+{
+  "slug": "nebius",
+  "recorded_by": "agent via drive.py",
+  "steps": [
+    {
+      "action": "goto",
+      "url": "https://studio.nebius.com/settings/api-keys"
+    },
+    {
+      "action": "goto",
+      "url": "https://tokenfactory.nebius.com/"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Log in",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Get started with Google"
+    }
+  ]
+}

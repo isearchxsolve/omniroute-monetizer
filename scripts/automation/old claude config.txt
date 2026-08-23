@@ -1,0 +1,6 @@
+{
+  "inferenceGatewayBaseUrl": "https://agentrouter.org",
+  "inferenceGatewayApiKey": "sk-S3e9J5QlH4wt046tQPwDCbFfpYrAFx2cMNzkMDjLLBYgdYgb",
+  "inferenceProvider": "gateway",
+  "inferenceCredentialKind": "static"
+}

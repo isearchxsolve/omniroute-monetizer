@@ -1,0 +1,28 @@
+{
+  "slug": "nous-research",
+  "recorded_by": "agent via drive.py",
+  "steps": [
+    {
+      "action": "goto",
+      "url": "https://portal.nousresearch.com"
+    },
+    {
+      "action": "click",
+      "role": "link",
+      "name": "API KEYS"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "CREATE KEY"
+    },
+    {
+      "action": "copy",
+      "css": "tr:last-child button[title='Copy to clipboard']",
+      "why": "the key is masked in the table (sk-nous-...ZrkL) and every row has an identical icon button whose only accessible name is title='Copy to clipboard'. Resolving it by name picks the FIRST row, which is an older key. Rows are ordered created-ascending, so the key just minted is the last row."
+    }
+  ],
+  "entry_url": "https://portal.nousresearch.com/",
+  "notes": "Already authenticated via the robot profile (team 'Kunal Das', isearch.xsolve@gmail.com) -- no Google step is in the recording. CREATE KEY needs NO modal and NO name: one click mints a key with an auto-generated name and a 'Key created' toast. The portal shows a Stripe top-up button and a LOW BALANCE of $0.10; that is an advert, not a wall, and nothing was ever paid. Nous Portal is itself an AGGREGATOR: it serves 373 models (deepseek, google, qwen, z-ai...), 6 of them marked ':free'. PROVEN 2026-08-23 upstream (GET inference-api.nousresearch.com/v1/models -> 200 with 373 models; POST /v1/chat/completions on poolside/laguna-s-2.1:free -> 200 with real text) AND through OmniRoute (nous-research/meituan/longcat-2.0:free -> real streamed text). NOTE the upstream base is inference-api.nousresearch.com, NOT api.nousresearch.com, which does not resolve.",
+  "status": "MONETIZER_READY"
+}

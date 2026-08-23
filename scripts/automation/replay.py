@@ -58,7 +58,15 @@ MASKED_CHIP_RE = re.compile(r"^[0-9a-zA-Z]{4,}[•*·\.]{3,}[0-9a-zA-Z]{3,}$")
 
 
 def recordings(only: Optional[list[str]]) -> list[dict]:
+    """Every replayable recording. Skips the ones already proven to be dead ends.
+
+    A MONETIZER_BLOCKED recording is kept on purpose -- it documents WHY a provider was walked
+    away from (featherless-ai: "Choose a plan to create API keys"), so the same wall is not
+    rediscovered on every run. Replaying it could only fail, and re-opening a paywall every time
+    is exactly the hammering the operator ruled out.
+    """
     out = []
+    skipped = []
     for p in sorted(REC_DIR.glob("*.json")):
         if p.name.startswith("_"):
             continue
@@ -66,11 +74,16 @@ def recordings(only: Optional[list[str]]) -> list[dict]:
             d = json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             continue
-        if not d.get("steps"):
-            continue
         if only and d.get("slug") not in only:
             continue
+        if d.get("status") == "MONETIZER_BLOCKED":
+            skipped.append(f"{d.get('slug')} ({d.get('blocked_reason') or 'blocked'})")
+            continue
+        if not d.get("steps"):
+            continue
         out.append(d)
+    if skipped:
+        print(f"[~] walked away from earlier, not retried: {', '.join(skipped)}", flush=True)
     return out
 
 

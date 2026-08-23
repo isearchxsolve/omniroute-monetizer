@@ -1,0 +1,8 @@
+{
+  "slug": "featherless-ai",
+  "recorded_by": "agent via drive.py",
+  "status": "MONETIZER_BLOCKED",
+  "blocked_reason": "PLAN",
+  "steps": [],
+  "notes": "WALKED AWAY 2026-08-23, deliberately, and this file exists so the time is never spent again. The robot profile IS signed in (isearch.xsolve@gmail.com) and https://featherless.ai/account/api-keys loads fine, but the page states: \"No API Keys -- Choose a plan to create API keys.\" Featherless is subscription-only ($10/mo minimum); there is no free tier behind that gate. The 'New API Key' button renders and looks enabled but is inert, so the only symptom was a Playwright click timing out with no reason -- which is why drive.walls() gained a narrow PLAN_REQUIRED_RE check that now reports this honestly as a PLAN wall. Nothing was paid, no card was entered, no plan was chosen. steps:[] is intentional: replay skips MONETIZER_BLOCKED recordings, so this costs nothing per run."
+}

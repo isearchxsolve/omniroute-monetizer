@@ -1,0 +1,42 @@
+{
+  "slug": "inception",
+  "recorded_by": "agent via drive.py",
+  "steps": [
+    {
+      "action": "goto",
+      "url": "https://platform.inceptionlabs.ai"
+    },
+    {
+      "action": "click",
+      "role": "link",
+      "name": "API Keys",
+      "exact": true
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Create API Key"
+    },
+    {
+      "action": "fill",
+      "css": "input[placeholder='e.g., Production API Key']",
+      "value": "omniroute"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Create Key",
+      "exact": true
+    },
+    {
+      "action": "copy",
+      "role": "button",
+      "name": "Copy API key",
+      "exact": true,
+      "why": "the reveal modal shows exactly one copy control, so the accessible name is unambiguous here -- unlike nous-research, where every row has an identical icon button"
+    }
+  ],
+  "entry_url": "https://platform.inceptionlabs.ai/",
+  "notes": "Already authenticated via the robot profile (Kunal Das) -- no Google step is in the recording. The site is behind a 'Vercel Security Checkpoint' that clears ITSELF after roughly 10 seconds with no interaction and nothing solved; replay's resolve_wait (18s) absorbs that, so no special step is needed. Create is a two-step modal: 'Create API Key' -> name input -> 'Create Key' -> a reveal modal with 'Copy API key' and 'Done'. Only ONE model exists: mercury-2, a diffusion model that spends REASONING tokens before emitting content -- a 16-token budget returns HTTP 200 with content \"\", which is why the probe budget was raised to 128. PROVEN 2026-08-23 upstream (GET api.inceptionlabs.ai/v1/models -> 200, 1 model; POST /v1/chat/completions on mercury-2 -> 200 with the real word 'Paris') AND through OmniRoute (inception/mercury-2 -> real streamed text). The account already held 4 keys from earlier attempts, so revoking the spares is a cleanup item for the operator.",
+  "status": "MONETIZER_READY"
+}

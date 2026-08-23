@@ -134,6 +134,21 @@ CARD_SOFT_RE = re.compile(
     r"credit card|payment method|upgrade to (?:pro|paid|premium)|start (?:your )?trial|"
     r"add a payment", re.I)
 CARD_RE = re.compile(CARD_HARD_RE.pattern + "|" + CARD_SOFT_RE.pattern, re.I)
+
+# A subscription gate on key CREATION itself. Deliberately narrow: the wording must tie a
+# plan/subscription to making a key, so it cannot fire on a "Choose a plan" nav link, a pricing
+# page, or the "Upgrade to Pro" advert that nearly every provider ships (see walls() for the
+# false positive that cost us openadapter). MEASURED 2026-08-23 on featherless.ai, whose keys page
+# is signed in, shows an enabled-looking "New API Key" button, and states plainly:
+# "No API Keys -- Choose a plan to create API keys." The button is inert, so the only symptom
+# without this check was a Playwright click timing out with no reason given.
+PLAN_REQUIRED_RE = re.compile(
+    r"(?:choose|select|pick) a (?:plan|subscription)[^.\n]{0,40}\b(?:to|before)\b[^.\n]{0,40}"
+    r"(?:creat\w*|generat\w*|api key)|"
+    r"(?:subscri\w+|paid plan|active plan|upgrade)[^.\n]{0,40}\brequired\b[^.\n]{0,40}"
+    r"(?:api key|creat\w*)|"
+    r"(?:api key|creat\w+ a key)[^.\n]{0,30}requires? (?:an? )?(?:paid |active )?"
+    r"(?:plan|subscription)", re.I)
 CAPTCHA_RE = re.compile(
     r"captcha|recaptcha|hcaptcha|turnstile|i'?m not a robot|verify you(?:'| a)re human|"
     r"unusual traffic|checking your browser", re.I)
@@ -377,6 +392,11 @@ def walls(txt: str, page=None) -> list[str]:
     elif CARD_SOFT_RE.search(txt):
         # No page to inspect (text-only caller): keep the old, cautious reading.
         hit.append("CARD")
+
+    # A subscription gate is not a card form and not an advert -- it is a hard stop with no free
+    # path behind it, and it must be reported as such rather than as a mystery timeout.
+    if PLAN_REQUIRED_RE.search(txt):
+        hit.append("PLAN")
     return hit
 
 
@@ -826,6 +846,40 @@ def cmd_clip(s: Sess, slug: Optional[str], sentinel: str = "", wait_ms: int = 80
     return 0
 
 
+def cmd_copy(s: Sess, role, name, css, frame, exact: bool, slug: Optional[str]) -> int:
+    """Click a NAMED copy control, then take what it put on the clipboard. Records one `copy` step.
+
+    cmd_key() already handles the easy shape: one copy button whose label is literally "copy".
+    MEASURED 2026-08-23 on portal.nousresearch.com, which is not that shape -- the key is masked
+    in the table (`sk-nous-...ZrkL`) and every row carries an identical icon button whose only
+    accessible name is title="Copy to clipboard". Resolving that by name picks the FIRST row, i.e.
+    a key from June, while the key just minted sits in the last row. Copying the wrong account's
+    key and calling it harvested is precisely the false claim the rules forbid, so the control has
+    to be addressable by selector.
+
+    The clipboard is marked before the click and the value must change -- see poison_clipboard().
+    """
+    page = s.page()
+    sentinel = poison_clipboard(page)
+    loc = resolve(page, role, name, css, frame, exact)
+    if loc is None:
+        out(f"[-] copy control not found: role={role} name={name!r} css={css}")
+        return 4
+    loc.click(timeout=10000)
+    page.wait_for_timeout(600)
+    rc = cmd_clip(s, slug, sentinel=sentinel)
+    if rc != 0:
+        return rc
+    # cmd_clip recorded "clipboard_key"; replace it with a "copy" step carrying this control, so
+    # replay clicks it itself (and poisons the clipboard first) instead of reading a stale value.
+    rec = rec_load()
+    if rec and rec.get("steps") and rec["steps"][-1].get("action") == "clipboard_key":
+        rec["steps"].pop()
+        rec_save(rec)
+        rec_step("copy", role=role, name=name, css=css, frame=frame, exact=exact or None)
+    return 0
+
+
 def cmd_wire(slug: str) -> int:
     """Wire the captured key into OmniRoute and PROVE it with a real completion.
 
@@ -909,6 +963,13 @@ def main() -> int:
     sh.add_argument("tag", nargs="?", default="now")
     cl = sub.add_parser("clip", help="capture a key the provider's copy button put on the clipboard")
     cl.add_argument("--slug")
+    cp = sub.add_parser("copy", help="click a specific copy control, then take the key it copied")
+    cp.add_argument("--role")
+    cp.add_argument("--name")
+    cp.add_argument("--css")
+    cp.add_argument("--frame", type=int)
+    cp.add_argument("--exact", action="store_true")
+    cp.add_argument("--slug")
     rk = sub.add_parser("readkey", help="capture a key the provider prints on the page (no clipboard)")
     rk.add_argument("--slug")
     wr = sub.add_parser("wire", help="wire the captured key into OmniRoute and prove it")
@@ -975,6 +1036,9 @@ def main() -> int:
             return cmd_shot(s, args.tag)
         if args.cmd == "clip":
             return cmd_clip(s, args.slug)
+        if args.cmd == "copy":
+            return cmd_copy(s, args.role, args.name, args.css, args.frame,
+                            args.exact, args.slug)
         if args.cmd == "readkey":
             return cmd_readkey(s, args.slug)
         return 2

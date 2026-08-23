@@ -1,0 +1,28 @@
+{
+  "inferenceProvider": "gateway",
+  "inferenceCredentialKind": "static",
+  "inferenceGatewayBaseUrl": "http://127.0.0.1:20128",
+  "inferenceGatewayApiKey": "REPLACE_WITH_OMNIROUTE_KEY",
+  "inferenceGatewayAuthScheme": "bearer",
+  "modelDiscoveryEnabled": false,
+  "inferenceModels": [
+    {
+      "name": "auto/best-free",
+      "labelOverride": "OmniRoute Auto (free)",
+      "anthropicFamilyTier": "opus",
+      "isFamilyDefault": true
+    },
+    {
+      "name": "auto/best-coding",
+      "labelOverride": "OmniRoute Coding",
+      "anthropicFamilyTier": "sonnet",
+      "isFamilyDefault": true
+    },
+    {
+      "name": "auto/fast",
+      "labelOverride": "OmniRoute Fast",
+      "anthropicFamilyTier": "haiku",
+      "isFamilyDefault": true
+    }
+  ]
+}

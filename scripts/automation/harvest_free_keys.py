@@ -329,20 +329,31 @@ KEY_LEVEL_RE = re.compile(
     r"account (?:suspended|disabled)", re.I)
 
 # Free tiers hide their usable models further down the list, so try the cheap-sounding ones first.
+# An id that SAYS free ranks above one that merely sounds cheap -- see free_first().
+EXPLICIT_FREE_RE = re.compile(r":free\b|\bfree\b|/free|-free", re.I)
 FREE_HINT_RE = re.compile(
     r"free|flash|mini|lite|small|tiny|nano|instruct|chat|8b|7b|4b|3b|1\.5b|2b", re.I)
 PAID_HINT_RE = re.compile(r"pro\b|max\b|ultra|opus|premium|large|70b|405b|thinking|reason", re.I)
 
 
 def free_first(ids: list[str]) -> list[str]:
-    """Cheapest-looking models first. Ordering only -- nothing is skipped."""
-    def rank(mid: str) -> tuple[int, str]:
-        score = 0
-        if FREE_HINT_RE.search(mid):
-            score -= 1
-        if PAID_HINT_RE.search(mid):
-            score += 1
-        return score, mid
+    """Cheapest-looking models first. Ordering only -- nothing is skipped.
+
+    Three tiers, because two tiers were not enough. MEASURED 2026-08-23 on nous-research, whose
+    portal is itself an aggregator offering 373 models of which exactly 6 are marked `:free`:
+    `deepseek/deepseek-v4-flash` matched the "flash" hint, tied with `poolside/laguna-s-2.1:free`,
+    and won on original list position. It then 404'd, and with only MAX_MODEL_TRIES attempts out of
+    373 the free models were never reached -- so a key that WAS authenticated upstream (200, 373
+    models, real text from laguna-s-2.1:free) had its row deleted as dead. An id that literally
+    says `:free` is the strongest signal available and now outranks everything.
+    """
+    def rank(mid: str) -> tuple[int, int, str]:
+        tier = 2
+        if EXPLICIT_FREE_RE.search(mid):
+            tier = 0
+        elif FREE_HINT_RE.search(mid):
+            tier = 1
+        return tier, 1 if PAID_HINT_RE.search(mid) else 0, mid
     return sorted(ids, key=rank)
 
 
@@ -432,7 +443,14 @@ def real_completion(slug: str, timeout: int = 60, api=None, cid: str = "") -> tu
             r = requests.post(
                 f"{OMNIROUTE_BASE}/v1/chat/completions",
                 json={"model": mid, "messages": [{"role": "user", "content": "Reply with: OK"}],
-                      "max_tokens": 12},
+                      # 128, not 12. MEASURED 2026-08-23 on inception's mercury-2: a 16-token
+                      # budget came back HTTP 200, finish_reason "stop", content "" -- because the
+                      # model burned 39 REASONING tokens before emitting anything. Raise the
+                      # ceiling and the same key answers "Paris". A reasoning model silently
+                      # scoring as "empty content" is the same false-negative family as the SSE
+                      # bug: it deletes a row whose key is perfectly good. Costs nothing on a
+                      # provider that just says OK, since generation stops at the stop token.
+                      "max_tokens": 128},
                 timeout=timeout,
             )
         except Exception as exc:
