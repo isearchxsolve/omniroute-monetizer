@@ -1498,6 +1498,10 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
         return row
 
     page = ctx.new_page()
+    try:
+        page.bring_to_front()   # MEASURED all night 2026-08-23: without this the sweep
+    except Exception:            # ran in BACKGROUND tabs -- the operator watched a dead 403
+        pass                     # tab, and Chrome refused every clipboard write.
     phase(page, f"{slug}: opening")
     preexisting = frozenset(id(p) for p in _sibling_pages(page))
     try:
@@ -1530,6 +1534,10 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
                 except Exception:
                     pass
                 page = reached_page
+                try:
+                    page.bring_to_front()
+                except Exception:
+                    pass
             return reached_page is not None
 
         # Some providers walk anonymous visitors straight into Google OAuth (MEASURED on
