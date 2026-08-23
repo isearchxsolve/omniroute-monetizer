@@ -1194,6 +1194,7 @@ def do_sso(ctx, page, target: dict, want_email: Optional[str]) -> str:
         return None
 
     start_url = page.url
+    phase(page, "looking for the login door")
     st = attempt_here(page)
     if st:
         return st
@@ -1480,6 +1481,7 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
         return row
 
     page = ctx.new_page()
+    phase(page, f"{slug}: opening")
     preexisting = frozenset(id(p) for p in _sibling_pages(page))
     try:
         try:
@@ -1568,6 +1570,7 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
         # before capturing the key"). Every speed trim exists to waste less time on hopeless
         # pages -- this is the opposite moment: a reached key page. Breathe, let late UI
         # finish, then capture deliberately.
+        phase(page, f"{slug}: CAPTURING KEY")
         log("        on the key page -- pausing to capture the key before anything else")
         settle(page, 2500)
         dismiss_overlays(page)
@@ -1609,7 +1612,7 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
             "(browser sits idle during this -- server-side checks, up to a few minutes)")
         # The operator watches the BROWSER, not the log: say it where they are looking.
         try:
-            page.evaluate("document.title = 'PROOFING KEY server-side -- browser idle is normal'")
+            phase(page, f"{slug}: PROOFING KEY server-side")
         except Exception:
             pass
         res = wire(api, slug, name, key)
