@@ -200,7 +200,9 @@ KEY_PATTERNS = (
 # Things that match the opaque-token fallback but are never keys.
 KEY_NOISE = re.compile(
     r"^(?:[0-9]+|https?|[A-Za-z]+\.(?:js|css|png|svg|woff2?)|[a-f0-9]{7})$|"
-    r"csrf|nonce|__next|webpack|sourcemap|integrity|sha256-|sha384-",
+    r"csrf|nonce|__next|webpack|sourcemap|integrity|sha256-|sha384-|"
+    r"omniroute-auto",   # the key NAME this script types into create dialogs -- MEASURED
+                           # 2026-08-23: 'omni...4625 (len=30)' was our own label, not a key
     re.I,
 )
 
@@ -1573,6 +1575,11 @@ def run_one(ctx, api, target: dict, dry_run: bool, budget: int = 180) -> dict:
 
         log("        key captured; wiring into OmniRoute and proving with a real completion "
             "(browser sits idle during this -- server-side checks, up to a few minutes)")
+        # The operator watches the BROWSER, not the log: say it where they are looking.
+        try:
+            page.evaluate("document.title = 'PROOFING KEY server-side -- browser idle is normal'")
+        except Exception:
+            pass
         res = wire(api, slug, name, key)
         row.update(res)
         if res.get("ok"):
