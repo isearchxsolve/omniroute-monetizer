@@ -888,13 +888,14 @@ def shot(page, name: str) -> Optional[str]:
 
 
 def read_clipboard(page) -> str:
-    """Clipboard, the operator's own step 'copy to clipoard'. JS first, PowerShell as backup."""
-    try:
-        v = page.evaluate("navigator.clipboard.readText()")
-        if v and str(v).strip():
-            return str(v).strip()
-    except Exception:
-        pass
+    """The operator's step 'copy to clipboard', read back. PowerShell ONLY, on purpose.
+
+    MEASURED 2026-08-23 (operator: "interaction does not happen, just stuck"): the JS path
+    navigator.clipboard.readText() hangs up to its 30s timeout in an ATTACHED Chrome when the
+    clipboard permission grant silently fails -- it waits for a permission prompt that never
+    appears. Chrome's Copy buttons write the OS clipboard, and Get-Clipboard reads it in
+    bounded time. No JS clipboard anywhere.
+    """
     try:
         out = subprocess.run(
             ["powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"],
@@ -1668,6 +1669,16 @@ def main() -> int:
         if args.attach:
             try:
                 ctx = attach(pw)
+                # Tab hygiene: previous runs leave console tabs behind (measured: typhoon,
+                # reka, hyperbolic dashboards all still open). Each one is a live SPA burning
+                # memory and slowing every action; close them all -- the robot window keeps a
+                # blank tab, the operator's own Chrome is a different tree entirely.
+                for p in list(ctx.pages):
+                    try:
+                        if (p.url or "") not in ("", "about:blank"):
+                            p.close()
+                    except Exception:
+                        pass
                 log(f"[*] attached to the robot Chrome on port {ROBOT_CDP_PORT} -- a real "
                     "browser you started, not an automation-flagged one")
             except Exception as exc:
