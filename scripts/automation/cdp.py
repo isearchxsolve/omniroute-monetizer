@@ -22,6 +22,11 @@ page, but it never types a password and never touches a CAPTCHA or a payment for
     python cdp.py shot <tag>                # png into state/harvest/shots/
     python cdp.py click "<visible text>"    # click the first element whose text matches
     python cdp.py targets                   # list every page target
+
+Every entry point takes a --port / port= so several Chrome profiles can be driven side by side. One
+Google account means one Chrome profile means one debugging port, because Flow's auth is a single
+NextAuth session cookie per profile and profiles cannot share one. 9222 stays the default so nothing
+that already imports this module has to change.
 """
 from __future__ import annotations
 
@@ -35,24 +40,30 @@ import urllib.request
 
 import websocket  # websocket-client 1.9.0, already in the venv
 
-DEVTOOLS = "http://127.0.0.1:9222"
+DEFAULT_PORT = 9222
+DEVTOOLS = "http://127.0.0.1:9222"          # kept for callers that read it directly
 SHOTS = pathlib.Path(r"D:\omniroute-monetizer\state\harvest\shots")
 
 
-def list_targets() -> list[dict]:
-    raw = urllib.request.urlopen(f"{DEVTOOLS}/json/list", timeout=20).read()
+def devtools(port: int = DEFAULT_PORT) -> str:
+    return f"http://127.0.0.1:{port}"
+
+
+def list_targets(port: int = DEFAULT_PORT) -> list[dict]:
+    raw = urllib.request.urlopen(f"{devtools(port)}/json/list", timeout=20).read()
     return json.loads(raw)
 
 
-def pick_page(match: str = "") -> dict:
-    pages = [t for t in list_targets() if t.get("type") == "page"]
+def pick_page(match: str = "", port: int = DEFAULT_PORT) -> dict:
+    pages = [t for t in list_targets(port) if t.get("type") == "page"]
     if not pages:
-        raise SystemExit("no page targets; is the robot Chrome running with --remote-debugging-port?")
+        raise SystemExit(f"no page targets on port {port}; is that Chrome running with "
+                         f"--remote-debugging-port={port}?")
     if match:
         for t in pages:
             if match.lower() in (t.get("url", "") + t.get("title", "")).lower():
                 return t
-        raise SystemExit(f"no page target matching {match!r}; have: "
+        raise SystemExit(f"no page target matching {match!r} on port {port}; have: "
                          + ", ".join(t.get("url", "")[:60] for t in pages))
     return pages[0]
 
@@ -60,8 +71,9 @@ def pick_page(match: str = "") -> dict:
 class Page:
     """One websocket to one page target. Context-managed so it always closes."""
 
-    def __init__(self, match: str = "", timeout: int = 45):
-        self.t = pick_page(match)
+    def __init__(self, match: str = "", timeout: int = 45, port: int = DEFAULT_PORT):
+        self.port = port
+        self.t = pick_page(match, port)
         self.ws = websocket.create_connection(self.t["webSocketDebuggerUrl"],
                                               timeout=timeout, max_size=64 * 1024 * 1024)
         self._id = 0
@@ -105,14 +117,14 @@ class Page:
 
 
 def cmd_url(a) -> int:
-    with Page(a.match) as p:
+    with Page(a.match, port=a.port) as p:
         print(p.evaluate("location.href"))
         print(p.evaluate("document.title"))
     return 0
 
 
 def cmd_targets(a) -> int:
-    for t in list_targets():
+    for t in list_targets(a.port):
         if t.get("type") != "page" and not a.all:
             continue
         print(f"[{t.get('type')}] {str(t.get('title'))[:60]}")
@@ -121,7 +133,7 @@ def cmd_targets(a) -> int:
 
 
 def cmd_text(a) -> int:
-    with Page(a.match) as p:
+    with Page(a.match, port=a.port) as p:
         txt = p.evaluate("document.body ? document.body.innerText : ''") or ""
     lines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
     if a.grep:
@@ -136,14 +148,14 @@ def cmd_text(a) -> int:
 
 
 def cmd_eval(a) -> int:
-    with Page(a.match) as p:
+    with Page(a.match, port=a.port) as p:
         v = p.evaluate(a.expr, timeout=a.timeout)
     print(v if isinstance(v, str) else json.dumps(v, indent=1, default=str))
     return 0
 
 
 def cmd_nav(a) -> int:
-    with Page(a.match) as p:
+    with Page(a.match, port=a.port) as p:
         p.send("Page.navigate", {"url": a.url}, timeout=60)
         # Don't wait on the load event -- these SPAs keep loading forever. Poll readyState.
         for _ in range(a.wait):
@@ -160,7 +172,7 @@ def cmd_nav(a) -> int:
 
 
 def cmd_shot(a) -> int:
-    with Page(a.match) as p:
+    with Page(a.match, port=a.port) as p:
         r = p.send("Page.captureScreenshot", {"format": "png"}, timeout=90)
     SHOTS.mkdir(parents=True, exist_ok=True)
     dest = SHOTS / f"cdp-{a.tag}.png"
@@ -185,7 +197,7 @@ CLICK_JS = """
 
 
 def cmd_click(a) -> int:
-    with Page(a.match) as p:
+    with Page(a.match, port=a.port) as p:
         print(p.evaluate(CLICK_JS % json.dumps(a.text), timeout=45))
         time.sleep(a.after)
         print("now at:", p.evaluate("location.href"))
@@ -195,6 +207,8 @@ def cmd_click(a) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--match", default="", help="substring of the target page url/title")
+    ap.add_argument("--port", type=int, default=DEFAULT_PORT,
+                    help=f"Chrome remote-debugging port (default {DEFAULT_PORT}); one per profile")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("url").set_defaults(fn=cmd_url)

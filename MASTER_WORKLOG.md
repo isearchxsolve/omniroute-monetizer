@@ -4431,17 +4431,66 @@ probe in the previous session was hitting a 404 path that emits no CORS headers,
 So: the token mints, the request arrives, and Google scores it. CDP-dispatched input scores the same
 as no input. A human click in that same tab, minutes earlier, produced an accepted token.
 
-#### What is NOT yet claimed
+#### RESOLVED: it was the action label, not the score
 
-Two explanations still fit every measurement above — score-based rejection, or an action label none
-of the five guesses hit. They are indistinguishable by guessing, because a wrong label and a bad
-score return byte-identical errors. `googleflow_click_capture.py` separates them without spending
-credits: it wraps `grecaptcha.enterprise.execute` to record the frontend's real sitekey+action, and
-wraps `fetch` so the submit to `batchAsyncGenerateVideoText` is **captured and blocked in the browser
-— Google never sees it**. One operator click then yields a genuine high-score token with the real
-label, which `verify` replays from Python against an empty prompt. ARGUMENT means score was the
-issue; CAPTCHA means the assessment binds to more than token+action and API replay is dead.
-**Hooks are armed; the click has not happened yet, so nothing is concluded.**
+The discriminator ran. `grecaptcha.enterprise.execute` was wrapped to record the frontend's own
+arguments and `fetch`/XHR were both guarded so the submit could not leave the tab (guard self-tested
+first: fetch -> 499 `BLOCKED_BY_LOCAL_PROBE`, XHR -> rewritten to an inert same-origin path). The
+operator typed `blue car` and clicked Create once. Captured:
+
+```
+sitekey 6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV   opts {"action": "VIDEO_GENERATION"}
+```
+
+**`VIDEO_GENERATION`.** The five earlier guesses included `GENERATE_VIDEO` — the same two words in
+the wrong order. Minting from Python with the correct label and submitting an empty prompt returns
+**400 INVALID_ARGUMENT**, i.e. the captcha is accepted and only the body is faulted.
+
+So the score hypothesis was wrong, and with it the "human in the loop at submit time" conclusion that
+was about to be drawn. The lesson worth keeping: `PUBLIC_ERROR_UNUSUAL_ACTIVITY` is emitted for a
+**mislabelled action** exactly as it is for a genuine abuse block, so that error must never be read as
+"we have been detected". The gesture probe was measuring nothing — synthetic input was never relevant.
+
+#### PROVEN END-TO-END, FULLY AUTOMATED
+
+One generation driven entirely from Python, no clicks anywhere in the loop:
+
+```
+python googleflow_client.py generate "a paper boat drifting down a rain-soaked street at night,
+                                      neon reflections" --model fast --yes
+  submitted   c14e9a99-8cc2-47cc-bd95-1e86c5f8080f
+  ACTIVE -> SUCCESSFUL,  length 8s,  mediaBlobSize 5671164
+python googleflow_client.py fetch c14e9a99-...
+  state/harvest/flow/c14e9a99-....mp4   5671164 bytes, container=MP4
+```
+
+Downloaded size matches `mediaBlobSize` exactly. **Google Flow is a working, scriptable video route.**
+
+Two implementation facts the shim depends on:
+
+- **The bytes need COOKIES, not the bearer.** `labs.google/fx/api/trpc/media.getMediaUrlRedirect`
+  is cookie-authenticated and 302s to a signed URL on another origin whose response carries no CORS
+  headers — so an in-page fetch dies with a bare `Failed to fetch` and the download must happen
+  server-side. `session_cookie_header()` reads the 8 labs.google cookies out of the live tab over
+  CDP (`Network.getCookies`), holds them in memory, and never prints or persists them; only cookie
+  *names* are ever displayed.
+- **The action label is mandatory and load-bearing.** `RECAPTCHA_ACTION = "VIDEO_GENERATION"` is now
+  the default in `mint_captcha`. A first automated run failed 403 purely because `submit()` minted
+  without passing it — a bug in this project, not a Google restriction.
+
+#### Measured but NOT explained: the charge was 60, not 20
+
+The operator's UI generation cost **20** (1050 -> 1030). The scripted one, on a body that is
+byte-identical in every parameter that appears in the request, cost **60** (1030 -> 970, confirmed by
+`GET /v1/credits` before and after). Both are `veo_3_1_t2v_fast`, `VIDEO_GENERATION_MODE_TEXT_TO_VIDEO`,
+`VIDEO_ASPECT_RATIO_LANDSCAPE`, `VIDEO_RESOLUTION_720P`, one `promptInputs` entry, `length: "8s"`.
+File sizes differ too — 2,285,908 vs 5,671,164 bytes.
+
+Leading theory is that the submit billed three videos (3 x 20) and only the first media id was read,
+or that `BLOCK_SILENCED_VIDEOS` caused internally-retried attempts to be billed. **Not established.**
+`cmd_generate` now measures credits before/after and prints `len(media)` and `len(workflows)` plus any
+extra media ids, so the next run answers this without an extra spend. Until then, budget planning
+should assume **60 credits per clip, i.e. ~17 clips per 1050-credit Pro account**, not 52.
 
 #### Why comfyui is the intended landing spot
 
@@ -4471,10 +4520,17 @@ All five hold the bearer and captcha tokens in memory only, never print or persi
 
 #### Next
 
-1. Operator clicks Create once with the hooks armed, then `googleflow_click_capture.py verify` —
-   that single measurement decides whether Flow is scriptable or human-gated.
-2. If scriptable: build the ComfyUI-shim on `:8188` over `googleflow_client.py`, then rotate the four
-   accounts by `GET /v1/credits`. If human-gated: Flow is not an unattended route, and the honest
-   record is that it can only be driven with a human at submit time.
-3. `recordings/googleflow.json` is still a one-step stub (`goto` only) and must not be mistaken for a
+1. Build the ComfyUI-shim on `:8188` over `googleflow_client.py`, exposing both the ComfyUI contract
+   (so OmniRoute's `comfyui` format reaches it via `providerSpecificData.baseUrl`) and a direct
+   `/v1/videos/generations` endpoint for the filmmaking app.
+2. Settle the 60-vs-20 charge on the next generation using the instrumentation already added.
+3. Rotation needs one Chrome instance PER account: only port 9222 is debuggable right now
+   (isearch.xsolve), and the kunal.colab window is a separate un-debugged instance. Flow auth is a
+   single NextAuth session cookie per profile, so multi-account means multi-profile, each with its own
+   `--remote-debugging-port` and `--user-data-dir`, plus its own Flow projectId.
+4. Durability hardening: the sitekey and the action label are Google-side constants this project now
+   hardcodes. Auto-discover the sitekey from the `enterprise.js?render=` script tag and fall back
+   across candidate action labels on a 403, so a Flow frontend deploy degrades to a retry instead of
+   an outage.
+5. `recordings/googleflow.json` is still a one-step stub (`goto` only) and must not be mistaken for a
    proven route.

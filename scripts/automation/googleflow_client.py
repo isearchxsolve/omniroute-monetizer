@@ -42,7 +42,7 @@ import urllib.request
 import uuid
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from cdp import Page  # noqa: E402  -- raw CDP, no Playwright (see cdp.py docstring)
+from cdp import Page, DEFAULT_PORT  # noqa: E402  -- raw CDP, no Playwright (see cdp.py docstring)
 
 HOST = "https://aisandbox-pa.googleapis.com"
 SUBMIT_URL = f"{HOST}/v1/video:batchAsyncGenerateVideoText"
@@ -58,6 +58,10 @@ RECAPTCHA_SITEKEY = "6LdsFiUsAAAAAIjVDZcuLhaHiDn5nnHVXVRQGeMV"
 # assessment fail and the submit answer 403 PUBLIC_ERROR_UNUSUAL_ACTIVITY -- the same error a genuine
 # abuse block produces, which is why this cost several wrong turns to pin down.
 RECAPTCHA_ACTION = "VIDEO_GENERATION"
+
+# Tried in order if VIDEO_GENERATION ever stops being accepted, so a frontend rename costs a retry
+# rather than an outage. Kept small on purpose: each attempt is a live request.
+ACTION_FALLBACKS = ("GENERATE_VIDEO", "VIDEO_GENERATION_TEXT", "generate", None)
 
 # The observed model keys. /v1/flow/models/statuses reports health under the short names on the left
 # of each pair; the submit RPC wants the t2v key on the right.
@@ -102,27 +106,63 @@ MINT_JS = """
 })()
 """
 
+# The sitekey is in the render= query of the enterprise.js the page loads.
+DISCOVER_SITEKEY_JS = """
+(() => {
+  const s = [...document.querySelectorAll('script[src*="recaptcha"]')]
+              .map(e => (e.src.match(/[?&]render=([\\w\\-]+)/) || [])[1]).filter(Boolean);
+  if (s.length) return s[0];
+  const r = performance.getEntriesByType('resource').map(e => e.name)
+              .map(n => (n.match(/recaptcha.*[?&]k=([\\w\\-]+)/) || [])[1]).filter(Boolean);
+  return r.length ? r[0] : null;
+})()
+"""
+
 
 class FlowSession:
-    """A Flow identity plus the live page that can mint captcha tokens for it."""
+    """A Flow identity plus the live page that can mint captcha tokens for it.
 
-    def __init__(self, match: str = "tools/flow"):
+    One instance == one Chrome profile == one Google account, addressed by its debugging port. Flow
+    auth is a single NextAuth session cookie per profile, so accounts cannot share a browser; the
+    port is how the multi-account rotation keeps them apart.
+    """
+
+    def __init__(self, match: str = "tools/flow", port: int = DEFAULT_PORT):
         self.match = match
+        self.port = port
         self.email: str | None = None
         self.expires: str | None = None
         self.project_id: str | None = None
+        self.sitekey: str = RECAPTCHA_SITEKEY
+        self.tier: str = "PAYGATE_TIER_ONE"
+        self.credits: int | None = None
         self._token: str | None = None
 
     def refresh(self) -> FlowSession:
-        with Page(self.match) as p:
+        with Page(self.match, port=self.port) as p:
             s = json.loads(p.evaluate(SESSION_JS, timeout=60))
             if s.get("error") or not s.get("token"):
                 raise RuntimeError(f"no Flow session token: {s.get('error') or 'access_token absent'}")
             self.email, self.expires, self._token = s["email"], s["expires"], s["token"]
             url = p.evaluate("location.href") or ""
+            # Read the sitekey off the page rather than trusting a constant. Google rotates these on
+            # frontend deploys, and a stale sitekey fails as 403 UNUSUAL_ACTIVITY -- indistinguishable
+            # from an abuse block, which is the single most misleading error in this whole integration.
+            self.sitekey = p.evaluate(DISCOVER_SITEKEY_JS, timeout=30) or RECAPTCHA_SITEKEY
         m = re.search(r"/project/([0-9a-f\-]{36})", url)
         if m:
             self.project_id = m.group(1)
+        # The paygate tier must match the ACCOUNT, not be assumed. Pro accounts report
+        # PAYGATE_TIER_ONE; the two non-Pro accounts in this project will report something else, and
+        # sending the wrong tier is a body-level lie that this project should not be telling.
+        st, ct = request(CREDITS_URL, self._token, None, method="GET")
+        if st == 200:
+            try:
+                info = json.loads(ct)
+                self.tier = info.get("userPaygateTier") or self.tier
+                self.credits = info.get("credits")
+            except ValueError:
+                pass
         return self
 
     @property
@@ -133,8 +173,8 @@ class FlowSession:
 
     def mint_captcha(self, action: str | None = RECAPTCHA_ACTION) -> str:
         opts = json.dumps({"action": action}) if action else "{}"
-        with Page(self.match) as p:
-            r = json.loads(p.evaluate(MINT_JS % (json.dumps(RECAPTCHA_SITEKEY), opts), timeout=60))
+        with Page(self.match, port=self.port) as p:
+            r = json.loads(p.evaluate(MINT_JS % (json.dumps(self.sitekey), opts), timeout=60))
         if r.get("error") or not r.get("token"):
             raise RuntimeError(f"captcha mint failed: {r.get('error') or 'empty token'}")
         return r["token"]
@@ -217,8 +257,22 @@ def classify(text: str) -> str:
 def submit(sess: FlowSession, prompt: str, **kw) -> dict:
     if not sess.project_id:
         raise RuntimeError("no Flow projectId -- open a project in the Flow tab first")
+    kw.setdefault("tier", sess.tier)
     body = build_submit_body(prompt, sess.mint_captcha(), sess.project_id, **kw)
     status, text = request(SUBMIT_URL, sess.token, body)
+    if status == 403 and classify(text) == "CAPTCHA":
+        # A 403 here is ambiguous by design: Google returns PUBLIC_ERROR_UNUSUAL_ACTIVITY both for a
+        # genuine abuse block and for a captcha minted with the wrong action label. Since the label is
+        # a Google-side constant that a frontend deploy can rename, try the alternates once before
+        # surfacing the failure -- an outage degrades to a retry.
+        for alt in ACTION_FALLBACKS:
+            body["clientContext"]["recaptchaContext"]["token"] = sess.mint_captcha(alt)
+            body["mediaGenerationContext"]["batchId"] = str(uuid.uuid4())
+            status, text = request(SUBMIT_URL, sess.token, body)
+            if status != 403:
+                print(f"    [captcha] action label {RECAPTCHA_ACTION!r} rejected; {alt!r} worked -- "
+                      f"update RECAPTCHA_ACTION")
+                break
     if status != 200:
         raise RuntimeError(f"submit HTTP {status} [{classify(text)}]: {scrub(text)[:400]}")
     return json.loads(text)
@@ -238,14 +292,23 @@ def media_status(poll_result: dict) -> tuple[str, dict]:
     return st, m
 
 
-def wait(sess: FlowSession, media_id: str, *, budget: int = 600, every: int = 10) -> dict:
-    """Poll until the media reports a terminal status. Observed: SCHEDULED -> SUCCESSFUL in ~40s."""
-    deadline = time.time() + budget
+def wait(sess: FlowSession, media_id: str, *, budget: int = 600, every: int = 10,
+         on_status=None) -> dict:
+    """Poll until the media reports a terminal status. Observed: SCHEDULED -> SUCCESSFUL in ~40s.
+
+    on_status(status, elapsed_seconds) is called on each CHANGE of status, so a long-running server
+    can record progress without this function owning stdout. Defaults to printing, for CLI use.
+    """
+    started = time.time()
+    deadline = started + budget
     last = "?"
     while time.time() < deadline:
         st, m = media_status(poll_once(sess, media_id))
         if st != last:
-            print(f"    [{int(time.time() - (deadline - budget)):>3}s] {st}")
+            if on_status:
+                on_status(st, time.time() - started)
+            else:
+                print(f"    [{int(time.time() - started):>3}s] {st}")
             last = st
         if "SUCCESSFUL" in st:
             return m
@@ -260,7 +323,8 @@ def wait(sess: FlowSession, media_id: str, *, budget: int = 600, every: int = 10
 OUT_DIR = pathlib.Path(r"D:\omniroute-monetizer\state\harvest\flow")
 
 
-def session_cookie_header(match: str = "tools/flow") -> tuple[str, list[str]]:
+def session_cookie_header(match: str = "tools/flow",
+                          port: int = DEFAULT_PORT) -> tuple[str, list[str]]:
     """Cookie header for labs.google, read out of the live tab over CDP.
 
     The finished video is served by labs.google/fx/api/trpc/media.getMediaUrlRedirect, which is
@@ -271,7 +335,7 @@ def session_cookie_header(match: str = "tools/flow") -> tuple[str, list[str]]:
 
     Returns (header, names). Only the NAMES are ever safe to display; the header is a credential.
     """
-    with Page(match) as p:
+    with Page(match, port=port) as p:
         p.send("Network.enable", {}, timeout=30)
         r = p.send("Network.getCookies", {"urls": ["https://labs.google/"]}, timeout=30)
     cookies = r.get("cookies", [])
@@ -279,11 +343,14 @@ def session_cookie_header(match: str = "tools/flow") -> tuple[str, list[str]]:
     return header, [c["name"] for c in cookies]
 
 
-def download(media_id: str, dest: pathlib.Path | None = None) -> pathlib.Path:
-    header, names = session_cookie_header()
+def download(media_id: str, dest: pathlib.Path | None = None, *, match: str = "tools/flow",
+             port: int = DEFAULT_PORT, verbose: bool = True) -> pathlib.Path:
+    header, names = session_cookie_header(match, port)
     if not header:
-        raise RuntimeError("no labs.google cookies in the live tab")
-    print(f"  cookies: {len(names)} ({', '.join(sorted(names)[:6])}{'...' if len(names) > 6 else ''})")
+        raise RuntimeError(f"no labs.google cookies in the live tab on port {port}")
+    if verbose:
+        print(f"  cookies: {len(names)} "
+              f"({', '.join(sorted(names)[:6])}{'...' if len(names) > 6 else ''})")
     req = urllib.request.Request(
         MEDIA_URL.format(media_id),
         headers={"Cookie": header,
@@ -299,11 +366,23 @@ def download(media_id: str, dest: pathlib.Path | None = None) -> pathlib.Path:
     return dest
 
 
+def credits_now(sess: FlowSession) -> int | None:
+    """Live balance, straight from the account. Used by the rotation to choose an account and to
+    measure what a generation actually cost rather than trusting a per-clip constant."""
+    st, ct = request(CREDITS_URL, sess.token, None, method="GET")
+    if st != 200:
+        return None
+    try:
+        return json.loads(ct).get("credits")
+    except ValueError:
+        return None
+
+
 # --------------------------------------------------------------------------- commands
 
 def cmd_probe(a) -> int:
     """Zero credits: does a MINTED captcha get accepted? Empty prompt guarantees no generation."""
-    sess = FlowSession().refresh()
+    sess = FlowSession(port=a.port).refresh()
     print(f"Flow session : {sess.email}  (expires {sess.expires})")
     print(f"Project      : {sess.project_id}")
     print()
@@ -339,7 +418,7 @@ def cmd_probe(a) -> int:
 
 def cmd_poll(a) -> int:
     """Resume an already-submitted generation. Safe to re-run: polling never charges."""
-    sess = FlowSession().refresh()
+    sess = FlowSession(port=a.port).refresh()
     m = wait(sess, a.media_id, budget=a.budget)
     print(f"  length={m.get('video', {}).get('dimensions', {}).get('length')}"
           f"  bytes={m.get('mediaMetadata', {}).get('mediaBlobSize')}")
@@ -347,14 +426,14 @@ def cmd_poll(a) -> int:
 
 
 def cmd_credits(a) -> int:
-    sess = FlowSession().refresh()
+    sess = FlowSession(port=a.port).refresh()
     status, text = request(CREDITS_URL, sess.token, None, method="GET")
     print(f"{sess.email:<32} HTTP {status}  {scrub(text)[:200]}")
     return 0 if status == 200 else 1
 
 
 def cmd_fetch(a) -> int:
-    dest = download(a.media_id)
+    dest = download(a.media_id, port=a.port)
     head = dest.read_bytes()[:16]
     kind = "MP4" if b"ftyp" in head else f"UNKNOWN {head[:8]!r}"
     print(f"  {dest}")
@@ -363,7 +442,7 @@ def cmd_fetch(a) -> int:
 
 
 def cmd_generate(a) -> int:
-    sess = FlowSession().refresh()
+    sess = FlowSession(port=a.port).refresh()
     model = MODELS.get(a.model, a.model)
     print(f"Flow session : {sess.email}  (expires {sess.expires})")
     print(f"Project      : {sess.project_id}")
@@ -375,19 +454,41 @@ def cmd_generate(a) -> int:
         return 0
     print()
     t0 = time.time()
+    # Credits BEFORE, so the charge is measured rather than assumed. One 720p/8s fast clip cost 20
+    # from the UI but 60 from here on an otherwise byte-identical body -- unexplained, so every run
+    # reports the delta and the returned media/workflow counts to test the "it billed 3 videos" idea.
+    st, ct = request(CREDITS_URL, sess.token, None, method="GET")
+    before = json.loads(ct).get("credits") if st == 200 else None
+    del st, ct
+
     r = submit(sess, a.prompt, model=model, resolution=a.resolution, aspect=a.aspect)
-    media_id = (r.get("media") or [{}])[0].get("name")
-    print(f"  submitted        {media_id}   remainingCredits={r.get('remainingCredits')}")
+    media_list = r.get("media") or []
+    media_id = media_list[0].get("name") if media_list else None
+    after = r.get("remainingCredits")
+    print(f"  submitted        {media_id}")
+    print(f"  media returned   {len(media_list)}   workflows {len(r.get('workflows') or [])}")
+    print(f"  credits          {before} -> {after}"
+          + (f"   (charged {before - after})" if isinstance(before, int) and isinstance(after, int)
+             else ""))
+    if len(media_list) > 1:
+        for m in media_list[1:]:
+            print(f"    extra media    {m.get('name')}")
     m = wait(sess, media_id, budget=a.budget)
     print(f"  done in {time.time() - t0:.0f}s   length={m.get('video', {}).get('dimensions', {}).get('length')}"
           f"  bytes={m.get('mediaMetadata', {}).get('mediaBlobSize')}")
-    print(f"  fetch with       GET {MEDIA_URL.format(media_id)}")
-    print("                   (labs.google cookie auth -- same profile as the tab)")
+    if a.fetch:
+        dest = download(media_id, port=a.port)
+        print(f"  saved            {dest}  ({dest.stat().st_size} bytes)")
+    else:
+        print(f"  fetch with       python googleflow_client.py fetch {media_id}")
     return 0
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--port", type=int, default=DEFAULT_PORT,
+                    help=f"Chrome remote-debugging port of the account's profile "
+                         f"(default {DEFAULT_PORT}); goes BEFORE the subcommand")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("probe", help="zero-credit check that a minted captcha is accepted")
@@ -412,6 +513,7 @@ def main() -> int:
     g.add_argument("--resolution", default="720p", choices=[*RESOLUTIONS])
     g.add_argument("--aspect", default="16:9", choices=[*ASPECTS])
     g.add_argument("--budget", type=int, default=600)
+    g.add_argument("--fetch", action="store_true", help="download the bytes when it finishes")
     g.add_argument("--yes", action="store_true")
     g.set_defaults(fn=cmd_generate)
 
