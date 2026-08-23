@@ -85,6 +85,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 
 import requests
@@ -308,7 +309,87 @@ def save_key(slug: str, key: str, verified: bool, detail: str) -> None:
     KEYS_FILE.write_text(json.dumps(store, indent=2), encoding="utf-8")
 
 
-def real_completion(slug: str, timeout: int = 60) -> tuple[bool, str]:
+# How many models one provider may be asked about before giving up. MEASURED 2026-08-23 on
+# openadapter: the account was live and authenticated (upstream GET /v1/models -> 200, 101 models,
+# and 0G-DeepSeek-v4-Flash answered with real text), but the first three ids in the catalog were
+# all paid tier and returned 403 "top-tier model ... isn't in your plan". With a cap of 3 the gate
+# concluded "no model answered" and DELETED a perfectly good row. Free tiers routinely list paid
+# models, so the walk has to be allowed to reach a free one.
+MAX_MODEL_TRIES = 10
+
+# "This MODEL is not available to you" -- says nothing bad about the key, so keep walking.
+MODEL_LEVEL_RE = re.compile(
+    r"top-tier|isn'?t in your plan|not in your plan|not available on your|requires? (?:a )?paid|"
+    r"upgrade your|does not exist|not found|no such model|unsupported model|"
+    r"temporarily busy|service_unavailable|overloaded|capacity", re.I)
+# "This KEY is no good" -- walking to another model cannot help, so stop and report honestly.
+KEY_LEVEL_RE = re.compile(
+    r"invalid api key|invalid_api_key|incorrect api key|unauthorized|authentication|"
+    r"invalid token|no credit|insufficient (?:credit|balance|funds)|quota exceeded|"
+    r"account (?:suspended|disabled)", re.I)
+
+# Free tiers hide their usable models further down the list, so try the cheap-sounding ones first.
+FREE_HINT_RE = re.compile(
+    r"free|flash|mini|lite|small|tiny|nano|instruct|chat|8b|7b|4b|3b|1\.5b|2b", re.I)
+PAID_HINT_RE = re.compile(r"pro\b|max\b|ultra|opus|premium|large|70b|405b|thinking|reason", re.I)
+
+
+def free_first(ids: list[str]) -> list[str]:
+    """Cheapest-looking models first. Ordering only -- nothing is skipped."""
+    def rank(mid: str) -> tuple[int, str]:
+        score = 0
+        if FREE_HINT_RE.search(mid):
+            score -= 1
+        if PAID_HINT_RE.search(mid):
+            score += 1
+        return score, mid
+    return sorted(ids, key=rank)
+
+
+def answer_text(resp) -> tuple[str, str]:
+    """The generated text out of an OmniRoute 200, whether it came back as JSON or as SSE.
+
+    MEASURED 2026-08-23 on reka, and this was a REAL FALSE NEGATIVE that cost working providers:
+    OmniRoute answers `/v1/chat/completions` with `content-type: text/event-stream` even when
+    `stream` was never requested. The old code called r.json(), caught the failure, and recorded
+    "HTTP 200 but non-JSON body" -- so a provider that was generating perfectly good text was
+    scored as broken and its connection row was DELETED. The comment about inception 2026-08-22
+    almost certainly described this same stream, not a malformed body.
+
+    Returns (text, how). Empty text means genuinely nothing came back.
+    """
+    ctype = (resp.headers.get("content-type") or "").lower()
+    body = resp.text or ""
+    if "text/event-stream" in ctype or body.lstrip().startswith("data:"):
+        parts = []
+        for line in body.splitlines():
+            line = line.strip()
+            if not line.startswith("data:"):
+                continue
+            blob = line[5:].strip()
+            if not blob or blob == "[DONE]":
+                continue
+            try:
+                chunk = json.loads(blob)
+            except Exception:
+                continue
+            for ch in (chunk.get("choices") or []):
+                piece = (ch.get("delta") or {}).get("content")
+                if piece is None:
+                    piece = (ch.get("message") or {}).get("content")
+                if piece:
+                    parts.append(str(piece))
+        return "".join(parts), "streamed"
+    try:
+        payload = resp.json()
+    except Exception:
+        return "", "non-JSON body"
+    choice = (payload.get("choices") or [{}])[0]
+    txt = (choice.get("message") or {}).get("content") or choice.get("text") or ""
+    return str(txt), "json"
+
+
+def real_completion(slug: str, timeout: int = 60, api=None, cid: str = "") -> tuple[bool, str]:
     """Ask OmniRoute for an actual answer from this provider. This is the only proof accepted.
 
     MEASURED 2026-08-22, and the reason this function exists: `uncloseai` was created, and
@@ -320,20 +401,33 @@ def real_completion(slug: str, timeout: int = 60) -> tuple[bool, str]:
     the false "harvested" claim anti-pattern #7 forbids. A provider counts only when a real
     request comes back with real text.
 
-    One request per model, at most 3 models, then it gives up. No retry of a failed model --
-    a 404/401 is an answer, and re-asking is hammering.
+    One request per model, never the same model twice -- a 404/403/503 is an answer, and
+    re-asking it is hammering. It walks DOWN the catalog while the refusals are about the MODEL,
+    and stops the moment a refusal is about the KEY.
     """
-    try:
-        m = requests.get(f"{OMNIROUTE_BASE}/v1/models", timeout=90).json()
-    except Exception as exc:
-        return False, f"could not list models: {type(exc).__name__}"
-    ids = [x.get("id", "") for x in (m.get("data") or [])
-           if str(x.get("id", "")).startswith(f"{slug}/")]
+    ids: list[str] = []
+    # Ask the connection what IT routes, first. MEASURED 2026-08-23 on reka: /v1/models omitted
+    # the provider entirely while routing worked fine, so the aggregate list must never be the
+    # gate -- believing it deleted a working row twice.
+    if api is not None and cid:
+        ids = [f"{slug}/{m}" for m in api.connection_models(cid)]
+    if not ids:
+        try:
+            m = requests.get(f"{OMNIROUTE_BASE}/v1/models", timeout=240).json()
+        except Exception as exc:
+            # Distinguish OUR aggregator being slow from the PROVIDER being dead. MEASURED
+            # 2026-08-23: with 109 connection rows, OmniRoute's /v1/models exceeded even 90s, and
+            # a proven-good reka key was rolled back because of it. Deleting a live row over a
+            # local timeout destroys real work, so this is flagged and the caller must not delete.
+            return False, f"LOCAL_LIST_TIMEOUT: could not list models: {type(exc).__name__}"
+        ids = [x.get("id", "") for x in (m.get("data") or [])
+               if str(x.get("id", "")).startswith(f"{slug}/")]
     if not ids:
         return False, "OmniRoute exposes no models at all for this provider"
 
+    ids = free_first(ids)
     last = ""
-    for mid in ids[:3]:
+    for mid in ids[:MAX_MODEL_TRIES]:
         try:
             r = requests.post(
                 f"{OMNIROUTE_BASE}/v1/chat/completions",
@@ -345,21 +439,16 @@ def real_completion(slug: str, timeout: int = 60) -> tuple[bool, str]:
             last = f"{mid}: {type(exc).__name__}"
             continue
         if r.status_code == 200:
-            # MEASURED on the first e2e sweep (inception, 2026-08-22): OmniRoute can answer
-            # HTTP 200 with a non-JSON body, and an unguarded r.json() then crashed the whole
-            # provider row as JSONDecodeError -- after the key was minted and the connection
-            # created. A malformed 200 is an answer: record it and move on.
-            try:
-                payload = r.json()
-            except Exception:
-                last = f"{mid}: HTTP 200 but non-JSON body"
-                continue
-            txt = ((payload.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+            txt, how = answer_text(r)
             if str(txt).strip():
-                return True, f"{mid} answered with real text"
-            last = f"{mid}: HTTP 200 but empty content"
+                return True, f"{mid} answered with real text ({how})"
+            last = f"{mid}: HTTP 200 but empty content ({how})"
             continue
         last = f"{mid}: HTTP {r.status_code} {MASK_RE.sub(' ', r.text)[:120]}"
+        if KEY_LEVEL_RE.search(r.text) and not MODEL_LEVEL_RE.search(r.text):
+            # The key itself is being refused. Another model cannot fix that, and asking again
+            # would just be hammering a provider that has already given a clear answer.
+            return False, f"KEY_REFUSED: {last}"
     return False, last or "no model answered"
 
 
@@ -391,11 +480,26 @@ def wire(api: OmniRouteAPI, slug: str, name: str, key: str) -> dict:
     err = MASK_RE.sub(" ", str(err)).strip()
 
     if valid:
+        # A brand-new row often exposes no models until OmniRoute fetches the provider's
+        # catalog for it. MEASURED on reka 2026-08-23: the key answered upstream, OmniRoute's
+        # own test said valid=True, yet /v1/models listed nothing under `reka/` -- the only
+        # reka models in the build came in via the openrouter/kilocode gateways. So ask for a
+        # refresh before judging the row dead.
+        try:
+            api.refresh_connection(cid)
+            time.sleep(6)
+        except Exception:
+            pass
         # valid=True is a hint, not proof. See real_completion() for why.
-        works, detail = real_completion(slug)
+        works, detail = real_completion(slug, api=api, cid=cid)
         if works:
             return {"ok": True, "stage": "answered", "id": cid,
                     "omniroute_test": "valid=True", "detail": detail}
+        if detail.startswith("LOCAL_LIST_TIMEOUT"):
+            # Our own aggregator timed out. That says nothing about this provider, so the row
+            # STAYS -- but it is reported unproven, never as working.
+            return {"ok": False, "stage": "unproven-local-timeout", "id": cid, "deleted": False,
+                    "detail": f"row kept, key not disproved: {detail}"}
         err = f"OmniRoute test said valid=True but no model answered -> {detail}"
 
     # Do not leave a dead active row: the router would select it and every request would fail.

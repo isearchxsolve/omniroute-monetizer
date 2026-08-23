@@ -200,6 +200,25 @@ class OmniRouteAPI:
         except Exception as e:
             return {"http_status": None, "result": {"valid": False, "error": f"{type(e).__name__}: {e}"}}
 
+    def connection_models(self, cid: str) -> List[str]:
+        """The model ids OmniRoute will actually route for ONE connection.
+
+        MEASURED 2026-08-23: `/v1/models` listed 7469 ids across 118 prefixes and yet contained
+        NO first-party `reka/` entry, while `POST /v1/chat/completions` on `reka/reka-flash-3`
+        returned 200 with real streamed text and the dashboard's own tester reported
+        "reka-edge-2603 is working, 1412ms". So the aggregate list is not a precondition for
+        routing, and gating a provider's proof on it produced a false negative that deleted a
+        working row twice. This endpoint is what the dashboard itself reads.
+        """
+        self._ensure_login()
+        try:
+            r = self.session.get(f"{self.api}/providers/{cid}/models", timeout=45)
+            if r.status_code != 200:
+                return []
+            return [str(m.get("id")) for m in (r.json().get("models") or []) if m.get("id")]
+        except Exception:
+            return []
+
     def refresh_connection(self, cid: str) -> Dict[str, Any]:
         self._ensure_login()
         try:

@@ -1,0 +1,37 @@
+{
+  "slug": "reka",
+  "recorded_by": "agent via drive.py",
+  "steps": [
+    {
+      "action": "click",
+      "role": "link",
+      "name": "API Keys"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "CREATE API KEY"
+    },
+    {
+      "action": "fill",
+      "css": "input[name=name]",
+      "value": "omniroute"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Create new key"
+    },
+    {
+      "action": "click_masked_key",
+      "index": 0,
+      "why": "the provider masks keys in the list; its masked chip IS the copy control, and the newest key is first"
+    },
+    {
+      "action": "clipboard_key"
+    }
+  ],
+  "entry_url": "https://platform.reka.ai/apikeys",
+  "notes": "Signed in already via the robot profile's Google session. Recording replays clean: a second unattended run minted a different key, so it is reusable, not a one-off. PROVEN 2026-08-23 upstream (GET api.reka.ai/v1/models -> 200, POST /v1/chat/completions on reka-flash-3 -> 200 with real text) AND through OmniRoute (reka/reka-flash-3 -> 200, real streamed text). CORRECTION to an earlier note: OmniRoute DOES route reka. /v1/models simply never lists the first-party reka/ prefix, so the model list is not a precondition -- the per-connection endpoint /api/providers/{id}/models is.",
+  "status": "MONETIZER_READY"
+}

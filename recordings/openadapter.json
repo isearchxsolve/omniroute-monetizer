@@ -1,0 +1,32 @@
+{
+  "slug": "openadapter",
+  "recorded_by": "agent via drive.py",
+  "steps": [
+    {
+      "action": "goto",
+      "url": "https://dashboard.openadapter.in/keys"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "+ new key"
+    },
+    {
+      "action": "fill",
+      "css": "input[placeholder='cursor, claude-code, laptop...']",
+      "value": "omniroute"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "create",
+      "exact": true
+    },
+    {
+      "action": "read_key_from_page",
+      "why": "the provider reveals the newly created key in the page, so no clipboard is involved and there is no stale-read race"
+    }
+  ],
+  "notes": "Already signed in via the robot profile's Google session (page shows 'sign out'). Two-step create: '+ new key' opens a name box, then 'create'. PROVEN 2026-08-23 upstream (GET api.openadapter.in/v1/models -> 200, 101 models; POST /v1/chat/completions on 0G-DeepSeek-v4-Flash -> 200 with real text) AND through OmniRoute (openadapter/GLM-4.7-Flash -> 200, real streamed text). The sidebar's 'Upgrade to Pro' advert is NOT a paywall: the free tier mints keys without a card.",
+  "status": "MONETIZER_READY"
+}
