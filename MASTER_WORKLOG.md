@@ -3915,3 +3915,53 @@ normal here (wrapper+child), not two racing sweeps.
 4. Door-finding breadth (27 sso failures) — dropdown logins (nebius), icon menus, the
    Chinese-provider cluster (needs SMS anyway → will be refused honestly).
 5. ffmpeg segment recording for a watchable, unkillable MP4.
+
+---
+
+### [2026-08-23 07:3x] #1048 — THE FOREGROUND-TAB ROOT CAUSE, THE MANUAL TAKEOVER, and the recorded story
+
+Operator, decisive: *"its not going to work this way if you let the script loose. You have to
+do it yourself... then you write the story in the script, whatever you did."*
+
+#### THE ROOT CAUSE THE OPERATOR SMELLED ALL NIGHT
+
+In attach mode the sweep ran every provider in a **BACKGROUND TAB** (`ctx.new_page()` never
+called `bring_to_front()`). Two consequences, both observed repeatedly and mis-attributed
+until now: (1) the operator watched foreground tabs (including a dead blackbox 403) while the
+real work was invisible — every "stuck"/"no interaction" report; (2) Chrome refuses clipboard
+writes from unfocused documents — so Copy clicks wrote nothing and copy reads came back empty,
+every time. Fix: `bring_to_front()` on the provider page and on every adopted follow page.
+
+#### THE MANUAL TAKEOVER (executed, not theorized)
+
+openadapter, driven by hand over CDP with per-step screenshots:
+1. closed leftover tabs, opened `dashboard.openadapter.in/keys` IN FRONT —
+   `manual-openadapter-1-landing.png`.
+2. inventory exposed why the script failed for hours: the create button is **"+ new key"**
+   (absent from CREATE_LABELS), and existing key rows carry **show** buttons.
+3. clicked **show** → the masked key became plaintext in the body (`sk-cv-67...9ae8`, len=38)
+   — `manual-openadapter-2-shown.png`.
+4. wired via `wire()` → `valid=True` → proof: `HTTP 403 "Model '0G-DeepSeek-v4-Pro' is a
+   top-tier model"` — the free tier excludes top-tier, and OmniRoute maps ONLY that model for
+   openadapter. Row deleted per policy. **VERDICT: capture is solved; the blocker is the model
+   mapping / free tier, on the record.**
+
+#### THE STORY, WRITTEN INTO THE SCRIPT (per the directive)
+
+`PLAYBOOKS` dict added to `auto_key_harvester.py`: the exact manually-executed step sequences
+for openadapter and featherless-ai, each with its verdict comment. `"+ new key"` added to
+CREATE_LABELS. The playbooks are documentation-grade: recorded steps + measured verdicts, so
+the next run (or the next agent) starts from proof, not guesses.
+
+#### What is NOT claimed
+
+- No provider landed tonight; openadapter's key WORKS (valid=True) but no mapped model answers
+  on the free tier.
+- The foreground fix is committed but not yet exercised by a full run.
+- Playbooks are recorded, not yet auto-executed by the sweep loop.
+
+#### Next
+
+1. Map a non-top-tier openadapter model in OmniRoute → the playbook then lands it in one pass.
+2. Manual takeover pass over featherless/reka/puter the same way (show buttons + "+ new key").
+3. Then let the script replay the playbooks in the foreground.
