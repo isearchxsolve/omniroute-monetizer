@@ -94,6 +94,20 @@ JOBS_FILE = STATE / "flow_jobs.jsonl"
 DIRECT_PORT = 8189
 COMFY_PORT = 8188            # OmniRoute's built-in default for the comfyui video provider
 
+# OmniRoute's compiled comfyui poller gives up after exactly 300s (3e5 ms) and has no error channel.
+# Anything the ComfyUI face starts that cannot finish inside that window charges credits for a video
+# OmniRoute will never collect, so every comfy-face deadline is derived from this number instead of
+# from the direct face's much more generous defaults.
+OMNIROUTE_COMFY_WINDOW = 300
+COMFY_ACQUIRE_TIMEOUT = 20   # no account free almost immediately -> fail BEFORE spending anything
+COMFY_BUDGET = 230           # leaves room for submit, download and OmniRoute's 2s poll cadence
+
+# cdp.pick_page signals "no matching tab" by raising SystemExit, which `except Exception` does not
+# catch. Uncaught in a worker thread it abandons a job whose credits are already spent; uncaught in
+# the refresh loop it freezes every balance for the life of the process. A missing tab is a routine,
+# recoverable condition here, so it is caught everywhere a browser is touched.
+NON_FATAL = (Exception, SystemExit)
+
 # Flow's own model keys. Only the fast key has actually been exercised end to end; the other two
 # follow its naming pattern and are marked so a caller is never told an inference is a measurement.
 PROVEN_MODEL_KEYS = {"veo_3_1_t2v_fast"}
@@ -170,11 +184,17 @@ class Account:
         self._sess: gf.FlowSession | None = None
         self._sess_at = 0.0
 
-    def public(self) -> dict:
-        return {"label": self.label, "port": self.port, "enabled": self.enabled,
-                "email": self.email, "project_id": self.project_id, "tier": self.tier,
-                "credits": self.credits, "ready": self.ready, "reason": self.reason,
-                "busy": self.lock.locked()}
+    def public(self, redact: bool = False) -> dict:
+        """redact=True is the pre-authentication shape: enough to see the fleet is alive, nothing
+        that identifies an account. Emails, project ids, tiers, balances and the free-text `reason`
+        (which can quote an upstream error verbatim) are withheld until the caller authenticates."""
+        d = {"label": self.label, "port": self.port, "enabled": self.enabled,
+             "ready": self.ready, "busy": self.lock.locked()}
+        if redact:
+            return d
+        d.update(email=self.email, project_id=self.project_id, tier=self.tier,
+                 credits=self.credits, reason=self.reason)
+        return d
 
 
 class Fleet:
@@ -204,7 +224,7 @@ class Fleet:
         assert_cdp_safe(f"http://127.0.0.1:{acct.port}", who=f"flow_shim account {acct.label}")
         try:
             sess = gf.FlowSession(FLOW_MATCH, port=acct.port).refresh()
-        except Exception as first:
+        except NON_FATAL as first:
             if "session token" not in str(first):
                 raise
             log(f"{acct.label}: no access_token, reloading the Flow tab once")
@@ -224,10 +244,10 @@ class Fleet:
                     try:
                         if p.evaluate("document.readyState", timeout=15) == "complete":
                             break
-                    except Exception:
+                    except NON_FATAL:
                         continue
             time.sleep(3)
-        except Exception as e:
+        except NON_FATAL as e:
             log(f"{acct.label}: reload failed: {type(e).__name__}: {e}")
 
     # -- balances ---------------------------------------------------------------------------
@@ -245,7 +265,7 @@ class Fleet:
                 acct.ready, acct.reason = False, "credits endpoint did not answer 200"
                 return
             acct.credits, acct.ready, acct.reason = c, True, "ok"
-        except Exception as e:
+        except NON_FATAL as e:
             if is_refusal(e):
                 acct.enabled = False
                 acct.ready, acct.reason = False, "REFUSED: points at the operator's live Chrome"
@@ -255,25 +275,36 @@ class Fleet:
             acct.reason = f"{type(e).__name__}: {gf.scrub(str(e))[:160]}"
 
     def probe_all(self, parallel: bool = True) -> None:
-        targets = [a for a in self.accounts if a.enabled]
-        if not parallel:
+        """Probe every idle account. Accounts mid-generation are skipped, not waited for: probing
+        can reload the Flow tab (see session()), and doing that underneath a job whose credits are
+        already spent destroys the generation. A skipped account keeps its last known balance, which
+        is correct anyway -- it is busy, so the rotation would not pick it.
+        """
+        targets = [a for a in self.accounts if a.enabled and a.lock.acquire(blocking=False)]
+        try:
+            if not parallel:
+                for a in targets:
+                    self.probe(a)
+                return
+            ts = [threading.Thread(target=self.probe, args=(a,), daemon=True) for a in targets]
+            [t.start() for t in ts]
+            [t.join(timeout=120) for t in ts]
+        finally:
             for a in targets:
-                self.probe(a)
-            return
-        ts = [threading.Thread(target=self.probe, args=(a,), daemon=True) for a in targets]
-        [t.start() for t in ts]
-        [t.join(timeout=120) for t in ts]
+                try:
+                    a.lock.release()
+                except RuntimeError:
+                    pass
 
     def refresh_loop(self) -> None:
+        """Never allowed to die. A dead refresh loop freezes every balance at its last value and the
+        rotation then routes on stale numbers -- including routing to an account that no longer has
+        the credits for the job."""
         while not self._stop.wait(self.REFRESH_EVERY):
-            for a in self.accounts:
-                if not a.enabled:
-                    continue
-                if a.lock.acquire(blocking=False):      # skip accounts mid-generation
-                    try:
-                        self.probe(a)
-                    finally:
-                        a.lock.release()
+            try:
+                self.probe_all()
+            except NON_FATAL as e:
+                log(f"refresh loop: {type(e).__name__}: {gf.scrub(str(e))[:120]} -- continuing")
 
     # -- the rotation rule ------------------------------------------------------------------
 
@@ -337,6 +368,13 @@ def load_accounts() -> Fleet:
 # --------------------------------------------------------------------------- jobs
 
 
+def _snap(job: dict) -> dict:
+    """A shallow copy safe to serialise while the worker thread is still writing to the original.
+    Lists are copied too, because json.dumps walks them. Every key a job will ever have is created
+    up front in JobStore.create, so this iteration can never see the dict change size."""
+    return {k: (list(v) if isinstance(v, list) else v) for k, v in job.items()}
+
+
 class JobStore:
     def __init__(self):
         self.jobs: dict[str, dict] = {}
@@ -344,7 +382,13 @@ class JobStore:
         self._load()
 
     def _load(self) -> None:
-        """Replay the append-only log so a restart does not orphan finished videos."""
+        """Replay the append-only log so a restart does not orphan finished videos.
+
+        Anything the log still calls queued/active was in flight when the process died. Its thread is
+        gone, so it can never progress: left as-is, a caller polls that job id forever. It is marked
+        `interrupted` instead, and kept rather than dropped -- Flow may well have charged for it, so
+        the record is the only trace of where the credits went.
+        """
         if not JOBS_FILE.exists():
             return
         try:
@@ -354,13 +398,26 @@ class JobStore:
                     self.jobs[j["id"]] = j
         except Exception as e:
             log(f"job log unreadable ({type(e).__name__}) -- starting empty")
+        stale = [j for j in self.jobs.values() if j.get("status") in ("queued", "active")]
+        for j in stale:
+            j["status"] = "interrupted"
+            j["error"] = ("the shim restarted while this job was in flight; credits may already have "
+                          "been charged -- check the balance and state/harvest/flow/ before retrying")
+            j["finished"] = time.time()
+        if stale:
+            log(f"{len(stale)} job(s) were in flight at the last shutdown -> marked interrupted")
+            for j in stale:
+                log(f"  {j['id'][:8]} {j.get('model')} media={j.get('media_id')} "
+                    f"charged={j.get('credits_charged')}")
 
     def create(self, **fields) -> dict:
         job = {"id": uuid.uuid4().hex, "status": "queued", "created": time.time(),
-               "account": None, "port": None, "media_id": None, "error": None,
+               "finished": None, "project_id": None, "dry_run": False,
+               "account": None, "port": None, "media_id": None, "media_ids": [], "error": None,
                "credits_before": None, "credits_after": None, "credits_charged": None,
                "media_count": None, "workflow_count": None, "flow_status": None,
-               "duration": None, "bytes": None, "file": None, **fields}
+               "duration": None, "durations": [], "bytes": None, "bytes_each": [],
+               "bytes_total": None, "file": None, "files": [], **fields}
         with self.lock:
             self.jobs[job["id"]] = job
         self.persist(job)
@@ -370,24 +427,36 @@ class JobStore:
         try:
             JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
             with JOBS_FILE.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(job, default=str) + "\n")
+                fh.write(json.dumps(_snap(job), default=str) + "\n")
         except Exception:
             pass                      # a job log that cannot be written must not fail the job
 
+    # Readers hand out snapshots, never the live dict. run_job mutates its job from a worker thread
+    # while HTTP threads serialise it; json.dumps over a dict or list that is being mutated raises
+    # "changed size during iteration" and kills the response mid-flight.
     def get(self, jid: str) -> dict | None:
         with self.lock:
-            return self.jobs.get(jid)
+            j = self.jobs.get(jid)
+            return _snap(j) if j else None
 
     def by_media(self, media_id: str) -> dict | None:
         with self.lock:
             for j in self.jobs.values():
-                if j.get("media_id") == media_id:
-                    return j
+                if j.get("media_id") == media_id or media_id in (j.get("media_ids") or []):
+                    return _snap(j)
         return None
 
     def recent(self, n: int = 50) -> list[dict]:
         with self.lock:
-            return sorted(self.jobs.values(), key=lambda j: j.get("created", 0), reverse=True)[:n]
+            newest = sorted(self.jobs.values(), key=lambda j: j.get("created", 0),
+                            reverse=True)[:n]
+            return [_snap(j) for j in newest]
+
+    def stats(self) -> dict:
+        with self.lock:
+            vals = list(self.jobs.values())
+        return {"total": len(vals),
+                "active": sum(1 for j in vals if j.get("status") in ("queued", "active"))}
 
 
 FLEET: Fleet
@@ -423,8 +492,10 @@ def run_job(job: dict) -> None:
                             "or drop --dry-run")
         else:
             f = gf.OUT_DIR / f"{mid}.mp4"
-            job.update(status="succeeded", media_id=mid, file=str(f), bytes=f.stat().st_size,
-                       credits_charged=0, duration="8s", flow_status="SUCCESSFUL (simulated)",
+            job.update(status="succeeded", media_id=mid, media_ids=[mid], file=str(f),
+                       files=[str(f)], bytes=f.stat().st_size, bytes_each=[f.stat().st_size],
+                       bytes_total=f.stat().st_size, credits_charged=0, duration="8s",
+                       durations=["8s"], flow_status="SUCCESSFUL (simulated)",
                        media_count=1, workflow_count=1)
         job["finished"] = time.time()
         log(f"{job['id'][:8]} DRY RUN {job['status']} -> {job.get('media_id')}")
@@ -434,7 +505,8 @@ def run_job(job: dict) -> None:
     need = MEASURED_COST.get(job["model"], EST_COST)
     acct = None
     try:
-        acct = FLEET.acquire(need, job.get("requested_account"))
+        acct = FLEET.acquire(need, job.get("requested_account"),
+                             timeout=float(job.get("acquire_timeout") or 900))
         job["account"], job["port"] = acct.email or acct.label, acct.port
         job["status"] = "active"
         sess = FLEET.session(acct)
@@ -448,7 +520,13 @@ def run_job(job: dict) -> None:
         media = r.get("media") or []
         job["media_count"] = len(media)
         job["workflow_count"] = len(r.get("workflows") or [])
-        job["media_id"] = media[0].get("name") if media else None
+        # Flow answers one submit with a LIST of medias and bills for all of them. Taking media[0]
+        # and dropping the rest is what a 60-credit charge for one 20-credit clip looks like: every
+        # id here is already paid for, so every id here gets polled and downloaded.
+        ids = [m.get("name") for m in media
+               if isinstance(m, dict) and isinstance(m.get("name"), str) and m.get("name")]
+        job["media_ids"] = ids
+        job["media_id"] = ids[0] if ids else None
         job["credits_after"] = r.get("remainingCredits")
         if isinstance(job["credits_before"], int) and isinstance(job["credits_after"], int):
             job["credits_charged"] = job["credits_before"] - job["credits_after"]
@@ -456,33 +534,56 @@ def run_job(job: dict) -> None:
                 MEASURED_COST[job["model"]] = job["credits_charged"]
         if isinstance(job["credits_after"], int):
             acct.credits = job["credits_after"]
-        if not job["media_id"]:
+        if not ids:
             raise RuntimeError("submit returned no media id")
         # The 60-vs-20 question: if Flow billed three clips, this is where it shows.
-        log(f"{job['id'][:8]} submitted {job['media_id']}  media={job['media_count']} "
+        log(f"{job['id'][:8]} submitted {len(ids)} media ({', '.join(i[:12] for i in ids)})  "
             f"workflows={job['workflow_count']} charged={job['credits_charged']}")
         STORE.persist(job)
 
-        def on_status(st, elapsed):
-            job["flow_status"] = st
-            log(f"{job['id'][:8]} {st} at {elapsed:.0f}s")
+        # One shared deadline across all medias, not `budget` each: Flow renders them concurrently,
+        # and a per-media budget would let a 3-media job run 3x longer than the caller asked for --
+        # which for the comfy face means blowing straight through OmniRoute's 300s window.
+        deadline = time.time() + float(job.get("budget") or 600)
+        files: list[str] = []
+        sizes: list[int] = []
+        durations: list = []
+        for n, mid in enumerate(ids, 1):
+            def on_status(st, elapsed, _n=n, _mid=mid):
+                job["flow_status"] = f"[{_n}/{len(ids)}] {st}"
+                log(f"{job['id'][:8]} [{_n}/{len(ids)}] {st} at {elapsed:.0f}s")
 
-        m = gf.wait(sess, job["media_id"], budget=job.get("budget", 600), on_status=on_status)
-        job["duration"] = m.get("video", {}).get("dimensions", {}).get("length")
-        job["bytes"] = m.get("mediaMetadata", {}).get("mediaBlobSize")
+            left = deadline - time.time()
+            if left < 10:
+                raise RuntimeError(
+                    f"budget exhausted after {n - 1}/{len(ids)} media; {len(ids) - n + 1} paid "
+                    f"clip(s) not collected -- ids are recorded, fetch them with "
+                    f"`googleflow_client.py fetch <id>`: {', '.join(ids[n - 1:])}")
+            m = gf.wait(sess, mid, budget=int(left), on_status=on_status)
+            durations = durations + [m.get("video", {}).get("dimensions", {}).get("length")]
+            dest = gf.download(mid, port=acct.port, verbose=False)
+            files = files + [str(dest)]
+            sizes = sizes + [dest.stat().st_size]
+            # Reassigned, never appended in place: an HTTP thread may be snapshotting these lists.
+            job["files"], job["bytes_each"], job["durations"] = files, sizes, durations
+            job["file"], job["bytes"] = files[0], sizes[0]
+            job["duration"] = durations[0]
+            job["bytes_total"] = sum(sizes)
+            STORE.persist(job)
 
-        dest = gf.download(job["media_id"], port=acct.port, verbose=False)
-        job["file"] = str(dest)
-        job["bytes"] = dest.stat().st_size
         job["status"] = "succeeded"
         job["finished"] = time.time()
         log(f"{job['id'][:8]} done in {job['finished'] - job['created']:.0f}s  "
-            f"{job['bytes']} bytes -> {dest.name}")
-    except Exception as e:
+            f"{len(files)} file(s) {job['bytes_total']} bytes -> "
+            f"{', '.join(pathlib.Path(f).name for f in files)}")
+    except NON_FATAL as e:
         job["status"] = "failed"
         job["error"] = f"{type(e).__name__}: {gf.scrub(str(e))[:400]}"
         job["finished"] = time.time()
         log(f"{job['id'][:8]} FAILED {job['error']}")
+        if job.get("media_ids") and not job.get("files"):
+            log(f"{job['id'][:8]} WARNING: credits were already charged for "
+                f"{len(job['media_ids'])} media; nothing was downloaded")
         if job.get("face") == "comfyui":
             log(f"{job['id'][:8]} note: the ComfyUI face has no error channel, so OmniRoute will "
                 f"report this as a timeout ~300s from its submit")
@@ -497,7 +598,7 @@ def run_job(job: dict) -> None:
 
 def start_job(*, prompt: str, model_name: str | None, aspect: str, resolution: str,
               seed: int | None, requested_account: str | None, face: str,
-              budget: int = 600) -> tuple[dict | None, str | None]:
+              budget: int = 600, acquire_timeout: float = 900) -> tuple[dict | None, str | None]:
     if not prompt or not str(prompt).strip():
         return None, "prompt is required and cannot be empty"
     key = resolve_model(model_name)
@@ -506,6 +607,7 @@ def start_job(*, prompt: str, model_name: str | None, aspect: str, resolution: s
                       + ", ".join(sorted(set(MODEL_ALIASES))))
     job = STORE.create(prompt=str(prompt), model=key, aspect=aspect, resolution=resolution,
                        seed=seed, requested_account=requested_account, face=face, budget=budget,
+                       acquire_timeout=acquire_timeout,
                        model_key_proven=key in PROVEN_MODEL_KEYS)
     threading.Thread(target=run_job, args=(job,), daemon=True).start()
     return job, None
@@ -515,6 +617,8 @@ def public_job(job: dict) -> dict:
     out = {k: v for k, v in job.items() if not k.startswith("_")}
     if job.get("status") == "succeeded":
         out["content_url"] = f"/v1/videos/{job['id']}/content"
+        out["content_urls"] = [f"/v1/videos/{job['id']}/content?index={i}"
+                               for i in range(len(job.get("files") or []))]
     return out
 
 
@@ -524,6 +628,12 @@ def public_job(job: dict) -> dict:
 class Base(BaseHTTPRequestHandler):
     server_version = "FlowShim/1.0"
     token: str | None = None
+    # StreamRequestHandler applies this to the connection socket. Without it a client that opens a
+    # socket, announces a Content-Length and then stops sending pins a worker thread forever.
+    timeout = 60
+    # A ComfyUI workflow is a few KB. Reading an arbitrary client-declared length into memory on a
+    # process that is meant to sit on localhost forever is not worth the generality.
+    MAX_BODY = 1 << 20
 
     def log_message(self, fmt, *args):        # quieter than the stdlib default, and scrubbed
         log(f"{self.address_string()} {gf.scrub(fmt % args)}")
@@ -540,16 +650,22 @@ class Base(BaseHTTPRequestHandler):
         self._json(code, {"error": {"code": code, "message": gf.scrub(msg)}})
 
     def _body(self) -> dict | None:
+        """None means "reject this request". A JSON body that is valid but not an object counts:
+        callers go straight to .get() on the result, so a bare list or string would raise inside the
+        handler and the client would get a dropped connection instead of a 400."""
         try:
             n = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             return None
         if n <= 0:
             return {}
+        if n > self.MAX_BODY:
+            return None
         try:
-            return json.loads(self.rfile.read(n).decode("utf-8", "replace"))
+            obj = json.loads(self.rfile.read(n).decode("utf-8", "replace"))
         except Exception:
             return None
+        return obj if isinstance(obj, dict) else None
 
     def _authed(self) -> bool:
         if not self.token:
@@ -566,11 +682,19 @@ class Base(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _resolve_media_file(self, ident: str) -> pathlib.Path | None:
-        """A job id, or a media id, or a media id with .mp4 on it -> the file on disk."""
+    def _resolve_media_file(self, ident: str, index: int = 0) -> pathlib.Path | None:
+        """A job id, or a media id, or a media id with .mp4 on it -> the file on disk.
+
+        A job can own several medias (Flow bills for all of them), so a job id plus an index selects
+        one of them; a media id addresses itself and ignores the index.
+        """
         ident = ident.strip()
         job = STORE.get(ident)
-        media_id = job.get("media_id") if job else None
+        media_id = None
+        if job:
+            ids = job.get("media_ids") or ([job["media_id"]] if job.get("media_id") else [])
+            if 0 <= index < len(ids):
+                media_id = ids[index]
         if not media_id:
             media_id = ident[:-4] if ident.endswith(".mp4") else ident
         if not media_id or not MEDIA_ID_RE.match(media_id):
@@ -594,14 +718,16 @@ class DirectHandler(Base):
         u = urllib.parse.urlparse(self.path)
         path, q = u.path.rstrip("/") or "/", urllib.parse.parse_qs(u.query)
         if path in ("/", "/healthz"):
+            # Reachable without a token so a liveness probe keeps working, but only in redacted form:
+            # the full shape carries account emails, project ids, balances and upstream error text.
+            authed = self._authed()
             return self._json(200, {
                 "ok": DRY_RUN or any(a.ready for a in FLEET.accounts),
                 "dry_run": DRY_RUN,
-                "accounts": [a.public() for a in FLEET.accounts],
-                "jobs": {"total": len(STORE.jobs),
-                         "active": sum(1 for j in STORE.jobs.values()
-                                       if j.get("status") in ("queued", "active"))},
-                "measured_cost": MEASURED_COST or {"(none yet)": EST_COST},
+                "authenticated": authed,
+                "accounts": [a.public(redact=not authed) for a in FLEET.accounts],
+                "jobs": STORE.stats(),
+                "measured_cost": (MEASURED_COST or {"(none yet)": EST_COST}) if authed else None,
             })
         if not self._authed():
             return self._err(401, "bad or missing bearer token")
@@ -623,7 +749,11 @@ class DirectHandler(Base):
             return self._json(200, public_job(job)) if job else self._err(404, "no such job")
         m = re.match(r"^/v1/videos/([^/]+)/content$", path)
         if m:
-            f = self._resolve_media_file(urllib.parse.unquote(m.group(1)))
+            try:
+                idx = int((q.get("index") or ["0"])[0])
+            except ValueError:
+                return self._err(400, "index must be an integer")
+            f = self._resolve_media_file(urllib.parse.unquote(m.group(1)), index=idx)
             if not f:
                 return self._err(404, "no bytes for that id (still running, failed, or unknown)")
             return self._send_video(f)
@@ -637,7 +767,7 @@ class DirectHandler(Base):
             return self._err(401, "bad or missing bearer token")
         b = self._body()
         if b is None:
-            return self._err(400, "body must be JSON")
+            return self._err(400, "body must be a JSON object under 1 MiB")
 
         aspect, resolution = b.get("aspect_ratio"), b.get("resolution")
         if b.get("size") and not (aspect and resolution):
@@ -652,27 +782,55 @@ class DirectHandler(Base):
             return self._err(400, f"aspect_ratio must be one of {list(gf.ASPECTS)}")
         if resolution not in gf.RESOLUTIONS:
             return self._err(400, f"resolution must be one of {list(gf.RESOLUTIONS)}")
-        seed = b.get("seed")
+
+        # Every number is parsed BEFORE start_job. Parsing them after it means a typo in wait_timeout
+        # raises inside the handler while the worker thread is already spending credits, and the
+        # caller never even learns the job id.
+        def num(field, default, lo, hi, cast=int):
+            raw = b.get(field)
+            if raw is None or raw == "":
+                return default, None
+            try:
+                v = cast(raw)
+            except (TypeError, ValueError):
+                return None, f"{field} must be a number"
+            if not (lo <= v <= hi):
+                return None, f"{field} must be between {lo} and {hi}"
+            return v, None
+
+        seed, err = num("seed", None, 0, 2 ** 32 - 1)
+        if err:
+            return self._err(400, err)
+        budget, err = num("budget", 600, 30, 3600)
+        if err:
+            return self._err(400, err)
+        wait_timeout, err = num("wait_timeout", 600, 1, 3600, float)
+        if err:
+            return self._err(400, err)
+
         job, err = start_job(prompt=b.get("prompt"), model_name=b.get("model"), aspect=aspect,
-                             resolution=resolution, seed=int(seed) if seed is not None else None,
-                             requested_account=b.get("account"), face="direct",
-                             budget=int(b.get("budget") or 600))
+                             resolution=resolution, seed=seed,
+                             requested_account=b.get("account"), face="direct", budget=budget)
         if err:
             return self._err(400, err)
 
         if b.get("wait"):
-            limit = time.time() + float(b.get("wait_timeout") or 600)
+            limit = time.time() + wait_timeout
             while time.time() < limit and job["status"] in ("queued", "active"):
                 time.sleep(0.5)
-            return self._json(200, public_job(job))
-        return self._json(202, public_job(job))
+            return self._json(200, public_job(STORE.get(job["id"]) or job))
+        return self._json(202, public_job(STORE.get(job["id"]) or job))
 
 
 # --------------------------------------------------------------------------- comfyui face
 
 
 class ComfyHandler(Base):
-    """ComfyUI's contract, exactly as OmniRoute's compiled handler consumes it."""
+    """ComfyUI's contract, exactly as OmniRoute's compiled handler consumes it.
+
+    Bound to loopback unconditionally (see serve()): this face is unauthenticated because
+    OmniRoute's comfyui provider is authType "none", and POST /prompt spends real credits.
+    """
 
     OUTPUT_NODE = "7"        # the SaveAnimatedWEBP node in OmniRoute's generated workflow
 
@@ -692,13 +850,14 @@ class ComfyHandler(Base):
             job = STORE.get(m.group(1))
             if not job:
                 return self._json(200, {})
-            if job["status"] == "succeeded" and job.get("media_id"):
+            files = job.get("files") or ([job["file"]] if job.get("file") else [])
+            if job["status"] == "succeeded" and files:
                 return self._json(200, {job["id"]: {
                     "status": {"status_str": "success", "completed": True, "messages": []},
                     "outputs": {self.OUTPUT_NODE: {"gifs": [
-                        {"filename": f"{job['media_id']}.mp4", "subfolder": "", "type": "output",
-                         "format": "video/mp4"}]}}}})
-            if job["status"] == "failed":
+                        {"filename": pathlib.Path(f).name, "subfolder": "", "type": "output",
+                         "format": "video/mp4"} for f in files]}}}})
+            if job["status"] in ("failed", "interrupted"):
                 # Real ComfyUI's error shape. OmniRoute's poller ignores `status` and only looks for
                 # `outputs`, so it will keep polling until its own 300s budget expires -- there is no
                 # error channel in that contract. Anything that reads ComfyUI properly sees this.
@@ -715,9 +874,12 @@ class ComfyHandler(Base):
                                                "python_version": sys.version.split()[0]},
                                     "devices": []})
         if path == "/queue":
-            running = [j["id"] for j in STORE.recent() if j.get("status") == "active"]
-            pending = [j["id"] for j in STORE.recent() if j.get("status") == "queued"]
-            return self._json(200, {"queue_running": running, "queue_pending": pending})
+            # Counts, not ids. A job id here is a capability: it opens /history/{id}, which names the
+            # media file, which /view then hands over as bytes the operator paid for.
+            st = STORE.stats()
+            return self._json(200, {"queue_running": [], "queue_pending": [],
+                                    "flow_shim": {"running": st["active"], "total": st["total"],
+                                                  "note": "ids withheld; use the :8189 face"}})
         return self._err(404, f"no route for {path}")
 
     def do_POST(self):
@@ -729,7 +891,7 @@ class ComfyHandler(Base):
             return self._err(404, f"no route for {path}")
         b = self._body()
         if b is None:
-            return self._err(400, "body must be JSON")
+            return self._err(400, "body must be a JSON object under 1 MiB")
         wf = b.get("prompt")
         if not isinstance(wf, dict):
             return self._err(400, "body must be {\"prompt\": <workflow>}")
@@ -738,15 +900,41 @@ class ComfyHandler(Base):
         # node number, so a handler change that renumbers nodes does not silently send an empty
         # prompt to a paid API.
         def by_class(cls):
-            return [n for n in wf.values()
-                    if isinstance(n, dict) and n.get("class_type") == cls]
+            return {k: n for k, n in wf.items()
+                    if isinstance(n, dict) and n.get("class_type") == cls}
 
-        texts = [n.get("inputs", {}).get("text") for n in by_class("CLIPTextEncode")]
-        prompt = next((t for t in texts if isinstance(t, str) and t.strip()), None)
         ckpt = next((n.get("inputs", {}).get("ckpt_name")
-                     for n in by_class("CheckpointLoaderSimple")), None)
-        latent = next((n.get("inputs", {}) for n in by_class("EmptyLatentImage")), {})
-        sampler = next((n.get("inputs", {}) for n in by_class("KSampler")), {})
+                     for n in by_class("CheckpointLoaderSimple").values()), None)
+        latent = next((n.get("inputs", {}) for n in by_class("EmptyLatentImage").values()), {})
+        sampler = next((n.get("inputs", {}) for n in by_class("KSampler").values()), {})
+
+        # The positive and negative prompts are BOTH CLIPTextEncode nodes, so "first non-empty text"
+        # picks the negative prompt whenever the positive one is blank -- i.e. it would pay to render
+        # "blurry, low quality, distorted". The only thing that distinguishes them is which KSampler
+        # input links to them, so follow that link. ComfyUI links are [node_id, output_index].
+        encoders = by_class("CLIPTextEncode")
+
+        def text_via(role):
+            link = sampler.get(role)
+            if isinstance(link, list) and link and str(link[0]) in encoders:
+                t = encoders[str(link[0])].get("inputs", {}).get("text")
+                return t if isinstance(t, str) else None
+            return None
+
+        prompt = text_via("positive")
+        if prompt is None and len(encoders) == 1:
+            # No KSampler to disambiguate, but with a single encoder there is nothing to confuse it
+            # with. Two-or-more encoders and no link is refused below rather than guessed at.
+            only = next(iter(encoders.values())).get("inputs", {}).get("text")
+            prompt = only if isinstance(only, str) else None
+        if prompt is not None and not prompt.strip():
+            prompt = None
+        if prompt is None:
+            neg = text_via("negative")
+            return self._err(400, "could not identify the positive prompt in this workflow"
+                             + (" (the KSampler's positive input resolved to an empty string; "
+                                "refusing to render the negative prompt instead)"
+                                if neg else ""))
 
         aspect, resolution = geometry(latent.get("width"), latent.get("height"))
         seed = sampler.get("seed")
@@ -755,16 +943,33 @@ class ComfyHandler(Base):
         else:
             seed = None
 
+        # Deadlines sized to OmniRoute's 300s window, not the direct face's 600s+900s. Waiting 900s
+        # for a free account, then rendering for 600s, guarantees OmniRoute has already given up --
+        # so the credits would be spent on a video it can never fetch.
         job, err = start_job(prompt=prompt, model_name=ckpt, aspect=aspect, resolution=resolution,
-                             seed=seed, requested_account=None, face="comfyui")
+                             seed=seed, requested_account=None, face="comfyui",
+                             budget=COMFY_BUDGET, acquire_timeout=COMFY_ACQUIRE_TIMEOUT)
         if err:
             return self._err(400, err)
-        log(f"{job['id'][:8]} comfyui face: ckpt={ckpt!r} -> {job['model']} {resolution} {aspect}")
-        return self._json(200, {"prompt_id": job["id"], "number": len(STORE.jobs),
+        log(f"{job['id'][:8]} comfyui face: ckpt={ckpt!r} -> {job['model']} {resolution} {aspect} "
+            f"(budget {COMFY_BUDGET}s inside OmniRoute's {OMNIROUTE_COMFY_WINDOW}s window)")
+        return self._json(200, {"prompt_id": job["id"], "number": STORE.stats()["total"],
                                 "node_errors": {}})
 
 
 # --------------------------------------------------------------------------- commands
+
+
+LOOPBACK = ("127.0.0.1", "localhost", "::1", "")
+
+
+class Server(ThreadingHTTPServer):
+    # HTTPServer sets allow_reuse_address = 1. On Windows SO_REUSEADDR lets a second process bind an
+    # address another process already holds, so the "is this port free" check below would pass while
+    # a stranger keeps serving on it. For a process that spends money, a contested port has to be a
+    # hard failure rather than a silent second listener.
+    allow_reuse_address = False
+    daemon_threads = True
 
 
 def serve(a) -> int:
@@ -772,10 +977,19 @@ def serve(a) -> int:
     FLEET = load_accounts()
     DRY_RUN = bool(a.dry_run)
 
-    if a.bind not in ("127.0.0.1", "localhost", "::1") and not a.token:
-        raise SystemExit("refusing to bind %s without --token: this process spends real credits "
-                         "and the ComfyUI face is unauthenticated by design" % a.bind)
+    if a.bind not in LOOPBACK and not a.token:
+        raise SystemExit("refusing to bind %s without --token: this process spends real credits"
+                         % a.bind)
     Base.token = a.token
+
+    # The ComfyUI face cannot be authenticated: OmniRoute's comfyui provider is authType "none", so
+    # it has no way to send a token, and --token therefore protects the direct face only. Since POST
+    # /prompt on that face spends real credits, it is pinned to loopback whatever --bind says.
+    # OmniRoute runs on this machine, so nothing is lost by refusing to publish it.
+    comfy_bind = "127.0.0.1"
+    if a.bind not in LOOPBACK:
+        log(f"note: direct face on {a.bind} (token required); ComfyUI face pinned to 127.0.0.1 "
+            f"because it cannot be authenticated and POST /prompt spends credits")
 
     if DRY_RUN:
         log("DRY RUN: no Flow call will be made and no credits spent; cached bytes are served")
@@ -792,18 +1006,19 @@ def serve(a) -> int:
         threading.Thread(target=FLEET.refresh_loop, daemon=True).start()
 
     servers = []
-    for handler, port, name in ((DirectHandler, a.direct_port, "direct"),
-                                (ComfyHandler, a.comfy_port, "comfyui")):
+    for handler, bind, port, name in ((DirectHandler, a.bind, a.direct_port, "direct"),
+                                      (ComfyHandler, comfy_bind, a.comfy_port, "comfyui")):
         if port <= 0:
             continue
         try:
-            s = ThreadingHTTPServer((a.bind, port), handler)
+            s = Server((bind, port), handler)
         except OSError as e:
-            raise SystemExit(f"cannot bind {name} face on {a.bind}:{port}: {e}")
-        s.daemon_threads = True
+            for done, _, _ in servers:
+                done.shutdown()
+            raise SystemExit(f"cannot bind {name} face on {bind}:{port}: {e}")
         servers.append((s, name, port))
         threading.Thread(target=s.serve_forever, daemon=True).start()
-        log(f"{name:<8} face on http://{a.bind}:{port}")
+        log(f"{name:<8} face on http://{bind}:{port}")
 
     log("")
     log(f"filmmaking app  ->  POST http://{a.bind}:{a.direct_port}/v1/videos/generations")
