@@ -1,0 +1,187 @@
+[
+ {
+  "provider": "cline",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "xai-oauth",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "xai-oauth",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "agy",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "antigravity",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "clinepass",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "kimi-coding",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "cloudflare-ai",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "nara",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "agnes",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "aion",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "lmarena",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "grok-cli",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "amazon-q",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "antigravity",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "gemini",
+  "auth": "apikey",
+  "default_model": "gemini-flash-latest"
+ },
+ {
+  "provider": "gemini-web",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "chatgpt-web",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "perplexity-web",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "t3-web",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "orcarouter",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "github-models",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "nscale",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "morph",
+  "auth": "apikey",
+  "default_model": "morph-v3-fast"
+ },
+ {
+  "provider": "aimlapi",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "agy",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "antigravity",
+  "auth": "oauth",
+  "default_model": null
+ },
+ {
+  "provider": "kie",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "novita",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "vertex",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "comfyui",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "g4f-gemini",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "g4f-groq",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "reka",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "reka",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "openadapter",
+  "auth": "apikey",
+  "default_model": null
+ },
+ {
+  "provider": "nous-research",
+  "auth": "apikey",
+  "default_model": null
+ }
+]

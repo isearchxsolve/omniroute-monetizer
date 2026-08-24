@@ -1,0 +1,5 @@
+auto/best-reasoning              12.6s FAILED JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+auto/best-coding                 17.7s FAILED JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+gemini/gemini-3.6-flash           8.6s FAILED HTTPError: HTTP Error 429: Too Many Requests
+morph/morph-v3-fast              13.2s FAILED JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+gemini/gemini-flash-latest       89.7s FAILED HTTPError: HTTP Error 503: Service Unavailable

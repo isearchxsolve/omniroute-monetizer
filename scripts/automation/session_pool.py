@@ -1,0 +1,286 @@
+"""session_pool.py — the breadth-not-depth ROUTER over every grabbed session (chat OR video).
+
+Operator's rule (2026-08-24): "we don't hammer one provider with parallel tasks. We divide among
+multiple providers, multiple accounts, multiple sessions." So this is NOT a way to fan parallel
+load at one host — it is a LOAD SPREADER: one light call each, least-recently-used across all live
+state/secrets/session_<host>.json, with a per-session cooldown so no single provider ever gets a
+burst. Different providers may run concurrently (that IS the point); the SAME host never does
+(a per-host lock serializes any sessions that share it, e.g. multiple accounts on one provider).
+
+Modality-agnostic on purpose: chat and video soft targets are grabbed the same way (grab_session.py
+records any genuine exchange by --url-substr) and routed the same way here. The only per-provider
+thing is the replay ADAPTER — the code that swaps the query into the recorded body and pulls the
+answer back out. We dispatch ONLY to hosts whose genuine shape we have PROVEN (veoaifree today via
+VeoSessionClient). Unknown hosts are listed but never blind-replayed — we don't guess a shape.
+
+The "omni way": replay the recorded genuine exchange server-side with the grabbed cookie; never
+reconstruct the request (reconstruction trips upstream gates — measured). No browser in the request
+path, so calls are parallel-safe across hosts.
+
+    python session_pool.py list                    # the pool, metadata only (never prints a secret)
+    python session_pool.py chat "prompt" [--model claude-sonnet]   # route ONE call (LRU pick)
+    python session_pool.py sweep [--prompt ...] [--workers 6] [--modality chat]  # one light call each
+"""
+from __future__ import annotations
+import argparse
+import glob
+import json
+import pathlib
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Optional, Type
+
+from veoaifree_chat_client import ChatError
+from veo_session_replay import VeoSessionClient, SessionExpired
+
+SECRETS = pathlib.Path(r"D:\omniroute-monetizer\state\secrets")
+# last-used timestamps ONLY (no cookie, no header) so the cooldown spreads load across CLI runs too.
+POOL_STATE = pathlib.Path(r"D:\omniroute-monetizer\state\session_pool_state.json")
+
+# host substring -> proven replay client. One line per provider whose genuine shape is captured AND
+# verified end-to-end. Dirty-and-easy: add a line when a new provider (chat OR video) proves out.
+# We NEVER blind-replay a host without an entry here — an unproven shape is a guess, and guessing is
+# exactly what the omni way exists to avoid.
+CLIENTS: Dict[str, Type[Any]] = {
+    "veoaifree.com": VeoSessionClient,
+}
+
+# Minimum seconds between two calls that land on the SAME session — the breadth-not-depth cooldown.
+DEFAULT_COOLDOWN = 20.0
+
+
+def _client_for(host: str) -> Optional[Type[Any]]:
+    for key, cls in CLIENTS.items():
+        if key in host:
+            return cls
+    return None
+
+
+def _load_pool_state() -> Dict[str, float]:
+    try:
+        return json.loads(POOL_STATE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_pool_state(state: Dict[str, float]) -> None:
+    try:
+        POOL_STATE.parent.mkdir(parents=True, exist_ok=True)
+        POOL_STATE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    except Exception:
+        pass                                    # best-effort; cooldown still holds within a run
+
+
+class PooledSession:
+    """One grabbed session_<host>.json. Tracks routing bookkeeping only (host, liveness, last-used,
+    cooldown) — the cookie/headers stay inside the replay client, never in this object's repr."""
+
+    def __init__(self, path: pathlib.Path):
+        self.path = path
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        self.host: str = raw.get("host") or path.stem.replace("session_", "").replace("_", ".")
+        self.key: str = path.stem                              # stable non-secret id for cooldown
+        self.modality: str = raw.get("modality") or "chat"     # forward-compat: "chat" | "video"
+        self.has_recording: bool = "recorded_exchange" in raw
+        status = raw.get("status") or {}
+        # alive unless keepalive explicitly flagged it dead; a MISSING status = unknown-but-usable
+        # (cookie/record verbs don't write status — only keepalive does).
+        self.flagged_dead: bool = status.get("alive") is False
+        self.reason: str = (status.get("reason") if status else None) or \
+            ("no_recording" if not self.has_recording else "ok")
+        self.runway_days = status.get("runway_days")
+        ctx = raw.get("context") or {}
+        self.logged_in = ctx.get("loggedIn")
+        self.account_present = bool(ctx.get("userName"))
+        self.client_cls = _client_for(self.host)
+        self._client = None
+        self.last_used: float = 0.0
+        self.cooldown_until: float = 0.0
+        self.dead: bool = False                                # set this run on SessionExpired
+        self.last_error: Optional[str] = None
+
+    @property
+    def dispatchable(self) -> bool:
+        return bool(self.has_recording and self.client_cls
+                    and not self.flagged_dead and not self.dead)
+
+    def client(self):
+        if self._client is None:
+            self._client = self.client_cls(secret=self.path)
+        return self._client
+
+    def chat(self, messages, model=None, **kw) -> Dict[str, Any]:
+        return self.client().chat(messages, model=model, **kw)
+
+
+class SessionPool:
+    """Least-recently-used router with per-session cooldown and per-host serialization."""
+
+    def __init__(self, secrets: pathlib.Path = SECRETS, cooldown: float = DEFAULT_COOLDOWN):
+        self.cooldown = cooldown
+        self._lock = threading.Lock()
+        self._host_locks: Dict[str, threading.Lock] = {}
+        self.sessions: List[PooledSession] = []
+        for f in sorted(glob.glob(str(secrets / "session_*.json"))):
+            try:
+                self.sessions.append(PooledSession(pathlib.Path(f)))
+            except Exception:
+                continue                                       # skip corrupt/partial secret files
+        st = _load_pool_state()
+        for s in self.sessions:
+            s.last_used = float(st.get(s.key, 0.0))
+
+    def _host_lock(self, host: str) -> threading.Lock:
+        with self._lock:
+            if host not in self._host_locks:
+                self._host_locks[host] = threading.Lock()
+            return self._host_locks[host]
+
+    def live(self, modality: Optional[str] = None) -> List[PooledSession]:
+        return [s for s in self.sessions if s.dispatchable
+                and (modality is None or s.modality == modality)]
+
+    def _persist(self) -> None:
+        _save_pool_state({s.key: s.last_used for s in self.sessions if s.last_used})
+
+    def pick(self, now: float, modality: Optional[str] = None) -> Optional[PooledSession]:
+        cands = [s for s in self.live(modality) if s.cooldown_until <= now]
+        if not cands:
+            return None
+        cands.sort(key=lambda s: s.last_used)                  # least-recently-used first
+        return cands[0]
+
+    def chat(self, messages, model=None, modality: Optional[str] = None,
+             tries: Optional[int] = None, **kw) -> Dict[str, Any]:
+        """Route ONE call to the least-recently-used live session; on expiry/failure fall to the
+        next. Never runs two concurrent calls to the same host (per-host lock)."""
+        max_tries = tries if tries is not None else (len(self.live(modality)) or 1)
+        attempted = 0
+        last_exc: Optional[Exception] = None
+        while attempted < max_tries:
+            s = self.pick(time.time(), modality)
+            if s is None:
+                break
+            attempted += 1
+            with self._host_lock(s.host):
+                try:
+                    r = s.chat(messages, model=model, **kw)
+                    s.last_used = time.time()
+                    s.cooldown_until = s.last_used + self.cooldown
+                    self._persist()
+                    r["provider"], r["session"] = s.host, s.key
+                    return r
+                except SessionExpired as e:
+                    s.dead, s.last_error, last_exc = True, "session_expired", e
+                    continue                                   # try the next provider
+                except ChatError as e:
+                    s.last_used = time.time()
+                    s.cooldown_until = s.last_used + max(self.cooldown, 30.0)
+                    s.last_error, last_exc = str(e)[:60], e
+                    continue
+        if last_exc:
+            raise last_exc
+        raise ChatError("NO_LIVE_SESSION",
+                        "no dispatchable session (all dead, cooling, or no proven adapter)")
+
+    def sweep(self, prompt: str, model=None, workers: int = 6,
+              modality: Optional[str] = None) -> List[Dict[str, Any]]:
+        """One light call to EACH live session — the operator's 'ping each once' sweep. Distinct
+        hosts run concurrently (spreading load, the whole point); sessions that share a host are
+        serialized by the per-host lock so we never burst a single provider."""
+        live = self.live(modality)
+        results: List[Dict[str, Any]] = []
+        rlock = threading.Lock()
+
+        def one(s: PooledSession) -> None:
+            t0 = time.time()
+            with self._host_lock(s.host):
+                try:
+                    r = s.chat([{"role": "user", "content": prompt}], model=model)
+                    s.last_used = time.time()
+                    s.cooldown_until = s.last_used + self.cooldown
+                    out = {"host": s.host, "session": s.key, "modality": s.modality, "ok": True,
+                           "ms": int((time.time() - t0) * 1000), "label": r.get("label"),
+                           "preview": (r.get("text") or "").replace("\n", " ")[:70]}
+                except SessionExpired:
+                    s.dead = True
+                    out = {"host": s.host, "session": s.key, "modality": s.modality, "ok": False,
+                           "ms": int((time.time() - t0) * 1000),
+                           "err": "session_expired (re-login + re-grab)"}
+                except Exception as e:
+                    out = {"host": s.host, "session": s.key, "modality": s.modality, "ok": False,
+                           "ms": int((time.time() - t0) * 1000), "err": str(e)[:70]}
+            with rlock:
+                results.append(out)
+
+        if live:
+            with ThreadPoolExecutor(max_workers=max(1, min(workers, len(live)))) as ex:
+                list(ex.map(one, live))
+        self._persist()
+        return results
+
+
+def _cli() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--secrets", default=str(SECRETS))
+    ap.add_argument("--cooldown", type=float, default=DEFAULT_COOLDOWN)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("list")
+    c = sub.add_parser("chat")
+    c.add_argument("prompt")
+    c.add_argument("--model", default=None)
+    c.add_argument("--modality", default=None)
+    s = sub.add_parser("sweep")
+    s.add_argument("--prompt", default="Reply with exactly one word: pong.")
+    s.add_argument("--model", default=None)
+    s.add_argument("--workers", type=int, default=6)
+    s.add_argument("--modality", default=None, help="restrict to chat|video")
+
+    a = ap.parse_args()
+    pool = SessionPool(pathlib.Path(a.secrets), cooldown=a.cooldown)
+
+    if a.cmd == "list":
+        if not pool.sessions:
+            print("(pool empty — no state/secrets/session_*.json yet; grab one with grab_session.py)")
+            return 0
+        print(f"{len(pool.sessions)} session file(s); {len(pool.live())} dispatchable:\n")
+        for s in pool.sessions:
+            adapter = "yes" if s.client_cls else "NO-ADAPTER"
+            rw = "—" if s.runway_days is None else f"{s.runway_days}d"
+            flag = "LIVE" if s.dispatchable else "OUT "
+            print(f"  [{flag}] {s.host:26s} {s.modality:5s} adapter={adapter:10s} "
+                  f"{'rec' if s.has_recording else 'no-rec':6s} "
+                  f"logged_in={str(s.logged_in):5s} acct={str(s.account_present):5s} "
+                  f"runway={rw:6s} reason={s.reason}")
+        na = [s.host for s in pool.sessions if not s.client_cls]
+        if na:
+            print(f"\n  {len(na)} host(s) grabbed but awaiting a proven replay adapter: "
+                  f"{', '.join(sorted(set(na)))}")
+        return 0
+
+    if a.cmd == "chat":
+        r = pool.chat([{"role": "user", "content": a.prompt}], model=a.model, modality=a.modality)
+        print(f'[{r.get("provider")} | {r.get("label")} | {r.get("frames")} frames]\n')
+        print(r["text"])
+        return 0
+
+    if a.cmd == "sweep":
+        res = pool.sweep(a.prompt, model=a.model, workers=a.workers, modality=a.modality)
+        if not res:
+            print("(no live sessions with a proven adapter to sweep yet)")
+            return 0
+        ok = 0
+        for r in sorted(res, key=lambda x: x["host"]):
+            if r["ok"]:
+                ok += 1
+                print(f'  OK  {r["host"]:26s} {r["ms"]:6d}ms  {r.get("label",""):14s} {r.get("preview","")}')
+            else:
+                print(f'  ERR {r["host"]:26s} {r["ms"]:6d}ms  {r.get("err","")}')
+        print(f'\n{ok}/{len(res)} live sessions answered a single light call.')
+        return 0
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(_cli())
