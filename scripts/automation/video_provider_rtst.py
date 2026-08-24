@@ -37,6 +37,66 @@ EST_FALLBACK = 2
 
 MIN_PROMPT_WORDS = 10       # MEASURED: 9 words returned VALIDATION_INVALID_PROMPT
 
+# --------------------------------------------------------------------------- the price law
+#
+# MEASURED 2026-08-24, 87 free estimate-credits reads (every model x every advertised duration x
+# every advertised quality, mute; then every quality x audio on/off). The law is exact, with no
+# rounding anywhere in 87/87 rows:
+#
+#     credits_required == credits_per_second * duration
+#
+# The catch is WHICH credits_per_second. The one in the /videomodel catalogue is a single number per
+# model, but the real rate depends on the QUALITY and on whether AUDIO is on, and the quote reply
+# carries that resolved rate in its own credits_per_second field. The catalogue figure is not the
+# rate at any consistent quality either -- it is ltx23's cheapest, seedance's dearest, vidu's middle,
+# and for wan22 it is 5, which is not the rate at 480 (2) or at 1080 (6):
+#
+#     model          cat  quality  mute  audio
+#     ltx23            9     1080     9      9      audio is free on ltx23, veo31 and hailuo23
+#     ltx23            9     1440    17     17
+#     ltx23            9     2160    34     34
+#     seedance15pro    5      480     3      4
+#     seedance15pro    5      720     5      7
+#     wan22            5      480     2      -      (no audio support)
+#     wan22            5     1080     6      -
+#     vidu             6      540     2      5      the old cps*duration over-reserved 3x here
+#     vidu             6      720     6      9
+#     vidu             6     1080     9     12      ...and under-reserved 1.5x here
+#     veo31           15      720    15     15
+#     veo31           15     1080    15     15
+#     hailuo23        10      480    10     10      quality is free on hailuo23
+#     hailuo23        10      720    10     10
+#     hailuo23        10     1080    10     10
+#
+# So the table below is SEEDED with that measurement and then OVERWRITTEN by every live quote, since
+# _raw_quote() gets the authoritative rate for free in a reply it was already fetching. A hardcoded
+# price list would rot the first time rtst re-priced anything; a purely learned one would guess on
+# the first request of every combination. Seeded-then-learned is exact today and self-correcting
+# afterwards, and a seed that disagrees with reality is logged the moment it is contradicted.
+RATE: dict[str, int] = {
+    "ltx23/1080/mute": 9, "ltx23/1080/audio": 9,
+    "ltx23/1440/mute": 17, "ltx23/1440/audio": 17,
+    "ltx23/2160/mute": 34, "ltx23/2160/audio": 34,
+    "seedance15pro/480/mute": 3, "seedance15pro/480/audio": 4,
+    "seedance15pro/720/mute": 5, "seedance15pro/720/audio": 7,
+    "wan22/480/mute": 2, "wan22/1080/mute": 6,
+    "vidu/540/mute": 2, "vidu/540/audio": 5,
+    "vidu/720/mute": 6, "vidu/720/audio": 9,
+    "vidu/1080/mute": 9, "vidu/1080/audio": 12,
+    "veo31/720/mute": 15, "veo31/720/audio": 15,
+    "veo31/1080/mute": 15, "veo31/1080/audio": 15,
+    "hailuo23/480/mute": 10, "hailuo23/480/audio": 10,
+    "hailuo23/720/mute": 10, "hailuo23/720/audio": 10,
+    "hailuo23/1080/mute": 10, "hailuo23/1080/audio": 10,
+}
+
+
+def rate_key(model: str, resolution, audio) -> str:
+    """One key shape for the rate table. The wire uses '540p', the catalogue uses 540 and the router
+    passes '540' around, so all three collapse to the digits here."""
+    res = "".join(ch for ch in str(resolution) if ch.isdigit())
+    return f"{model}/{res}/{'audio' if audio else 'mute'}"
+
 CHAIN_HELP = {
     "chrome": "Start the automation Chrome with its OWN profile directory and "
               "--remote-debugging-port=<port>. `video_router.py wake` does this for you.",
@@ -104,18 +164,21 @@ class RtstProvider(vp.Provider):
     def describe(self, key: str) -> dict:
         """Adds what the live catalogue knows. The cheapest allowed duration is used for est_cost, to
         match normalise()'s default -- advertising the dearest option as "the" price would be wrong in
-        the expensive direction."""
+        the expensive direction. est_cost goes through estimate() rather than recomputing a price
+        here, so what a client is told and what the router actually reserves cannot drift apart."""
         d = super().describe(key)
         m = self.catalogue.get(key) or {}
         durs, quals = self._allowed(key)
-        cps = m.get("credits_per_second")
-        try:
-            if cps and durs:
-                d["est_cost"] = int(cps) * int(durs[0])
-        except Exception:
-            pass
-        d.update(credits_per_second=cps, durations=durs, resolutions=quals,
-                 in_live_catalogue=bool(m), min_prompt_words=MIN_PROMPT_WORDS)
+        if durs and quals:
+            d["est_cost"] = self.estimate({"model": key, "duration": durs[0],
+                                           "resolution": quals[0], "audio": False})
+        rates = {f"{q}p": RATE[rate_key(key, q, False)] for q in quals
+                 if rate_key(key, q, False) in RATE}
+        d.update(credits_per_second=m.get("credits_per_second"), durations=durs, resolutions=quals,
+                 in_live_catalogue=bool(m), min_prompt_words=MIN_PROMPT_WORDS,
+                 # The catalogue's single credits_per_second is not the rate at every quality (see
+                 # RATE): this is the measured per-quality rate, and price is rate * seconds exactly.
+                 credits_per_second_by_quality=rates or None)
         return d
 
     # -- request shaping ---------------------------------------------------------------------
@@ -186,16 +249,39 @@ class RtstProvider(vp.Provider):
     # -- money -------------------------------------------------------------------------------
 
     def estimate(self, params: dict) -> int:
-        """Account-independent. rtst prices linearly in seconds (proven: vidu at 2 credits/s, 3s = 6),
-        so credits_per_second from the catalogue reproduces the quote without a network call."""
-        floor = vp.MEASURED_COST.get(f"{self.name}/{params['model']}")
-        m = self.catalogue.get(params["model"]) or {}
-        cps = m.get("credits_per_second")
+        """Account-independent and offline: this only decides which account to reserve, and it runs
+        before one is chosen, so it cannot make a network call.
+
+        Sources in order of how much they are worth, first usable one wins:
+
+        1. The measured/learned rate for this exact (model, quality, audio) -- exact, because the
+           price law is rate * duration with no rounding.
+        2. The catalogue's per-model credits_per_second -- the old behaviour, right only at whichever
+           quality that figure happens to correspond to for that model. Kept as the cold-start guess
+           for a combination nobody has quoted yet, because the very next thing the router does with
+           the account it reserves is confirm(), which quotes exactly, refuses for free, and teaches
+           RATE the real number -- so a cold-start miss self-corrects after one request.
+        3. The observed reservation floor, only if the catalogue is missing entirely (probe failed).
+           It is NOT max()'d over the computed price: the floor is a flat per-media charge from some
+           past job, while an rtst price is a function of duration and quality, so folding one into
+           the other can only inflate. One 90-credit 10s/1080p job would otherwise make every
+           6-credit 3s/540p request reserve 90 and strand 15x the capacity it needs.
+        """
+        model, dur = params["model"], params.get("duration")
         try:
-            est = int(cps) * int(params["duration"]) if cps else 0
-        except Exception:
-            est = 0
-        return max(est, floor or 0) or EST_FALLBACK
+            seconds = int(dur)
+        except (TypeError, ValueError):
+            seconds = 0
+        rate = RATE.get(rate_key(model, params.get("resolution"), params.get("audio")))
+        if rate and seconds:
+            return rate * seconds
+        cps = (self.catalogue.get(model) or {}).get("credits_per_second")
+        try:
+            if cps and seconds:
+                return int(cps) * seconds
+        except (TypeError, ValueError):
+            pass
+        return vp.MEASURED_COST.get(f"{self.name}/{model}") or EST_FALLBACK
 
     def _raw_quote(self, acct: vp.Account, params: dict) -> dict:
         """GET /video/estimate-credits, verbatim. Free, read-only, and the one place the price comes
@@ -207,7 +293,40 @@ class RtstProvider(vp.Provider):
         bal = q.get("current_balance")
         if isinstance(bal, int):
             acct.credits = bal              # authoritative and free; the cached figure is a snapshot
+        self._learn_rate(params, q)
         return q
+
+    def _learn_rate(self, params: dict, q: dict) -> None:
+        """Fold this reply's resolved credits_per_second into RATE so the next estimate() is exact.
+
+        Free: the number was in a reply already being fetched. Unlike the reservation floor this may
+        move in either direction -- it is not an inference from a balance delta that something else
+        could have contributed to, it is rtst stating its own price for a named request.
+        """
+        rate, need = q.get("credits_per_second"), q.get("credits_required")
+        if not isinstance(rate, int) or rate <= 0:
+            return
+        seconds = q.get("duration")
+        if not isinstance(seconds, int):
+            try:
+                seconds = int(params.get("duration"))
+            except (TypeError, ValueError):
+                seconds = 0
+        # Only learn from a reply that actually obeys the law. If rtst ever starts pricing some other
+        # way -- a flat fee, a minimum charge, a discount -- rate * duration stops reproducing
+        # credits_required, and a rate learned from it would be wrong in a way nothing else notices.
+        if not (isinstance(need, int) and seconds and rate * seconds == need):
+            vp.log(f"rtst priced {params.get('model')} outside rate*duration "
+                   f"({rate}/s x {seconds}s != {need}); not learning it -- confirm() still gates "
+                   f"on the exact quote, so this is a stale estimate at worst")
+            return
+        key = rate_key(params["model"], q.get("resolution") or params.get("resolution"),
+                       params.get("audio"))
+        old = RATE.get(key)
+        if old != rate:
+            RATE[key] = rate
+            if old is not None:
+                vp.log(f"rtst re-priced {key}: {old} -> {rate} credits/s (was measured 2026-08-24)")
 
     def quote(self, acct: vp.Account, params: dict) -> tuple[int | None, str | None]:
         """The exact price with no ceiling applied. Affordability is reported, not enforced: this is
@@ -299,8 +418,19 @@ class RtstProvider(vp.Provider):
                 return
             msg = str(e)
             acct.ready = False
-            acct.fault = (vp.FAULT_AUTH if ("auth_token" in msg or "signed out" in msg)
-                          else vp.FAULT_OTHER)
+            if "auth_token" in msg or "signed out" in msg:
+                acct.fault = vp.FAULT_AUTH
+            elif vp.is_frozen(e):
+                # Same discarded-renderer case as the Flow adapter: the port answered, the rtst tab
+                # is in the target list, and the in-page fetch still never came back. See
+                # vp.is_frozen for why a timeout can only mean that by the time we reach here.
+                acct.fault = vp.FAULT_FROZEN
+                acct.reason = (f"tab is not executing JS (renderer discarded or frozen) on port "
+                               f"{acct.port}: "
+                               f"{vp.scrub(e)[:90]}")
+                return
+            else:
+                acct.fault = vp.FAULT_OTHER
             acct.reason = f"{type(e).__name__}: {vp.scrub(e)[:160]}"
 
     # -- the job -----------------------------------------------------------------------------

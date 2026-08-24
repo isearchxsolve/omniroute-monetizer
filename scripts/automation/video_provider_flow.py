@@ -241,7 +241,20 @@ class FlowProvider(vp.Provider):
                 vp.log(f"{acct.label}: {acct.reason} -- disabled")
                 return
             acct.ready = False
-            acct.fault = vp.FAULT_AUTH if "session token" in str(e) else vp.FAULT_OTHER
+            if "session token" in str(e):
+                acct.fault = vp.FAULT_AUTH
+            elif vp.is_frozen(e):
+                # Port answered, the Flow tab is right there in the target list, and still nothing
+                # evaluates: Chrome discarded the renderer. Reachable only here, below both earlier
+                # checks, which is what makes the classification safe -- see vp.is_frozen.
+                acct.fault = vp.FAULT_FROZEN
+                acct.state.pop("sess", None)      # a session cached from before the discard is junk
+                acct.reason = (f"tab is not executing JS (renderer discarded or frozen) on port "
+                               f"{acct.port}: "
+                               f"{vp.scrub(e)[:90]}")
+                return
+            else:
+                acct.fault = vp.FAULT_OTHER
             acct.reason = f"{type(e).__name__}: {vp.scrub(e)[:160]}"
 
     # -- the job -----------------------------------------------------------------------------

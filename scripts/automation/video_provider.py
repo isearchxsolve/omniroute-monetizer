@@ -87,11 +87,40 @@ NON_FATAL = (Exception, SystemExit)
 FAULT_NONE = None
 FAULT_PORT = "port"          # the debug port is not answering: Chrome is closed. Relaunchable.
 FAULT_TAB = "tab"            # port answers, no tab for this provider. Reopenable by navigation.
+FAULT_FROZEN = "frozen"      # port answers AND the tab is there, but the tab is not executing JS.
 FAULT_AUTH = "auth"          # signed out / login wall. NOT heal-able: no password is ever typed.
 FAULT_REFUSED = "refused"    # points at the operator's live Chrome. Never touched again.
 FAULT_OTHER = "other"        # anything else; reported, not acted on.
 
-HEALABLE = (FAULT_PORT, FAULT_TAB)
+# FROZEN is its own code because it is the one failure that looks healthy from the outside. MEASURED
+# 2026-08-24: Chrome's memory saver discarded both automation tabs after they sat idle. /json/list
+# still listed them, a page websocket still attached in 0.0s, and browser-domain calls
+# (Browser.getVersion, SystemInfo.getProcessInfo) answered instantly -- only Runtime.evaluate hung,
+# because a discarded tab has no execution context to evaluate in. Classified as FAULT_OTHER it was
+# reported and never acted on, so the fleet sat dead with a green port and a green tab. The cure is
+# GET /json/activate/<targetId>, which re-creates the renderer: after that both tabs answered
+# document.readyState in under half a second. Navigation only -- nothing is clicked, so it cannot
+# spend a credit, which is why it belongs in HEALABLE next to the other two.
+HEALABLE = (FAULT_PORT, FAULT_TAB, FAULT_FROZEN)
+
+
+def is_frozen(exc: BaseException) -> bool:
+    """True for the 'renderer is not executing JS' signature.
+
+    Matched on cdp.py's own wording -- it raises TimeoutError("<method> did not answer within <n>s")
+    when a command gets no reply -- and deliberately NOT on isinstance(exc, TimeoutError). A urllib
+    read timeout is also a TimeoutError, so trusting the type alone would file "labs.google was slow"
+    as "this tab cannot run JavaScript" and reload a perfectly healthy tab over a network hiccup.
+    Anything this does not recognise stays FAULT_OTHER, which is reported and never acted on.
+
+    Both adapters only classify with this AFTER the port has answered /json/list and the provider's
+    tab has been found, so at that point a CDP command timeout can no longer mean a dead Chrome or a
+    missing tab -- it means the tab is there but nothing is running in it.
+
+    MEASURED 2026-08-24 against the live automation Chrome: freezing the rtst tab's lifecycle left
+    /json/list intact and every page listed, and Runtime.evaluate then hung for the full 90s.
+    """
+    return "did not answer within" in str(exc)
 
 # --------------------------------------------------------------------------- the reservation floor
 
@@ -175,13 +204,19 @@ class Account:
         """redact=True is the pre-authentication shape: enough to see the fleet is alive, nothing
         that identifies an account. Emails, project ids, tiers, balances, the last-known URL (it
         names the Flow project) and the free-text `reason` (which can quote an upstream error
-        verbatim) are all withheld until the caller authenticates."""
-        d = {"label": self.label, "provider": self.provider, "port": self.port,
+        verbatim) are all withheld until the caller authenticates.
+
+        `provider` is withheld too. It is not a secret in the way a bearer is, but it names which
+        paid services this machine holds credentials for, and an unauthenticated liveness probe has
+        no need of it -- label/port/ready is all a probe can act on. (The caller that DOES need it,
+        `/v1/accounts`, is authenticated and gets the unredacted shape.)"""
+        d = {"label": self.label, "port": self.port,
              "enabled": self.enabled, "ready": self.ready, "busy": self.lock.locked()}
         if redact:
             return d
-        d.update(email=self.email, project_id=self.project_id, tier=self.tier,
-                 credits=self.credits, reason=self.reason, fault=self.fault, url=self.url)
+        d.update(provider=self.provider, email=self.email, project_id=self.project_id,
+                 tier=self.tier, credits=self.credits, reason=self.reason, fault=self.fault,
+                 url=self.url)
         return d
 
 

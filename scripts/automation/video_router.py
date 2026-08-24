@@ -89,7 +89,6 @@ import sys
 import threading
 import time
 import traceback
-import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -148,6 +147,10 @@ HEAL_BACKOFF_MIN = 300
 HEAL_BACKOFF_MAX = 1800
 HEAL_PORT_WAIT = 25          # seconds to wait for a relaunched Chrome's debug port
 HEAL_TAB_WAIT = 30           # seconds to wait for a reopened tab to reach readyState complete
+# A woken tab either evaluates at once or is not really awake: the measured recovery answered
+# document.readyState in 0.4s, while a still-discarded one hangs until the deadline. Short on purpose
+# -- the probe's own 60s timeout is what made a discarded tab expensive to discover in the first place.
+WAKE_EVAL_TIMEOUT = 15
 
 Account = vp.Account         # re-exported: the registry, the fleet and the smoke test all use it
 
@@ -216,7 +219,9 @@ class Fleet:
         self._locks_lock = threading.Lock()
         self._heal_after: dict[int, float] = {}    # port -> earliest next launch attempt
         self._heal_fails: dict[int, int] = {}      # port -> consecutive launch failures
-        self.heal_stats = {"launched": 0, "tabs_opened": 0, "failed": 0,
+        self._wake_after: dict[str, float] = {}    # account key -> earliest next tab wake
+        self._wake_fails: dict[str, int] = {}      # account key -> consecutive wake failures
+        self.heal_stats = {"launched": 0, "tabs_opened": 0, "tabs_woken": 0, "failed": 0,
                            "not_healable": 0, "last": None}
 
     def _port_lock(self, port: int) -> threading.Lock:
@@ -320,8 +325,10 @@ class Fleet:
     # of its tab URL -- so relaunching the browser alone is not enough and nothing else in the repo
     # remembers the project URL. Hence: relaunch, then reopen the remembered URL, then re-probe.
     #
-    # ONLY two faults are heal-able. FAULT_AUTH is deliberately excluded: relaunching cannot fix a
-    # login wall, no password is ever typed here, and retrying would be a launch loop. Per
+    # ONLY three faults are heal-able, and every one of them is fixed by launching or navigating:
+    # a dead port (relaunch Chrome), a missing tab (open the URL), a discarded renderer (activate it,
+    # then reload if that was not enough). FAULT_AUTH is deliberately excluded: relaunching cannot fix
+    # a login wall, no password is ever typed here, and retrying would be a launch loop. Per
     # chrome_live_guard, a login wall in automation's own profile is a correct, reportable outcome.
 
     def _port_alive(self, port: int) -> bool:
@@ -334,15 +341,32 @@ class Fleet:
     def _may_attempt(self, port: int) -> tuple[bool, float]:
         """Rate limit, per port: at most one launch per HEAL_BACKOFF_MIN, doubling to
         HEAL_BACKOFF_MAX after consecutive failures. Returns (allowed, seconds_to_wait)."""
-        left = self._heal_after.get(int(port), 0.0) - time.time()
-        return (left <= 0), max(0.0, left)
+        return self._gate_check(self._heal_after, int(port))
 
     def _arm_backoff(self, port: int, ok: bool) -> None:
-        port = int(port)
-        fails = 0 if ok else self._heal_fails.get(port, 0) + 1
-        self._heal_fails[port] = fails
-        delay = min(HEAL_BACKOFF_MIN * (2 ** max(0, fails - 1)), HEAL_BACKOFF_MAX)
-        self._heal_after[port] = time.time() + delay
+        self._gate_arm(self._heal_after, self._heal_fails, int(port), ok)
+
+    def _may_wake(self, acct: Account) -> tuple[bool, float]:
+        """The same rate limit for waking a discarded tab, but on its own counter keyed by ACCOUNT
+        rather than by port. Relaunching a dead Chrome and re-activating a discarded tab are different
+        actions with different causes and different costs: a Chrome that refuses to start must not
+        also freeze out the cheap HTTP activation of a sibling tab on the same port for half an hour.
+        Successful wakes arm it too, so a tab Chrome keeps re-discarding cannot become a wake loop."""
+        return self._gate_check(self._wake_after, acct.key)
+
+    def _arm_wake(self, acct: Account, ok: bool) -> None:
+        self._gate_arm(self._wake_after, self._wake_fails, acct.key, ok)
+
+    @staticmethod
+    def _gate_check(after: dict, key) -> tuple[bool, float]:
+        left = after.get(key, 0.0) - time.time()
+        return (left <= 0), max(0.0, left)
+
+    @staticmethod
+    def _gate_arm(after: dict, fails: dict, key, ok: bool) -> None:
+        n = 0 if ok else fails.get(key, 0) + 1
+        fails[key] = n
+        after[key] = time.time() + min(HEAL_BACKOFF_MIN * (2 ** max(0, n - 1)), HEAL_BACKOFF_MAX)
 
     def _launch_chrome(self, acct: Account, dry_run: bool = False) -> tuple[bool, str]:
         """Relaunch this account's Chrome on its own profile dir at its own port.
@@ -431,6 +455,76 @@ class Fleet:
                 continue
         return False, f"tab for {prov.name} did not settle within {HEAL_TAB_WAIT}s"
 
+    def _wake_tab(self, acct: Account, dry_run: bool = False) -> tuple[bool, str]:
+        """Bring a discarded tab's renderer back. Navigation only, so it cannot spend a credit.
+
+        MEASURED 2026-08-24: after both automation tabs sat idle, Chrome's memory saver discarded
+        their renderers. /json/list still listed them, a page websocket still attached in 0.0s, and
+        browser-domain calls answered instantly -- but every Runtime.evaluate hung until the deadline,
+        because a discarded tab has no execution context. GET /json/activate/<targetId> re-created it,
+        after which document.readyState came back in 0.4s.
+
+        Two steps, cheapest first: activate, and only if the tab still will not evaluate, one
+        Page.navigate to the URL it is already on. Navigate is dispatched by the browser process
+        rather than the renderer, so it works on a tab that cannot run JS -- it is the same one-reload
+        recovery the Flow adapter already does for a stale session, and Flow's project id survives it
+        because the URL is unchanged.
+        """
+        prov = provider_of(acct)
+        if prov is None:
+            return False, f"no adapter for provider {acct.provider!r}"
+        try:
+            vp.assert_cdp_safe(f"http://127.0.0.1:{acct.port}", who="video_router wake-tab")
+        except Exception as e:
+            return False, f"live guard refused port {acct.port}: {scrub(e)[:120]}"
+        try:
+            tabs = [t for t in list_targets(acct.port)
+                    if t.get("type") == "page"
+                    and prov.tab_match in (t.get("url", "") + t.get("title", "")).lower()]
+        except NON_FATAL as e:
+            return False, f"port {acct.port} stopped answering: {type(e).__name__}"
+        if not tabs:
+            # The tab went away between the probe and now, which is the other heal-able fault and is
+            # handled by a different branch. Say so instead of activating a target id that is gone.
+            return False, f"no {prov.name} tab on port {acct.port} any more -- it is a missing tab now"
+        target, url = tabs[0].get("id"), tabs[0].get("url") or acct.url or prov.default_url
+        if dry_run:
+            return True, (f"would activate target {target} ({(url or '')[:50]}) on port {acct.port}"
+                          f"; if it still would not evaluate, would navigate it to its own URL")
+        if not target:
+            return False, "target has no id in /json/list"
+
+        def evaluates() -> bool:
+            try:
+                with Page(prov.tab_match, port=acct.port) as p:
+                    return bool(p.evaluate("document.readyState", timeout=WAKE_EVAL_TIMEOUT))
+            except NON_FATAL:
+                return False
+
+        try:
+            urllib.request.urlopen(
+                f"http://127.0.0.1:{int(acct.port)}/json/activate/"
+                f"{urllib.parse.quote(str(target), safe='')}", timeout=20).read()
+        except NON_FATAL as e:
+            return False, f"activate refused: {type(e).__name__}: {scrub(e)[:100]}"
+        if evaluates():
+            return True, f"activated {(url or '')[:60]} -- it evaluates again"
+
+        if not url:
+            return False, "activated but it still will not evaluate, and no URL to navigate to"
+        try:
+            with Page(prov.tab_match, port=acct.port) as p:
+                p.send("Page.navigate", {"url": url}, timeout=60)
+        except NON_FATAL as e:
+            return False, (f"activated but it still will not evaluate, and navigate failed: "
+                           f"{type(e).__name__}: {scrub(e)[:100]}")
+        for _ in range(HEAL_TAB_WAIT):
+            time.sleep(1)
+            if evaluates():
+                return True, f"activated, then reloaded {(url or '')[:60]} -- it evaluates again"
+        return False, (f"activated and reloaded, still not executing JS after {HEAL_TAB_WAIT}s "
+                       f"-- Chrome may be out of memory")
+
     @staticmethod
     def _create_target(port: int, url: str) -> None:
         """Target.createTarget on the BROWSER endpoint. cdp.Page only attaches to page targets, and
@@ -498,6 +592,21 @@ class Fleet:
             fault = acct.fault
             if fault == vp.FAULT_PORT and self._port_alive(acct.port):
                 fault = vp.FAULT_TAB
+
+            if fault == vp.FAULT_FROZEN:
+                allowed, wait = self._may_wake(acct)
+                if not allowed:
+                    return rec("skip", False, f"backoff: {wait:.0f}s before waking "
+                                              f"{acct.label}'s tab again")
+                ok, detail = self._wake_tab(acct, dry_run)
+                if dry_run:
+                    return rec("activate", ok, detail)
+                self._arm_wake(acct, ok)
+                self.heal_stats["tabs_woken" if ok else "failed"] += 1
+                if ok:
+                    self.probe(acct)
+                    detail = f"{detail}; now {'ready' if acct.ready else acct.reason}"
+                return rec("activate", ok and acct.ready, detail)
 
             if fault == vp.FAULT_PORT:
                 allowed, wait = self._may_attempt(acct.port)
@@ -1186,12 +1295,18 @@ class DirectHandler(Base):
             # Reachable without a token so a liveness probe keeps working, but only in redacted form:
             # the full shape carries account emails, project ids, balances, upstream error text and
             # the remembered tab URL -- which names the Flow project.
+            #
+            # `providers` is behind the token too, and so is each account's `provider` (withheld by
+            # Account.public(redact=True)). Redacting one without the other would be theatre: with two
+            # adapters registered, a global list of provider names plus a per-account port is enough to
+            # infer which paid service each account belongs to. A liveness probe needs "ok"; it does
+            # not need to know which video vendors this machine holds credentials for.
             authed = self._authed()
             return self._json(200, {
                 "ok": DRY_RUN or any(a.ready for a in FLEET.accounts),
                 "dry_run": DRY_RUN,
                 "authenticated": authed,
-                "providers": sorted(vp.REGISTRY),
+                "providers": sorted(vp.REGISTRY) if authed else None,
                 "accounts": [a.public(redact=not authed) for a in FLEET.accounts],
                 "jobs": STORE.stats(),
                 "self_heal": FLEET.self_heal,
@@ -1449,3 +1564,416 @@ class ComfyHandler(Base):
             f"(budget {COMFY_BUDGET}s inside OmniRoute's {OMNIROUTE_COMFY_WINDOW}s window)")
         return self._json(200, {"prompt_id": job["id"], "number": STORE.stats()["total"],
                                 "node_errors": {}})
+
+
+# --------------------------------------------------------------------------- commands
+
+
+LOOPBACK = ("127.0.0.1", "localhost", "::1", "")
+
+
+class Server(ThreadingHTTPServer):
+    # HTTPServer sets allow_reuse_address = 1. On Windows SO_REUSEADDR lets a second process bind an
+    # address another process already holds, so the "is this port free" check below would pass while
+    # a stranger keeps serving on it. For a process that spends money, a contested port has to be a
+    # hard failure rather than a silent second listener.
+    allow_reuse_address = False
+    daemon_threads = True
+
+
+def serve(a) -> int:
+    global FLEET, DRY_RUN
+    FLEET = load_accounts()
+    DRY_RUN = bool(a.dry_run)
+    FLEET.self_heal = not bool(a.no_self_heal)
+
+    if a.bind not in LOOPBACK and not a.token:
+        raise SystemExit("refusing to bind %s without --token: this process spends real credits"
+                         % a.bind)
+    Base.token = a.token
+
+    # The ComfyUI face cannot be authenticated: OmniRoute's comfyui provider is authType "none", so
+    # it has no way to send a token, and --token therefore protects the direct face only. Since POST
+    # /prompt on that face spends real credits, it is pinned to loopback whatever --bind says.
+    # OmniRoute runs on this machine, so nothing is lost by refusing to publish it.
+    comfy_bind = "127.0.0.1"
+    if a.bind not in LOOPBACK:
+        log(f"note: direct face on {a.bind} (token required); ComfyUI face pinned to 127.0.0.1 "
+            f"because it cannot be authenticated and POST /prompt spends credits")
+
+    log(f"providers: {', '.join(f'{p.name} ({p.title})' for p in vp.REGISTRY.values())}")
+    if DRY_RUN:
+        log("DRY RUN: no provider call will be made and no credits spent; cached bytes are served")
+        log(f"  stand-in media: {_dry_media() or 'NONE CACHED -- jobs will fail'}")
+    else:
+        log("probing accounts...")
+        FLEET.probe_all()
+        for acct in FLEET.accounts:
+            mark = "ok " if acct.ready else "DOWN"
+            log(f"  [{mark}] {acct.provider}/{acct.label:<12} port {acct.port}  "
+                f"{acct.email or '-'}  credits={acct.credits}  "
+                f"{'' if acct.ready else acct.reason}")
+        if not any(x.ready for x in FLEET.accounts):
+            log(f"no account is ready -- serving anyway; run "
+                f"`python {pathlib.Path(__file__).name} doctor` to see why")
+        if FLEET.self_heal:
+            log(f"self-heal ON: a closed Chrome or a missing tab is relaunched/reopened during the "
+                f"{FLEET.REFRESH_EVERY}s refresh (never a signed-out account, never a busy one)")
+            FLEET.heal()
+        else:
+            log("self-heal OFF (--no-self-heal): down accounts are reported and left alone")
+        threading.Thread(target=FLEET.refresh_loop, daemon=True).start()
+
+    servers = []
+    for handler, bind, port, name in ((DirectHandler, a.bind, a.direct_port, "direct"),
+                                      (ComfyHandler, comfy_bind, a.comfy_port, "comfyui")):
+        if port <= 0:
+            continue
+        try:
+            s = Server((bind, port), handler)
+        except OSError as e:
+            for done, _, _ in servers:
+                done.shutdown()
+            raise SystemExit(f"cannot bind {name} face on {bind}:{port}: {e}")
+        servers.append((s, name, port))
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+        log(f"{name:<8} face on http://{bind}:{port}")
+
+    log("")
+    log(f"filmmaking app  ->  POST http://{a.bind}:{a.direct_port}/v1/videos/generations")
+    log(f"                    (free price check first: POST /v1/videos/quote)")
+    # Which provider a ckpt lands on is a registry fact, so print what it actually resolves to today
+    # rather than a comment that can drift out of date.
+    for mid in ("animatediff", "svd-xt"):
+        p, k, err = vp.resolve_model(mid)
+        log(f"OmniRoute       ->  comfyui ckpt {mid!r} -> "
+            + (f"{p.name}/{k}" if p else f"UNRESOLVED ({err})"))
+    log("ctrl-c to stop")
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        log("stopping")
+        FLEET._stop.set()
+        for s, _, _ in servers:
+            s.shutdown()
+    return 0
+
+
+def cmd_accounts(a) -> int:
+    global FLEET
+    FLEET = load_accounts()
+    FLEET.probe_all()
+    print(f"{'provider':<8} {'label':<14} {'port':>5}  {'email':<30} {'credits':>8}  "
+          f"{'tier':<14} status")
+    for x in FLEET.accounts:
+        print(f"{x.provider:<8} {x.label:<14} {x.port:>5}  {(x.email or '-'):<30} "
+              f"{str(x.credits):>8}  {(x.tier or '-'):<14} {'ok' if x.ready else x.reason}")
+    print()
+    for p in vp.REGISTRY.values():
+        mine = [x for x in FLEET.accounts if x.provider == p.name]
+        ready = [x for x in mine if x.ready]
+        total = sum(x.credits or 0 for x in ready)
+        if not mine:
+            print(f"{p.name:<8} no accounts registered -- any model of its would fail at submit "
+                  f"time; register one with `add --provider {p.name} --port <port>`")
+            continue
+        # Capacity is reported through the SAME estimate() the router reserves with, so this line
+        # cannot flatter the thing that actually gates a job. describe() prices the cheapest allowed
+        # duration at the cheapest allowed quality, per model, and the cheapest of those is the most
+        # clips this balance can possibly buy.
+        #
+        # For rtst that is now exact: price is a measured per-second rate x duration, so 24 credits
+        # really is 4 vidu 3s @540p clips. (It is deliberately NOT the old flat floor of 2, which
+        # would have claimed 12.) For Flow, which has no quote endpoint, est_cost is the reservation
+        # floor -- the best price knowledge that exists for it -- and it is labelled as such.
+        keys = {k for k in (vp.resolve_model(n)[1] for n in p.listing()) if k}
+        cheapest, of, dims = None, None, ""
+        for key in sorted(keys):
+            try:
+                d = p.describe(key)
+            except vp.NON_FATAL:
+                continue
+            c = d.get("est_cost")
+            if not (isinstance(c, int) and c > 0) or (cheapest is not None and c >= cheapest):
+                continue
+            durs, res = d.get("durations") or [], d.get("resolutions") or []
+            cheapest, of = c, key
+            # rtst advertises durations and bare quality numbers; Flow advertises one fixed
+            # length_seconds and resolutions that already carry the "p". Print either without
+            # inventing a second p or a duration Flow does not let a caller choose.
+            secs = durs[0] if durs else d.get("length_seconds")
+            qual = str(res[0]) if res else ""
+            dims = ((f" {secs}s" if secs else "")
+                    + (f" @{qual}" + ("" if qual.endswith("p") else "p") if qual else ""))
+        measured = [v for k, v in vp.MEASURED_COST.items() if k.startswith(f"{p.name}/")]
+        head = f"{p.name:<8} {total} credits across {len(ready)}/{len(mine)} ready account(s)"
+        if cheapest:
+            how = ("exact -- `quote --model <name>` re-checks it for free before every submit"
+                   if p.quotes_before_spending else
+                   f"the {'measured' if measured else 'estimated'} reservation floor; "
+                   f"{p.name} cannot be quoted")
+            print(f"{head}  ~= {total // cheapest} x its cheapest clip "
+                  f"({of}{dims} = {cheapest})  -- {how}")
+        else:
+            print(f"{head}  -- no model on the menu could be priced (catalogue unavailable?)")
+    print()
+    print(f"registry: {ACCOUNTS_FILE}")
+    return 0 if any(x.ready for x in FLEET.accounts) else 1
+
+
+def cmd_add(a) -> int:
+    prov = vp.get(a.provider)
+    if prov is None:
+        print(f"unknown provider {a.provider!r}; known: {', '.join(sorted(vp.REGISTRY))}")
+        return 1
+    ACCOUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if ACCOUNTS_FILE.exists():
+        raw = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
+    else:
+        raw = _migrate() or {"_note": REGISTRY_NOTE, "accounts": []}
+    existing = raw.setdefault("accounts", [])
+    label = a.label or f"{prov.name}-{a.port}"
+    # The dup check is on (provider, port), NOT on port: one Chrome on 9222 legitimately carries both
+    # a Flow tab and an rtst tab, and refusing the second would make the whole point unreachable.
+    for x in existing:
+        if not isinstance(x, dict):
+            continue
+        e = _entry(x)
+        if e["provider"] == prov.name and e["port"] == int(a.port):
+            print(f"{prov.name} on port {a.port} is already registered as {e['label']!r}")
+            return 1
+        if e["label"] == label:
+            print(f"label {label!r} is already taken (by {e['provider']} on port {e['port']})")
+            return 1
+    entry = _entry({"label": label, "provider": prov.name, "port": a.port,
+                    "profile": a.profile, "enabled": True,
+                    "url": a.url or prov.default_url})
+    existing.append(entry)
+    raw.setdefault("_note", REGISTRY_NOTE)
+    ACCOUNTS_FILE.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+    print(f"added {entry['provider']}/{entry['label']} port {entry['port']} "
+          f"profile {entry['profile']} -> {ACCOUNTS_FILE}")
+    print(f"  url: {entry['url']}")
+    if not a.url:
+        print(f"  NOTE: that is {prov.name}'s generic entry URL. It is overwritten with the real "
+              f"one the first time a probe succeeds"
+              + ("; Flow's project id lives ONLY in the tab URL, so a heal before that first "
+                 "successful probe can only reopen the generic page."
+                 if prov.name == "flow" else "."))
+    print(f"  next: python {pathlib.Path(__file__).name} doctor")
+    return 0
+
+
+def cmd_doctor(a) -> int:
+    """Walk every provider's own chain per account and name the first broken link.
+
+    This is the answer to 'what do I do when it stops working': each provider tests its own
+    dependencies in the order it actually uses them, and each failure prints the specific repair.
+    The chains are generators, so nothing above a broken rung is tested -- testing it anyway
+    produces confusing output.
+    """
+    global FLEET
+    FLEET = load_accounts()
+    bad = 0
+    for acct in FLEET.accounts:
+        prov = provider_of(acct)
+        print("=" * 78)
+        print(f"{acct.provider}/{acct.label}  (port {acct.port}, profile {acct.profile})")
+        print("=" * 78)
+        if prov is None:
+            print(f"  [FAIL] {'provider adapter':<26} no adapter named {acct.provider!r}")
+            print(f"\n  FIX: known providers are {', '.join(sorted(vp.REGISTRY))}. Fix the "
+                  f"\"provider\" field for this entry in {ACCOUNTS_FILE}.\n")
+            bad += 1
+            continue
+        if not acct.enabled:
+            print(f"  [....] {'disabled in the registry':<26} skipped")
+            print()
+            continue
+        failed = None
+        try:
+            for st in prov.doctor_chain(acct, deep=bool(a.deep)):
+                print(f"  [{'ok ' if st.ok else 'FAIL'}] {st.name:<26} {scrub(st.detail)}")
+                if not st.ok:
+                    failed = st
+                    break
+        except NON_FATAL as e:
+            print(f"  [FAIL] {'chain raised':<26} {type(e).__name__}: {scrub(e)[:70]}")
+            failed = vp.Step("chain raised", False, "", prov.recovery_hint("<id>"))
+        if failed is not None:
+            bad += 1
+            if failed.fix:
+                print(f"\n  FIX: {failed.fix}\n")
+            else:
+                print()
+            continue
+        print()
+    print("=" * 78)
+    if bad:
+        print(f"  {bad} account(s) need attention -- see the FIX line under each.")
+    else:
+        n = sum(1 for x in FLEET.accounts if x.enabled)
+        print(f"  All {n} enabled account(s) healthy end to end"
+              + ("" if a.deep else "; add --deep to also prove each provider's submit gate "
+                                   "still accepts us (still 0 credits)"))
+    print("=" * 78)
+    return 1 if bad else 0
+
+
+def cmd_wake(a) -> int:
+    """Recover the fleet after Chrome was closed or a tab was lost.
+
+    Same body the refresh loop runs, so what `wake` fixes is exactly what `serve` fixes by itself.
+    Navigation only -- nothing is clicked and no generate button is touched -- so waking cannot
+    spend a credit. --dry-run prints the launch and tab plan without acting.
+    """
+    global FLEET
+    FLEET = load_accounts()
+    log("probing before healing (heal decisions key off the structured fault, not off prose)")
+    FLEET.probe_all()
+    down = [x for x in FLEET.accounts if x.enabled and not x.ready]
+    for x in FLEET.accounts:
+        log(f"  [{'ok ' if x.ready else 'DOWN'}] {x.provider}/{x.label:<12} port {x.port}  "
+            f"fault={x.fault or '-'}  {'' if x.ready else x.reason}")
+    if not down:
+        log("nothing to heal: every enabled account is ready")
+        return 0
+    actions = FLEET.heal(dry_run=bool(a.dry_run))
+    if not actions:
+        log("no heal-able account: every down account is signed out, refused or busy")
+        return 1
+    if a.dry_run:
+        log("dry run: nothing was launched, opened or probed")
+        return 0
+    still = [x for x in FLEET.accounts if x.enabled and not x.ready]
+    log(f"healed {len(down) - len(still)}/{len(down)}; heal counters {FLEET.heal_stats}")
+    for x in still:
+        log(f"  still down: {x.provider}/{x.label}: {x.reason}")
+    return 1 if still else 0
+
+
+def cmd_quote(a) -> int:
+    """A price, for free, through the reserved account's own tab. Spends nothing.
+
+    Deliberately reports `exact: false` for a provider that cannot be quoted rather than dressing an
+    estimate up as a price -- that distinction is the whole reason estimate() and confirm() are
+    separate calls.
+    """
+    global FLEET
+    FLEET = load_accounts()
+    FLEET.probe_all()
+    req = {"duration": a.duration, "resolution": a.resolution, "aspect_ratio": a.aspect,
+           "size": a.size, "audio": a.audio, "prompt": a.prompt}
+    out = quote_once(a.model, {k: v for k, v in req.items() if v is not None}, a.account)
+    print(json.dumps(out, indent=2, default=str))
+    if out.get("error"):
+        return 1
+    q, est = out.get("quote"), out.get("estimate")
+    if out.get("exact"):
+        print(f"\n{out['provider']}/{out['model']}: {q} credits, quoted exactly by the provider "
+              f"(balance {out.get('balance')}, per-job ceiling {out.get('max_spend_default')})")
+    else:
+        print(f"\n{out['provider']}/{out['model']}: ~{est} credits ESTIMATED -- {out['provider']} "
+              f"has no quote endpoint, so this is the reservation floor and the provider's own "
+              f"balance check is the only real gate")
+    return 0
+
+
+def cmd_models(a) -> int:
+    """Every name a caller may use, per provider, with the honesty flags attached."""
+    for p in vp.REGISTRY.values():
+        print("=" * 78)
+        print(f"{p.name}  --  {p.title}")
+        print(f"  quotes before spending: {p.quotes_before_spending}   "
+              f"default per-job ceiling: {p.max_spend_default}   out dir: {p.out_dir}")
+        print("=" * 78)
+        try:
+            names = p.listing()
+        except NON_FATAL as e:
+            print(f"  could not list models: {type(e).__name__}: {scrub(e)[:80]}")
+            continue
+        for name in names:
+            key = p.owns(name) or name
+            d = p.describe(key)
+            note = d.get("note")
+            print(f"  {name:<26} -> {key:<24} {'proven' if d.get('proven') else 'INFERRED'}"
+                  + (f"  ({note})" if note and not d.get("proven") else ""))
+        print()
+    print(f"default model: {vp.DEFAULT_MODEL}")
+    print("a bare name is searched across every provider; \"rtst/vidu\" pins the provider")
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("serve", help="run both faces over every provider")
+    s.add_argument("--bind", default="127.0.0.1")
+    s.add_argument("--direct-port", type=int, default=DIRECT_PORT)
+    s.add_argument("--comfy-port", type=int, default=COMFY_PORT,
+                   help="0 to disable the ComfyUI face")
+    # FLOW_SHIM_TOKEN is still honoured: worklog #1064 documents it, and a rename that silently
+    # dropped the operator's existing token would publish an unauthenticated face on their next run.
+    s.add_argument("--token", default=(os.environ.get("VIDEO_ROUTER_TOKEN")
+                                      or os.environ.get("FLOW_SHIM_TOKEN") or None),
+                   help="require this bearer on the direct face")
+    s.add_argument("--dry-run", action="store_true",
+                   help="serve cached bytes instead of calling a provider; spends nothing")
+    s.add_argument("--no-self-heal", action="store_true",
+                   help="report down accounts instead of relaunching Chrome / reopening tabs")
+    s.set_defaults(fn=serve)
+
+    c = sub.add_parser("accounts", help="registry plus live balances, per provider")
+    c.set_defaults(fn=cmd_accounts)
+
+    d = sub.add_parser("add", help="register another provider tab / Chrome port")
+    d.add_argument("--port", type=int, default=DEFAULT_PORT)
+    d.add_argument("--provider", default="flow",
+                   help=f"one of: {', '.join(sorted(vp.REGISTRY)) or '(none registered)'}")
+    d.add_argument("--label", default="")
+    d.add_argument("--profile", default=DEFAULT_PROFILE,
+                   help="safe_profile_dir tag; each Chrome needs its OWN profile dir")
+    d.add_argument("--url", default="",
+                   help="tab URL to remember (defaults to the provider's entry page)")
+    d.set_defaults(fn=cmd_add)
+
+    o = sub.add_parser("doctor", help="find and explain the broken link, per provider")
+    o.add_argument("--deep", action="store_true",
+                   help="also prove each provider's submit gate still accepts us (0 credits)")
+    o.set_defaults(fn=cmd_doctor)
+
+    w = sub.add_parser("wake", help="relaunch closed Chromes and reopen missing tabs")
+    w.add_argument("--dry-run", action="store_true",
+                   help="print exactly what would be launched and opened, without acting")
+    w.set_defaults(fn=cmd_wake)
+
+    q = sub.add_parser("quote", help="free price check; spends nothing")
+    q.add_argument("--model", default=vp.DEFAULT_MODEL)
+    q.add_argument("--duration", type=int, default=None)
+    q.add_argument("--resolution", default=None)
+    q.add_argument("--aspect", default=None)
+    q.add_argument("--size", default=None, help="WxH, translated to the provider's own params")
+    q.add_argument("--audio", action="store_true", default=None)
+    q.add_argument("--prompt", default=None, help="only affects providers that price per prompt")
+    q.add_argument("--account", default=None)
+    q.set_defaults(fn=cmd_quote)
+
+    m = sub.add_parser("models", help="every usable model name, per provider")
+    m.set_defaults(fn=cmd_models)
+
+    a = ap.parse_args()
+    try:
+        return a.fn(a)
+    except SystemExit:
+        raise
+    except Exception as exc:
+        print(f"!! {type(exc).__name__}: {scrub(exc)[:500]}")
+        if os.environ.get("VIDEO_ROUTER_TRACE") or os.environ.get("FLOW_SHIM_TRACE"):
+            traceback.print_exc()
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
