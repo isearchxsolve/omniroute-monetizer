@@ -98,6 +98,26 @@ class RtstProvider(vp.Provider):
                     f"never generated through this router")
         return "model key inferred, never exercised end to end"
 
+    def listing(self) -> list[str]:
+        return sorted(set(self.aliases) | set(self.catalogue))
+
+    def describe(self, key: str) -> dict:
+        """Adds what the live catalogue knows. The cheapest allowed duration is used for est_cost, to
+        match normalise()'s default -- advertising the dearest option as "the" price would be wrong in
+        the expensive direction."""
+        d = super().describe(key)
+        m = self.catalogue.get(key) or {}
+        durs, quals = self._allowed(key)
+        cps = m.get("credits_per_second")
+        try:
+            if cps and durs:
+                d["est_cost"] = int(cps) * int(durs[0])
+        except Exception:
+            pass
+        d.update(credits_per_second=cps, durations=durs, resolutions=quals,
+                 in_live_catalogue=bool(m), min_prompt_words=MIN_PROMPT_WORDS)
+        return d
+
     # -- request shaping ---------------------------------------------------------------------
 
     def _allowed(self, model: str) -> tuple[list[int], list[int]]:
@@ -177,6 +197,31 @@ class RtstProvider(vp.Provider):
             est = 0
         return max(est, floor or 0) or EST_FALLBACK
 
+    def _raw_quote(self, acct: vp.Account, params: dict) -> dict:
+        """GET /video/estimate-credits, verbatim. Free, read-only, and the one place the price comes
+        from -- both quote() and confirm() go through here so they can never disagree."""
+        with rt.Rtst(acct.port) as c:
+            q = c.quote(model=params["model"], duration=params["duration"],
+                        resolution=params["resolution"], aspect=params.get("aspect") or "16:9",
+                        audio=bool(params.get("audio")))
+        bal = q.get("current_balance")
+        if isinstance(bal, int):
+            acct.credits = bal              # authoritative and free; the cached figure is a snapshot
+        return q
+
+    def quote(self, acct: vp.Account, params: dict) -> tuple[int | None, str | None]:
+        """The exact price with no ceiling applied. Affordability is reported, not enforced: this is
+        the operator asking what something costs, and refusing to answer would be unhelpful."""
+        try:
+            q = self._raw_quote(acct, params)
+        except vp.NON_FATAL as e:
+            return None, f"quote failed: {vp.scrub(e)[:200]}"
+        need = int(q.get("credits_required") or 0)
+        if not q.get("can_afford"):
+            return need, (f"quoted {need} credits but the balance is "
+                          f"{q.get('current_balance')} -- not affordable")
+        return need, None
+
     def confirm(self, acct: vp.Account, params: dict,
                 max_spend: int | None = None) -> tuple[int | None, str | None]:
         """The real pre-commit gate, run on the account that was actually reserved.
@@ -188,19 +233,14 @@ class RtstProvider(vp.Provider):
         """
         ceiling = self.max_spend_default if max_spend is None else max_spend
         try:
-            with rt.Rtst(acct.port) as c:
-                q = c.quote(model=params["model"], duration=params["duration"],
-                            resolution=params["resolution"], aspect=params["aspect"],
-                            audio=params["audio"])
+            q = self._raw_quote(acct, params)
         except vp.NON_FATAL as e:
             return None, f"quote failed, refusing to spend blind: {vp.scrub(e)[:200]}"
         need = int(q.get("credits_required") or 0)
         bal = q.get("current_balance")
-        if isinstance(bal, int):
-            acct.credits = bal              # authoritative and free; the cached figure is a snapshot
         if not q.get("can_afford"):
             return None, f"rtst refuses: {need} credits required, balance {bal}"
-        if ceiling is not None and need > ceiling:
+        if ceiling is not None and need > int(ceiling):
             return None, f"quote {need} credits exceeds max_spend {ceiling}"
         if need <= 0:
             return None, f"quote returned a non-positive price ({need}); refusing to submit blind"

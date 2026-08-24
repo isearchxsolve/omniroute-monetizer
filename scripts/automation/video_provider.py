@@ -247,6 +247,16 @@ class Provider:
         account is big enough, never whether to spend."""
         raise NotImplementedError
 
+    def quote(self, acct: Account, params: dict) -> tuple[int | None, str | None]:
+        """A price, for free, with NO ceiling applied -- the operator asking "what would this cost".
+
+        Kept separate from confirm() on purpose: confirm() refuses when the price exceeds max_spend,
+        and a quote that refused would hide the very number the operator asked for. Providers that
+        cannot be quoted inherit this and return their floor, which is why the caller must also read
+        quotes_before_spending before treating the answer as exact.
+        """
+        return self.estimate(params), None
+
     def confirm(self, acct: Account, params: dict,
                 max_spend: int | None = None) -> tuple[int | None, str | None]:
         """Last gate before money moves, run on the RESERVED account. Returning an error aborts the
@@ -305,6 +315,11 @@ class Provider:
                 "est_cost": self.estimate({"model": key}),
                 "quotes_before_spending": bool(self.quotes_before_spending),
                 "max_spend_default": self.max_spend_default}
+
+    def listing(self) -> list[str]:
+        """Every name a caller may use for this provider. Overridden where a provider learns names at
+        runtime, so a model the site added yesterday is still listed."""
+        return sorted(set(self.aliases))
 
     def doctor_chain(self, acct: Account, deep: bool = False):
         """Yield Steps in dependency order. A generator, not a list: once a rung fails there is no

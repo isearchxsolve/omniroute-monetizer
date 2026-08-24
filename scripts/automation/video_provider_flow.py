@@ -121,6 +121,13 @@ class FlowProvider(vp.Provider):
             res = "1080p"
         return {"aspect": vp.pixels_to_aspect(width, height), "resolution": res}
 
+    def describe(self, key: str) -> dict:
+        d = super().describe(key)
+        # Flow's clip length is not a caller-settable parameter; it is always 8s. Advertised so a
+        # client does not send `duration` and quietly have it ignored.
+        d.update(length_seconds=8, aspects=list(gf.ASPECTS), resolutions=list(gf.RESOLUTIONS))
+        return d
+
     # -- money -------------------------------------------------------------------------------
 
     def estimate(self, params: dict) -> int:

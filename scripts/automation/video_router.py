@@ -1,26 +1,32 @@
-"""flow_shim.py -- serve Google Flow as a local video API, with multi-account rotation.
+"""video_router.py -- serve Google Flow AND rtst.ai as one local video API, with rotation.
 
-WHY THIS EXISTS (all facts below measured 2026-08-23)
------------------------------------------------------
-googleflow_client.py proved Flow's real RPC is drivable from Python end to end, with no human in
-the loop: mint a reCAPTCHA Enterprise token in the live tab, POST the captured wire format, poll,
-pull the MP4 with the tab's labs.google cookies. What it is NOT is something OmniRoute or a
-filmmaking app can call.
+WHY THIS EXISTS
+---------------
+Two providers are proven end to end and each arrived with its own code. Google Flow arrived with a
+rotation engine welded to it (highest-balance-first account selection, a reservation floor, one lock
+per account held across submit+poll, an append-only job log, two HTTP faces). rtst.ai arrived as a
+one-shot CLI with none of that. Duplicating the engine per provider is not an option -- two
+processes cannot both bind :8188, and a money bug fixed in one copy would live on in the other -- so
+the engine stays singular HERE and everything provider-shaped lives behind video_provider.Provider.
 
-OmniRoute cannot be pointed at Flow directly. Its compiled google-flow handler calls
-/v1:generateVideo and /v1:fetchOperation; neither path exists on Flow's host, and both are baked
-into a compiled chunk, so no credential or feature flag can redirect them. But OmniRoute's `comfyui`
-video format is operator-steerable: its base URL comes from the credential's
-providerSpecificData.baseUrl and defaults to http://localhost:8188, and it authenticates with
-nothing (authType "none"). So a process that speaks ComfyUI's three-call contract on :8188 IS a
-working Flow route through OmniRoute with zero OmniRoute code change.
+    video_provider.py        the seam: Provider, Account, Step, REGISTRY, resolve_model, the floor
+    video_provider_flow.py   Google Flow (Veo 3.1) -- wraps googleflow_client
+    video_provider_rtst.py   rtst.ai (Vidu Q2 et al.) -- wraps rtst_client
+    video_router.py          this file: registry, rotation, jobs, self-heal, two HTTP faces, CLI
 
-This module serves TWO faces over the same job engine:
+TWO FACES OVER ONE JOB ENGINE
 
-  :8189  the honest one -- POST /v1/videos/generations, GET the job, GET the MP4 bytes.
-         Use this from the filmmaking app.
+  :8189  the honest one -- POST /v1/videos/generations, GET the job, GET the MP4 bytes, plus a FREE
+         POST /v1/videos/quote. Use this from the filmmaking app. Serves every provider.
   :8188  the ComfyUI costume -- POST /prompt, GET /history/{id}, GET /view?filename=...
          Use this to make `comfyui/veo-3.1-fast` work as an OmniRoute model string.
+
+OmniRoute cannot be pointed at Flow directly: its compiled google-flow handler calls
+/v1:generateVideo and /v1:fetchOperation, neither path exists on Flow's host, and both are baked
+into a compiled chunk. But OmniRoute's `comfyui` video format is operator-steerable -- its base URL
+comes from the credential's providerSpecificData.baseUrl (default http://localhost:8188) and it
+authenticates with nothing (authType "none"). So a process speaking ComfyUI's three-call contract on
+:8188 IS a working route through OmniRoute with zero OmniRoute code change.
 
 THE COMFYUI CONTRACT, read off the compiled handler rather than guessed:
     POST {base}/prompt      {prompt: <workflow>}  -> {prompt_id}
@@ -35,27 +41,41 @@ TWO THINGS THE COMFYUI FACE CANNOT FIX, both inherited from the compiled handler
   * it labels the response format "webp" no matter what the bytes are, so an MP4 arrives claiming
     to be a webp. The bytes are correct; the label lies.
   * its poller understands exactly two outcomes, "outputs appeared" and "300s elapsed". There is no
-    error channel, so a Flow failure reaches OmniRoute as a timeout ~300s later. The direct face
-    reports the same failure in seconds, which is why the filmmaking app should use the direct face.
+    error channel, so a failure reaches OmniRoute as a timeout ~300s later. The direct face reports
+    the same failure in seconds, which is why the filmmaking app should use the direct face.
 
-WHY A BROWSER MUST STAY RUNNING: the bearer is a web session token read from
-labs.google/fx/api/auth/session, and the reCAPTCHA token can only be minted by Google's own JS
-inside a real page. Neither has a server-side equivalent. The Chrome windows can be minimised and
-unfocused and nobody has to click anything -- but they must be alive, one per account, each with its
-own --remote-debugging-port, because Flow auth is a single NextAuth cookie per profile.
+WHICH MODELS LAND WHERE is a registry fact, not code: a ckpt_name is routed by whichever provider
+claims it in its `aliases`. Both of OmniRoute's registered comfyui ids ("animatediff", "svd-xt")
+are claimed by Flow today; re-pointing "svd-xt" at rtst is one line moved between two adapters.
+
+WHY A BROWSER MUST STAY RUNNING: Flow's bearer is a web session token read from
+labs.google/fx/api/auth/session and its reCAPTCHA token can only be minted by Google's own JS inside
+a real page; rtst's bearer lives in that tab's localStorage. Neither has a server-side equivalent.
+The Chrome windows can be minimised and unfocused and nobody has to click anything -- but they must
+be alive. Two providers can share ONE Chrome on one port (different tabs, independent balances,
+therefore independent locks), which is exactly how port 9222 is registered today.
 
 SAFETY PROPERTIES THIS FILE IS RESPONSIBLE FOR
-  * assert_cdp_safe() on every account port, so a profile misconfigured onto the operator's live
-    Chrome is refused rather than risking the session revocation described in chrome_live_guard.py.
-  * one lock per account held across submit+poll, so two jobs can never race the same balance.
+  * assert_cdp_safe() on every account port (inside each adapter's probe), so a profile
+    misconfigured onto the operator's live Chrome is refused rather than risking the session
+    revocation described in chrome_live_guard.py. A refusal disables the account permanently.
+  * one lock per ACCOUNT held across submit+poll, so two jobs can never race the same balance.
+  * confirm() runs on the reserved account before any spend, and may refuse for free.
+  * NO automatic submit retry, ever: neither provider offers an idempotency key, so a retry after a
+    submit that actually landed mints and charges a second video.
   * binds to 127.0.0.1 by default; a non-loopback bind REQUIRES --token, because this process
-    spends real money.
-  * bearer tokens, captcha tokens and cookies stay in memory, are never logged and never persisted;
-    every error string goes through scrub() before it is logged or returned.
+    spends real money. The ComfyUI face is pinned to loopback unconditionally.
+  * bearers, captcha tokens and cookies stay in memory, are never logged and never persisted; every
+    error string goes through scrub() before it is logged or returned.
+  * self-heal relaunches Chrome and reopens tabs, but ONLY for a dead port or a missing tab -- never
+    for a login wall, and never on a busy account. Opening a tab is navigation only; nothing is
+    clicked, so healing cannot spend a credit.
 
-    python flow_shim.py doctor            # which link in the chain is broken, and what to do
-    python flow_shim.py accounts          # registry + live balances
-    python flow_shim.py serve             # run both faces
+    python video_router.py doctor      # which link in which chain is broken, and what to do
+    python video_router.py accounts    # registry + live balances, per provider
+    python video_router.py quote --model vidu --duration 3 --resolution 540    # free, exact
+    python video_router.py wake --dry-run                                     # recovery plan
+    python video_router.py serve       # run both faces
 """
 from __future__ import annotations
 
@@ -64,32 +84,36 @@ import json
 import os
 import pathlib
 import re
+import subprocess
 import sys
 import threading
 import time
 import traceback
+import urllib.error
 import urllib.parse
+import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import googleflow_client as gf  # noqa: E402
+import video_provider as vp  # noqa: E402
+# Importing an adapter registers it. Nothing else in this file names a provider class, so adding a
+# third provider is one import plus one adapter file.
+import video_provider_flow  # noqa: E402,F401
+import video_provider_rtst  # noqa: E402,F401
 from cdp import DEFAULT_PORT, Page, list_targets  # noqa: E402
-
-try:
-    from chrome_live_guard import assert_cdp_safe, is_refusal
-except Exception:  # pragma: no cover -- guard is present in this repo; degrade loudly, not silently
-    def assert_cdp_safe(endpoint, who="flow_shim"):
-        print("!! chrome_live_guard not importable -- live-profile protection is OFF")
-        return endpoint
-
-    def is_refusal(exc):
-        return False
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STATE = ROOT / "state"
-ACCOUNTS_FILE = STATE / "flow_accounts.json"
-JOBS_FILE = STATE / "flow_jobs.jsonl"
+
+# New per-provider registry and job log. The Flow-only originals are READ (so no history or
+# registration is lost) and never written, so an operator can still run the old shim off them.
+ACCOUNTS_FILE = STATE / "video_accounts.json"
+JOBS_FILE = STATE / "video_jobs.jsonl"
+LEGACY_ACCOUNTS_FILE = STATE / "flow_accounts.json"
+LEGACY_JOBS_FILE = STATE / "flow_jobs.jsonl"
+
+DEFAULT_PROFILE = "providers"      # the safe_profile_dir() tag the proven Chrome actually uses
 
 DIRECT_PORT = 8189
 COMFY_PORT = 8188            # OmniRoute's built-in default for the comfyui video provider
@@ -106,265 +130,464 @@ COMFY_BUDGET = 230           # leaves room for submit, download and OmniRoute's 
 # catch. Uncaught in a worker thread it abandons a job whose credits are already spent; uncaught in
 # the refresh loop it freezes every balance for the life of the process. A missing tab is a routine,
 # recoverable condition here, so it is caught everywhere a browser is touched.
-NON_FATAL = (Exception, SystemExit)
+NON_FATAL = vp.NON_FATAL
+log = vp.log
+scrub = vp.scrub
 
-# Flow's own model keys. Only the fast key has actually been exercised end to end; the other two
-# follow its naming pattern and are marked so a caller is never told an inference is a measurement.
-PROVEN_MODEL_KEYS = {"veo_3_1_t2v_fast"}
+# CHARSET, not length. The old floor was {6,80}, which 404s EVERY rtst clip: rtst ids are 5
+# characters (measured: 96089). Length was never the guard -- the charset is, because it excludes
+# "/", "\", "." and ":" so no id can name a path, and every resolved path is additionally
+# containment-checked against the registered out dirs (see _contained).
+MEDIA_ID_RE = re.compile(r"^[0-9A-Za-z_\-]{1,80}$")
 
-MODEL_ALIASES = {
-    "fast": "veo_3_1_t2v_fast",
-    "veo-3.1-fast": "veo_3_1_t2v_fast",
-    "veo3.1-fast": "veo_3_1_t2v_fast",
-    "veo-3.1-fast-generate": "veo_3_1_t2v_fast",
-    "animatediff": "veo_3_1_t2v_fast",       # OmniRoute's registered comfyui model id
-    "quality": "veo_3_1_t2v_quality",
-    "veo-3.1": "veo_3_1_t2v_quality",
-    "veo-3.1-quality": "veo_3_1_t2v_quality",
-    "veo-3.1-generate": "veo_3_1_t2v_quality",
-    "svd-xt": "veo_3_1_t2v_quality",         # the other registered comfyui model id
-    "lite": "veo_3_1_t2v_lite",
-    "veo-3.1-lite": "veo_3_1_t2v_lite",
-}
+# -- self-heal tuning -------------------------------------------------------------------------
+# A self-healing launcher is the one thing here that can misbehave entirely on its own, so the rate
+# limit is per PORT (flow and rtst share 9222) and it doubles on consecutive failures. Without this,
+# a Chrome that refuses to start becomes a launch loop.
+HEAL_BACKOFF_MIN = 300
+HEAL_BACKOFF_MAX = 1800
+HEAL_PORT_WAIT = 25          # seconds to wait for a relaunched Chrome's debug port
+HEAL_TAB_WAIT = 30           # seconds to wait for a reopened tab to reach readyState complete
 
-# MEASURED 2026-08-23 through this shim: one 720p/16:9 8s veo_3_1_t2v_fast clip == 1 media,
-# 1 workflow, 950 -> 930 credits. Exactly 20, matching the price shown in the Flow UI.
-#
-# An earlier 60-credit drop was read as "one clip costs 60 from the API but 20 from the UI"; it was
-# not. That drop came from three separate submits run directly through googleflow_client.py during
-# capture work, none of which are in state/flow_jobs.jsonl. 20 is the price; there is no API penalty.
-# Kept as a floor for "does this account have enough".
-EST_COST = 20
-MEASURED_COST: dict[str, int] = {}
-
-# A billing observation is credits_before (read from the account) minus credits_after (read from the
-# submit response). Anything else spending on that same account in between -- the operator in their
-# own browser, or a direct googleflow_client.py run -- lands inside that window, so the delta is our
-# cost PLUS theirs. Letting the newest delta become the floor means one concurrent 1080p generation
-# elsewhere raises the floor to 80 permanently, after which acquire() refuses every account holding
-# 20-79 credits: capacity stranded by an arithmetic artefact, which is exactly what the old
-# 60-credit floor did. So the floor moves DOWN freely and UP never, and disagreements are logged.
-# Under-reserving is the safe direction: Flow enforces the balance server-side, so the cost of
-# guessing low is one rejected submit, while the cost of guessing high is invisible lost capacity.
-COST_FLOOR_MAX = 200          # a per-media delta above this is someone else's spending, not ours
+Account = vp.Account         # re-exported: the registry, the fleet and the smoke test all use it
 
 
-def observe_cost(model: str, charged: int | None, media_count: int | None) -> None:
-    """Fold one billing observation into the reservation floor. A genuine Google price rise and a
-    concurrent external spend are indistinguishable from here, so an increase is reported to the
-    operator rather than acted on."""
-    if not isinstance(charged, int) or charged <= 0:
-        return
-    per = charged // media_count if isinstance(media_count, int) and media_count > 0 else charged
-    if per <= 0 or per > COST_FLOOR_MAX:
-        log(f"ignoring implausible billing observation for {model}: {charged} credits over "
-            f"{media_count} media; floor stays {MEASURED_COST.get(model, EST_COST)}")
-        return
-    old = MEASURED_COST.get(model)
-    if old is None or per < old:
-        MEASURED_COST[model] = per
-        if old is not None:
-            log(f"reservation floor for {model} lowered {old} -> {per}/media")
-    elif per > old:
-        log(f"{model} charged {per}/media this run but the floor stays at {old}. If every run now "
-            f"charges {per}, either Flow raised its price or something else is spending on this "
-            f"account at the same time -- check before trusting the balance arithmetic")
+def _contained(p: pathlib.Path) -> pathlib.Path | None:
+    """The resolved path if it sits inside ANY registered provider's out dir, else None.
 
-MEDIA_ID_RE = re.compile(r"^[0-9A-Za-z_\-]{6,80}$")
-FLOW_MATCH = "tools/flow"
+    This is the traversal guard, not decoration. It iterates vp.out_dirs() rather than hard-coding
+    one provider's directory: Flow writes to state/harvest/flow and rtst to state/harvest/rtst, and a
+    check against only the first silently 404s every clip from the second.
+    """
+    try:
+        rp = pathlib.Path(p).resolve()
+    except (OSError, ValueError):
+        return None
+    for d in vp.out_dirs():
+        try:
+            rp.relative_to(pathlib.Path(d).resolve())
+            return rp
+        except (ValueError, OSError):
+            continue
+    return None
 
 
-def log(msg: str) -> None:
-    print(f"[{time.strftime('%H:%M:%S')}] {gf.scrub(msg)}", flush=True)
+def provider_of(acct: Account) -> vp.Provider | None:
+    return vp.get(acct.provider)
 
 
-def resolve_model(name: str | None) -> str | None:
-    """Loose name -> Flow model key. Unknown names are rejected rather than silently defaulted:
-    quietly generating a fast clip for someone who asked for quality is a billing surprise."""
-    if not name:
-        return "veo_3_1_t2v_fast"
-    n = str(name).strip().lower()
-    if n.startswith("veo_"):
-        return n                       # already a Flow key, pass through untouched
-    if "/" in n:                       # tolerate a full OmniRoute model string
-        n = n.rsplit("/", 1)[1]
-    return MODEL_ALIASES.get(n)
+# --------------------------------------------------------------------------- chrome launch recipe
 
 
-def geometry(width: int | None, height: int | None) -> tuple[str, str]:
-    """ComfyUI speaks pixels; Flow speaks two enums. Square (OmniRoute's 512x512 default) has no
-    Flow equivalent, so it lands on landscape 720p."""
-    if not width or not height:
-        return "16:9", "720p"
-    aspect = "9:16" if height > width else "16:9"
-    res = "1080p" if (max(width, height) >= 1920 or min(width, height) >= 1080) else "720p"
-    return aspect, res
+def find_chrome() -> pathlib.Path:
+    """Copied from drive.py:240 (find_chrome) rather than imported: drive.py is a 300-line CLI with
+    its own argparse and module-level state, and pulling it in for 12 lines of path lookup would
+    make the router depend on a tool it does not otherwise use."""
+    for env in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
+        base = os.environ.get(env)
+        if not base:
+            continue
+        p = pathlib.Path(base) / "Google" / "Chrome" / "Application" / "chrome.exe"
+        if p.exists():
+            return p
+    raise RuntimeError("Chrome not found in Program Files or LocalAppData")
 
 
-# --------------------------------------------------------------------------- accounts
-
-
-class Account:
-    """One Google account == one Chrome profile == one debugging port."""
-
-    def __init__(self, port: int, label: str = "", enabled: bool = True):
-        self.port = int(port)
-        self.label = label or f"port-{port}"
-        self.enabled = bool(enabled)
-        self.lock = threading.Lock()
-        self.email: str | None = None
-        self.project_id: str | None = None
-        self.tier: str | None = None
-        self.credits: int | None = None
-        self.ready = False
-        self.reason = "not probed yet"
-        self._sess: gf.FlowSession | None = None
-        self._sess_at = 0.0
-
-    def public(self, redact: bool = False) -> dict:
-        """redact=True is the pre-authentication shape: enough to see the fleet is alive, nothing
-        that identifies an account. Emails, project ids, tiers, balances and the free-text `reason`
-        (which can quote an upstream error verbatim) are withheld until the caller authenticates."""
-        d = {"label": self.label, "port": self.port, "enabled": self.enabled,
-             "ready": self.ready, "busy": self.lock.locked()}
-        if redact:
-            return d
-        d.update(email=self.email, project_id=self.project_id, tier=self.tier,
-                 credits=self.credits, reason=self.reason)
-        return d
+# --------------------------------------------------------------------------- the fleet
 
 
 class Fleet:
-    """The set of accounts, their live balances, and the rule for choosing one."""
+    """Every registered account across every provider, their live balances, and the rule for
+    choosing one. Provider-agnostic: it asks the adapter to probe and never inspects a browser
+    itself, except when healing (which is about the browser, not about the provider)."""
 
-    SESSION_TTL = 600          # bearer is good ~12h; re-reading every 10min is cheap insurance
     REFRESH_EVERY = 90
 
-    def __init__(self, accounts: list[Account]):
+    def __init__(self, accounts: list[Account], raw: dict | None = None):
         self.accounts = accounts
+        self.raw = raw if isinstance(raw, dict) else {"accounts": []}
         self._select = threading.Lock()
+        self._save = threading.Lock()
         self._stop = threading.Event()
+        self.self_heal = True
+        # One heal in flight per PORT, because flow and rtst share 9222 and two simultaneous
+        # relaunches of the same Chrome would race ProcessSingleton.
+        self._port_locks: dict[int, threading.Lock] = {}
+        self._locks_lock = threading.Lock()
+        self._heal_after: dict[int, float] = {}    # port -> earliest next launch attempt
+        self._heal_fails: dict[int, int] = {}      # port -> consecutive launch failures
+        self.heal_stats = {"launched": 0, "tabs_opened": 0, "failed": 0,
+                           "not_healable": 0, "last": None}
 
-    # -- session handling, with the one self-heal that matters ------------------------------
-
-    def session(self, acct: Account, force: bool = False) -> gf.FlowSession:
-        """A live FlowSession for this account, cached briefly.
-
-        The single failure this heals: after the machine sleeps or the tab sits idle for hours,
-        /fx/api/auth/session can answer without an access_token until the page is reloaded. That is
-        a page-state problem, not a credential problem, so one reload is tried before giving up.
-        """
-        if (not force and acct._sess is not None
-                and (time.time() - acct._sess_at) < self.SESSION_TTL):
-            return acct._sess
-
-        assert_cdp_safe(f"http://127.0.0.1:{acct.port}", who=f"flow_shim account {acct.label}")
-        try:
-            sess = gf.FlowSession(FLOW_MATCH, port=acct.port).refresh()
-        except NON_FATAL as first:
-            if "session token" not in str(first):
-                raise
-            log(f"{acct.label}: no access_token, reloading the Flow tab once")
-            self._reload(acct)
-            sess = gf.FlowSession(FLOW_MATCH, port=acct.port).refresh()
-
-        acct._sess, acct._sess_at = sess, time.time()
-        acct.email, acct.project_id, acct.tier = sess.email, sess.project_id, sess.tier
-        return sess
-
-    def _reload(self, acct: Account) -> None:
-        try:
-            with Page(FLOW_MATCH, port=acct.port) as p:
-                p.send("Page.reload", {}, timeout=60)
-                for _ in range(30):
-                    time.sleep(1)
-                    try:
-                        if p.evaluate("document.readyState", timeout=15) == "complete":
-                            break
-                    except NON_FATAL:
-                        continue
-            time.sleep(3)
-        except NON_FATAL as e:
-            log(f"{acct.label}: reload failed: {type(e).__name__}: {e}")
+    def _port_lock(self, port: int) -> threading.Lock:
+        with self._locks_lock:
+            return self._port_locks.setdefault(int(port), threading.Lock())
 
     # -- balances ---------------------------------------------------------------------------
 
     def probe(self, acct: Account) -> None:
-        """Refresh one account's readiness and balance. Never raises: an account being down is a
-        state to report and route around, not an error that takes the server with it."""
+        """Refresh one account through its adapter. Never raises: an account being down is a state
+        to report and route around, not an error that takes the server with it. The adapter promises
+        the same, but a provider bug must not be able to kill the refresh loop either."""
+        prov = provider_of(acct)
+        if prov is None:
+            acct.ready, acct.fault = False, vp.FAULT_OTHER
+            acct.reason = (f"no adapter registered for provider {acct.provider!r}; known: "
+                           + ", ".join(sorted(vp.REGISTRY)))
+            return
         try:
-            sess = self.session(acct)
-            if not sess.project_id:
-                acct.ready, acct.reason = False, "tab is not inside a Flow /project/ URL"
-                return
-            c = gf.credits_now(sess)
-            if c is None:
-                acct.ready, acct.reason = False, "credits endpoint did not answer 200"
-                return
-            acct.credits, acct.ready, acct.reason = c, True, "ok"
+            prov.probe(acct)
         except NON_FATAL as e:
-            if is_refusal(e):
-                acct.enabled = False
-                acct.ready, acct.reason = False, "REFUSED: points at the operator's live Chrome"
-                log(f"{acct.label}: {acct.reason} -- disabled")
-                return
-            acct.ready = False
-            acct.reason = f"{type(e).__name__}: {gf.scrub(str(e))[:160]}"
+            acct.ready, acct.fault = False, vp.FAULT_OTHER
+            acct.reason = f"{type(e).__name__}: {scrub(e)[:160]}"
 
     def probe_all(self, parallel: bool = True) -> None:
-        """Probe every idle account. Accounts mid-generation are skipped, not waited for: probing
-        can reload the Flow tab (see session()), and doing that underneath a job whose credits are
-        already spent destroys the generation. A skipped account keeps its last known balance, which
-        is correct anyway -- it is busy, so the rotation would not pick it.
+        """Probe every idle account. Accounts mid-generation are skipped, not waited for: probing can
+        reload a tab (Flow's session self-heal does), and doing that underneath a job whose credits
+        are already spent destroys the generation. A skipped account keeps its last known balance,
+        which is correct anyway -- it is busy, so the rotation would not pick it.
         """
         targets = [a for a in self.accounts if a.enabled and a.lock.acquire(blocking=False)]
         try:
             if not parallel:
                 for a in targets:
                     self.probe(a)
-                return
-            ts = [threading.Thread(target=self.probe, args=(a,), daemon=True) for a in targets]
-            [t.start() for t in ts]
-            [t.join(timeout=120) for t in ts]
+            else:
+                ts = [threading.Thread(target=self.probe, args=(a,), daemon=True) for a in targets]
+                [t.start() for t in ts]
+                [t.join(timeout=120) for t in ts]
         finally:
             for a in targets:
                 try:
                     a.lock.release()
                 except RuntimeError:
                     pass
+        self.save_urls()
+
+    def save_urls(self) -> bool:
+        """Persist any URL an adapter learned during probe, atomically, only when something changed.
+
+        This one field is what makes recovery from a closed Chrome mechanical: Flow's project id
+        exists ONLY in its tab URL, so reopening labs.google/fx generically restores a browser but
+        not a working account. Everything else in the file is left exactly as the operator wrote it.
+        """
+        with self._save:
+            entries = self.raw.get("accounts")
+            if not isinstance(entries, list):
+                return False
+            changed = False
+            for acct in self.accounts:
+                if not acct.url:
+                    continue
+                for e in entries:
+                    if not isinstance(e, dict):
+                        continue
+                    same = (str(e.get("provider") or "flow").lower() == acct.provider
+                            and (e.get("label") or "") == acct.label
+                            and int(e.get("port") or 0) == acct.port)
+                    if same and e.get("url") != acct.url:
+                        e["url"] = acct.url
+                        changed = True
+            if not changed:
+                return False
+            try:
+                ACCOUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+                tmp = ACCOUNTS_FILE.with_suffix(".json.tmp")
+                tmp.write_text(json.dumps(self.raw, indent=2), encoding="utf-8")
+                os.replace(tmp, ACCOUNTS_FILE)     # atomic: a torn registry would be unloadable
+                log(f"remembered tab URL(s) in {ACCOUNTS_FILE.name}")
+                return True
+            except OSError as e:
+                log(f"could not write {ACCOUNTS_FILE.name}: {type(e).__name__}: {e}")
+                return False
 
     def refresh_loop(self) -> None:
         """Never allowed to die. A dead refresh loop freezes every balance at its last value and the
         rotation then routes on stale numbers -- including routing to an account that no longer has
-        the credits for the job."""
+        the credits for the job. Self-heal runs here, after the probe that classified the faults."""
         while not self._stop.wait(self.REFRESH_EVERY):
             try:
                 self.probe_all()
+                if self.self_heal:
+                    self.heal()
             except NON_FATAL as e:
-                log(f"refresh loop: {type(e).__name__}: {gf.scrub(str(e))[:120]} -- continuing")
+                log(f"refresh loop: {type(e).__name__}: {scrub(str(e))[:120]} -- continuing")
+
+    # -- self-heal --------------------------------------------------------------------------
+    #
+    # Credentials survive a closed Chrome (cookies and localStorage are on disk under
+    # state/automation_profiles), but the TABS do not come back, and Flow's project id is parsed out
+    # of its tab URL -- so relaunching the browser alone is not enough and nothing else in the repo
+    # remembers the project URL. Hence: relaunch, then reopen the remembered URL, then re-probe.
+    #
+    # ONLY two faults are heal-able. FAULT_AUTH is deliberately excluded: relaunching cannot fix a
+    # login wall, no password is ever typed here, and retrying would be a launch loop. Per
+    # chrome_live_guard, a login wall in automation's own profile is a correct, reportable outcome.
+
+    def _port_alive(self, port: int) -> bool:
+        try:
+            list_targets(int(port))
+            return True
+        except NON_FATAL:
+            return False
+
+    def _may_attempt(self, port: int) -> tuple[bool, float]:
+        """Rate limit, per port: at most one launch per HEAL_BACKOFF_MIN, doubling to
+        HEAL_BACKOFF_MAX after consecutive failures. Returns (allowed, seconds_to_wait)."""
+        left = self._heal_after.get(int(port), 0.0) - time.time()
+        return (left <= 0), max(0.0, left)
+
+    def _arm_backoff(self, port: int, ok: bool) -> None:
+        port = int(port)
+        fails = 0 if ok else self._heal_fails.get(port, 0) + 1
+        self._heal_fails[port] = fails
+        delay = min(HEAL_BACKOFF_MIN * (2 ** max(0, fails - 1)), HEAL_BACKOFF_MAX)
+        self._heal_after[port] = time.time() + delay
+
+    def _launch_chrome(self, acct: Account, dry_run: bool = False) -> tuple[bool, str]:
+        """Relaunch this account's Chrome on its own profile dir at its own port.
+
+        The flag set and the detached-launch technique are copied from drive.py:251-274
+        (start_chrome) rather than imported, for the reason given on find_chrome above. Keep the two
+        in step: --remote-allow-origins=* is what lets a websocket from this process attach at all.
+        """
+        udd = vp.safe_profile_dir(acct.profile)
+        try:
+            vp.assert_safe(udd, who="video_router heal")     # can never be the operator's live dir
+        except Exception as e:
+            return False, f"profile dir refused by the live guard: {scrub(e)[:120]}"
+        if int(acct.port) in vp.live_devtools_ports():
+            # Belt and braces on top of assert_cdp_safe: if the operator's own Chrome is advertising
+            # this port right now, launching a second one against it is exactly the accident
+            # chrome_live_guard exists to prevent.
+            return False, f"port {acct.port} is currently served by a live Chrome -- refusing"
+        try:
+            chrome = find_chrome()
+        except RuntimeError as e:
+            return False, str(e)
+        if dry_run:
+            return True, f"would launch {chrome.name} --user-data-dir={udd} " \
+                         f"--remote-debugging-port={acct.port}"
+
+        flags = 0
+        if os.name == "nt":
+            flags = 0x00000008 | 0x00000200      # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        try:
+            subprocess.Popen(
+                [str(chrome),
+                 f"--user-data-dir={udd}",
+                 f"--remote-debugging-port={acct.port}",
+                 "--remote-allow-origins=*",
+                 "--no-first-run", "--no-default-browser-check", "--disable-sync",
+                 "--window-size=1400,950", "about:blank"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+                creationflags=flags, close_fds=True)
+        except OSError as e:
+            return False, f"launch failed: {type(e).__name__}: {e}"
+        for _ in range(HEAL_PORT_WAIT):
+            time.sleep(1)
+            if self._port_alive(acct.port):
+                return True, f"chrome up on port {acct.port} (profile {acct.profile})"
+        return False, f"launched but port {acct.port} never came up in {HEAL_PORT_WAIT}s"
+
+    def _open_tab(self, acct: Account, dry_run: bool = False) -> tuple[bool, str]:
+        """Open the remembered URL in this account's Chrome. Navigation only -- nothing is clicked,
+        no generate button is touched, so this cannot spend a credit."""
+        prov = provider_of(acct)
+        if prov is None:
+            return False, f"no adapter for provider {acct.provider!r}"
+        url = acct.url or prov.default_url
+        if not url:
+            return False, f"no URL remembered for {acct.label} and no default_url on {prov.name}"
+        if dry_run:
+            return True, f"would open {url}"
+        try:
+            vp.assert_cdp_safe(f"http://127.0.0.1:{acct.port}", who="video_router heal")
+        except Exception as e:
+            return False, f"live guard refused port {acct.port}: {scrub(e)[:120]}"
+
+        try:
+            self._create_target(acct.port, url)
+        except NON_FATAL as e:
+            return False, f"could not open a tab: {type(e).__name__}: {scrub(e)[:120]}"
+
+        # Wait for the tab to actually exist and finish loading, so the re-probe that follows reads a
+        # settled page rather than an about:blank that has not navigated yet.
+        for _ in range(HEAL_TAB_WAIT):
+            time.sleep(1)
+            try:
+                hit = [t for t in list_targets(acct.port)
+                       if t.get("type") == "page"
+                       and prov.tab_match in (t.get("url", "") + t.get("title", "")).lower()]
+            except NON_FATAL:
+                continue
+            if not hit:
+                continue
+            try:
+                with Page(prov.tab_match, port=acct.port) as p:
+                    if p.evaluate("document.readyState", timeout=15) == "complete":
+                        return True, f"opened {(hit[0].get('url') or url)[:70]}"
+            except NON_FATAL:
+                continue
+        return False, f"tab for {prov.name} did not settle within {HEAL_TAB_WAIT}s"
+
+    @staticmethod
+    def _create_target(port: int, url: str) -> None:
+        """Target.createTarget on the BROWSER endpoint. cdp.Page only attaches to page targets, and
+        there is no page to attach to when the whole point is that the tab is missing.
+
+        PUT /json/new is Chrome's HTTP alias for the same command (PUT, not GET, since M111); it is
+        tried first because it needs no websocket, with the CDP call as the fallback.
+        """
+        try:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{int(port)}/json/new?{urllib.parse.quote(url, safe=':/?&=%.-_')}",
+                method="PUT")
+            urllib.request.urlopen(req, timeout=20).read()
+            return
+        except NON_FATAL as http_err:
+            first = http_err
+
+        import websocket                          # already a hard dependency, via cdp.py
+        raw = urllib.request.urlopen(f"http://127.0.0.1:{int(port)}/json/version", timeout=20).read()
+        ws_url = json.loads(raw).get("webSocketDebuggerUrl")
+        if not ws_url:
+            raise RuntimeError(f"/json/new refused ({first}) and /json/version exposed no browser "
+                               f"websocket")
+        ws = websocket.create_connection(ws_url, timeout=30)
+        try:
+            ws.send(json.dumps({"id": 1, "method": "Target.createTarget", "params": {"url": url}}))
+            deadline = time.time() + 30
+            while time.time() < deadline:
+                msg = json.loads(ws.recv())
+                if msg.get("id") == 1:
+                    if "error" in msg:
+                        raise RuntimeError(f"Target.createTarget: {msg['error'].get('message')}")
+                    return
+            raise TimeoutError("Target.createTarget did not answer within 30s")
+        finally:
+            try:
+                ws.close()
+            except Exception:
+                pass
+
+    def _heal_one(self, acct: Account, dry_run: bool = False) -> dict | None:
+        """Heal exactly one account, or explain why it was left alone. Returns an action record."""
+        def rec(action, ok, detail):
+            return {"account": acct.label, "provider": acct.provider, "port": acct.port,
+                    "action": action, "ok": bool(ok), "detail": detail}
+
+        if not acct.enabled or acct.ready:
+            return None
+        if acct.fault not in vp.HEALABLE:
+            self.heal_stats["not_healable"] += 1
+            why = ("signed out -- sign in by hand once; automation never types a password"
+                   if acct.fault == vp.FAULT_AUTH else f"fault {acct.fault!r} is not heal-able")
+            return rec("skip", False, f"{why}: {acct.reason}")
+        # Never heal a busy account: healing reloads or reopens a tab, and doing that underneath a
+        # job whose credits are already spent destroys the generation. Same rule as probe_all.
+        if not acct.lock.acquire(blocking=False):
+            return rec("skip", False, "busy with a job")
+        plock = self._port_lock(acct.port)
+        if not plock.acquire(blocking=False):
+            acct.lock.release()
+            return rec("skip", False, f"another heal is already in flight on port {acct.port}")
+        try:
+            # Re-derive rather than trust the probe's label: a sibling account on this same port may
+            # already have relaunched Chrome a moment ago, in which case this is only a missing tab.
+            fault = acct.fault
+            if fault == vp.FAULT_PORT and self._port_alive(acct.port):
+                fault = vp.FAULT_TAB
+
+            if fault == vp.FAULT_PORT:
+                allowed, wait = self._may_attempt(acct.port)
+                if not allowed:
+                    return rec("skip", False, f"backoff: {wait:.0f}s before the next launch on "
+                                              f"port {acct.port}")
+                ok, detail = self._launch_chrome(acct, dry_run)
+                if not dry_run:
+                    self._arm_backoff(acct.port, ok)
+                    self.heal_stats["launched" if ok else "failed"] += 1
+                if not ok:
+                    return rec("launch", False, detail)
+                if dry_run:
+                    ok2, d2 = self._open_tab(acct, dry_run=True)
+                    return rec("launch+tab", ok2, f"{detail}; then {d2}")
+                ok, detail2 = self._open_tab(acct)
+                if ok:
+                    self.heal_stats["tabs_opened"] += 1
+                else:
+                    self.heal_stats["failed"] += 1
+                self.probe(acct)
+                return rec("launch+tab", ok and acct.ready, f"{detail}; {detail2}; "
+                                                            f"now {'ready' if acct.ready else acct.reason}")
+
+            ok, detail = self._open_tab(acct, dry_run)
+            if dry_run:
+                return rec("tab", ok, detail)
+            self.heal_stats["tabs_opened" if ok else "failed"] += 1
+            if ok:
+                self.probe(acct)
+                detail = f"{detail}; now {'ready' if acct.ready else acct.reason}"
+            return rec("tab", ok and acct.ready, detail)
+        finally:
+            plock.release()
+            try:
+                acct.lock.release()
+            except RuntimeError:
+                pass
+
+    def heal(self, dry_run: bool = False) -> list[dict]:
+        """Try to bring every down-but-heal-able account back. Every action is logged; the counters
+        land in /healthz. This is both the refresh loop's recovery step and the body of `wake`."""
+        out = []
+        for acct in self.accounts:
+            r = self._heal_one(acct, dry_run=dry_run)
+            if not r:
+                continue
+            out.append(r)
+            mark = "ok  " if r["ok"] else ("plan" if dry_run else "----")
+            log(f"heal [{mark}] {r['provider']}/{r['account']} port {r['port']}: "
+                f"{r['action']}: {r['detail']}")
+        if out and not dry_run:
+            self.heal_stats["last"] = time.strftime("%H:%M:%S")
+            self.save_urls()
+        return out
 
     # -- the rotation rule ------------------------------------------------------------------
 
-    def acquire(self, need: int, requested: str | None = None,
+    def acquire(self, provider: str, need: int, requested: str | None = None,
                 timeout: float = 900) -> Account:
-        """Reserve an account, holding its lock. Caller MUST release it.
+        """Reserve an account of THIS provider, holding its lock. Caller MUST release it.
+
+        Filtering by provider first is what keeps the two balances apart: handing a Flow account to
+        an rtst job would submit a Vidu prompt against a Google session. Every refusal below names
+        the provider, so "no account is ready" can never be read as being about the wrong pool.
 
         Highest balance first, so the fleet drains evenly rather than burning one account to zero
         while three sit full. The lock is held across submit AND poll: that is what makes the
         credits-before/after delta trustworthy and makes double-spend structurally impossible.
         """
+        provider = str(provider).strip().lower()
         deadline = time.time() + timeout
         first_pass = True
         while time.time() < deadline:
             with self._select:
-                pool = [a for a in self.accounts if a.enabled]
+                pool = [a for a in self.accounts if a.enabled and a.provider == provider]
+                if not pool:
+                    raise RuntimeError(
+                        f"no {provider} account is registered (registry has: "
+                        + (", ".join(sorted({f'{a.provider}/{a.label}' for a in self.accounts}))
+                           or "nothing")
+                        + f"). Add one with: python {pathlib.Path(__file__).name} add "
+                          f"--provider {provider} --port {DEFAULT_PORT}")
                 if requested:
                     r = str(requested).strip().lower()
                     if r not in ("", "auto", "any"):
                         pool = [a for a in pool
                                 if r in (str(a.port), a.label.lower(), (a.email or "").lower())]
                         if not pool:
-                            raise RuntimeError(f"no account matches {requested!r}")
+                            raise RuntimeError(f"no {provider} account matches {requested!r}")
                 if first_pass and not any(a.ready for a in pool):
                     self.probe_all()
                     first_pass = False
@@ -373,33 +596,104 @@ class Fleet:
                 for acct in ranked:
                     if acct.lock.acquire(blocking=False):
                         return acct
-                if pool and not any(a.ready for a in pool):
-                    raise RuntimeError("no account is ready: "
+                if not any(a.ready for a in pool):
+                    raise RuntimeError(f"no {provider} account is ready: "
                                        + "; ".join(f"{a.label}: {a.reason}" for a in pool))
-                if pool and not any((a.credits or 0) >= need for a in pool if a.ready):
+                if not any((a.credits or 0) >= need for a in pool if a.ready):
                     raise RuntimeError(
-                        f"no account has the ~{need} credits this needs: "
+                        f"no {provider} account has the ~{need} credits this needs: "
                         + "; ".join(f"{a.label}={a.credits}" for a in pool if a.ready))
             time.sleep(2)
-        raise RuntimeError(f"every account stayed busy for {timeout:.0f}s")
+        raise RuntimeError(f"every {provider} account stayed busy for {timeout:.0f}s")
+
+
+# --------------------------------------------------------------------------- the registry file
+
+
+REGISTRY_NOTE = ("One entry per (provider, port, label). Two providers MAY share a port -- they are "
+                 "different tabs in one Chrome with independent balances, so they get independent "
+                 "locks. Each Chrome needs its OWN profile dir and --remote-debugging-port; never "
+                 "point one at the operator's live Chrome profile. `url` is rewritten by the router "
+                 "whenever a probe succeeds, and is what makes recovery from a closed Chrome "
+                 "mechanical -- Flow's project id exists nowhere else.")
+
+
+def _entry(a: dict) -> dict:
+    """One registry entry, normalised. A missing provider means flow: that is what every entry in
+    the Flow-only registry implicitly was."""
+    return {"label": str(a.get("label") or ""),
+            "provider": str(a.get("provider") or "flow").strip().lower(),
+            "port": int(a.get("port") or DEFAULT_PORT),
+            "profile": str(a.get("profile") or DEFAULT_PROFILE),
+            "enabled": bool(a.get("enabled", True)),
+            "url": a.get("url") or None}
+
+
+def _migrate() -> dict | None:
+    """Build the new registry from the Flow-only one. The original is READ ONLY -- it is left exactly
+    as it is so the old shim keeps working off it, and so a failed migration costs nothing."""
+    if not LEGACY_ACCOUNTS_FILE.exists():
+        return None
+    try:
+        old = json.loads(LEGACY_ACCOUNTS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        log(f"{LEGACY_ACCOUNTS_FILE.name} is unreadable ({type(e).__name__}) -- not migrating")
+        return None
+    entries = [_entry(a) for a in old.get("accounts", []) if isinstance(a, dict)]
+    if not entries:
+        return None
+    return {"_note": REGISTRY_NOTE, "accounts": entries}
 
 
 def load_accounts() -> Fleet:
+    """The registry, migrating from the Flow-only file the first time and never touching it after."""
     if not ACCOUNTS_FILE.exists():
         STATE.mkdir(parents=True, exist_ok=True)
-        ACCOUNTS_FILE.write_text(json.dumps({
-            "_note": "One entry per Google account. Each needs its OWN Chrome profile with its own "
-                     "--remote-debugging-port, parked on a labs.google Flow /project/ URL. "
-                     "Never point one at the operator's live Chrome profile.",
-            "accounts": [{"label": "pro-1", "port": DEFAULT_PORT, "enabled": True}],
-        }, indent=2), encoding="utf-8")
-        log(f"wrote a starter registry at {ACCOUNTS_FILE}")
-    raw = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
-    accts = [Account(a["port"], a.get("label", ""), a.get("enabled", True))
-             for a in raw.get("accounts", [])]
+        raw = _migrate()
+        if raw:
+            ACCOUNTS_FILE.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+            log(f"migrated {len(raw['accounts'])} account(s) from {LEGACY_ACCOUNTS_FILE.name} to "
+                f"{ACCOUNTS_FILE.name} as provider=flow; the original was not modified")
+        else:
+            raw = {"_note": REGISTRY_NOTE,
+                   "accounts": [_entry({"label": "flow-pro-1", "provider": "flow",
+                                        "port": DEFAULT_PORT})]}
+            ACCOUNTS_FILE.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+            log(f"wrote a starter registry at {ACCOUNTS_FILE}")
+        # Never register an account silently: a second provider means a second balance and a second
+        # way to spend money, so the operator names it explicitly. But do say the exact command --
+        # the proven Chrome on 9222 really does carry an rtst.ai tab alongside the Flow one.
+        if not any(a["provider"] == "rtst" for a in raw["accounts"]):
+            log(f"hint: port {DEFAULT_PORT} also carries an rtst.ai tab. To rotate it too, run: "
+                f"python {pathlib.Path(__file__).name} add --provider rtst --port {DEFAULT_PORT} "
+                f"--label rtst-1")
+
+    try:
+        raw = json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise SystemExit(f"cannot read {ACCOUNTS_FILE}: {type(e).__name__}: {e}")
+    if not isinstance(raw, dict) or not isinstance(raw.get("accounts"), list):
+        raise SystemExit(f"{ACCOUNTS_FILE} must be an object with an \"accounts\" list")
+
+    # Normalise in place so save_urls() writes back a file of the same shape it read.
+    raw["accounts"] = [_entry(a) for a in raw["accounts"] if isinstance(a, dict)]
+    accts, seen = [], set()
+    for e in raw["accounts"]:
+        if not e["label"]:
+            e["label"] = f"{e['provider']}-{e['port']}"
+        k = (e["provider"], e["port"], e["label"])
+        if k in seen:
+            log(f"duplicate registry entry {k} -- keeping the first")
+            continue
+        seen.add(k)
+        if vp.get(e["provider"]) is None:
+            log(f"{e['label']}: no adapter for provider {e['provider']!r} -- entry kept but it can "
+                f"never be routed to (known: {', '.join(sorted(vp.REGISTRY))})")
+        accts.append(Account(e["provider"], e["port"], e["label"], e["enabled"],
+                             profile=e["profile"], url=e["url"]))
     if not accts:
         raise SystemExit(f"no accounts in {ACCOUNTS_FILE}")
-    return Fleet(accts)
+    return Fleet(accts, raw)
 
 
 # --------------------------------------------------------------------------- jobs
@@ -419,40 +713,49 @@ class JobStore:
         self._load()
 
     def _load(self) -> None:
-        """Replay the append-only log so a restart does not orphan finished videos.
+        """Replay the append-only logs so a restart does not orphan finished videos.
 
-        Anything the log still calls queued/active was in flight when the process died. Its thread is
-        gone, so it can never progress: left as-is, a caller polls that job id forever. It is marked
-        `interrupted` instead, and kept rather than dropped -- Flow may well have charged for it, so
-        the record is the only trace of where the credits went.
+        BOTH logs are read -- the Flow-only original and the new one -- so no history is lost, but
+        only the new one is ever appended to. Anything the log still calls queued/active was in
+        flight when the process died. Its thread is gone, so it can never progress: left as-is, a
+        caller polls that job id forever. It is marked `interrupted` instead, and kept rather than
+        dropped -- the provider may well have charged for it, so the record is the only trace of
+        where the credits went.
         """
-        if not JOBS_FILE.exists():
-            return
-        try:
-            for line in JOBS_FILE.read_text(encoding="utf-8").splitlines():
-                if line.strip():
-                    j = json.loads(line)
-                    self.jobs[j["id"]] = j
-        except Exception as e:
-            log(f"job log unreadable ({type(e).__name__}) -- starting empty")
+        for path in (LEGACY_JOBS_FILE, JOBS_FILE):        # oldest first: newer records win
+            if not path.exists():
+                continue
+            try:
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    if line.strip():
+                        j = json.loads(line)
+                        if isinstance(j, dict) and j.get("id"):
+                            j.setdefault("provider", "flow")   # pre-router records are all Flow
+                            self.jobs[j["id"]] = j
+            except Exception as e:
+                log(f"{path.name} unreadable ({type(e).__name__}) -- skipping it")
         stale = [j for j in self.jobs.values() if j.get("status") in ("queued", "active")]
         for j in stale:
+            prov = vp.get(j.get("provider") or "")
+            where = str(prov.out_dir) if prov else "state/harvest/"
             j["status"] = "interrupted"
-            j["error"] = ("the shim restarted while this job was in flight; credits may already have "
-                          "been charged -- check the balance and state/harvest/flow/ before retrying")
+            j["error"] = ("the router restarted while this job was in flight; credits may already "
+                          f"have been charged -- check the balance and {where} before retrying")
             j["finished"] = time.time()
         if stale:
             log(f"{len(stale)} job(s) were in flight at the last shutdown -> marked interrupted")
             for j in stale:
-                log(f"  {j['id'][:8]} {j.get('model')} media={j.get('media_id')} "
-                    f"charged={j.get('credits_charged')}")
+                log(f"  {j['id'][:8]} {j.get('provider')}/{j.get('model')} "
+                    f"media={j.get('media_id')} charged={j.get('credits_charged')}")
 
     def create(self, **fields) -> dict:
+        # Every key is created up front: _snap iterates this dict from HTTP threads while the worker
+        # writes to it, and a dict that grows mid-iteration raises and kills the response.
         job = {"id": uuid.uuid4().hex, "status": "queued", "created": time.time(),
-               "finished": None, "project_id": None, "dry_run": False,
+               "finished": None, "provider": None, "project_id": None, "dry_run": False,
                "account": None, "port": None, "media_id": None, "media_ids": [], "error": None,
                "credits_before": None, "credits_after": None, "credits_charged": None,
-               "media_count": None, "workflow_count": None, "flow_status": None,
+               "quoted": None, "media_count": None, "workflow_count": None, "flow_status": None,
                "duration": None, "durations": [], "bytes": None, "bytes_each": [],
                "bytes_total": None, "file": None, "files": [], **fields}
         with self.lock:
@@ -500,106 +803,130 @@ FLEET: Fleet
 STORE = JobStore()
 
 # Set by `serve --dry-run`. A dry run exercises every byte of both HTTP contracts -- OmniRoute's
-# poller, the base64 envelope, the filmmaking app's client -- without touching Flow, so the plumbing
-# can be regression-tested for free instead of at 60 credits a go. It is surfaced in /healthz and on
-# every job so a dry run can never be mistaken for a real one.
+# poller, the base64 envelope, the filmmaking app's client -- without touching either provider, so
+# the plumbing can be regression-tested for free instead of at 20 credits a go. It is surfaced in
+# /healthz and on every job so a dry run can never be mistaken for a real one.
 DRY_RUN = False
 
 
-def _dry_media() -> str | None:
-    """The newest already-downloaded clip, reused as stand-in bytes for a dry run."""
-    try:
-        files = sorted(gf.OUT_DIR.glob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
-        return files[0].stem if files else None
-    except Exception:
-        return None
+def _dry_media() -> pathlib.Path | None:
+    """The newest already-downloaded clip from ANY provider, reused as stand-in bytes for a dry run.
+
+    Scans every registered out dir rather than Flow's alone -- with only rtst clips on disk, a
+    Flow-only scan makes every dry run fail with "no cached mp4".
+    """
+    best = None
+    for d in vp.out_dirs():
+        try:
+            for f in pathlib.Path(d).glob("*.mp4"):
+                if best is None or f.stat().st_mtime > best.stat().st_mtime:
+                    best = f
+        except OSError:
+            continue
+    return best
 
 
 def run_job(job: dict) -> None:
-    """Submit, poll, download. Owns one account for its whole life."""
+    """Confirm, submit, poll, download. Owns one account for its whole life."""
     if DRY_RUN:
         job["dry_run"] = True
         job["status"] = "active"
         job["account"] = "(dry run -- no account used)"
         time.sleep(4)
-        mid = _dry_media()
-        if not mid:
+        f = _dry_media()
+        if not f:
             job["status"] = "failed"
             job["error"] = ("dry run has no cached mp4 to serve; run one real generation first "
                             "or drop --dry-run")
         else:
-            f = gf.OUT_DIR / f"{mid}.mp4"
-            job.update(status="succeeded", media_id=mid, media_ids=[mid], file=str(f),
-                       files=[str(f)], bytes=f.stat().st_size, bytes_each=[f.stat().st_size],
-                       bytes_total=f.stat().st_size, credits_charged=0, duration="8s",
-                       durations=["8s"], flow_status="SUCCESSFUL (simulated)",
-                       media_count=1, workflow_count=1)
+            size = f.stat().st_size
+            job.update(status="succeeded", media_id=f.stem, media_ids=[f.stem], file=str(f),
+                       files=[str(f)], bytes=size, bytes_each=[size], bytes_total=size,
+                       credits_charged=0, duration="8s", durations=["8s"],
+                       flow_status="SUCCESSFUL (simulated)", media_count=1, workflow_count=1)
         job["finished"] = time.time()
         log(f"{job['id'][:8]} DRY RUN {job['status']} -> {job.get('media_id')}")
         STORE.persist(job)
         return
 
-    need = MEASURED_COST.get(job["model"], EST_COST)
+    prov = vp.get(job["provider"])
+    params = job["_params"]
     acct = None
     try:
-        acct = FLEET.acquire(need, job.get("requested_account"),
+        if prov is None:                     # start_job resolves the provider, so this is paranoia
+            raise RuntimeError(f"no adapter for provider {job['provider']!r}")
+        # estimate() is account-independent and only decides WHICH account is big enough. It is
+        # deliberately allowed to be low: confirm() below runs on the reserved account and can still
+        # refuse for free, whereas over-reserving strands accounts that could in fact have paid.
+        need = prov.estimate(params)
+        acct = FLEET.acquire(prov.name, need, job.get("requested_account"),
                              timeout=float(job.get("acquire_timeout") or 900))
         job["account"], job["port"] = acct.email or acct.label, acct.port
         job["status"] = "active"
-        sess = FLEET.session(acct)
-        job["project_id"] = sess.project_id
 
-        job["credits_before"] = gf.credits_now(sess)
-        log(f"{job['id'][:8]} -> {acct.label} ({job['model']}, {job['resolution']} {job['aspect']})")
+        # THE pre-commit gate, on the account that was actually reserved. rtst re-quotes exactly here
+        # and refuses on can_afford:false or quote > max_spend; Flow cannot be quoted, so it reports
+        # its floor and its server-side balance check stays the only real gate. Either way, an error
+        # here aborts with nothing spent.
+        cost, err = prov.confirm(acct, params, max_spend=job.get("max_spend"))
+        if err:
+            raise RuntimeError(f"refused before spending anything: {err}")
+        job["quoted"] = cost
+        log(f"{job['id'][:8]} -> {prov.name}/{acct.label} ({job['model']}, "
+            f"{job.get('resolution')} {job.get('aspect')}) "
+            f"{'quoted' if prov.quotes_before_spending else 'estimated'} {cost} credits")
 
-        r = gf.submit(sess, job["prompt"], model=job["model"], resolution=job["resolution"],
-                      aspect=job["aspect"], seed=job.get("seed"))
-        media = r.get("media") or []
-        job["media_count"] = len(media)
-        job["workflow_count"] = len(r.get("workflows") or [])
-        # Flow answers one submit with a LIST of medias and bills for every one of them, so every id
-        # here is already paid for and every id here gets polled and downloaded. (Measured: a single
-        # fast 720p submit returns exactly 1 media for 20 credits. Taking media[0] was still wrong --
-        # it silently discards paid output the moment Flow returns more than one.)
-        ids = [m.get("name") for m in media
-               if isinstance(m, dict) and isinstance(m.get("name"), str) and m.get("name")]
+        r = prov.submit(acct, params)          # SPENDS. Never retried: no idempotency key exists.
+        ids = [str(i) for i in (r.get("items") or []) if str(i or "").strip()]
         job["media_ids"] = ids
         job["media_id"] = ids[0] if ids else None
-        job["credits_after"] = r.get("remainingCredits")
+        job["media_count"] = r.get("media_count")
+        job["workflow_count"] = r.get("workflow_count")
+        job["project_id"] = r.get("project_id")
+        job["credits_before"] = r.get("credits_before")
+        job["credits_after"] = r.get("credits_after")
         if isinstance(job["credits_before"], int) and isinstance(job["credits_after"], int):
             job["credits_charged"] = job["credits_before"] - job["credits_after"]
-            observe_cost(job["model"], job["credits_charged"], job["media_count"])
+            # Keyed by provider AND model, so rtst's 2-credit vidu floor cannot poison Flow's 20.
+            vp.observe_cost(f"{prov.name}/{job['model']}", job["credits_charged"],
+                            job["media_count"], fallback=prov.est_cost)
         if isinstance(job["credits_after"], int):
             acct.credits = job["credits_after"]
         if not ids:
             raise RuntimeError("submit returned no media id")
-        # Per-job billing evidence: media count, workflow count and the real balance delta, so a
-        # price change or a multi-media response is visible in the log instead of inferred later.
-        log(f"{job['id'][:8]} submitted {len(ids)} media ({', '.join(i[:12] for i in ids)})  "
+        # A quote that disagrees with the charge is the single most useful standing check on the money
+        # path -- it is exactly how the 6-quoted/6-charged proof was made. Logged, never acted on.
+        if (isinstance(job["quoted"], int) and isinstance(job["credits_charged"], int)
+                and prov.quotes_before_spending and job["quoted"] != job["credits_charged"]):
+            log(f"{job['id'][:8]} !! {prov.name} quoted {job['quoted']} but the balance moved "
+                f"{job['credits_charged']} -- the quote and the charge disagree, check before "
+                f"trusting either")
+        log(f"{job['id'][:8]} submitted {len(ids)} item(s) ({', '.join(i[:12] for i in ids)})  "
             f"workflows={job['workflow_count']} charged={job['credits_charged']}")
         STORE.persist(job)
 
-        # One shared deadline across all medias, not `budget` each: Flow renders them concurrently,
-        # and a per-media budget would let a 3-media job run 3x longer than the caller asked for --
-        # which for the comfy face means blowing straight through OmniRoute's 300s window.
+        # One shared deadline across all items, not `budget` each: a provider that returns several
+        # medias renders them concurrently, and a per-item budget would let a 3-media job run 3x
+        # longer than the caller asked for -- which for the comfy face means blowing straight through
+        # OmniRoute's 300s window.
         deadline = time.time() + float(job.get("budget") or 600)
         files: list[str] = []
         sizes: list[int] = []
         durations: list = []
-        for n, mid in enumerate(ids, 1):
-            def on_status(st, elapsed, _n=n, _mid=mid):
+        for n, item in enumerate(ids, 1):
+            def on_status(st, _n=n, _item=item):
                 job["flow_status"] = f"[{_n}/{len(ids)}] {st}"
-                log(f"{job['id'][:8]} [{_n}/{len(ids)}] {st} at {elapsed:.0f}s")
+                log(f"{job['id'][:8]} [{_n}/{len(ids)}] {st}")
 
             left = deadline - time.time()
             if left < 10:
                 raise RuntimeError(
-                    f"budget exhausted after {n - 1}/{len(ids)} media; {len(ids) - n + 1} paid "
-                    f"clip(s) not collected -- ids are recorded, fetch them with "
-                    f"`googleflow_client.py fetch <id>`: {', '.join(ids[n - 1:])}")
-            m = gf.wait(sess, mid, budget=int(left), on_status=on_status)
-            durations = durations + [m.get("video", {}).get("dimensions", {}).get("length")]
-            dest = gf.download(mid, port=acct.port, verbose=False)
+                    f"budget exhausted after {n - 1}/{len(ids)} item(s); {len(ids) - n + 1} paid "
+                    f"clip(s) not collected -- ids are recorded, fetch them with: "
+                    + "; ".join(prov.recovery_hint(i) for i in ids[n - 1:]))
+            meta = prov.wait(acct, item, budget=int(left), on_status=on_status)
+            durations = durations + [prov.duration_of(meta)]
+            dest = prov.download(acct, item, meta)
             files = files + [str(dest)]
             sizes = sizes + [dest.stat().st_size]
             # Reassigned, never appended in place: an HTTP thread may be snapshotting these lists.
@@ -616,26 +943,29 @@ def run_job(job: dict) -> None:
             f"{', '.join(pathlib.Path(f).name for f in files)}")
     except NON_FATAL as e:
         job["status"] = "failed"
-        job["error"] = f"{type(e).__name__}: {gf.scrub(str(e))[:400]}"
+        job["error"] = f"{type(e).__name__}: {scrub(str(e))[:400]}"
         job["finished"] = time.time()
         log(f"{job['id'][:8]} FAILED {job['error']}")
         if job.get("media_ids") and not job.get("files"):
+            hint = "; ".join(prov.recovery_hint(i) for i in job["media_ids"]) if prov else ""
             log(f"{job['id'][:8]} WARNING: credits were already charged for "
-                f"{len(job['media_ids'])} media; nothing was downloaded")
+                f"{len(job['media_ids'])} item(s); nothing was downloaded. {hint}")
         if job.get("face") == "comfyui":
             log(f"{job['id'][:8]} note: the ComfyUI face has no error channel, so OmniRoute will "
-                f"report this as a timeout ~300s from its submit")
+                f"report this as a timeout ~{OMNIROUTE_COMFY_WINDOW}s from its submit")
     finally:
         if acct is not None:
-            # If the submit response never reported remainingCredits, this account's cached balance
-            # is known-stale: routing on it can hand the account out for a job it can no longer pay
-            # for. Marking it not-ready sends the next acquire() through probe_all instead of
-            # trusting arithmetic we could not confirm.
+            # If the submit response never reported a balance, this account's cached figure is
+            # known-stale: routing on it can hand the account out for a job it can no longer pay for.
+            # Marking it not-ready sends the next acquire() through probe_all instead of trusting
+            # arithmetic we could not confirm. (Both adapters do report one -- Flow reads
+            # remainingCredits, rtst re-reads /user/credits -- so this firing means something
+            # upstream changed shape, which is exactly when the guard is needed.)
             if not DRY_RUN and job.get("credits_after") is None and job.get("media_ids"):
                 acct.ready = False
                 acct.reason = "balance unconfirmed after a charged submit; awaiting re-probe"
-                log(f"{job['id'][:8]} {acct.label}: submit reported no remainingCredits after "
-                    f"charging; marked for re-probe so routing cannot use a stale balance")
+                log(f"{job['id'][:8]} {acct.label}: submit reported no balance after charging; "
+                    f"marked for re-probe so routing cannot use a stale balance")
             try:
                 acct.lock.release()
             except RuntimeError:
@@ -643,24 +973,87 @@ def run_job(job: dict) -> None:
         STORE.persist(job)
 
 
-def start_job(*, prompt: str, model_name: str | None, aspect: str, resolution: str,
-              seed: int | None, requested_account: str | None, face: str,
-              budget: int = 600, acquire_timeout: float = 900) -> tuple[dict | None, str | None]:
+def start_job(*, prompt: str, model_name: str | None, req: dict, requested_account: str | None,
+              face: str, budget: int = 600, acquire_timeout: float = 900,
+              max_spend: int | None = None) -> tuple[dict | None, str | None]:
+    """Validate everything that can be validated for free, then spawn the worker.
+
+    Order matters: the model is resolved, the provider validates its own params, and a provider with
+    no registered account fails HERE -- before a thread exists and before an account is reserved.
+    """
     if not prompt or not str(prompt).strip():
         return None, "prompt is required and cannot be empty"
-    key = resolve_model(model_name)
-    if not key:
-        return None, (f"unknown model {model_name!r}; try one of: "
-                      + ", ".join(sorted(set(MODEL_ALIASES))))
-    job = STORE.create(prompt=str(prompt), model=key, aspect=aspect, resolution=resolution,
-                       seed=seed, requested_account=requested_account, face=face, budget=budget,
+    prov, key, err = vp.resolve_model(model_name)
+    if err or prov is None or key is None:
+        return None, err or f"unknown model {model_name!r}"
+    if not any(a.enabled and a.provider == prov.name for a in FLEET.accounts):
+        return None, (f"model {key!r} routes to {prov.name}, which has no enabled account "
+                      f"registered; add one with: python {pathlib.Path(__file__).name} add "
+                      f"--provider {prov.name} --port {DEFAULT_PORT}")
+    params, err = prov.normalise({**req, "model": key, "prompt": str(prompt)})
+    if err or params is None:
+        return None, err or "provider rejected these parameters"
+    params.setdefault("prompt", str(prompt))
+    job = STORE.create(prompt=str(prompt), provider=prov.name, model=key,
+                       aspect=params.get("aspect"), resolution=params.get("resolution"),
+                       duration=params.get("duration"), seed=params.get("seed"),
+                       requested_account=requested_account, face=face, budget=budget,
                        acquire_timeout=acquire_timeout,
-                       model_key_proven=key in PROVEN_MODEL_KEYS)
+                       max_spend=prov.max_spend_default if max_spend is None else max_spend,
+                       model_key_proven=key in prov.proven, _params=params)
     threading.Thread(target=run_job, args=(job,), daemon=True).start()
     return job, None
 
 
+def quote_once(model_name: str | None, req: dict, requested_account: str | None = None,
+               timeout: float = 30) -> dict:
+    """What would this cost? Free, read-only, no job created.
+
+    Provided because rtst can answer exactly (GET /video/estimate-credits) and that is the whole
+    difference between the two providers' money paths: a caller can know the price before spending.
+    Flow answers with its floor and says so via `exact: false`.
+    """
+    prov, key, err = vp.resolve_model(model_name)
+    if err or prov is None or key is None:
+        return {"error": err or f"unknown model {model_name!r}"}
+    params, err = prov.normalise({**req, "model": key,
+                                  "prompt": str(req.get("prompt") or QUOTE_PROMPT)})
+    if err or params is None:
+        return {"provider": prov.name, "model": key, "error": err}
+    out = {"provider": prov.name, "model": key, "params": params,
+           "estimate": prov.estimate(params), "exact": bool(prov.quotes_before_spending),
+           "max_spend_default": prov.max_spend_default, "quote": None, "error": None}
+    try:
+        # A short lock on a ready account: the quote is a read through that account's own tab, and
+        # the balance it reports belongs to that account and no other.
+        acct = FLEET.acquire(prov.name, 0, requested_account, timeout=timeout)
+    except NON_FATAL as e:
+        out["error"] = scrub(str(e))[:300]
+        return out
+    try:
+        out["account"] = acct.label
+        q, qerr = prov.quote(acct, params)
+        out["quote"], out["error"] = q, (scrub(qerr)[:300] if qerr else None)
+        out["balance"] = acct.credits
+    finally:
+        try:
+            acct.lock.release()
+        except RuntimeError:
+            pass
+    return out
+
+
+# Long enough to clear rtst's 10-word minimum, which normalise() enforces before it will shape a
+# request at all. The price does not depend on the prompt -- estimate-credits takes only model,
+# duration, resolution, aspect and audio -- so a placeholder yields the real number.
+QUOTE_PROMPT = ("a quote only placeholder prompt with enough words in it to satisfy the minimum "
+                "prompt length this provider requires before pricing anything at all")
+
+
 def public_job(job: dict) -> dict:
+    """The wire shape. Keys starting with "_" are internal (the normalised provider params) and are
+    stripped; nothing else is renamed, including `flow_status`, because the filmmaking app's client
+    reads it today and a rename would break a working caller for cosmetic reasons."""
     out = {k: v for k, v in job.items() if not k.startswith("_")}
     if job.get("status") == "succeeded":
         out["content_url"] = f"/v1/videos/{job['id']}/content"
@@ -673,7 +1066,7 @@ def public_job(job: dict) -> dict:
 
 
 class Base(BaseHTTPRequestHandler):
-    server_version = "FlowShim/1.0"
+    server_version = "VideoRouter/1.0"
     token: str | None = None
     # StreamRequestHandler applies this to the connection socket. Without it a client that opens a
     # socket, announces a Content-Length and then stops sending pins a worker thread forever.
@@ -683,7 +1076,7 @@ class Base(BaseHTTPRequestHandler):
     MAX_BODY = 1 << 20
 
     def log_message(self, fmt, *args):        # quieter than the stdlib default, and scrubbed
-        log(f"{self.address_string()} {gf.scrub(fmt % args)}")
+        log(f"{self.address_string()} {scrub(fmt % args)}")
 
     def _json(self, code: int, obj) -> None:
         body = json.dumps(obj, indent=1, default=str).encode("utf-8")
@@ -694,7 +1087,7 @@ class Base(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _err(self, code: int, msg: str) -> None:
-        self._json(code, {"error": {"code": code, "message": gf.scrub(msg)}})
+        self._json(code, {"error": {"code": code, "message": scrub(msg)}})
 
     def _body(self) -> dict | None:
         """None means "reject this request". A JSON body that is valid but not an object counts:
@@ -732,49 +1125,78 @@ class Base(BaseHTTPRequestHandler):
     def _resolve_media_file(self, ident: str, index: int = 0) -> pathlib.Path | None:
         """A job id, or a media id, or a media id with .mp4 on it -> the file on disk.
 
+        The job record's recorded absolute path is tried FIRST and is authoritative: the router wrote
+        that path itself, so it needs no guessing about which provider's directory the clip landed in.
+        Only if there is no record does it fall back to a bare id, which is looked up across EVERY
+        registered out dir -- Flow's alone would 404 every rtst clip.
+
         A job can own several medias (Flow bills for all of them), so a job id plus an index selects
         one of them; a media id addresses itself and ignores the index.
         """
-        ident = ident.strip()
+        ident = (ident or "").strip()
+        if not ident:
+            return None
+
+        def recorded(job: dict, i: int) -> pathlib.Path | None:
+            files = job.get("files") or ([job["file"]] if job.get("file") else [])
+            if 0 <= i < len(files):
+                p = _contained(pathlib.Path(files[i]))    # still containment-checked: the log is
+                if p and p.exists():                      # data on disk, not a trusted input
+                    return p
+            return None
+
         job = STORE.get(ident)
         media_id = None
         if job:
+            hit = recorded(job, index)
+            if hit:
+                return hit
             ids = job.get("media_ids") or ([job["media_id"]] if job.get("media_id") else [])
             if 0 <= index < len(ids):
                 media_id = ids[index]
         if not media_id:
-            media_id = ident[:-4] if ident.endswith(".mp4") else ident
-        if not media_id or not MEDIA_ID_RE.match(media_id):
+            media_id = ident[:-4] if ident.lower().endswith(".mp4") else ident
+        # Charset guard: no "/", "\", "." or ":" can survive it, so no id can name a path. There is
+        # deliberately no length floor -- rtst ids are 5 characters (measured: 96089).
+        if not MEDIA_ID_RE.match(media_id):
             return None
-        p = gf.OUT_DIR / f"{media_id}.mp4"
-        # Belt and braces against a crafted id escaping the harvest directory.
-        try:
-            p.resolve().relative_to(gf.OUT_DIR.resolve())
-        except ValueError:
-            return None
-        return p if p.exists() else None
+        by_media = STORE.by_media(media_id)
+        if by_media:
+            ids = by_media.get("media_ids") or []
+            hit = recorded(by_media, ids.index(media_id) if media_id in ids else 0)
+            if hit:
+                return hit
+        for d in vp.out_dirs():
+            p = _contained(pathlib.Path(d) / f"{media_id}.mp4")
+            if p and p.exists():
+                return p
+        return None
 
 
 # --------------------------------------------------------------------------- direct face
 
 
 class DirectHandler(Base):
-    """The face the filmmaking app should use. Honest content types, honest errors."""
+    """The face the filmmaking app should use. Honest content types, honest errors, every provider."""
 
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         path, q = u.path.rstrip("/") or "/", urllib.parse.parse_qs(u.query)
         if path in ("/", "/healthz"):
             # Reachable without a token so a liveness probe keeps working, but only in redacted form:
-            # the full shape carries account emails, project ids, balances and upstream error text.
+            # the full shape carries account emails, project ids, balances, upstream error text and
+            # the remembered tab URL -- which names the Flow project.
             authed = self._authed()
             return self._json(200, {
                 "ok": DRY_RUN or any(a.ready for a in FLEET.accounts),
                 "dry_run": DRY_RUN,
                 "authenticated": authed,
+                "providers": sorted(vp.REGISTRY),
                 "accounts": [a.public(redact=not authed) for a in FLEET.accounts],
                 "jobs": STORE.stats(),
-                "measured_cost": (MEASURED_COST or {"(none yet)": EST_COST}) if authed else None,
+                "self_heal": FLEET.self_heal,
+                "heal": FLEET.heal_stats if authed else None,
+                "measured_cost": (vp.MEASURED_COST or {"(none yet)": None}) if authed else None,
             })
         if not self._authed():
             return self._err(401, "bad or missing bearer token")
@@ -782,12 +1204,25 @@ class DirectHandler(Base):
             if q.get("refresh"):
                 FLEET.probe_all()
             return self._json(200, {"accounts": [a.public() for a in FLEET.accounts]})
-        if path == "/v1/models":
+        if path == "/v1/providers":
             return self._json(200, {"data": [
-                {"id": k, "flow_key": v, "proven": v in PROVEN_MODEL_KEYS,
-                 "length_seconds": 8, "note": None if v in PROVEN_MODEL_KEYS
-                 else "model key inferred from the fast key's naming, never exercised"}
-                for k, v in sorted(MODEL_ALIASES.items())]})
+                {"provider": p.name, "title": p.title, "out_dir": str(p.out_dir),
+                 "quotes_before_spending": bool(p.quotes_before_spending),
+                 "max_spend_default": p.max_spend_default, "models": p.listing(),
+                 "accounts": [a.label for a in FLEET.accounts if a.provider == p.name]}
+                for p in vp.REGISTRY.values()]})
+        if path == "/v1/models":
+            # Every name a caller may use, across every provider, with the honesty flags the adapters
+            # supply: `proven` says whether that key was ever exercised end to end, and
+            # `quotes_before_spending` says whether est_cost is a price or a guess.
+            data = []
+            for p in vp.REGISTRY.values():
+                for name in p.listing():
+                    key = p.owns(name) or name
+                    d = p.describe(key)
+                    d["id"] = name
+                    data.append(d)
+            return self._json(200, {"data": data})
         if path == "/v1/videos/generations":
             return self._json(200, {"data": [public_job(j) for j in STORE.recent()]})
         m = re.match(r"^/v1/videos/generations/([0-9a-f]{32})$", path)
@@ -806,9 +1241,26 @@ class DirectHandler(Base):
             return self._send_video(f)
         return self._err(404, f"no route for {path}")
 
+    # Every number is parsed BEFORE start_job. Parsing them after it means a typo in wait_timeout
+    # raises inside the handler while the worker thread is already spending credits, and the caller
+    # never even learns the job id.
+    @staticmethod
+    def _num(b, field, default, lo, hi, cast=int):
+        raw = b.get(field)
+        if raw is None or raw == "":
+            return default, None
+        try:
+            v = cast(raw)
+        except (TypeError, ValueError):
+            return None, f"{field} must be a number"
+        if not (lo <= v <= hi):
+            return None, f"{field} must be between {lo} and {hi}"
+        return v, None
+
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
-        if (u.path.rstrip("/") or "/") != "/v1/videos/generations":
+        path = u.path.rstrip("/") or "/"
+        if path not in ("/v1/videos/generations", "/v1/videos/quote"):
             return self._err(404, f"no route for {u.path}")
         if not self._authed():
             return self._err(401, "bad or missing bearer token")
@@ -816,48 +1268,30 @@ class DirectHandler(Base):
         if b is None:
             return self._err(400, "body must be a JSON object under 1 MiB")
 
-        aspect, resolution = b.get("aspect_ratio"), b.get("resolution")
-        if b.get("size") and not (aspect and resolution):
-            try:
-                w, h = (int(x) for x in str(b["size"]).lower().split("x"))
-                aspect, resolution = geometry(w, h)
-            except Exception:
-                return self._err(400, "size must look like 1280x720")
-        aspect = aspect or "16:9"
-        resolution = resolution or "720p"
-        if aspect not in gf.ASPECTS:
-            return self._err(400, f"aspect_ratio must be one of {list(gf.ASPECTS)}")
-        if resolution not in gf.RESOLUTIONS:
-            return self._err(400, f"resolution must be one of {list(gf.RESOLUTIONS)}")
+        if path == "/v1/videos/quote":
+            # Free and read-only: no job, no account held beyond the read, nothing spent. This is the
+            # route a caller should use before committing to a generation.
+            return self._json(200, quote_once(b.get("model"), b, b.get("account")))
 
-        # Every number is parsed BEFORE start_job. Parsing them after it means a typo in wait_timeout
-        # raises inside the handler while the worker thread is already spending credits, and the
-        # caller never even learns the job id.
-        def num(field, default, lo, hi, cast=int):
-            raw = b.get(field)
-            if raw is None or raw == "":
-                return default, None
-            try:
-                v = cast(raw)
-            except (TypeError, ValueError):
-                return None, f"{field} must be a number"
-            if not (lo <= v <= hi):
-                return None, f"{field} must be between {lo} and {hi}"
-            return v, None
-
-        seed, err = num("seed", None, 0, 2 ** 32 - 1)
+        # Aspect, resolution, duration and size are NOT validated here: each provider owns its own
+        # enums (Flow's two aspects and two resolutions are not rtst's per-model duration and quality
+        # lists), and a router that policed both would encode one provider's rules as universal.
+        seed, err = self._num(b, "seed", None, 0, 2 ** 32 - 1)
         if err:
             return self._err(400, err)
-        budget, err = num("budget", 600, 30, 3600)
+        budget, err = self._num(b, "budget", 600, 30, 3600)
         if err:
             return self._err(400, err)
-        wait_timeout, err = num("wait_timeout", 600, 1, 3600, float)
+        wait_timeout, err = self._num(b, "wait_timeout", 600, 1, 3600, float)
+        if err:
+            return self._err(400, err)
+        max_spend, err = self._num(b, "max_spend", None, 1, 10 ** 6)
         if err:
             return self._err(400, err)
 
-        job, err = start_job(prompt=b.get("prompt"), model_name=b.get("model"), aspect=aspect,
-                             resolution=resolution, seed=seed,
-                             requested_account=b.get("account"), face="direct", budget=budget)
+        job, err = start_job(prompt=b.get("prompt"), model_name=b.get("model"),
+                             req={**b, "seed": seed}, requested_account=b.get("account"),
+                             face="direct", budget=budget, max_spend=max_spend)
         if err:
             return self._err(400, err)
 
@@ -877,6 +1311,10 @@ class ComfyHandler(Base):
 
     Bound to loopback unconditionally (see serve()): this face is unauthenticated because
     OmniRoute's comfyui provider is authType "none", and POST /prompt spends real credits.
+
+    Which provider a ckpt_name lands on is a registry fact -- whichever adapter claims that alias.
+    Both of OmniRoute's registered ids are Flow's today; moving "svd-xt" into
+    video_provider_rtst.aliases re-points it at rtst without touching this file.
     """
 
     OUTPUT_NODE = "7"        # the SaveAnimatedWEBP node in OmniRoute's generated workflow
@@ -917,7 +1355,7 @@ class ComfyHandler(Base):
         if path == "/history":
             return self._json(200, {})
         if path == "/system_stats":
-            return self._json(200, {"system": {"comfyui_version": "flow-shim",
+            return self._json(200, {"system": {"comfyui_version": "video-router",
                                                "python_version": sys.version.split()[0]},
                                     "devices": []})
         if path == "/queue":
@@ -925,8 +1363,8 @@ class ComfyHandler(Base):
             # media file, which /view then hands over as bytes the operator paid for.
             st = STORE.stats()
             return self._json(200, {"queue_running": [], "queue_pending": [],
-                                    "flow_shim": {"running": st["active"], "total": st["total"],
-                                                  "note": "ids withheld; use the :8189 face"}})
+                                    "video_router": {"running": st["active"], "total": st["total"],
+                                                     "note": "ids withheld; use the :8189 face"}})
         return self._err(404, f"no route for {path}")
 
     def do_POST(self):
@@ -983,7 +1421,14 @@ class ComfyHandler(Base):
                                 "refusing to render the negative prompt instead)"
                                 if neg else ""))
 
-        aspect, resolution = geometry(latent.get("width"), latent.get("height"))
+        # Geometry is translated by whichever provider owns this ckpt: Flow turns pixels into two
+        # enums, rtst into a short-edge quality number. Resolved here so a bad ckpt is a 400 rather
+        # than an exception inside start_job.
+        prov, key, err = vp.resolve_model(ckpt)
+        if err or prov is None:
+            return self._err(400, err or f"unknown ckpt_name {ckpt!r}")
+        geo = prov.geometry(latent.get("width"), latent.get("height"))
+
         seed = sampler.get("seed")
         if isinstance(seed, int):
             seed = seed % 100000        # ComfyUI seeds are 32-bit; Flow's observed seeds are small
@@ -993,279 +1438,14 @@ class ComfyHandler(Base):
         # Deadlines sized to OmniRoute's 300s window, not the direct face's 600s+900s. Waiting 900s
         # for a free account, then rendering for 600s, guarantees OmniRoute has already given up --
         # so the credits would be spent on a video it can never fetch.
-        job, err = start_job(prompt=prompt, model_name=ckpt, aspect=aspect, resolution=resolution,
-                             seed=seed, requested_account=None, face="comfyui",
-                             budget=COMFY_BUDGET, acquire_timeout=COMFY_ACQUIRE_TIMEOUT)
+        req = {"aspect_ratio": geo.get("aspect"), "resolution": geo.get("resolution"), "seed": seed}
+        job, err = start_job(prompt=prompt, model_name=ckpt, req=req, requested_account=None,
+                             face="comfyui", budget=COMFY_BUDGET,
+                             acquire_timeout=COMFY_ACQUIRE_TIMEOUT)
         if err:
             return self._err(400, err)
-        log(f"{job['id'][:8]} comfyui face: ckpt={ckpt!r} -> {job['model']} {resolution} {aspect} "
+        log(f"{job['id'][:8]} comfyui face: ckpt={ckpt!r} -> {prov.name}/{key} "
+            f"{geo.get('resolution')} {geo.get('aspect')} "
             f"(budget {COMFY_BUDGET}s inside OmniRoute's {OMNIROUTE_COMFY_WINDOW}s window)")
         return self._json(200, {"prompt_id": job["id"], "number": STORE.stats()["total"],
                                 "node_errors": {}})
-
-
-# --------------------------------------------------------------------------- commands
-
-
-LOOPBACK = ("127.0.0.1", "localhost", "::1", "")
-
-
-class Server(ThreadingHTTPServer):
-    # HTTPServer sets allow_reuse_address = 1. On Windows SO_REUSEADDR lets a second process bind an
-    # address another process already holds, so the "is this port free" check below would pass while
-    # a stranger keeps serving on it. For a process that spends money, a contested port has to be a
-    # hard failure rather than a silent second listener.
-    allow_reuse_address = False
-    daemon_threads = True
-
-
-def serve(a) -> int:
-    global FLEET, DRY_RUN
-    FLEET = load_accounts()
-    DRY_RUN = bool(a.dry_run)
-
-    if a.bind not in LOOPBACK and not a.token:
-        raise SystemExit("refusing to bind %s without --token: this process spends real credits"
-                         % a.bind)
-    Base.token = a.token
-
-    # The ComfyUI face cannot be authenticated: OmniRoute's comfyui provider is authType "none", so
-    # it has no way to send a token, and --token therefore protects the direct face only. Since POST
-    # /prompt on that face spends real credits, it is pinned to loopback whatever --bind says.
-    # OmniRoute runs on this machine, so nothing is lost by refusing to publish it.
-    comfy_bind = "127.0.0.1"
-    if a.bind not in LOOPBACK:
-        log(f"note: direct face on {a.bind} (token required); ComfyUI face pinned to 127.0.0.1 "
-            f"because it cannot be authenticated and POST /prompt spends credits")
-
-    if DRY_RUN:
-        log("DRY RUN: no Flow call will be made and no credits spent; cached bytes are served")
-        log(f"  stand-in media: {_dry_media() or 'NONE CACHED -- jobs will fail'}")
-    else:
-        log("probing accounts...")
-        FLEET.probe_all()
-        for acct in FLEET.accounts:
-            mark = "ok " if acct.ready else "DOWN"
-            log(f"  [{mark}] {acct.label:<10} port {acct.port}  {acct.email or '-'}  "
-                f"credits={acct.credits}  {'' if acct.ready else acct.reason}")
-        if not any(x.ready for x in FLEET.accounts):
-            log("no account is ready -- serving anyway; run `python flow_shim.py doctor` to see why")
-        threading.Thread(target=FLEET.refresh_loop, daemon=True).start()
-
-    servers = []
-    for handler, bind, port, name in ((DirectHandler, a.bind, a.direct_port, "direct"),
-                                      (ComfyHandler, comfy_bind, a.comfy_port, "comfyui")):
-        if port <= 0:
-            continue
-        try:
-            s = Server((bind, port), handler)
-        except OSError as e:
-            for done, _, _ in servers:
-                done.shutdown()
-            raise SystemExit(f"cannot bind {name} face on {bind}:{port}: {e}")
-        servers.append((s, name, port))
-        threading.Thread(target=s.serve_forever, daemon=True).start()
-        log(f"{name:<8} face on http://{bind}:{port}")
-
-    log("")
-    log(f"filmmaking app  ->  POST http://{a.bind}:{a.direct_port}/v1/videos/generations")
-    log(f"OmniRoute       ->  model \"comfyui/veo-3.1-fast\" (comfyui baseUrl defaults to :8188)")
-    log("ctrl-c to stop")
-    try:
-        while True:
-            time.sleep(3600)
-    except KeyboardInterrupt:
-        log("stopping")
-        FLEET._stop.set()
-        for s, _, _ in servers:
-            s.shutdown()
-    return 0
-
-
-def cmd_accounts(a) -> int:
-    global FLEET
-    FLEET = load_accounts()
-    FLEET.probe_all()
-    print(f"{'label':<10} {'port':>5}  {'email':<32} {'credits':>8}  {'tier':<18} status")
-    for x in FLEET.accounts:
-        print(f"{x.label:<10} {x.port:>5}  {(x.email or '-'):<32} {str(x.credits):>8}  "
-              f"{(x.tier or '-'):<18} {'ok' if x.ready else x.reason}")
-    total = sum(x.credits or 0 for x in FLEET.accounts if x.ready)
-    print()
-    print(f"{total} credits across {sum(1 for x in FLEET.accounts if x.ready)} ready account(s)"
-          f"  ~= {total // EST_COST} clips at the measured {EST_COST}/clip")
-    return 0
-
-
-def cmd_add(a) -> int:
-    ACCOUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    raw = (json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
-           if ACCOUNTS_FILE.exists() else {"accounts": []})
-    if any(x["port"] == a.port for x in raw.get("accounts", [])):
-        print(f"port {a.port} is already registered")
-        return 1
-    raw.setdefault("accounts", []).append(
-        {"label": a.label or f"acct-{a.port}", "port": a.port, "enabled": True})
-    ACCOUNTS_FILE.write_text(json.dumps(raw, indent=2), encoding="utf-8")
-    print(f"added {a.label or ''} port {a.port} to {ACCOUNTS_FILE}")
-    return 0
-
-
-CHAIN_HELP = {
-    "chrome": "Start that account's Chrome with its OWN profile directory and "
-              "--remote-debugging-port=<port>. Never the operator's live profile.",
-    "tab": "In that Chrome, open labs.google/fx/tools/flow and enter a PROJECT, so the URL "
-           "contains /project/<uuid>. The shim reads the project id from the URL.",
-    "session": "The tab is signed out or its session went stale. Reload the tab; if it asks for "
-               "a login, sign in by hand once -- automation never types a password here.",
-    "sitekey": "The page did not expose a reCAPTCHA sitekey. Reload the tab and let it settle.",
-    "credits": "The credits RPC refused this bearer. Usually a signed-out tab; reload and re-check.",
-    "captcha": "grecaptcha.enterprise.execute failed in the page. Reload the tab.",
-    "accepted": "A minted token was REJECTED by the submit RPC. Google most likely renamed the "
-                "action label. Re-capture it with googleflow_click_capture.py (arm, click Create "
-                "once, verify) and update RECAPTCHA_ACTION in googleflow_client.py.",
-}
-
-
-def cmd_doctor(a) -> int:
-    """Walk the whole chain per account and name the first broken link.
-
-    This is the answer to 'what do I do when it stops working': every dependency that can rot is
-    tested in the order it is used, and each failure prints the specific repair.
-    """
-    global FLEET
-    FLEET = load_accounts()
-    bad = 0
-    for acct in FLEET.accounts:
-        print("=" * 78)
-        print(f"{acct.label}  (port {acct.port})")
-        print("=" * 78)
-
-        def step(name, ok, detail=""):
-            print(f"  [{'ok ' if ok else 'FAIL'}] {name:<26} {detail}")
-            return ok
-
-        try:
-            assert_cdp_safe(f"http://127.0.0.1:{acct.port}", who="flow_shim doctor")
-        except Exception as e:
-            if is_refusal(e):
-                step("live-profile guard", False, "REFUSED -- this port is the operator's Chrome")
-                print(f"\n  FIX: {CHAIN_HELP['chrome']}\n")
-                bad += 1
-                continue
-            raise
-        step("live-profile guard", True, "not the operator's profile")
-
-        try:
-            targets = [t for t in list_targets(acct.port) if t.get("type") == "page"]
-        except Exception as e:
-            step("chrome debug port", False, f"{type(e).__name__}: {str(e)[:60]}")
-            print(f"\n  FIX: {CHAIN_HELP['chrome']}\n")
-            bad += 1
-            continue
-        step("chrome debug port", True, f"{len(targets)} page target(s)")
-
-        flow = [t for t in targets if FLOW_MATCH in (t.get("url", "") + t.get("title", "")).lower()]
-        if not step("flow tab open", bool(flow), flow[0].get("url", "")[:60] if flow else "none"):
-            print(f"\n  FIX: {CHAIN_HELP['tab']}\n")
-            bad += 1
-            continue
-
-        try:
-            sess = gf.FlowSession(FLOW_MATCH, port=acct.port).refresh()
-        except Exception as e:
-            step("session token", False, gf.scrub(str(e))[:70])
-            print(f"\n  FIX: {CHAIN_HELP['session']}\n")
-            bad += 1
-            continue
-        step("session token", True, f"{sess.email} expires {sess.expires}")
-
-        if not step("project id", bool(sess.project_id), sess.project_id or "not in a project"):
-            print(f"\n  FIX: {CHAIN_HELP['tab']}\n")
-            bad += 1
-            continue
-        if not step("recaptcha sitekey", bool(sess.sitekey), (sess.sitekey or "")[:24]):
-            print(f"\n  FIX: {CHAIN_HELP['sitekey']}\n")
-            bad += 1
-            continue
-
-        c = gf.credits_now(sess)
-        if not step("credits rpc", c is not None, f"{c} credits, tier {sess.tier}"):
-            print(f"\n  FIX: {CHAIN_HELP['credits']}\n")
-            bad += 1
-            continue
-
-        try:
-            captcha = sess.mint_captcha()
-        except Exception as e:
-            step("captcha mint", False, gf.scrub(str(e))[:70])
-            print(f"\n  FIX: {CHAIN_HELP['captcha']}\n")
-            bad += 1
-            continue
-        step("captcha mint", True, f"{len(captcha)} chars")
-
-        if a.deep:
-            # Zero credits: an EMPTY prompt cannot generate anything, so a complaint about the
-            # ARGUMENT is proof the captcha gate was passed.
-            body = gf.build_submit_body("", captcha, sess.project_id, tier=sess.tier)
-            st, text = gf.request(gf.SUBMIT_URL, sess.token, body)
-            kind = gf.classify(text)
-            if not step("captcha accepted", kind == "ARGUMENT", f"HTTP {st} {kind} (0 credits)"):
-                print(f"      {gf.scrub(text)[:180]}")
-                print(f"\n  FIX: {CHAIN_HELP['accepted']}\n")
-                bad += 1
-                continue
-        print()
-    print("=" * 78)
-    if bad:
-        print(f"  {bad} account(s) need attention -- see the FIX line under each.")
-    else:
-        n = len(FLEET.accounts)
-        print(f"  All {n} account(s) healthy end to end"
-              + ("" if a.deep else "; add --deep to also prove the captcha is still accepted"))
-    print("=" * 78)
-    return 1 if bad else 0
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    sub = ap.add_subparsers(dest="cmd", required=True)
-
-    s = sub.add_parser("serve", help="run both faces")
-    s.add_argument("--bind", default="127.0.0.1")
-    s.add_argument("--direct-port", type=int, default=DIRECT_PORT)
-    s.add_argument("--comfy-port", type=int, default=COMFY_PORT,
-                   help="0 to disable the ComfyUI face")
-    s.add_argument("--token", default=os.environ.get("FLOW_SHIM_TOKEN") or None,
-                   help="require this bearer on the direct face")
-    s.add_argument("--dry-run", action="store_true",
-                   help="serve cached bytes instead of calling Flow; spends nothing")
-    s.set_defaults(fn=serve)
-
-    c = sub.add_parser("accounts", help="registry plus live balances")
-    c.set_defaults(fn=cmd_accounts)
-
-    d = sub.add_parser("add", help="register another account's Chrome port")
-    d.add_argument("port", type=int)
-    d.add_argument("--label", default="")
-    d.set_defaults(fn=cmd_add)
-
-    o = sub.add_parser("doctor", help="find and explain the broken link")
-    o.add_argument("--deep", action="store_true",
-                   help="also send a zero-credit empty-prompt submit to prove the captcha works")
-    o.set_defaults(fn=cmd_doctor)
-
-    a = ap.parse_args()
-    try:
-        return a.fn(a)
-    except SystemExit:
-        raise
-    except Exception as exc:
-        print(f"!! {type(exc).__name__}: {gf.scrub(str(exc))[:500]}")
-        if os.environ.get("FLOW_SHIM_TRACE"):
-            traceback.print_exc()
-        return 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())
