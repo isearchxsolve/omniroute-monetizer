@@ -100,6 +100,7 @@ import video_provider as vp  # noqa: E402
 # third provider is one import plus one adapter file.
 import video_provider_flow  # noqa: E402,F401
 import video_provider_rtst  # noqa: E402,F401
+import video_provider_digen  # noqa: E402,F401
 from cdp import DEFAULT_PORT, Page, list_targets  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
