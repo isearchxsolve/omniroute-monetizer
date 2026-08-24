@@ -31,7 +31,9 @@ class ShimHandler(BaseHTTPRequestHandler):
             return
             
         messages = req.get("messages", [])
-        model = req.get("model", "auto")
+        model = req.get("model")
+        if model == "auto" or model == "auto/best-chat":
+            model = None
         
         try:
             # Route strictly to chat modality

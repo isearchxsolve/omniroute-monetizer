@@ -21,34 +21,36 @@ JS_GET_ELS = """
 (() => {
     let els = [];
     let idCounter = 0;
-    // Grab interactive elements that could be inputs or buttons
-    for (let el of document.querySelectorAll('textarea, input, button, [role="button"], a, div')) {
+    
+    // Only select explicit interactive elements, no generic divs
+    let selectors = 'textarea, input[type="text"], input[type="search"], input:not([type]), button, [role="button"], [role="textbox"], [contenteditable="true"]';
+    
+    for (let el of document.querySelectorAll(selectors)) {
         let rect = el.getBoundingClientRect();
         // Skip invisible
         if (rect.width === 0 || rect.height === 0 || rect.width * rect.height < 10) continue;
         
         let tag = el.tagName.toLowerCase();
-        let role = el.getAttribute('role');
-        let txt = (el.innerText || el.value || el.placeholder || '').trim();
-        let cls = el.className || '';
+        let role = el.getAttribute('role') || '';
+        let aria = el.getAttribute('aria-label') || '';
+        let txt = (el.innerText || el.value || el.placeholder || aria).trim();
         
-        // Skip divs that are just generic containers
-        if (tag === 'div' && role !== 'button' && role !== 'textbox' && typeof cls === 'string' && !cls.includes('btn') && !cls.includes('input') && !cls.includes('generate') && !cls.includes('create')) {
-            if (txt.length > 50 || txt.length === 0) continue; 
-        }
-        if (txt === '' && typeof cls === 'string' && !cls.includes('generate') && !cls.includes('create') && tag !== 'input' && tag !== 'textarea') continue;
+        // If it has absolutely no text or label, we can't identify it, so skip it to save LLM context
+        if (txt === '') continue;
         
         if (!el.id) {
             el.id = 'llm-agent-temp-id-' + idCounter++;
         }
+        
+        let cls = typeof el.className === 'string' ? el.className : '';
         els.push({
             tag: tag,
             id: el.id,
             placeholder: el.placeholder || '',
-            text: txt.substring(0, 80),
-            class: typeof cls === 'string' ? cls : '',
+            text: txt.substring(0, 100),
+            class: cls,
             type: el.type || '',
-            role: role || ''
+            role: role
         });
     }
     return els;
@@ -93,13 +95,13 @@ def extract_and_identify(page: Page, title: str):
         
     print(f"[{title}] Extracted {len(els)} elements. Asking local LLM...")
     prompt = f"""
-You are an AI agent controlling a web browser. I want to generate an AI video.
+You are an AI agent controlling a web browser. I want to generate an AI video OR send a chat message to an AI.
 Here is a list of interactive elements on the page (represented as JSON):
 {json.dumps(els, indent=2)}
 
 Identify:
-1. The text input element where I should type my prompt.
-2. The button element I should click to generate/create the video.
+1. The text input element (or textarea) where I should type my prompt or chat message.
+2. The button element I should click to generate the video OR send the chat message (e.g. Generate, Create, Send, Submit, or an arrow icon).
 
 Reply strictly with a JSON object in this format (and nothing else):
 {{
@@ -108,7 +110,7 @@ Reply strictly with a JSON object in this format (and nothing else):
 }}
 """
     try:
-        r = requests.post("http://127.0.0.1:20128/v1/chat/completions", json={
+        r = requests.post("http://127.0.0.1:8190/v1/chat/completions", json={
             "model": "auto/pro-chat",
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 100,
@@ -126,7 +128,7 @@ Reply strictly with a JSON object in this format (and nothing else):
         data = json.loads(res_text.strip())
         return data.get("input_id"), data.get("button_id")
     except Exception as e:
-        print(f"[{title}] LLM request failed: {e}. Raw response: {res_text if 'res_text' in locals() else 'None'}")
+        print(f"[{title}] LLM request failed: {e}. Raw response:\n{res_text if 'res_text' in locals() else 'None'}\n---")
         return None, None
 
 def run_tab(target, prompt_text: str, port: int):

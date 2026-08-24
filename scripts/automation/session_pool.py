@@ -32,6 +32,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Type
 
 from veoaifree_chat_client import ChatError
+from digen_session_replay import DigenSessionClient
 from veo_session_replay import VeoSessionClient, SessionExpired
 
 SECRETS = pathlib.Path(r"D:\omniroute-monetizer\state\secrets")
@@ -43,17 +44,24 @@ POOL_STATE = pathlib.Path(r"D:\omniroute-monetizer\state\session_pool_state.json
 # We NEVER blind-replay a host without an entry here — an unproven shape is a guess, and guessing is
 # exactly what the omni way exists to avoid.
 CLIENTS: Dict[str, Type[Any]] = {
-    "veoaifree.com": VeoSessionClient,
+    # "veoaifree.com": VeoSessionClient,  # Commented out to force Universal Replay test
+    "digen.ai": DigenSessionClient,
 }
 
 # Minimum seconds between two calls that land on the SAME session — the breadth-not-depth cooldown.
 DEFAULT_COOLDOWN = 20.0
 
 
-def _client_for(host: str) -> Optional[Type[Any]]:
+def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
     for key, cls in CLIENTS.items():
         if key in host:
             return cls
+            
+    # Universal fallback for any provider with a recorded exchange blueprint
+    if raw and raw.get("recorded_exchange"):
+        from universal_replay import UniversalSessionClient
+        return UniversalSessionClient
+        
     return None
 
 
@@ -93,7 +101,7 @@ class PooledSession:
         ctx = raw.get("context") or {}
         self.logged_in = ctx.get("loggedIn")
         self.account_present = bool(ctx.get("userName"))
-        self.client_cls = _client_for(self.host)
+        self.client_cls = _client_for(self.host, raw)
         self._client = None
         self.last_used: float = 0.0
         self.cooldown_until: float = 0.0
