@@ -63,6 +63,29 @@ try:
     st, _ = call(D + "/v1/accounts")
     check("/v1/accounts still 401s", st == 401, f"HTTP {st}")
 
+    print("\n-- money: the reservation floor must never ratchet upward ----------------")
+    # A dry run charges nothing, so this path is unreachable through HTTP. Test it directly.
+    # The hazard: credits_before is read from the account and credits_after comes from the submit
+    # response, so any concurrent spend on that account lands inside the window and inflates the
+    # delta. If that inflated delta became the floor, acquire() would refuse every account holding
+    # less than it -- capacity stranded for good.
+    sys.path.insert(0, "scripts/automation")
+    import flow_shim as fs
+    M = "veo_3_1_t2v_fast"
+    fs.MEASURED_COST.clear()
+    fs.observe_cost(M, 20, 1)
+    check("an honest run sets the floor", fs.MEASURED_COST.get(M) == 20, f"floor={fs.MEASURED_COST.get(M)}")
+    fs.observe_cost(M, 80, 1)
+    check("a concurrent external spend cannot raise it", fs.MEASURED_COST.get(M) == 20,
+          f"floor={fs.MEASURED_COST.get(M)}")
+    fs.observe_cost(M, 40, 4)
+    check("multi-media cost is divided per media", fs.MEASURED_COST.get(M) == 10,
+          f"floor={fs.MEASURED_COST.get(M)}")
+    for label, charged, n in (("absurd delta ignored", 5000, 1), ("negative delta ignored", -30, 1),
+                              ("missing billing data ignored", None, None)):
+        fs.observe_cost(M, charged, n)
+        check(label, fs.MEASURED_COST.get(M) == 10, f"floor={fs.MEASURED_COST.get(M)}")
+
     print("\n-- contract: negative prompt must never be rendered as the positive ------")
     st, r = call(C + "/prompt", wf("", "blurry, low quality, distorted"))
     check("blank positive is refused", st == 400, f"HTTP {st} {str(r)[:90]}")

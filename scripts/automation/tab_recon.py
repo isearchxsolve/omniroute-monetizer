@@ -9,7 +9,10 @@ out of a page that is already loaded, without clicking anything and without spen
      the site's real API surface for free -- no devtools capture, no guessing at URL shapes.
   2. WHETHER this browser is authenticated to it. A session cookie name, or a bearer-shaped value in
      localStorage, is the difference between "a route we own" and "a signup form".
-  3. WHAT it costs. The credit balance rendered on the page is the capacity estimate.
+  3. WHAT it costs. Treat any credit number scraped from the page as a RUMOUR, not a fact: rtst.ai
+     rendered "412" while its own /user/credits said 30, and topmediai rendered "3,000" while its API
+     said the profile is not even logged in (and multiplies real credits by 50 for display). The
+     balance is only real once the site's own API says it. Use site_probe.py for that.
 
 Nothing here types, clicks, submits or navigates. Cookie NAMES only, never values. Anything that
 looks like a token is reported by shape and length, never printed.
@@ -39,14 +42,15 @@ JS = r"""
   // ---- 1. the site's own API surface, from the browser's own resource timeline ----------------
   let res = [];
   try { res = performance.getEntriesByType('resource') || []; } catch (e) {}
+  // A same-registrable-domain filter LOOKS right and is wrong: topmediai's whole video API lives on
+  // imyfone.com, so that filter hid the only endpoints that mattered. Exclude known analytics/ad
+  // hosts instead, and keep every other host the page talks to.
+  const NOISE = /(google|googletagmanager|googleadservices|doubleclick|gstatic|clarity\.ms|mixpanel|segment|sentry|hotjar|facebook|fbcdn|riskified|amplitude|intercom|crisp\.chat|cloudflareinsights|newrelic|datadog|bugsnag|a\.run\.app|on\.aws\/events)/i;
   const api = {};
   for (const r of res) {
     if (r.initiatorType !== 'xmlhttprequest' && r.initiatorType !== 'fetch') continue;
     let u; try { u = new URL(r.name); } catch (e) { continue; }
-    // Third-party analytics/ads are noise; keep the site's own hosts.
-    const base = u.host.split('.').slice(-2).join('.');
-    const self = location.host.split('.').slice(-2).join('.');
-    if (base !== self) continue;
+    if (NOISE.test(u.host)) continue;
     if (/\.(js|css|png|jpe?g|svg|woff2?|webp|gif|mp4)$/i.test(u.pathname)) continue;
     const key = u.host + u.pathname.replace(/\/[0-9a-f]{8,}\b/gi, '/{id}')
                                    .replace(/\/\d{3,}\b/g, '/{n}');
@@ -54,6 +58,12 @@ JS = r"""
   }
   out.api = Object.entries(api).sort((a, b) => b[1] - a[1]).slice(0, 26)
                   .map(([k, n]) => n + "x " + k);
+  out.apiHosts = [...new Set(Object.keys(api).map(k => k.split('/')[0]))].slice(0, 14);
+
+  // A page that calls a "tourist"/"guest"/"anon" endpoint is telling you it has no user session --
+  // a far more reliable signal than any cookie, and it is the one that caught topmediai.
+  out.guestCalls = Object.keys(api).filter(k => /tourist|guest|anonymous|\banon\b|visitor/i.test(k))
+                         .slice(0, 6);
 
   // ---- 2. is this browser authenticated to it -------------------------------------------------
   // document.cookie only sees non-HttpOnly cookies; Network.getCookies (python side) sees the rest.
@@ -120,17 +130,20 @@ def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(rows, indent=1), encoding="utf-8")
 
-    print(f"{'HOST':<22} {'AUTH':<5} {'CREDITS':<14} {'API CALLS':<9} MODELS SEEN")
-    print("-" * 100)
+    print(f"{'HOST':<22} {'AUTH':<5} {'GUEST?':<7} {'CREDITS(page,unverified)':<24} {'APIs':<5} MODELS SEEN")
+    print("-" * 112)
     for d in rows:
         if d.get("error"):
             print(f"{d['host'][:22]:<22} {'ERR':<5} {d['error']}")
             continue
         authed = bool(d.get("httpOnly")) or bool(d.get("authKeys")) or bool(d.get("identityShape"))
-        print(f"{d['host'][:22]:<22} {('yes' if authed else 'no'):<5} "
-              f"{str(d.get('credits'))[:14]:<14} {len(d.get('api') or []):<9} "
-              f"{','.join(d.get('models') or [])[:44]}")
-    print(f"\nfull detail -> {OUT}")
+        guest = "GUEST" if d.get("guestCalls") else ""
+        print(f"{d['host'][:22]:<22} {('yes' if authed else 'no'):<5} {guest:<7} "
+              f"{str(d.get('credits'))[:24]:<24} {len(d.get('api') or []):<5} "
+              f"{','.join(d.get('models') or [])[:40]}")
+    print("\nCREDITS above is scraped page text and is often wrong. Confirm with site_probe.py "
+          "against the site's own balance endpoint before ranking anything.")
+    print(f"full detail -> {OUT}")
     return 0
 
 

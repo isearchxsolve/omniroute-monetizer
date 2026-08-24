@@ -4534,3 +4534,315 @@ All five hold the bearer and captcha tokens in memory only, never print or persi
    an outage.
 5. `recordings/googleflow.json` is still a one-step stub (`goto` only) and must not be mistaken for a
    proven route.
+
+---
+
+### [2026-08-23 23:4x] #1063 — GOOGLE FLOW IS WIRED AND PROVEN THROUGH OMNIROUTE via a ComfyUI shim; 15 review findings fixed; the 60-vs-20 charge SETTLED at 20; veoaifree.com fully reverse-engineered but capacity-dead; and 11 more logged-in video tools found in the automation profile
+
+#### What is now true
+
+`comfyui/veo-3.1-fast` is a working OmniRoute video model, with **zero OmniRoute code changed**.
+
+The route: OmniRoute's compiled `google-flow` handler is unfixable from outside (it calls
+`/v1:generateVideo` and `/v1:fetchOperation`, neither of which exists on Flow's host, both baked into
+a compiled chunk). But its `comfyui` video format IS operator-steerable — the base URL comes from the
+credential's `providerSpecificData.baseUrl` and defaults to `http://localhost:8188`, and it
+authenticates with nothing. So `scripts/automation/flow_shim.py` serves ComfyUI's three-call contract
+on `:8188` over `googleflow_client.py`, and OmniRoute cannot tell the difference.
+
+Two faces over one job engine:
+- `:8189` direct — `POST /v1/videos/generations`, honest content types, honest errors, `?index=` per
+  media. **This is what the filmmaking app should use.**
+- `:8188` ComfyUI costume — `POST /prompt` then `GET /history/{id}` then `GET /view?filename=`.
+
+#### The billing question is settled: 20 credits, not 60
+
+Measured through the shim, 2026-08-23: one 720p/16:9 8s `veo_3_1_t2v_fast` submit returns
+**1 media, 1 workflow, 950 -> 930 credits = exactly 20**, matching the price shown in the Flow UI.
+Proof: `state/video_proofs/flow_shim_real.json`; artifact
+`state/harvest/flow/2eaae4e3-9dc1-47b5-a8ce-54ff584cf6e6.mp4` (2,622,139 bytes, `ftypisom`, 8s).
+
+Entry #1057's "60 from the API vs 20 from the UI" was a **misreading**. That 60 was three separate
+submits run directly through `googleflow_client.py` during capture work — none of them are in
+`state/flow_jobs.jsonl`, which is why they looked like one charge. There is no API surcharge.
+`EST_COST` is now 20; a 60 floor was also over-reserving and locking out any account with 20-59
+credits left.
+
+#### 15 confirmed defects found by adversarial review and fixed
+
+Reviewed across five dimensions with independent verification (9 of 10 reviewers returned; the
+money-safety dimension stalled on all 6 attempts and is still owed). Fixed, worst first:
+
+*Money and correctness*
+
+1. **Only `media[0]` was polled and downloaded.** Flow bills for every media it returns, so any
+   multi-media response silently discarded paid output. Now every id is polled and fetched, under one
+   *shared* deadline (Flow renders them concurrently; a per-media budget would let a 3-media job run
+   3x longer than the caller asked for).
+2. **The negative prompt was submitted as the positive prompt** whenever the positive was blank.
+   Both are `CLIPTextEncode` nodes, so "first non-empty text" happily paid to render
+   "blurry, low quality, distorted". Now resolved by following the KSampler's `positive` link;
+   ambiguity is a 400, never a guess.
+3. **ComfyUI-face deadlines exceeded OmniRoute's own window.** 600s budget + 900s acquire against a
+   hard 300s poller = credits spent on a video OmniRoute had already given up on. Comfy face now
+   budgets 230s and fails in 20s if no account is free, i.e. *before* spending.
+4. **`wait_timeout` / `seed` / `budget` were parsed after `start_job`**, so a typo threw inside the
+   handler while the worker was already spending and the caller never learned the job id. All numbers
+   are validated and range-checked first.
+
+*Robustness*
+
+5. `cdp.pick_page` signals "no matching tab" with **`SystemExit`**, which `except Exception` does not
+   catch — it abandoned charged jobs mid-flight and permanently killed the balance-refresh loop.
+   `NON_FATAL = (Exception, SystemExit)` at every browser boundary.
+6. `probe_all` did not skip busy accounts, so a refresh could **reload the Flow tab underneath a job
+   whose credits were already spent**.
+7. No startup reconciliation: jobs in flight at shutdown came back as permanently `queued`. They are
+   now marked `interrupted` and kept, because the credits may already be gone.
+8. Job dicts were serialised unlocked while the worker mutated them. Readers now hand out snapshots
+   and every key is created up front.
+
+*Exposure*
+
+9. **The ComfyUI face never called `_authed()`**, yet `serve --bind 0.0.0.0 --token S` passed the
+   guard — publishing unauthenticated `POST /prompt`, i.e. remote repeatable credit spend. It cannot
+   be authenticated (OmniRoute's comfyui provider is authType `none`), so it is now **pinned to
+   127.0.0.1 unconditionally**, whatever `--bind` says.
+10. `/healthz` and `/` were served above the auth gate, leaking account emails, project ids, tiers,
+    balances and raw upstream error text. Now redacted unless authenticated (liveness still works).
+11. `/queue` handed out job ids — a capability that chains `/history` to `/view` to walk off with paid
+    videos. Counts only now.
+12. `_body()` returned non-dict JSON straight into `.get()`; unbounded `Content-Length` with no socket
+    timeout pinned a thread; `allow_reuse_address` defeated the bind guard on Windows. All closed.
+
+Verified by `scratch/shim_smoke.py` — 16 checks over both HTTP contracts including the
+negative-prompt trap and a link-order-vs-node-order swap, **all green, 0 credits spent**.
+
+#### veoaifree.com: fully reverse-engineered, and not worth wiring
+
+Built `scripts/automation/veoaifree_client.py` and proved the protocol end to end. It is a two-phase
+WordPress admin-ajax exchange (`action=veo_video_generator`): `full-video-generate` returns a bare
+scene handle, then `final-video-results` returns **empty-string-means-pending** until a URL appears,
+with error signalling by **substring match only**. `doctor` is green on all five links.
+
+Two findings kill it:
+
+- **The free allowance is 2 videos and is already exhausted** —
+  `<div class='rate-limit-exceed rate-3'>...maximum allowance of 2 videos</div>`. The profile page
+  shows TOTAL SUCCESS 0 / TOTAL FAILED 0 while the site counts 2 used, so the counter is **not
+  per-account** — most likely IP- or cookie-scoped, meaning 4 accounts would share one allowance
+  rather than get 2 each. Not proven either way. No veoaifree video has ever been produced, so its
+  poll -> URL -> download path remains **unproven**.
+- Each poll **blocks ~100s server-side** (measured: 101.4s, 102.6s). With an 85s first delay that
+  routinely exceeds OmniRoute's 300s window.
+
+And the built-in `veoaifree-web` provider cannot be repaired from outside: the compiled handler treats
+the site as a **chat executor**, posting `messages:[...]` and expecting
+`{data:[{b64_json, format:"mp4"}]}`. It never calls admin-ajax, sends no nonce or cookie, passes
+`signal: null` (unbounded wait), and — unlike `comfyui` — receives **no `providerConfig` at all**, so
+there is no baseUrl to redirect. Same class of defect as `google-flow`. The earlier "EXCLUDE" verdict
+stands, now with the mechanism.
+
+Correction to an in-session claim: "Daily Limit — Unlimited Generations" belongs to veoaifree's
+**Premium** comparison table, not the free tier. The free reset period is still unestablished.
+
+#### New: 11 more logged-in AI video tools in the automation profile
+
+`scripts/automation/tab_recon.py` (new) censuses every tab read-only — no clicks, no navigation,
+cookie *names* only, token shapes never values. It reads each site's real API surface out of
+`performance.getEntriesByType('resource')`, which is the browser's own record of calls the page has
+already made, so no capture session is needed. Census in `state/harvest/tab_recon.json`:
+
+| host | auth | credits | API surface |
+|---|---|---|---|
+| rtst.ai | `auth_token` JWT (localStorage) | **412** | `api.rtst.ai/{model,videomodel,template}` |
+| topmediai.com | session | **3,000** | `account-api.topmediai.com/account/check-auth` |
+| capcut.com | full ByteDance session (`sessionid`, `sid_guard`, httpOnly) | 0 + "Free credits" | `commerce-api-sg` / `edit-api-sg`, incl. `agent/list_models` |
+| kling.ai | `ksi18n.ai.portal_st` httpOnly | — | `kling.ai/api/*` |
+| openart.ai | NextAuth + Clerk | — | `openart.ai/suite/*` |
+| flux-ai.io | localStorage only | 50 | few |
+| digen.ai | **none** | — | `api.digen.ai/v3/video/job/*` (possibly zero-auth) |
+| akool.com | none visible | — | `/interface/*/api/v6/verify/user`, `calculateFee` |
+| teamily.ai | JWTs | 5 | — |
+| heygen, imagine.art | session | — | nothing useful captured |
+
+Ranked by balance x ease: **rtst.ai first** (bearer JWT, three-endpoint REST API, 412 credits), then
+**topmediai** (largest balance at 3,000, auth mechanism not yet identified). capcut and kling hold
+real sessions but their web APIs are request-signed (`msToken` and friends), which is a much larger
+job. digen.ai is interesting precisely because it appears to need no auth at all.
+
+The right shape is **not** 11 bespoke clients: it is to generalise `flow_shim` into a multi-provider
+router behind the same two faces, so each new site is a submit/poll/download adapter rather than a
+new server.
+
+#### Still owed
+
+1. Re-run the **money-safety review dimension** (stalled on all 6 attempts). It is the one dimension
+   with no dedicated reviewer, on the one file that spends money.
+2. `veo_3_1_t2v_quality` and `veo_3_1_t2v_lite` are still **inferred** from the fast key's naming and
+   are reported `proven:false`. Only `veo_3_1_t2v_fast` has been exercised.
+3. Rotation is still **one account**. Only port 9222 is debuggable; accounts 2-4 need their own
+   profile + `--remote-debugging-port`, then `flow_shim.py add <port> --label <name>`.
+4. The ComfyUI face's two inherited lies remain unfixable: it labels every response `"webp"` whatever
+   the bytes are, and its poller has no error channel, so a Flow failure reaches OmniRoute as a
+   ~300s timeout. **This is why the filmmaking app must use the `:8189` face**, which reports the
+   same failure in seconds.
+5. `recordings/googleflow.json` is still a one-step `goto` stub and must not be mistaken for a route.
+6. `gf.submit`'s captcha `ACTION_FALLBACKS` loop re-submits on a 403. If Flow ever returns 403 *after*
+   creating the video, that retry mints and charges a second clip. Unobserved, but it is a money path
+   with no idempotency key — worth a guard.
+
+### [2026-08-24 02:3x] #1064 — THE TWELVE-TAB VIDEO SHELF, CLOSED OUT: rtst.ai IS A SECOND PROVEN ROUTE (real video, 6 credits, quoted 6); two money bugs fixed in flow_shim; and six of my own probe-tool bugs found by disagreeing with my own results
+
+**Operator request:** *"check all the tabs in my chrome profile"*, then *"if you are done with the flow lets close the other ones"*. Flow was finished in #1063; this entry closes every other candidate with a verdict.
+
+#### The one that mattered: rtst.ai is wired and proven
+
+A real video was generated end to end: `vidu` (Vidu Q2) 3s @540p, **quoted 6 credits and charged
+exactly 6** (30 → 24), delivered as `state/harvest/rtst/96089.mp4` (872,579 bytes, `ftyp` verified).
+
+The whole contract was proven at **zero cost first** — payload shape, the ≥10-word prompt rule, and
+server-side HTTP 402 balance enforcement — with the balance confirmed unchanged at 30 after both
+probes. The technique that made that possible is worth keeping: **send a well-formed request for
+something demonstrably unaffordable.** The server *must* reject it, so no video can be created, yet
+the rejection reveals field-level validation. Validation runs before the balance check, so a short
+prompt stops the probe early and hides the rest of the contract — the first attempt returned
+`VALIDATION_INVALID_PROMPT` at 9 words and taught me the minimum.
+
+rtst.ai earns its place for one reason: `GET /video/estimate-credits` returns
+`{credits_required, credits_per_second, current_balance, can_afford, allowed_durations}`, so **every
+cost question is settled for free.** Compare Flow, where the only way to learn a price was to spend
+20 credits and diff the balance. `scripts/automation/rtst_client.py` gates `submit` behind
+`--confirm-spend` AND a fresh `can_afford` quote AND `--max-spend`; everything else is read-only.
+Trap recorded: `is_free:true` does **not** mean free — `wan22` carries that flag and still quotes 10
+credits. It means "available on the free plan".
+
+#### The money-safety review dimension is finally done — and it found two real defects
+
+This is the dimension that stalled on all six attempts in #1063, on the one file that spends money.
+Run inline this time. Both fixes are in `scripts/automation/flow_shim.py`:
+
+1. **The reservation floor could ratchet upward and strand capacity permanently.** A billing
+   observation is `credits_before` (read from the account) minus `credits_after` (read from the submit
+   response). Anything else spending on that account inside that window — the operator in their own
+   browser, a direct `googleflow_client.py` run — lands in the delta. Letting the newest delta become
+   the floor meant one concurrent 1080p generation elsewhere would raise the floor to 80 *forever*,
+   after which `acquire()` refuses every account holding 20–79 credits. That is precisely the bug the
+   old hardcoded 60-credit floor caused. Now the floor moves **down freely and up never**, per-media
+   deltas above `COST_FLOOR_MAX = 200` are discarded as someone else's spending, and a disagreement is
+   logged with an explicit "check before trusting the balance arithmetic".
+2. **A stale balance could survive a charged submit.** If a submit charges but the response omits
+   `remainingCredits`, the cached balance is now known-wrong. The account is marked `ready = False`
+   with reason "balance unconfirmed after a charged submit; awaiting re-probe" — deliberately *not*
+   by clearing `credits`, because `acquire()` calls `probe_all()` when nothing is ready but raises
+   immediately if a ready account merely lacks credits.
+
+`scratch/shim_smoke.py` grew a 6-check money block covering both. Full suite: **22 checks, all green,
+0 credits spent.**
+
+#### The census, and the correction to two numbers I reported yesterday
+
+**Page-text balances are rumours.** Two of the three I reported on 2026-08-23 were wrong: rtst.ai
+rendered "412 credits" against a real 30, and topmediai rendered "3,000 Credits" while its API says
+the profile is not even logged in *and* its UI multiplies real credits by 50 for display. Root cause
+fixed in `tab_recon.py`, which now prints `CREDITS(page,unverified)` with a `GUEST?` column.
+
+| site | verdict | evidence (from its own API) |
+|---|---|---|
+| **rtst.ai** | **WIRED AND PROVEN** | 24 credits left = 4 more short clips |
+| **heygen.com** | **AUTHENTICATED, real unused free quota** | `data.user_plan_v2.available_quota_v2`: 3/3 Hyperframes renders, 5/5 API renders, 3/3 avatar IV, 600/600 TTS — `amount == total` everywhere, nothing spent |
+| kling.ai | AUTHENTICATED, balance unreadable | userId 97309502; profile readable unsigned, but every other call needs a `__NS_hxfalcon` anti-bot param |
+| digen.ai | VIABLE, needs work | daily login reward for user 3666347; session is device-bound via FingerprintJS |
+| openart.ai | NOT A ROUTE — empty | ledger has exactly one entry: `CONSUME -40 trial_credit_balance, 40 → 0, 2026-04-08` |
+| topmediai.com | NOT A ROUTE — signed out | `Login expired`; app calls `/v3/user/tourist_id` |
+| akool.com | NOT A ROUTE — signed out | HTTP **200** `{"code":1002,"msg":"authorization cannot be empty"}` |
+| teamily.ai | NOT A ROUTE — signed out | `open.teamily.ai` → 401 `ACCOUNT_NO_EXIST`; no video-submit endpoint exists at all |
+| imagine.art | NOT A ROUTE — not the app | marketing origin, 8.9MB of bundle, and **zero** XHRs of its own after a reload |
+| flux-ai.io | NOT A ROUTE | no API; see the correction below |
+| capcut.com | NOT WORTH IT | msToken request signing, largest job on the shelf, and its UI shows 0 credits |
+
+**heygen is the best remaining candidate to wire** — but it is avatar/presenter video, not
+prompt-to-video, so it is only a route if the filmmaking app wants avatar or Hyperframes renders. Its
+submit contract has **not** been probed; no generate endpoint was called.
+
+#### Six bugs in my own probe tooling, found by disbelieving my own output
+
+Every one of these produced a *confident wrong answer*, which is the failure mode that matters:
+
+1. **`site_probe` filtered script URLs to the page's own registrable domain** — the identical mistake
+   already fixed in `tab_recon`. akool and teamily serve their whole app bundle from a CDN host, so
+   all 166 scripts were discarded and both sites reported "0 paths" as if they had no API. Fixed by
+   excluding known analytics/ad hosts instead, and fetching with `credentials:'same-origin'` (a
+   wildcard-CORS bundle response is *invalid* for a credentialed request).
+2. **No time budget on the discovery loop.** Once it read cross-origin CDN bundles, one slow script
+   hung the whole probe and the site got no verdict at all — worse than a partial read. Fixed with a
+   100s overall deadline plus a 12s per-script `AbortController`.
+3. **Candidate URLs were built from the CLI name, not the tab's origin.** A tab on `app.heygen.com`
+   had every call made cross-origin to `heygen.com`, so everything returned `TypeError: Failed to
+   fetch` — reads like a dead site, was self-inflicted. Fixed: the page's own origin goes first, where
+   CORS cannot refuse.
+4. **An HTML body counted as proof of an authenticated API.** flux-ai.io was called AUTHENTICATED off
+   `/subscription-terms` returning a marketing page, with "submit-shaped" paths that were all
+   marketing routes. Fixed: evidence must be JSON. **HTTP 200 + a body proves nothing.**
+5. **Signed-out was detected from prose only**, so akool's `200 {"code":1002}` and teamily's `401
+   ACCOUNT_NO_EXIST` both slipped past. Fixed: 401/403 is now structurally decisive.
+6. **Balance candidates were ranked by name**, so teamily's Next.js page route `/credit-usage` (which
+   500s with `Only HTML requests are supported here`) was tried ahead of its real `/userCenter/api/v1/`
+   endpoints. Fixed: API-shaped paths rank first, and the bundle's *own* host list is tried too.
+
+One reload-based technique was added and is worth reusing: a tab open for hours no longer remembers
+the XHRs its app fired at startup, and those are the only record of endpoints built from template
+strings. Reloading replays exactly the app's own requests. **Navigation only — nothing clicked, no
+generate button touched, so it cannot spend a credit.** It is what cracked kling and heygen.
+
+#### Safety posture held throughout
+
+Zero credits spent on any site except the one deliberate 6-credit proof run. No password typed, no
+CAPTCHA touched, no payment form. Every bearer token was read and used *inside* the page and never
+crossed the CDP boundary; only lengths and JWT-ness were ever printed. Cookie names only. Saved
+artifacts are scrubbed. A login wall in the automation profile was reported as the correct outcome
+three times (topmediai, akool, teamily) rather than worked around.
+
+#### Still owed
+
+1. **4-account Flow rotation** is still one account. Only port 9222 is debuggable; accounts 2–4 need
+   their own profile plus `--remote-debugging-port`, then `flow_shim.py add <port> --label <name>`.
+2. **Generalise `flow_shim` into a multi-provider router.** Two proven providers now sit behind two
+   different faces. The right shape is not N bespoke clients but one router where each site is a
+   submit/poll/download adapter. This is the main architectural debt of #1063 and #1064 combined.
+3. **heygen's submit contract is unprobed** — the free quota is real but nothing has been generated.
+4. `veo_3_1_t2v_quality` and `veo_3_1_t2v_lite` remain **inferred** from the fast key's naming and are
+   reported `proven:false`.
+5. `gf.submit`'s captcha `ACTION_FALLBACKS` loop still re-submits on a 403 with no idempotency key. If
+   Flow ever returns 403 *after* creating the video, that retry mints and charges a second clip.
+6. capcut's 0-credit figure is the only number in this census taken from a UI rather than an API.
+
+Full machine-readable census: `state/harvest/probes/FINDINGS.json`.
+
+### [2026-08-24 00:00] #1060 — EmergentSH OmniRoute fallback health verification
+
+**Request:** Wire the measured OmniRoute model routes into the standalone
+EmergentSH application above NVIDIA NIM and verify live health. No OmniRoute
+provider connections, credentials, model mappings, or management records were
+modified.
+
+**Observation:** Port 20128 accepted TCP connections but `GET /health` timed
+out at five seconds and the Node listener had multiple `CLOSE_WAIT` sockets.
+The supported NSSM service was confirmed as `OmniRoute` and running. After the
+operator explicitly authorized a restart, `nssm restart OmniRoute` was
+attempted; Windows returned `OpenService(): Access is denied`, so no restart
+occurred and no process was killed. The service recovered naturally afterward:
+`GET /` returned HTTP 200.
+
+**Live proof:** A non-mutating standard `/v1/chat/completions` probe through
+the local gateway used the measured route
+`nvidia/nvidia/nemotron-3-super-120b-a12b` with a small valid prompt. It
+returned HTTP-successful, non-empty generated content; the sanitized result was
+`{"live": true, "model": "nvidia/nvidia/nemotron-3-super-120b-a12b",
+"ready": true}`. This is a genuine inference proof, not a socket or catalog
+check. Secrets and response content were not recorded.
+
+**EmergentSH handoff:** The standalone repository now has an opt-in guarded
+OmniRoute secondary transport design with NIM primary, a real-completion health
+probe, and a short failure circuit. It must remain disabled until the normal
+application verification and commit are complete.

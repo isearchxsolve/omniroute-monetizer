@@ -127,11 +127,48 @@ MODEL_ALIASES = {
     "veo-3.1-lite": "veo_3_1_t2v_lite",
 }
 
-# One 720p/8s fast clip charged 60 from here, against 20 for the same parameters clicked in the UI.
-# Unexplained, so this is only a floor for "does the account have enough" and every job overwrites it
-# with what was actually charged.
-EST_COST = 60
+# MEASURED 2026-08-23 through this shim: one 720p/16:9 8s veo_3_1_t2v_fast clip == 1 media,
+# 1 workflow, 950 -> 930 credits. Exactly 20, matching the price shown in the Flow UI.
+#
+# An earlier 60-credit drop was read as "one clip costs 60 from the API but 20 from the UI"; it was
+# not. That drop came from three separate submits run directly through googleflow_client.py during
+# capture work, none of which are in state/flow_jobs.jsonl. 20 is the price; there is no API penalty.
+# Kept as a floor for "does this account have enough".
+EST_COST = 20
 MEASURED_COST: dict[str, int] = {}
+
+# A billing observation is credits_before (read from the account) minus credits_after (read from the
+# submit response). Anything else spending on that same account in between -- the operator in their
+# own browser, or a direct googleflow_client.py run -- lands inside that window, so the delta is our
+# cost PLUS theirs. Letting the newest delta become the floor means one concurrent 1080p generation
+# elsewhere raises the floor to 80 permanently, after which acquire() refuses every account holding
+# 20-79 credits: capacity stranded by an arithmetic artefact, which is exactly what the old
+# 60-credit floor did. So the floor moves DOWN freely and UP never, and disagreements are logged.
+# Under-reserving is the safe direction: Flow enforces the balance server-side, so the cost of
+# guessing low is one rejected submit, while the cost of guessing high is invisible lost capacity.
+COST_FLOOR_MAX = 200          # a per-media delta above this is someone else's spending, not ours
+
+
+def observe_cost(model: str, charged: int | None, media_count: int | None) -> None:
+    """Fold one billing observation into the reservation floor. A genuine Google price rise and a
+    concurrent external spend are indistinguishable from here, so an increase is reported to the
+    operator rather than acted on."""
+    if not isinstance(charged, int) or charged <= 0:
+        return
+    per = charged // media_count if isinstance(media_count, int) and media_count > 0 else charged
+    if per <= 0 or per > COST_FLOOR_MAX:
+        log(f"ignoring implausible billing observation for {model}: {charged} credits over "
+            f"{media_count} media; floor stays {MEASURED_COST.get(model, EST_COST)}")
+        return
+    old = MEASURED_COST.get(model)
+    if old is None or per < old:
+        MEASURED_COST[model] = per
+        if old is not None:
+            log(f"reservation floor for {model} lowered {old} -> {per}/media")
+    elif per > old:
+        log(f"{model} charged {per}/media this run but the floor stays at {old}. If every run now "
+            f"charges {per}, either Flow raised its price or something else is spending on this "
+            f"account at the same time -- check before trusting the balance arithmetic")
 
 MEDIA_ID_RE = re.compile(r"^[0-9A-Za-z_\-]{6,80}$")
 FLOW_MATCH = "tools/flow"
@@ -520,9 +557,10 @@ def run_job(job: dict) -> None:
         media = r.get("media") or []
         job["media_count"] = len(media)
         job["workflow_count"] = len(r.get("workflows") or [])
-        # Flow answers one submit with a LIST of medias and bills for all of them. Taking media[0]
-        # and dropping the rest is what a 60-credit charge for one 20-credit clip looks like: every
-        # id here is already paid for, so every id here gets polled and downloaded.
+        # Flow answers one submit with a LIST of medias and bills for every one of them, so every id
+        # here is already paid for and every id here gets polled and downloaded. (Measured: a single
+        # fast 720p submit returns exactly 1 media for 20 credits. Taking media[0] was still wrong --
+        # it silently discards paid output the moment Flow returns more than one.)
         ids = [m.get("name") for m in media
                if isinstance(m, dict) and isinstance(m.get("name"), str) and m.get("name")]
         job["media_ids"] = ids
@@ -530,13 +568,13 @@ def run_job(job: dict) -> None:
         job["credits_after"] = r.get("remainingCredits")
         if isinstance(job["credits_before"], int) and isinstance(job["credits_after"], int):
             job["credits_charged"] = job["credits_before"] - job["credits_after"]
-            if job["credits_charged"] > 0:
-                MEASURED_COST[job["model"]] = job["credits_charged"]
+            observe_cost(job["model"], job["credits_charged"], job["media_count"])
         if isinstance(job["credits_after"], int):
             acct.credits = job["credits_after"]
         if not ids:
             raise RuntimeError("submit returned no media id")
-        # The 60-vs-20 question: if Flow billed three clips, this is where it shows.
+        # Per-job billing evidence: media count, workflow count and the real balance delta, so a
+        # price change or a multi-media response is visible in the log instead of inferred later.
         log(f"{job['id'][:8]} submitted {len(ids)} media ({', '.join(i[:12] for i in ids)})  "
             f"workflows={job['workflow_count']} charged={job['credits_charged']}")
         STORE.persist(job)
@@ -589,6 +627,15 @@ def run_job(job: dict) -> None:
                 f"report this as a timeout ~300s from its submit")
     finally:
         if acct is not None:
+            # If the submit response never reported remainingCredits, this account's cached balance
+            # is known-stale: routing on it can hand the account out for a job it can no longer pay
+            # for. Marking it not-ready sends the next acquire() through probe_all instead of
+            # trusting arithmetic we could not confirm.
+            if not DRY_RUN and job.get("credits_after") is None and job.get("media_ids"):
+                acct.ready = False
+                acct.reason = "balance unconfirmed after a charged submit; awaiting re-probe"
+                log(f"{job['id'][:8]} {acct.label}: submit reported no remainingCredits after "
+                    f"charging; marked for re-probe so routing cannot use a stale balance")
             try:
                 acct.lock.release()
             except RuntimeError:
