@@ -1,4 +1,14 @@
 
+### [2026-08-24 21:07] #1067 - MASTER TARGET SITES REGISTRY PERSISTED & PREPARED
+
+- **Operator request**: Verify and store all target URLs and provider links to disk so current session can be closed and a new session opened.
+- **Action**:
+  1. Updated `scripts/automation/target_sites.json` with the complete structured catalog of 19 Video targets (`OpenArt`, `Akool`, `OiiOii`, `Digen`, `Kling`, `CapCut`, `ImagineArt`, `RTST`, `Teamily`, `HeyGen`, `Creen`, `VeoAIFree Gemini/Claude`, `Google Flow`, `Flyne`, `TopMediai`, `MagicHour`, `Pixelbin`, `Giz`) and 16 Chat targets (`PLAI`, `NoteGPT`, `NoTrack`, `ChatGPT`, `Claude`, `Gemini`, `Poe`, `You`, `Mistral`, `DeepSeek`, `LMSYS`, `Perchance`, `HuggingFace`, `DuckDuckGo`, `Pi`, `Yep`).
+  2. All captured session credentials remain persisted in `state/secrets/`.
+- **Validation**:
+  - File written and validated on disk.
+- **Status**: Ready for operator session transition.
+
 ### [2026-08-24 20:40] #1066 - CDP BLUEPRINT GENERATOR & POOL EXPANSION (CREEN, PLAI, HEYGEN)
 
 - **Operator request**: Execute blueprint recording pass over active browser tabs to capture generation API endpoints, request schemas, and headers for the video/chat pools.

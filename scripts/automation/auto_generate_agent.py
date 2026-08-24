@@ -66,25 +66,59 @@ JS_EXECUTE_ACTION = """
         return "ELEMENT_NOT_FOUND";
     }
     
-    // Fill prompt using React/Vue prototype setter
+    // Visual Highlight on Input
+    inputEl.scrollIntoView({behavior: 'smooth', block: 'center'});
+    inputEl.style.transition = 'all 0.3s ease';
+    let origInputOutline = inputEl.style.outline;
+    let origInputShadow = inputEl.style.boxShadow;
+    inputEl.style.outline = '4px solid #00f0ff';
+    inputEl.style.boxShadow = '0 0 25px #00f0ff';
+    
+    // Fill prompt
     inputEl.focus();
     let val = {prompt_json};
-    let proto = Object.getPrototypeOf(inputEl);
-    let nativeInputValueSetter = Object.getOwnPropertyDescriptor(proto, "value")?.set 
-                                 || Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set
-                                 || Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
-    if (nativeInputValueSetter) { nativeInputValueSetter.call(inputEl, val); }
-    else { inputEl.value = val; }
+    
+    if (inputEl.isContentEditable || inputEl.getAttribute('contenteditable') === 'true' || inputEl.tagName === 'DIV' || inputEl.tagName === 'P') {
+        inputEl.innerText = val;
+    } else {
+        let proto = Object.getPrototypeOf(inputEl);
+        let setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+        if (!setter) {
+            if (inputEl instanceof HTMLInputElement) setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+            else if (inputEl instanceof HTMLTextAreaElement) setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+        }
+        if (setter) {
+            try { setter.call(inputEl, val); }
+            catch (e) { inputEl.value = val; }
+        } else {
+            inputEl.value = val;
+        }
+    }
     
     inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     inputEl.dispatchEvent(new Event('change', { bubbles: true }));
     inputEl.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
     
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 800));
+    inputEl.style.outline = origInputOutline;
+    inputEl.style.boxShadow = origInputShadow;
+    
+    // Visual Highlight on Button
+    buttonEl.scrollIntoView({behavior: 'smooth', block: 'center'});
+    buttonEl.style.transition = 'all 0.3s ease';
+    let origBtnOutline = buttonEl.style.outline;
+    let origBtnShadow = buttonEl.style.boxShadow;
+    buttonEl.style.outline = '4px solid #ff0055';
+    buttonEl.style.boxShadow = '0 0 30px #ff0055';
+    
+    await new Promise(r => setTimeout(r, 800));
     
     // Click button
-    buttonEl.scrollIntoView({block: 'center'});
     buttonEl.click();
+    
+    await new Promise(r => setTimeout(r, 500));
+    buttonEl.style.outline = origBtnOutline;
+    buttonEl.style.boxShadow = origBtnShadow;
     return "SUCCESS";
 })();
 """
@@ -140,13 +174,17 @@ Reply strictly with a JSON object in this format (and nothing else):
         return None, None
 
 def run_tab(target, prompt_text: str, port: int):
-    title = target.get("title", "")[:30]
+    raw_title = target.get("title", "") or "Untitled"
+    title = raw_title.encode("ascii", "replace").decode("ascii")[:30]
     target_url = target.get("url", "")
     try:
         import urllib.parse
         host = urllib.parse.urlsplit(target_url).hostname or ""
         match_str = host.replace("www.", "")
         with Page(match_str, port=port, timeout=30) as p:
+            p.send("Page.bringToFront")
+            p.send("Emulation.setFocusEmulationEnabled", {"enabled": True})
+            time.sleep(0.3)
             input_id, button_id = extract_and_identify(p, title)
             if not input_id or not button_id:
                 print(f"[{title}] LLM could not identify elements. Skipping.")
@@ -184,7 +222,12 @@ def run_tab(target, prompt_text: str, port: int):
                     req = msg["params"]["request"]
                     req_url = req.get("url", "")
                     method = req.get("method", "GET")
-                    if method in ("POST", "PUT") and any(k in req_url for k in ("/api/", "/generate", "/create", "/tasks", "/v1/")):
+                    is_tracker = any(k in req_url.lower() for k in (
+                        "facebook.com", "google-analytics", "doubleclick", "datadoghq", 
+                        "tiktok.com", "clarity.ms", "segment.io", "sentry.io", "mixpanel", 
+                        "posthog", "/rum", "/telemetry", "/collect", "/events", "/tr/"
+                    ))
+                    if method in ("POST", "PUT") and not is_tracker and not any(ext in req_url.lower() for ext in (".png", ".jpg", ".jpeg", ".webp", ".js", ".css", ".svg", ".woff", ".woff2")):
                         print(f"[{title}] [!] CAPTURED GENERATION API: {method} {req_url[:80]}")
                         captured_req = req
                         break
@@ -236,8 +279,8 @@ def main():
     
     success_count = 0
     for t in targets:
-        # Ignore empty pages
-        if t.get("url") == "about:blank":
+        url = t.get("url", "")
+        if not url or url == "about:blank" or any(k in url for k in ("apps.apple.com", "chrome://", "chrome-extension://")):
             continue
             
         print("-" * 60)
