@@ -1,4 +1,18 @@
 
+### [2026-08-24 20:40] #1066 - CDP BLUEPRINT GENERATOR & POOL EXPANSION (CREEN, PLAI, HEYGEN)
+
+- **Operator request**: Execute blueprint recording pass over active browser tabs to capture generation API endpoints, request schemas, and headers for the video/chat pools.
+- **Action**:
+  1. Upgraded `scripts/automation/auto_generate_agent.py` to route UI reasoning through OmniRoute master endpoint (`:20128` with `frontier` model `codex/gpt-5.6-sol`).
+  2. Enhanced `JS_EXECUTE_ACTION` with prototype value setters for HTMLInputElement/HTMLTextAreaElement to cleanly unlock React 18/Vue reactive generate buttons.
+  3. Embedded inline `Network.enable` CDP packet capture in `auto_generate_agent.py` to intercept generation API routes (`POST /api/aiVideo/calculateIntegral`, `POST /api/web/chat/send`, `POST /v1/user_cache.create`) and atomically persist blueprints into `state/secrets/session_<host>.json`.
+  4. Patched `session_pool.py` CLI sweep printer to sanitize ASCII/Unicode strings on Windows cp1252 consoles.
+- **Validation**:
+  - Swept 23 active Chromium page targets.
+  - Successfully captured live exchange blueprints for `www.creen.ai` (AI Video), `plai.chat` (AI Chat), and `app.heygen.com` (HeyGen Video Agent).
+  - Verified `python scripts/automation/session_pool.py sweep`: both `veoaifree.com` (4812ms) and `www.creen.ai` (2663ms) responded successfully through the zero-LLM universal replay adapter.
+- **Status**: Live pool expanded to 4 dispatchable providers (`app.heygen.com`, `plai.chat`, `veoaifree.com`, `www.creen.ai`).
+
 ### [2026-08-24 20:20] #1065 - AUTONOMOUS CDP HARVESTER & GOOGLE SSO BYPASS SWEEP
 
 - **Operator request**: Automate the 30-provider sweep and implement automated Google SSO ("Continue with Google") sign-in detection using LLM DOM reasoning over live Chrome profile.

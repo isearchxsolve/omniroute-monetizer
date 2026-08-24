@@ -282,9 +282,11 @@ def _cli() -> int:
         for r in sorted(res, key=lambda x: x["host"]):
             if r["ok"]:
                 ok += 1
-                print(f'  OK  {r["host"]:26s} {r["ms"]:6d}ms  {r.get("label",""):14s} {r.get("preview","")}')
+                prev = str(r.get("preview", "")).encode("ascii", "replace").decode("ascii")[:80]
+                print(f'  OK  {r["host"]:26s} {r["ms"]:6d}ms  {r.get("label",""):14s} {prev}')
             else:
-                print(f'  ERR {r["host"]:26s} {r["ms"]:6d}ms  {r.get("err","")}')
+                err = str(r.get("err", "")).encode("ascii", "replace").decode("ascii")[:80]
+                print(f'  ERR {r["host"]:26s} {r["ms"]:6d}ms  {err}')
         print(f'\n{ok}/{len(res)} live sessions answered a single light call.')
         return 0
     return 1

@@ -66,13 +66,21 @@ JS_EXECUTE_ACTION = """
         return "ELEMENT_NOT_FOUND";
     }
     
-    // Fill prompt
+    // Fill prompt using React/Vue prototype setter
     inputEl.focus();
-    inputEl.value = {prompt_json};
+    let val = {prompt_json};
+    let proto = Object.getPrototypeOf(inputEl);
+    let nativeInputValueSetter = Object.getOwnPropertyDescriptor(proto, "value")?.set 
+                                 || Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set
+                                 || Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+    if (nativeInputValueSetter) { nativeInputValueSetter.call(inputEl, val); }
+    else { inputEl.value = val; }
+    
     inputEl.dispatchEvent(new Event('input', { bubbles: true }));
     inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+    inputEl.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
     
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 600));
     
     // Click button
     buttonEl.scrollIntoView({block: 'center'});
@@ -93,7 +101,7 @@ def extract_and_identify(page: Page, title: str):
         print(f"[{title}] No interactive elements found.")
         return None, None
         
-    print(f"[{title}] Extracted {len(els)} elements. Asking local LLM...")
+    print(f"[{title}] Extracted {len(els)} elements. Asking master OmniRoute LLM (:20128)...")
     prompt = f"""
 You are an AI agent controlling a web browser. I want to generate an AI video OR send a chat message to an AI.
 Here is a list of interactive elements on the page (represented as JSON):
@@ -110,13 +118,13 @@ Reply strictly with a JSON object in this format (and nothing else):
 }}
 """
     try:
-        r = requests.post("http://127.0.0.1:8190/v1/chat/completions", json={
-            "model": "auto/pro-chat",
+        r = requests.post("http://127.0.0.1:20128/v1/chat/completions", json={
+            "model": "frontier",
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 100,
             "temperature": 0.0,
             "stream": False
-        }, timeout=30)
+        }, headers={"Authorization": "Bearer sk-omniroute"}, timeout=30)
         r.raise_for_status()
         res_text = r.json()["choices"][0]["message"]["content"].strip()
         # Clean markdown if present
@@ -128,13 +136,17 @@ Reply strictly with a JSON object in this format (and nothing else):
         data = json.loads(res_text.strip())
         return data.get("input_id"), data.get("button_id")
     except Exception as e:
-        print(f"[{title}] LLM request failed: {e}. Raw response:\n{res_text if 'res_text' in locals() else 'None'}\n---")
+        print(f"[{title}] LLM request failed: {e}")
         return None, None
 
 def run_tab(target, prompt_text: str, port: int):
     title = target.get("title", "")[:30]
+    target_url = target.get("url", "")
     try:
-        with Page(target.get("url"), port=port, timeout=30) as p:
+        import urllib.parse
+        host = urllib.parse.urlsplit(target_url).hostname or ""
+        match_str = host.replace("www.", "")
+        with Page(match_str, port=port, timeout=30) as p:
             input_id, button_id = extract_and_identify(p, title)
             if not input_id or not button_id:
                 print(f"[{title}] LLM could not identify elements. Skipping.")
@@ -142,17 +154,67 @@ def run_tab(target, prompt_text: str, port: int):
                 
             print(f"[{title}] LLM identified input='{input_id}', button='{button_id}'")
             
-            # Execute
+            # Enable network capture before triggering action
+            import websocket
+            p.send("Network.enable")
+            while True:
+                p.ws.settimeout(0.1)
+                try: p.ws.recv()
+                except: break
+                
+            # Execute action
             js = JS_EXECUTE_ACTION.replace('{input_id}', input_id).replace('{button_id}', button_id)
             js = js.replace('{prompt_json}', json.dumps(prompt_text))
             
             res = p.evaluate(js, timeout=20)
-            if res == "SUCCESS":
-                print(f"[{title}] Successfully triggered generation.")
-                return True
-            else:
+            if res != "SUCCESS":
                 print(f"[{title}] CDP execution failed: {res}")
                 return False
+                
+            print(f"[{title}] Clicked generate! Intercepting network traffic for 12s...")
+            deadline = time.time() + 12
+            captured_req = None
+            while time.time() < deadline:
+                p.ws.settimeout(1.0)
+                try:
+                    msg = json.loads(p.ws.recv())
+                except websocket.WebSocketTimeoutException:
+                    continue
+                if msg.get("method") == "Network.requestWillBeSent":
+                    req = msg["params"]["request"]
+                    req_url = req.get("url", "")
+                    method = req.get("method", "GET")
+                    if method in ("POST", "PUT") and any(k in req_url for k in ("/api/", "/generate", "/create", "/tasks", "/v1/")):
+                        print(f"[{title}] [!] CAPTURED GENERATION API: {method} {req_url[:80]}")
+                        captured_req = req
+                        break
+                        
+            if captured_req and host:
+                # Save into state/secrets/session_<host>.json
+                import pathlib
+                secrets_dir = pathlib.Path(r"D:\omniroute-monetizer\state\secrets")
+                clean_host = host.replace(".", "_")
+                sess_file = secrets_dir / f"session_{clean_host}.json"
+                
+                existing = {}
+                if sess_file.exists():
+                    try: existing = json.loads(sess_file.read_text(encoding="utf-8"))
+                    except Exception: pass
+                    
+                existing["host"] = host
+                existing["recorded_exchange"] = {
+                    "method": captured_req.get("method"),
+                    "url": captured_req.get("url"),
+                    "headers": captured_req.get("headers"),
+                    "post_data": captured_req.get("postData")
+                }
+                existing["updated_at"] = int(time.time())
+                sess_file.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+                print(f"[{title}] Saved recorded exchange to {sess_file.name}")
+                return True
+                
+            print(f"[{title}] Triggered generation (no immediate API call intercepted).")
+            return True
     except BaseException as e:
         print(f"[{title}] Error connecting/evaluating: {e}")
         return False
