@@ -112,6 +112,13 @@ JOBS_FILE = STATE / "video_jobs.jsonl"
 LEGACY_ACCOUNTS_FILE = STATE / "flow_accounts.json"
 LEGACY_JOBS_FILE = STATE / "flow_jobs.jsonl"
 
+# A dry run is a rehearsal: no credit moves and no media exists, so its record belongs nowhere near
+# the ledger that answers "what did this machine spend and what did it get". MEASURED 2026-08-24:
+# 40 dry-run records from the smoke suite had accumulated in video_jobs.jsonl, every one of them
+# status=succeeded with credits_charged=0 and a borrowed file path -- indistinguishable at a glance
+# from paid work, and load() was replaying them into the in-memory history an integrator would read.
+DRYRUN_JOBS_FILE = STATE / "video_jobs.dryrun.jsonl"
+
 DEFAULT_PROFILE = "providers"      # the safe_profile_dir() tag the proven Chrome actually uses
 
 DIRECT_PORT = 8189
@@ -873,9 +880,12 @@ class JobStore:
         return job
 
     def persist(self, job: dict) -> None:
+        # DRY_RUN is the process-wide flag and job["dry_run"] is set once run_job starts, so the
+        # queued record written by create() -- which lands before that -- is caught by the global.
+        path = DRYRUN_JOBS_FILE if (DRY_RUN or job.get("dry_run")) else JOBS_FILE
         try:
-            JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with JOBS_FILE.open("a", encoding="utf-8") as fh:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(_snap(job), default=str) + "\n")
         except Exception:
             pass                      # a job log that cannot be written must not fail the job
@@ -1905,6 +1915,263 @@ def cmd_models(a) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- fresh machine
+
+
+def _free_label(entries: list, stem: str) -> str:
+    """A label no existing entry has taken. Labels are how the operator names an account in every
+    other command, so a collision here would make one of the two unaddressable."""
+    taken = {_entry(x)["label"] for x in entries if isinstance(x, dict)}
+    for n in range(1, 100):
+        cand = f"{stem}-{n}"
+        if cand not in taken:
+            return cand
+    return f"{stem}-{uuid.uuid4().hex[:6]}"
+
+
+def cmd_setup(a) -> int:
+    """One guided pass from a clean machine to a green doctor.
+
+    Every step is idempotent -- run it again after a reboot, after adding a provider, or whenever you
+    are not sure what state the machine is in. It will not re-register, re-launch or re-sign anything
+    that is already good.
+
+    The one step that cannot be automated is the sign-in. No password is ever typed by this process
+    (that is chrome_live_guard's rule, and the reason FAULT_AUTH is excluded from self-heal), so setup
+    opens the provider's page, waits for you, and then proves the result by probing.
+    """
+    ok = True
+    name = pathlib.Path(__file__).name
+    print("=" * 78)
+    print("video_router setup -- clean machine to green doctor")
+    print("=" * 78)
+
+    print("\n[1/5] preflight")
+    print(f"  python         {sys.version.split()[0]}  {sys.executable}")
+    venv_py = ROOT / ".venv" / "Scripts" / "python.exe"
+    if venv_py.exists() and pathlib.Path(sys.executable).resolve() != venv_py.resolve():
+        # Every *_task.bat in this directory runs the venv interpreter. If setup registers accounts
+        # under one interpreter and the scheduled task serves them under another, the two can disagree
+        # about installed packages while both look fine in isolation.
+        print(f"  NOTE           this repo's scheduled tasks all run {venv_py}")
+        print(f"                 consider re-running setup with that interpreter")
+    try:
+        print(f"  chrome         {find_chrome()}")
+    except RuntimeError as e:
+        print(f"  chrome         NOT FOUND -- {e}")
+        ok = False
+    for d in [STATE, STATE / "automation_profiles", *vp.out_dirs()]:
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            print(f"  dir ready      {d}")
+        except OSError as e:
+            print(f"  dir FAILED     {d}: {type(e).__name__}: {e}")
+            ok = False
+
+    print(f"\n[2/5] registry -- {ACCOUNTS_FILE}")
+    if not vp.REGISTRY:
+        print("  no provider adapter is registered; nothing to set up")
+        return 1
+    raw = (json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8")) if ACCOUNTS_FILE.exists()
+           else (_migrate() or {"_note": REGISTRY_NOTE, "accounts": []}))
+    entries = raw.setdefault("accounts", [])
+    have = {(_entry(x)["provider"], _entry(x)["port"])
+            for x in entries if isinstance(x, dict)}
+    added = 0
+    for pname in sorted(vp.REGISTRY):
+        prov = vp.get(pname)
+        if (pname, int(a.port)) in have:
+            print(f"  already there  {pname} on port {a.port}")
+            continue
+        entries.append(_entry({"label": _free_label(entries, pname), "provider": pname,
+                               "port": a.port, "profile": a.profile, "enabled": True,
+                               "url": prov.default_url}))
+        added += 1
+        print(f"  registered     {pname} on port {a.port} -> {prov.default_url}")
+    if added:
+        raw.setdefault("_note", REGISTRY_NOTE)
+        ACCOUNTS_FILE.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+        print(f"  wrote          {added} new entry(s)")
+
+    fleet = load_accounts()
+    print(f"\n[3/5] chrome -- one per port, on its own profile dir")
+    for port in sorted({x.port for x in fleet.accounts}):
+        if fleet._port_alive(port):
+            print(f"  port {port}     already answering")
+            continue
+        acct = next(x for x in fleet.accounts if x.port == port)
+        launched, detail = fleet._launch_chrome(acct)
+        print(f"  port {port}     {'launched' if launched else 'FAILED'}: {detail}")
+        ok = ok and launched
+
+    print(f"\n[4/5] sign-in -- once per provider, by hand, on purpose")
+    for acct in fleet.accounts:
+        prov = provider_of(acct)
+        fleet.probe(acct)
+        if acct.ready:
+            print(f"  {acct.provider}/{acct.label}: signed in, {acct.credits} credits")
+            continue
+        opened, detail = fleet._open_tab(acct)
+        print(f"  {acct.provider}/{acct.label}: not ready -- {acct.reason}")
+        print(f"      opened {prov.title}: {detail}")
+        if a.no_input:
+            print(f"      --no-input: sign in, then re-run `python {name} setup`")
+            ok = False
+            continue
+        for _ in range(3):
+            try:
+                input(f"      sign in to {prov.title} in that window, then press Enter... ")
+            except (EOFError, KeyboardInterrupt):
+                print("\n      skipped")
+                break
+            fleet.probe(acct)
+            if acct.ready:
+                print(f"      now ready: {acct.credits} credits")
+                break
+            print(f"      still not ready: {acct.reason}")
+        ok = ok and acct.ready
+
+    print(f"\n[5/5] proof -- the same doctor you would run any other day")
+    rc = cmd_doctor(argparse.Namespace(deep=False))
+    if rc == 0 and ok:
+        print(f"\nsetup complete. Next:")
+        print(f"  python {name} serve            # run it now, in this window")
+        print(f"  python {name} boot --install   # and/or start it at boot, unattended")
+        return 0
+    print(f"\nsetup did NOT finish clean -- fix what doctor named above and re-run "
+          f"`python {name} setup`")
+    return 1
+
+
+TASK_BAT = pathlib.Path(__file__).with_name("video_router_task.bat")
+SERVE_LOG = STATE / "video_router_serve.log"
+TASK_KEEP = "OmniRoute Video Router (keepalive)"
+STARTUP_DIR = (pathlib.Path(os.environ.get("APPDATA", pathlib.Path.home()))
+               / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup")
+STARTUP_VBS = STARTUP_DIR / "omniroute_video_router.vbs"
+
+
+def _startup_vbs_text() -> str:
+    """The logon trigger, as a hidden-window .vbs in the per-user Startup folder.
+
+    MEASURED 2026-08-24: `schtasks /Create /SC ONLOGON` answers "Access is denied." from a normal
+    prompt -- an ONLOGON trigger can name any user on the box, so Windows reserves it for an
+    administrator. The Startup folder needs no elevation, is per-user by construction, and runs
+    inside the user's own desktop session, which is exactly the property `serve` needs. This repo
+    already starts oauth_keepalive.py the same way, so this follows that file's shape: Run(cmd, 0,
+    False) means hidden window, do not wait.
+    """
+    return ('Set WshShell = CreateObject("WScript.Shell")\r\n'
+            f'WshShell.Run """{TASK_BAT}""", 0, False\r\n')
+
+
+def _task_bat_text() -> str:
+    """The Task Scheduler wrapper, in the same shape as every other *_task.bat in this directory.
+
+    Two things it has to get right. It runs the repo's own .venv interpreter, like its siblings. And it
+    exits quietly if the direct port already answers, so the 5-minute keepalive trigger acts as a
+    supervisor rather than a second server -- belt and braces over Task Scheduler's IgnoreNew policy.
+    """
+    py = ROOT / ".venv" / "Scripts" / "python.exe"
+    if not py.exists():                      # a machine that never made the venv still gets a wrapper
+        py = pathlib.Path(sys.executable)
+    return (
+        "@echo off\r\n"
+        "rem OmniRoute Video Router -- invoked by Windows Task Scheduler at logon and every 5 min.\r\n"
+        f"rem Starts the two video faces if :{DIRECT_PORT} is not already answering.\r\n"
+        f"rem Written by `python {pathlib.Path(__file__).name} boot --install`; edit that, not this.\r\n"
+        f"cd /d {ROOT}\r\n"
+        f'"{py}" -c "import urllib.request;urllib.request.urlopen('
+        f"'http://127.0.0.1:{DIRECT_PORT}/healthz',timeout=3)\" >nul 2>&1\r\n"
+        "if not errorlevel 1 exit /b 0\r\n"
+        f'"{py}" -u "{pathlib.Path(__file__)}" serve >> "{SERVE_LOG}" 2>&1\r\n')
+
+
+def _schtasks_cmds() -> list[list[str]]:
+    # /IT is not stylistic: the providers are driven through a real Chrome window, so the server needs
+    # an interactive desktop session to heal into. A task running in session 0 would relaunch Chrome
+    # somewhere nobody can ever sign in. The logon half of the job is the Startup .vbs above -- see
+    # _startup_vbs_text for why it is not a second schtasks entry.
+    return [
+        ["schtasks", "/Create", "/F", "/IT", "/TN", TASK_KEEP, "/TR", str(TASK_BAT),
+         "/SC", "MINUTE", "/MO", "5"],
+    ]
+
+
+def cmd_boot(a) -> int:
+    """Register (or just print) the two things that keep `serve` running without a human.
+
+    A Startup-folder .vbs for "start at logon" and a 5-minute schtasks entry for "and keep it
+    started". Prints the plan and changes nothing unless asked -- the same dry-run-first habit as
+    `wake`.
+    """
+    name = pathlib.Path(__file__).name
+    if a.remove:
+        if STARTUP_VBS.exists():
+            STARTUP_VBS.unlink()
+            print(f"  removed   {STARTUP_VBS}")
+        else:
+            print(f"  absent    {STARTUP_VBS}")
+        r = subprocess.run(["schtasks", "/Delete", "/F", "/TN", TASK_KEEP],
+                           capture_output=True, text=True)
+        ok = r.returncode == 0
+        print(f"  {'removed  ' if ok else 'not removed'} {TASK_KEEP}"
+              f"{'' if ok else ': ' + (r.stderr or r.stdout).strip()[:120]}")
+        print(f"\n{TASK_BAT.name} was left in place; delete it by hand if you want it gone.")
+        print("A serve already running is untouched -- Ctrl-C it, or just leave it.")
+        return 0
+
+    if not a.install:
+        print(f"would write {TASK_BAT}:\n")
+        for line in _task_bat_text().splitlines():
+            print("    " + line)
+        print(f"\nwould write {STARTUP_VBS}:\n")
+        for line in _startup_vbs_text().splitlines():
+            print("    " + line)
+        print("\nwould register:\n")
+        for c in _schtasks_cmds():
+            print("    " + subprocess.list2cmdline(c))
+        print(f"\n  {STARTUP_VBS.name:<34} starts it when you log on")
+        print(f"  {TASK_KEEP:<34} restarts it within 5 min if it ever dies")
+        print("\nserve drives real Chrome windows, so it needs an interactive desktop session: a task")
+        print("in session 0 would relaunch Chrome where nobody can ever sign in. That is why the logon")
+        print("trigger is a Startup-folder .vbs and not ONSTART -- if this box reboots to a locked")
+        print("login screen the router waits for a human to log on, and no scheduling trick gets")
+        print("around that. (ONLOGON via schtasks would need an elevated prompt; the Startup folder")
+        print("does not, and this repo already starts oauth_keepalive.py that way.)")
+        print("\nnothing was changed. Re-run with --install to do it.")
+        return 0
+
+    TASK_BAT.write_text(_task_bat_text(), encoding="utf-8")
+    print(f"wrote {TASK_BAT}")
+    SERVE_LOG.parent.mkdir(parents=True, exist_ok=True)
+    rc = 0
+    try:
+        STARTUP_DIR.mkdir(parents=True, exist_ok=True)
+        STARTUP_VBS.write_text(_startup_vbs_text(), encoding="utf-8")
+        print(f"wrote {STARTUP_VBS}")
+    except Exception as e:                                                   # noqa: BLE001
+        rc = 1
+        print(f"  FAILED       {STARTUP_VBS}: {type(e).__name__}: {e}")
+    for c in _schtasks_cmds():
+        r = subprocess.run(c, capture_output=True, text=True)
+        tn = c[c.index("/TN") + 1]
+        if r.returncode == 0:
+            print(f"  registered   {tn}")
+        else:
+            rc = 1
+            print(f"  FAILED       {tn}: {(r.stderr or r.stdout).strip()[:200]}")
+    if rc:
+        print(f"\nSomething above was refused. `python {name} boot` prints the exact commands and file")
+        print("contents if you would rather place them by hand from an elevated prompt.")
+        return rc
+    print("\nserve now starts when you log on, and is restarted within 5 min if it dies.")
+    print(f"  log:     {SERVE_LOG}")
+    print(f'  check:   schtasks /Query /TN "{TASK_KEEP}"')
+    print(f"  undo:    python {name} boot --remove")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1962,6 +2229,20 @@ def main() -> int:
 
     m = sub.add_parser("models", help="every usable model name, per provider")
     m.set_defaults(fn=cmd_models)
+
+    u = sub.add_parser("setup", help="clean machine -> green doctor, one guided idempotent pass")
+    u.add_argument("--port", type=int, default=DEFAULT_PORT,
+                   help="the Chrome debug port every provider's tab lives on")
+    u.add_argument("--profile", default=DEFAULT_PROFILE,
+                   help="safe_profile_dir tag; each Chrome PORT needs its own profile dir")
+    u.add_argument("--no-input", action="store_true",
+                   help="never wait at a sign-in prompt; report what is missing and exit non-zero")
+    u.set_defaults(fn=cmd_setup)
+
+    b = sub.add_parser("boot", help="keep serve running across logons and crashes (Task Scheduler)")
+    b.add_argument("--install", action="store_true", help="actually write the wrapper and register")
+    b.add_argument("--remove", action="store_true", help="delete both scheduled tasks")
+    b.set_defaults(fn=cmd_boot)
 
     a = ap.parse_args()
     try:

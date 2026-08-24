@@ -49,3 +49,7 @@ scratch/MonkeyCode/
 # Windows reserved-name artifact from accidental redirect
 nul
 .aider*
+
+# Local DB rollback backups that carry encrypted provider credentials — keep on disk, never push.
+# (The combos backup has no secrets and is intentionally not matched here.)
+_reactivation_backup_*.json

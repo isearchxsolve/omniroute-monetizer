@@ -7,9 +7,16 @@ would be indistinguishable from a refactor that broke it. The new checks below t
 two-provider seam: routing, per-provider isolation of both the account pool and the cost floor,
 rtst's pre-commit refusals, the 5-character media id, the self-heal guards and the registry
 migration. Still 0 credits: nothing here submits, and the only network is loopback."""
-import json, socket, subprocess, sys, time, urllib.error, urllib.request
+import json, pathlib, socket, subprocess, sys, time, urllib.error, urllib.request
 
 D, C = "http://127.0.0.1:8189", "http://127.0.0.1:8188"
+
+# Snapshotted BEFORE the server starts. This suite runs a --dry-run serve and then queues jobs
+# through both faces, so if a rehearsal record can reach the money ledger, it reaches it here.
+LEDGER = pathlib.Path("D:/omniroute-monetizer/state/video_jobs.jsonl")
+DRY_LEDGER = LEDGER.with_name("video_jobs.dryrun.jsonl")
+LEDGER_BEFORE = LEDGER.read_bytes() if LEDGER.exists() else b""
+DRY_BEFORE = DRY_LEDGER.stat().st_size if DRY_LEDGER.exists() else 0
 
 
 def call(url, payload=None, token=None):
@@ -458,6 +465,21 @@ try:
     finally:
         vr.STATE, vr.ACCOUNTS_FILE, vr.LEGACY_ACCOUNTS_FILE = keep
         _sh.rmtree(tmp, ignore_errors=True)
+
+    print("\n-- the ledger: a rehearsal never lands in the money log -------------------")
+    # MEASURED 2026-08-24: 40 dry-run records had accumulated in video_jobs.jsonl, all
+    # status=succeeded with credits_charged=0 and a borrowed file path. An integrator reading that
+    # file -- or Jobs.load() replaying it -- could not tell them from paid work.
+    now = LEDGER.read_bytes() if LEDGER.exists() else b""
+    check("video_jobs.jsonl is byte-for-byte unchanged by a dry-run run",
+          now == LEDGER_BEFORE, f"{len(LEDGER_BEFORE)} -> {len(now)} bytes")
+    check("...because rehearsals go to their own log",
+          DRY_LEDGER.exists() and DRY_LEDGER.stat().st_size > DRY_BEFORE,
+          f"{DRY_LEDGER.name} grew {DRY_LEDGER.stat().st_size - DRY_BEFORE}B"
+          if DRY_LEDGER.exists() else "MISSING")
+    check("...and the money log is not what Jobs.load() would call history",
+          vr.DRYRUN_JOBS_FILE not in (vr.JOBS_FILE, vr.LEGACY_JOBS_FILE),
+          vr.DRYRUN_JOBS_FILE.name)
 finally:
     srv.terminate()
     try:
