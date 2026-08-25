@@ -5238,3 +5238,19 @@ NSSM service not restarted, operator's live Chrome neither driven nor launched a
 
 **Next Steps:**
 - Launch the candidate tabs on-screen with: python scripts/automation/launch_and_harvest_chats.py launch
+
+### [2026-08-25 23:02] #1075 -- RCA & FIX: CHROME INVISIBLE WINDOW PLACEMENT ON DISK
+**Status:** SUCCESS / FIXED
+**Symptom:** Chrome was listening on port 9222 and answering CDP calls with 9 open tabs, but the GUI window was physically invisible to the operator on the Windows desktop.
+
+**Root Cause Analysis (RCA):**
+1. **Cached Window Coordinates in Preferences:** Chrome persists its last-closed window rectangle on disk in state/automation_profiles/providers/Default/Preferences under browser.window_placement.
+2. **Off-screen Coordinate Drift:** Because this profile was previously driven by off-screen keepalive routines, Preferences had saved left: -1370, right: 30, top: 0, bottom: 900.
+3. **Command-line Override Ignored:** On startup, Chrome's UI engine prioritizes the saved JSON placement over --window-position CLI arguments, rendering the window 1370 pixels to the left of the physical monitor (X: 0 to 1600).
+
+**Resolution & Actions Taken:**
+1. **Terminated Stale Process:** Closed the off-screen Chrome instance cleanly to release file locks.
+2. **Patched Preferences JSON:** Directly reset browser.window_placement in state/automation_profiles/providers/Default/Preferences to left: 100, top: 50, right: 1400, bottom: 800.
+3. **Created Interactive Launcher:** Created launch_candidate_browser.bat and executed it directly into the interactive Desktop shell (Session 1).
+4. **Verified:** Confirmed via sweep_grab.py --port 9222 targets that all 9 candidate tabs are live on port 9222 with proper on-screen placement coordinates.
+
