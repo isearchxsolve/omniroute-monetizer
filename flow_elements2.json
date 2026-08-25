@@ -1,0 +1,146 @@
+[
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "help_outlined\nFlow Help Center\nFlow Help Center",
+    "ariaLabel": null,
+    "role": null,
+    "id": "",
+    "className": "sc-e8425ea6-0 hOBPaw sc-355d1ae3-10 fKYMXf"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "",
+    "ariaLabel": null,
+    "role": null,
+    "id": "",
+    "className": "sc-355d1ae3-7 dfmxeZ"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "Subscribe",
+    "ariaLabel": null,
+    "role": null,
+    "id": "",
+    "className": "sc-16c4830a-1 dnFqQq sc-ea1fc14e-20 hOPiSn"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "close\nDismiss\nDismiss",
+    "ariaLabel": null,
+    "role": null,
+    "id": "",
+    "className": "sc-e8425ea6-0 hOBPaw sc-1b8c5c0f-2 jiIhHM"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "Try Omni now",
+    "ariaLabel": null,
+    "role": null,
+    "id": "",
+    "className": "sc-16c4830a-1 dnFqQq sc-ea1fc14e-13 kclBin"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "",
+    "ariaLabel": "Go to banner 1",
+    "role": null,
+    "id": "",
+    "className": "sc-ea1fc14e-16 bngOnP"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "",
+    "ariaLabel": "Go to banner 2",
+    "role": null,
+    "id": "",
+    "className": "sc-ea1fc14e-16 bngOnP"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "",
+    "ariaLabel": "Go to banner 3",
+    "role": null,
+    "id": "",
+    "className": "sc-ea1fc14e-16 bngOnP"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "",
+    "ariaLabel": "Go to banner 4",
+    "role": null,
+    "id": "",
+    "className": "sc-ea1fc14e-16 bngOnP"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "",
+    "ariaLabel": "Go to banner 5",
+    "role": null,
+    "id": "",
+    "className": "sc-ea1fc14e-16 bngOnP"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "",
+    "ariaLabel": "Go to banner 6",
+    "role": null,
+    "id": "",
+    "className": "sc-ea1fc14e-16 bngOnP"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "add_2\nNew project",
+    "ariaLabel": null,
+    "role": null,
+    "id": "",
+    "className": "sc-16c4830a-1 iofibh sc-a38764c7-0 cgdjfr"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "Get started",
+    "ariaLabel": null,
+    "role": null,
+    "id": "",
+    "className": "sc-16c4830a-1 hxJPrd sc-181bed44-2 cqJnVC"
+  },
+  {
+    "tag": "TEXTAREA",
+    "placeholder": null,
+    "text": "",
+    "ariaLabel": null,
+    "role": null,
+    "id": "g-recaptcha-response-100000",
+    "className": "g-recaptcha-response"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "Previous",
+    "ariaLabel": null,
+    "role": null,
+    "id": "",
+    "className": "sc-defdda7d-8 eKGscy"
+  },
+  {
+    "tag": "BUTTON",
+    "placeholder": null,
+    "text": "Continue",
+    "ariaLabel": null,
+    "role": null,
+    "id": "",
+    "className": "sc-16c4830a-1 fgQBdK"
+  }
+]

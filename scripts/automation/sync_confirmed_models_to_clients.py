@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-REPORT = ROOT / "state" / "healthy_provider_models_rescan.json"
+REPORT = ROOT / "state" / "route_truth.json"
 PROFILE_JSON = Path(__file__).resolve().parent / "98e83bfd-e627-4557-a52e-9dcc8a008f50.json"
 CODEX_YAML = Path(__file__).resolve().parent / "codex omni.yml"
 ZCODE_JSON = Path.home() / ".zcode" / "v2" / "config.json"

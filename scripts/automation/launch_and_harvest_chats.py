@@ -36,24 +36,16 @@ DEFAULT_SITES_FILE = STATE / "free_llm_chat_sites.json"
 
 SENTINEL_PROMPT = "Reply exactly one word: Omni."
 
-# Top initial target URLs to open in browser tabs
-TARGET_URLS = [
-    ("lmsys_arena", "https://arena.lmsys.org"),
-    ("lmsys_chat", "https://chat.lmsys.org"),
-    ("duckduckgo_ai", "https://duckduckgo.com/ai"),
-    ("huggingchat", "https://huggingface.co/chat"),
-    ("poe", "https://poe.com"),
-    ("phind", "https://www.phind.com"),
-    ("blackbox", "https://www.blackbox.ai"),
-    ("perplexity", "https://www.perplexity.ai"),
-    ("v0_dev", "https://v0.dev"),
-    ("puter", "https://puter.com"),
-    ("claude_ai", "https://claude.ai"),
-    ("deepseek", "https://chat.deepseek.com"),
-    ("qwen_ai", "https://chat.qwen.ai"),
-    ("kimi_ai", "https://kimi.moonshot.cn"),
-    ("mistral_chat", "https://chat.mistral.ai")
-]
+def get_target_urls() -> list[tuple[str, str]]:
+    if not DEFAULT_SITES_FILE.exists():
+        return []
+    with open(DEFAULT_SITES_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    urls = []
+    for category in data:
+        for site in category.get("sites", []):
+            urls.append((site["name"], site["url"]))
+    return urls
 
 
 def find_chrome() -> pathlib.Path:
@@ -155,7 +147,7 @@ def cmd_launch(port: int = 9222, profile_tag: str = "providers") -> int:
     profile_dir.mkdir(parents=True, exist_ok=True)
     chrome = find_chrome()
 
-    urls = [url for _, url in TARGET_URLS]
+    urls = [url for _, url in get_target_urls()]
     flags = 0
     if os.name == "nt":
         flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
@@ -203,11 +195,16 @@ async def harvest_page(page, idx: int) -> dict | None:
     async def on_request(request):
         nonlocal captured_exchange
         if request.method in ["POST", "PUT"]:
+            # Ignore telemetry and analytics endpoints
+            url_lower = request.url.lower()
+            if any(x in url_lower for x in ["telemetry", "analytics", "tracking", "browser.events.data.microsoft.com", "log", "metrics"]):
+                return
+
             try:
                 body = request.post_data or ""
                 if (SENTINEL_PROMPT in body or "Omni" in body or "prompt" in body or "messages" in body) and not captured_exchange:
                     headers = request.headers
-                    cookies = await page.context.cookies()
+                    cookies = await page.context.cookies([page.url, request.url])
                     cookie_header = "; ".join([f"{c['name']}={c['value']}" for c in cookies])
                     
                     captured_exchange = {
@@ -310,6 +307,13 @@ async def cmd_harvest(port: int = 9222) -> int:
 
 
 def main():
+    import sys
+    if sys.stdout.encoding.lower() != 'utf-8':
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except AttributeError:
+            pass
+    
     parser = argparse.ArgumentParser(description="Launch & Harvest Chat Sites")
     parser.add_argument("action", choices=["launch", "harvest"], help="Action to perform")
     parser.add_argument("--port", type=int, default=9222, help="CDP Port (default: 9222)")

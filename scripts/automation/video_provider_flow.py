@@ -143,12 +143,24 @@ class FlowProvider(vp.Provider):
 
     # -- session, with the one self-heal that matters -----------------------------------------
 
+    # Two page-state failures, both cured by one reload, neither a credential problem:
+    #   "session token"       -- the tab has sat idle for hours and /fx/api/auth/session answers
+    #                            without an access_token until the page is reloaded.
+    #   "Failed to parse URL" -- the probe ran before the navigation the heal just started had
+    #                            committed, so the document was still about:blank and a RELATIVE
+    #                            fetch had no base to resolve against. MEASURED 2026-08-25: every
+    #                            heal that opened a Flow tab then probed reported
+    #                            `TypeError: Failed to execute 'fetch' on 'Window': Failed to parse
+    #                            URL from /fx/api/auth/session` and was logged as still-down, while
+    #                            the very next `accounts` run showed the same account ready with 960
+    #                            credits. It made a healthy PRO account read as broken twice.
+    RETRYABLE = ("session token", "Failed to parse URL")
+
     def session(self, acct: vp.Account, force: bool = False) -> gf.FlowSession:
         """A live FlowSession for this account, cached briefly.
 
-        The single failure this heals: after the machine sleeps or the tab sits idle for hours,
-        /fx/api/auth/session can answer without an access_token until the page is reloaded. That is
-        a page-state problem, not a credential problem, so one reload is tried before giving up.
+        The failures this heals are listed on RETRYABLE above: both are about the state of the page,
+        not about the credential, so one reload is tried before giving up.
         """
         cached, at = acct.state.get("sess"), acct.state.get("sess_at", 0.0)
         if not force and cached is not None and (time.time() - at) < self.SESSION_TTL:
@@ -158,9 +170,10 @@ class FlowProvider(vp.Provider):
         try:
             sess = gf.FlowSession(FLOW_MATCH, port=acct.port).refresh()
         except vp.NON_FATAL as first:
-            if "session token" not in str(first):
+            if not any(s in str(first) for s in self.RETRYABLE):
                 raise
-            vp.log(f"{acct.label}: no access_token, reloading the Flow tab once")
+            vp.log(f"{acct.label}: {'tab not settled' if 'parse URL' in str(first) else 'no access_token'}"
+                   f", reloading the Flow tab once")
             self._reload(acct)
             sess = gf.FlowSession(FLOW_MATCH, port=acct.port).refresh()
 

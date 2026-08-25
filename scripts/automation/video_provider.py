@@ -175,12 +175,21 @@ class Account:
     """
 
     def __init__(self, provider: str, port: int, label: str = "", enabled: bool = True,
-                 profile: str = "providers", url: str | None = None):
+                 profile: str = "providers", url: str | None = None,
+                 chrome_profile: str | None = None):
         self.provider = provider
         self.port = int(port)
         self.label = label or f"{provider}-{port}"
         self.enabled = bool(enabled)
         self.profile = profile or "providers"
+        # Which sub-profile INSIDE that user-data-dir to open (Chrome's --profile-directory).
+        # None means "let Chrome decide", which it does by reading `last_used` out of Local State --
+        # fine for a dir automation created, wrong for a dir that was mirrored from a multi-profile
+        # Chrome. MEASURED 2026-08-25: state/automation_profiles/niloy is such a mirror (Default,
+        # Profile 14, Profile 16, Profile 17) with last_used=Profile 17, so an unpinned launch drove
+        # Profile 17 while every check read Default, and the operator's hand sign-in appeared to
+        # vanish. Pin it and the profile the human signs into is the profile the router drives.
+        self.chrome_profile = (chrome_profile or None)
         # The last URL this account was successfully probed on. This one field is what makes
         # recovery from a closed Chrome mechanical: Flow's project id exists ONLY in its tab URL
         # (FlowSession parses /project/<uuid> out of location.href), so reopening labs.google/fx

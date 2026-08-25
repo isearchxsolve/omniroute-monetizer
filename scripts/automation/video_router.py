@@ -160,6 +160,15 @@ HEAL_TAB_WAIT = 30           # seconds to wait for a reopened tab to reach ready
 # -- the probe's own 60s timeout is what made a discarded tab expensive to discover in the first place.
 WAKE_EVAL_TIMEOUT = 15
 
+# Where the healed Chrome's window goes. It used to land centred on whatever the operator was
+# looking at and take focus -- once every 5 minutes, forever, because the keepalive task retries
+# that often (worklog #1068). Park it off-screen instead. Set OMNIROUTE_VIDEO_CHROME_OFFSCREEN=0
+# for a visible window, which is what you want while signing a profile in by hand; a window
+# already off-screen can be pulled back with `Browser.setWindowBounds` over CDP.
+CHROME_OFFSCREEN = os.environ.get("OMNIROUTE_VIDEO_CHROME_OFFSCREEN", "1").strip().lower() \
+    not in ("0", "false", "no", "off")
+CHROME_OFFSCREEN_POS = "-32000,-32000"
+
 Account = vp.Account         # re-exported: the registry, the fleet and the smoke test all use it
 
 
@@ -399,7 +408,22 @@ class Fleet:
             return False, str(e)
         if dry_run:
             return True, f"would launch {chrome.name} --user-data-dir={udd} " \
-                         f"--remote-debugging-port={acct.port}"
+                         + (f"--profile-directory={acct.chrome_profile!r} "
+                            if acct.chrome_profile else "") \
+                         + f"--remote-debugging-port={acct.port} " \
+                           f"({'off-screen' if CHROME_OFFSCREEN else 'on-screen'})"
+
+        # Off-screen by default: this launch fires unattended on the keepalive's 5-minute tick, and a
+        # window that steals focus that often is unusable to sit next to. CDP does not care where the
+        # window is, so nothing downstream changes.
+        window = ["--window-size=1400,950"]
+        if CHROME_OFFSCREEN:
+            window.append(f"--window-position={CHROME_OFFSCREEN_POS}")
+
+        # Pin the sub-profile when the registry names one. Without this Chrome opens whatever
+        # Local State calls `last_used`, which is a value the OPERATOR changes by clicking around --
+        # so the profile holding the session could silently stop being the profile we drive.
+        which = [f"--profile-directory={acct.chrome_profile}"] if acct.chrome_profile else []
 
         flags = 0
         if os.name == "nt":
@@ -408,10 +432,11 @@ class Fleet:
             subprocess.Popen(
                 [str(chrome),
                  f"--user-data-dir={udd}",
+                 *which,
                  f"--remote-debugging-port={acct.port}",
                  "--remote-allow-origins=*",
                  "--no-first-run", "--no-default-browser-check", "--disable-sync",
-                 "--window-size=1400,950", "about:blank"],
+                 *window, "about:blank"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
                 creationflags=flags, close_fds=True)
         except OSError as e:
@@ -419,7 +444,10 @@ class Fleet:
         for _ in range(HEAL_PORT_WAIT):
             time.sleep(1)
             if self._port_alive(acct.port):
-                return True, f"chrome up on port {acct.port} (profile {acct.profile})"
+                where = "off-screen" if CHROME_OFFSCREEN else "on-screen"
+                seat = acct.profile + (f"/{acct.chrome_profile}" if acct.chrome_profile
+                                       else " (unpinned: Chrome picks last_used)")
+                return True, f"chrome up on port {acct.port} (profile {seat}, {where})"
         return False, f"launched but port {acct.port} never came up in {HEAL_PORT_WAIT}s"
 
     def _open_tab(self, acct: Account, dry_run: bool = False) -> tuple[bool, str]:
@@ -584,6 +612,8 @@ class Fleet:
         if acct.fault not in vp.HEALABLE:
             self.heal_stats["not_healable"] += 1
             why = ("signed out -- sign in by hand once; automation never types a password"
+                   + (" (the healed window is parked off-screen: relaunch with "
+                      "OMNIROUTE_VIDEO_CHROME_OFFSCREEN=0 to see it)" if CHROME_OFFSCREEN else "")
                    if acct.fault == vp.FAULT_AUTH else f"fault {acct.fault!r} is not heal-able")
             return rec("skip", False, f"{why}: {acct.reason}")
         # Never heal a busy account: healing reloads or reopens a tab, and doing that underneath a
@@ -742,6 +772,8 @@ def _entry(a: dict) -> dict:
             "provider": str(a.get("provider") or "flow").strip().lower(),
             "port": int(a.get("port") or DEFAULT_PORT),
             "profile": str(a.get("profile") or DEFAULT_PROFILE),
+            "chrome_profile": (str(a["chrome_profile"]).strip() or None
+                               if a.get("chrome_profile") else None),
             "enabled": bool(a.get("enabled", True)),
             "url": a.get("url") or None}
 
@@ -807,7 +839,8 @@ def load_accounts() -> Fleet:
             log(f"{e['label']}: no adapter for provider {e['provider']!r} -- entry kept but it can "
                 f"never be routed to (known: {', '.join(sorted(vp.REGISTRY))})")
         accts.append(Account(e["provider"], e["port"], e["label"], e["enabled"],
-                             profile=e["profile"], url=e["url"]))
+                             profile=e["profile"], url=e["url"],
+                             chrome_profile=e.get("chrome_profile")))
     if not accts:
         raise SystemExit(f"no accounts in {ACCOUNTS_FILE}")
     return Fleet(accts, raw)

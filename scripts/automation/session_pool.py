@@ -145,29 +145,30 @@ class SessionPool:
                 self._host_locks[host] = threading.Lock()
             return self._host_locks[host]
 
-    def live(self, modality: Optional[str] = None) -> List[PooledSession]:
+    def live(self, modality: Optional[str] = None, host: Optional[str] = None) -> List[PooledSession]:
         return [s for s in self.sessions if s.dispatchable
-                and (modality is None or s.modality == modality)]
+                and (modality is None or s.modality == modality)
+                and (host is None or s.host == host)]
 
     def _persist(self) -> None:
         _save_pool_state({s.key: s.last_used for s in self.sessions if s.last_used})
 
-    def pick(self, now: float, modality: Optional[str] = None) -> Optional[PooledSession]:
-        cands = [s for s in self.live(modality) if s.cooldown_until <= now]
+    def pick(self, now: float, modality: Optional[str] = None, host: Optional[str] = None) -> Optional[PooledSession]:
+        cands = [s for s in self.live(modality, host) if s.cooldown_until <= now]
         if not cands:
             return None
         cands.sort(key=lambda s: s.last_used)                  # least-recently-used first
         return cands[0]
 
     def chat(self, messages, model=None, modality: Optional[str] = None,
-             tries: Optional[int] = None, **kw) -> Dict[str, Any]:
+             tries: Optional[int] = None, host: Optional[str] = None, **kw) -> Dict[str, Any]:
         """Route ONE call to the least-recently-used live session; on expiry/failure fall to the
         next. Never runs two concurrent calls to the same host (per-host lock)."""
-        max_tries = tries if tries is not None else (len(self.live(modality)) or 1)
+        max_tries = tries if tries is not None else (len(self.live(modality, host)) or 1)
         attempted = 0
         last_exc: Optional[Exception] = None
         while attempted < max_tries:
-            s = self.pick(time.time(), modality)
+            s = self.pick(time.time(), modality, host)
             if s is None:
                 break
             attempted += 1

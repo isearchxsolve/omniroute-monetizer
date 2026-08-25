@@ -14,6 +14,26 @@ from session_pool import SessionPool, ChatError
 pool = SessionPool()
 
 class ShimHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/v1/models":
+            models = [{"id": "session-pool/auto", "object": "model", "created": int(time.time()), "owned_by": "session_pool"}]
+            # List all hosts as well
+            for s in pool.live():
+                models.append({
+                    "id": f"{s.host}/auto",
+                    "object": "model",
+                    "created": int(time.time()),
+                    "owned_by": "session_pool"
+                })
+            resp = {"object": "list", "data": models}
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(resp).encode())
+            return
+        self.send_response(404)
+        self.end_headers()
+
     def do_POST(self):
         if self.path != "/v1/chat/completions":
             self.send_response(404)
@@ -32,12 +52,16 @@ class ShimHandler(BaseHTTPRequestHandler):
             
         messages = req.get("messages", [])
         model = req.get("model")
-        if model == "auto" or model == "auto/best-chat":
+        host_target = None
+        if model and model.endswith("/auto") and model != "session-pool/auto":
+            host_target = model.split("/")[0]
+            model = None
+        elif model == "auto" or model == "auto/best-chat" or model == "session-pool/auto":
             model = None
         
         try:
             # Route strictly to chat modality
-            result = pool.chat(messages, model=model, modality="chat")
+            result = pool.chat(messages, model=model, modality="chat", host=host_target)
         except ChatError as e:
             self.send_response(500)
             self.send_header("Content-Type", "application/json")
