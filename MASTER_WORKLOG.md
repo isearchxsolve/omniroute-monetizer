@@ -5224,3 +5224,17 @@ NSSM service not restarted, operator's live Chrome neither driven nor launched a
 
 **Next Steps:**
 - Begin session harvesting across key multi-model arena and direct web endpoints to populate \state/secrets/session_<host>.json\.
+
+
+### [2026-08-25 22:26] #1074 — AUTOMATED CHAT HARVESTER & TAB LAUNCHER READY
+**Status:** SUCCESS
+**Context:** Implemented an end-to-end two-stage orchestrator (launch_and_harvest_chats.py) to open candidate chat websites in a single on-screen Chrome instance, allow manual Google OAuth sign-in if needed, and autonomously harvest, inject sentinels, intercept POST requests, save session_<host>.json, and verify with universal_replay.py.
+
+**Actions Taken:**
+1. **Created scripts/automation/launch_and_harvest_chats.py:**
+   - 'launch' command opens Chrome with target candidate LLM chat tabs (LMSYS Arena, DuckDuckGo AI, HuggingChat, Poe, Phind, Blackbox, Perplexity, etc.).
+   - 'harvest' command connects via CDP, scans all tabs, auto-injects sentinel prompts via Shadow DOM TreeWalker, sniffs network POST payloads + cookie headers, and saves to state/secrets/session_<host>.json.
+   - Automatically tests live replay with UniversalSessionClient.
+
+**Next Steps:**
+- Launch the candidate tabs on-screen with: python scripts/automation/launch_and_harvest_chats.py launch
