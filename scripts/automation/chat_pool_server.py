@@ -97,6 +97,52 @@ def slug(host: str) -> str:
     return host.replace(".", "-").replace("_", "-").lower()
 
 
+# Host labels are mostly packaging: api-cohere-com and www-perplexity-ai carry one real word each.
+GENERIC_HOST_WORDS = {"api", "www", "com", "ai", "co", "io", "net", "org", "app", "cloud",
+                      "chat", "web", "free", "the", "my", "get", "go"}
+
+
+def seat_token(provider_name: str) -> str:
+    """The one word that identifies a seat: api-cohere-com -> cohere, you-com -> you."""
+    parts = [p for p in provider_name.lower().replace(".", "-").replace("_", "-").split("-")
+             if p and p not in GENERIC_HOST_WORDS]
+    return parts[0] if parts else ""
+
+
+def claude_alias(provider_name: str) -> str:
+    """A Claude-shaped model id for a free-pool seat.
+
+    Claude Code will not accept a model whose id it cannot read as a Claude model, so `pool/you-com`
+    is unselectable there no matter how healthy that seat is -- which made the whole free pool
+    invisible to the one client that matters. Every seat therefore also advertises
+    `pool/claude-sonnet-4-6-<seat>`; the trailing word is what pins the provider.
+    """
+    tok = seat_token(provider_name)
+    return f"pool/claude-sonnet-4-6-{tok}" if tok else "pool/claude-sonnet-4-6"
+
+
+def resolve_seat(providers: list, target: str):
+    """Map the part after `pool/` onto a provider. None means "any healthy seat", not "not found".
+
+    Exact host slugs still win, so `pool/api-cohere-com` keeps working. Otherwise the id is split on
+    dashes and matched word-against-word, which is what makes the Claude-shaped aliases resolve
+    (`claude-sonnet-4-6-cohere` -> cohere) without a hand-maintained table.
+
+    An id naming no known seat rotates instead of erroring: the ids Claude Code sends are not ours to
+    control, and a pool that refuses an unfamiliar name is a pool that answers nothing.
+    """
+    target = (target or "").lower()
+    for p in providers:
+        if p.name == target:
+            return p
+    words = set(target.split("-"))
+    for p in providers:
+        tok = seat_token(p.name)
+        if tok and tok in words:
+            return p
+    return None
+
+
 class Provider:
     """One captured session, plus the state needed to not abuse it."""
 
@@ -609,13 +655,23 @@ class Handler(BaseHTTPRequestHandler):
             }
             self._send(200, st)
         elif path == "/v1/models":
-            mine = [{"id": f"pool/{p.name}", "object": "model", "owned_by": p.host,
-                     "source": "pool", "state": p.status()["state"]}
-                    for p in self.pool.providers]
-            # `pool/auto` is advertised explicitly. It is the id a client should normally send, and a
-            # model that never appears in a list is a model no client will ever pick.
-            mine.insert(0, {"id": "pool/auto", "object": "model", "owned_by": "pool",
-                            "source": "pool", "state": "rotates over every healthy provider"})
+            # The advertised id is the Claude-shaped alias, because an id Claude Code will not accept
+            # is a seat no operator can select. The host slug still resolves if sent, and is reported
+            # here so `/v1/models` remains readable as a map of which real account is behind which id.
+            mine, seen = [], set()
+            for p in self.pool.providers:
+                mid = claude_alias(p.name)
+                if mid in seen:                      # two hosts sharing one word: keep ids unique
+                    mid = f"pool/claude-sonnet-4-6-{p.name}"
+                seen.add(mid)
+                mine.append({"id": mid, "object": "model", "owned_by": p.host,
+                             "source": "pool", "state": p.status()["state"],
+                             "x_host_id": f"pool/{p.name}"})
+            # `pool/claude-sonnet-4-6` is advertised explicitly. It is the id a client should normally
+            # send, and a model that never appears in a list is a model no client will ever pick.
+            mine.insert(0, {"id": "pool/claude-sonnet-4-6", "object": "model", "owned_by": "pool",
+                            "source": "pool", "state": "rotates over every healthy provider",
+                            "x_host_id": "pool/auto"})
             up = []
             if self.upstream:
                 for row in self.upstream.models():
@@ -714,12 +770,13 @@ class Handler(BaseHTTPRequestHandler):
         """
         pinned = None
         # `pool/auto` and `pool/any` are the natural things for a client to send when it does not
-        # care which provider answers, so they mean "no pin" rather than "no such provider".
+        # care which provider answers, so they mean "no pin" rather than "no such provider". So does
+        # a bare Claude-shaped alias with no seat word in it (`pool/claude-sonnet-4-6`).
         if want and want.startswith("pool/") and want.split("/", 1)[1].lower() not in ("auto", "any"):
             target = want.split("/", 1)[1].lower()
-            pinned = next((p for p in self.pool.providers if p.name == target), None)
+            pinned = resolve_seat(self.pool.providers, target)
             if pinned is None:
-                return None, "", f"no provider named {want!r}; see GET /v1/models"
+                log(f"{want!r} names no seat -- rotating instead of refusing")
 
         tried = set()
         attempts = 1 if pinned else max(1, len(self.pool.providers))

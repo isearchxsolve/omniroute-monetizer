@@ -807,33 +807,33 @@
       "isFamilyDefault": false
     },
     {
-      "name": "pool/auto",
-      "labelOverride": "Free pool - auto (rotates over every healthy captured session)",
+      "name": "pool/claude-sonnet-4-6",
+      "labelOverride": "Free pool - auto (rotates every healthy captured seat, no credits)",
       "isFamilyDefault": false
     },
     {
-      "name": "pool/api-cohere-com",
-      "labelOverride": "Free pool - Cohere (4.3s median, 6/6 clean)",
+      "name": "pool/claude-sonnet-4-6-cohere",
+      "labelOverride": "Free pool - Cohere seat (4.3s median, 6/6 clean)",
       "isFamilyDefault": false
     },
     {
-      "name": "pool/www-perplexity-ai",
-      "labelOverride": "Free pool - Perplexity (4.8s median, 7/7 clean)",
+      "name": "pool/claude-sonnet-4-6-perplexity",
+      "labelOverride": "Free pool - Perplexity seat (4.8s median, 7/7 clean)",
       "isFamilyDefault": false
     },
     {
-      "name": "pool/huggingface-co",
-      "labelOverride": "Free pool - HuggingFace (5.4s median, 6/6 clean)",
+      "name": "pool/claude-sonnet-4-6-huggingface",
+      "labelOverride": "Free pool - HuggingFace seat (5.4s median, 6/6 clean)",
       "isFamilyDefault": false
     },
     {
-      "name": "pool/you-com",
-      "labelOverride": "Free pool - You.com (13.2s, verbose: avoid for strict JSON)",
+      "name": "pool/claude-sonnet-4-6-you",
+      "labelOverride": "Free pool - You.com seat (13.2s, verbose: avoid for strict JSON)",
       "isFamilyDefault": false
     },
     {
-      "name": "pool/aymo-ai",
-      "labelOverride": "Free pool - Aymo (walled at last check; recovers on cooldown)",
+      "name": "pool/claude-sonnet-4-6-aymo",
+      "labelOverride": "Free pool - Aymo seat (walled at last check; recovers on cooldown)",
       "isFamilyDefault": false
     }
   ]
