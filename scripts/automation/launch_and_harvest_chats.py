@@ -197,7 +197,7 @@ async def harvest_page(page, idx: int) -> dict | None:
         if request.method in ["POST", "PUT"]:
             # Ignore telemetry and analytics endpoints
             url_lower = request.url.lower()
-            if any(x in url_lower for x in ["telemetry", "analytics", "tracking", "browser.events.data.microsoft.com", "log", "metrics"]):
+            if any(x in url_lower for x in ["telemetry", "analytics", "tracking", "browser.events.data.microsoft.com", "log", "metrics", "/track", "/v1/b", "beacon", "segment"]):
                 return
 
             try:

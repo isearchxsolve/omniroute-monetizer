@@ -9,6 +9,10 @@ class SessionExpired(Exception):
 class ChatError(Exception):
     pass
 
+# A prompt shorter than this is never used to detect an echo by containment: aymo.ai's real answer
+# "Hi!" contains the prompt "hi", and dropping it as an echo emptied the extraction entirely.
+_ECHO_MIN_PROMPT = 24
+
 class UniversalSessionClient:
     """
     Universal HTTP Replay Adapter.
@@ -18,7 +22,11 @@ class UniversalSessionClient:
     """
     def __init__(self, secret):
         import pathlib
+        # Kept so a rotated cookie can be written back to the file it came from. Without a path the
+        # client still works; it just cannot persist rotation past its own process.
+        self._src = None
         if isinstance(secret, pathlib.Path) or isinstance(secret, str):
+            self._src = pathlib.Path(secret)
             with open(secret, "r", encoding="utf-8") as f:
                 self.raw = json.load(f)
         else:
@@ -33,6 +41,12 @@ class UniversalSessionClient:
         # Filter out HTTP/2 pseudo-headers (like :authority, :path) which crash requests
         raw_headers = self.exchange.get("request_headers", {})
         self.headers = {k: v for k, v in raw_headers.items() if not k.startswith(":")}
+
+        # The recorded content-length describes the RECORDED body. Substituting a prompt changes the
+        # length, so keeping it means announcing the wrong size -- a truncated read or a 400 at the
+        # provider. requests computes the right one from the body it is given.
+        self.headers = {k: v for k, v in self.headers.items()
+                        if k.lower() not in ("content-length", "content-md5")}
 
         self.base_body = self.exchange.get("request_body", "")
 
@@ -109,6 +123,26 @@ class UniversalSessionClient:
             return ""
         body = self.base_body
         import urllib.parse
+
+        # The prompt is substituted into a recorded body as raw text, so every character that is
+        # special in that body's ENCODING has to be escaped or the body stops parsing. This is not a
+        # corner case: real prompts contain newlines and quotes constantly, and an unescaped newline
+        # made chat.qwen.ai answer
+        #     {"code":"RequestValidationError","details":["Field '542': JSON decode error"]}
+        # which reads exactly like a dead session but is our own bug. The recorded sentinel contains
+        # no special characters, so it is still searched for literally -- only the replacement is
+        # escaped.
+        # Escape whenever the body carries JSON ANYWHERE, not just when the whole body is JSON.
+        # huggingface.co posts multipart/form-data whose parts contain JSON, so a whole-body check
+        # said "not JSON", the raw newlines went in unescaped and the inner JSON stopped parsing --
+        # HTTP 500. Defaulting to escaped is the safe direction: on a genuinely plain body the only
+        # cost is a newline arriving as the two characters \n, where the other error corrupts the
+        # payload outright.
+        stripped = body.lstrip()
+        is_json = stripped[:1] in ("{", "[") or '{"' in body
+        esc = json.dumps(new_prompt)[1:-1]
+        repl = esc if is_json else new_prompt
+
         for ph in [
             "Reply exactly one word: Omni.",
             "Reply exactly one word: Omni",
@@ -118,13 +152,18 @@ class UniversalSessionClient:
             "Hello"
         ]:
             if ph in body:
-                return body.replace(ph, new_prompt)
+                return body.replace(ph, repl)
+            # A url-encoded body is almost always a form field CARRYING JSON (Google's `f.req`,
+            # Next.js server actions), so the replacement is json-escaped before it is percent
+            # encoded. On a genuinely plain form field this only means a newline arrives as the two
+            # characters \n instead of a real newline -- wrong but harmless, where the other order
+            # corrupts the payload outright.
             ph_url = urllib.parse.quote_plus(ph)
             if ph_url in body:
-                return body.replace(ph_url, urllib.parse.quote_plus(new_prompt))
+                return body.replace(ph_url, urllib.parse.quote_plus(esc))
             ph_url2 = urllib.parse.quote(ph)
             if ph_url2 in body:
-                return body.replace(ph_url2, urllib.parse.quote(new_prompt))
+                return body.replace(ph_url2, urllib.parse.quote(esc))
         return body
 
     @staticmethod
@@ -177,21 +216,192 @@ class UniversalSessionClient:
             return e.get("message") or json.dumps(e)[:200]
         return None
 
+    def _is_echo(self, frag: str) -> bool:
+        """True when a swept fragment is the prompt coming back, not generated text.
+
+        Deliberately narrow, and the bounds were both learned the hard way:
+
+          * NOT "anything that is a substring of the prompt" -- that destroys the answer, because a
+            streamed reply arrives as tokens like "Ver" + "ified" and "Ver" is a substring of
+            "Reply exactly one word: Verified".
+          * `p in f` only counts for a LONG prompt. With prompt "hi", aymo.ai's real answer "Hi!"
+            contains the prompt and was dropped as an echo, which emptied the extraction and made the
+            whole SSE stream fall through to the raw fallback. A short prompt cannot be told apart
+            from a short answer this way, so it is not tried.
+        """
+        p = (getattr(self, "_last_prompt", "") or "").strip().lower()
+        f = (frag or "").strip().lower()
+        if not p or not f:
+            return False
+        return f == p or (len(p) >= _ECHO_MIN_PROMPT and p in f)
+
+    @staticmethod
+    def _looks_like_html(text: str) -> bool:
+        head = text[:400].lstrip().lower()
+        return (head.startswith(("<!doctype", "<html", "<?xml"))
+                or "<meta " in head or "<head>" in head)
+
+    @staticmethod
+    def _strip_xssi(text: str) -> str:
+        """Drop the anti-JSON-hijack prefix Google (and a few others) put in front of a JSON body."""
+        t = (text or "").lstrip()
+        for pref in (")]}'", "while(1);", "for(;;);"):
+            if t.startswith(pref):
+                return t[len(pref):].lstrip()
+        return text
+
+    @classmethod
+    def _deep_strings(cls, node, depth: int = 0) -> list:
+        """Every string in a nested list/dict, in order. Google's reply arrays are positional with
+        no field names, so there is no key to look the answer up by."""
+        if depth > 12:
+            return []
+        if isinstance(node, str):
+            return [node]
+        if isinstance(node, (list, tuple)):
+            out = []
+            for v in node:
+                out.extend(cls._deep_strings(v, depth + 1))
+            return out
+        if isinstance(node, dict):
+            out = []
+            for v in node.values():
+                out.extend(cls._deep_strings(v, depth + 1))
+            return out
+        return []
+
+    @staticmethod
+    def _google_error(text: str) -> Optional[str]:
+        """Google signals a refusal in the SAME envelope it uses for answers, but with a null
+        payload and a `BardErrorInfo` code instead:
+
+            [["wrb.fr",null,null,null,null,[13,null,[["...BardErrorInfo",[1076]]]]]]
+
+        Without this, the envelope parser finds no documents, falls through to the raw fallback and
+        the refusal reads as an answer. Observed on gemini.google.com after two successful replays:
+        the session is state-sensitive, so a refusal here means STOP, not retry.
+        """
+        if "BardErrorInfo" not in (text or ""):
+            return None
+        import re
+        m = re.search(r"BardErrorInfo\"\s*,\s*\[\s*(\d+)", text)
+        code = m.group(1) if m else "unknown"
+        return (f"GOOGLE_REFUSED: BardErrorInfo {code} -- the session replied to earlier replays and "
+                f"is now refusing. State-sensitive or rate-limited; do not retry.")
+
+    @classmethod
+    def _google_envelope(cls, text: str) -> str:
+        """Unwrap Google's batchexecute body: `)]}'`, then alternating length lines and JSON
+        payloads, each `[["wrb.fr",null,"<escaped json>"]]` whose third element is JSON *inside* a
+        JSON string. Neither json.loads on the body nor a regex sweep for `"text":"..."` reaches it.
+
+        Parsed with a streaming json decoder rather than a regex -- a regex over this escaping is
+        unwritable in practice, and the framing is newline-aligned so raw_decode walks it cleanly.
+
+        This is a RESPONSE envelope, not a per-provider request adapter: the same shape is served by
+        every Google property (Gemini, Flow, AI Studio), so one generic handler is worth it.
+
+        Answer path measured on gemini.google.com 2026-08-26 (see inspect_reply_shape.py): the reply
+        lives under `[4][0]` of the inner document, and the streaming increments repeat it, so the
+        LAST document holds the most complete text.
+        """
+        t = cls._strip_xssi(text)
+        if "wrb.fr" not in t:
+            return ""
+        dec = json.JSONDecoder()
+        docs = []
+        i = 0
+        while i < len(t):
+            while i < len(t) and t[i] not in "[{":
+                i += 1
+            if i >= len(t):
+                break
+            try:
+                obj, end = dec.raw_decode(t, i)
+            except ValueError:
+                i += 1
+                continue
+            docs.extend(cls._unwrap_wrb(obj))
+            i = end
+        if not docs:
+            return ""
+        # Later documents are fuller versions of the same reply, so search from the end.
+        for doc in reversed(docs):
+            body = doc[4] if isinstance(doc, list) and len(doc) > 4 else None
+            best = ""
+            for s in cls._deep_strings(body if body is not None else doc):
+                if len(s) <= len(best):
+                    continue
+                if s.startswith(("http://", "https://", "data:")) or "_" in s[:4]:
+                    continue                                   # c_/r_/rc_ ids and urls
+                best = s
+            if best:
+                return best[:4000].strip()
+        return ""
+
+    @classmethod
+    def _unwrap_wrb(cls, obj) -> list:
+        out = []
+        if isinstance(obj, list):
+            for row in obj:
+                if (isinstance(row, list) and len(row) >= 3
+                        and row[0] == "wrb.fr" and isinstance(row[2], str)):
+                    try:
+                        out.append(json.loads(row[2]))
+                    except ValueError:
+                        pass
+                else:
+                    out.extend(cls._unwrap_wrb(row))
+        return out
+
+    @staticmethod
+    def _accumulate(pieces) -> str:
+        """Join stream pieces, handling both delta and CUMULATIVE streams.
+
+        Providers split roughly in half on this. A delta stream sends "Ver" then "ified" and the
+        pieces must be concatenated. A cumulative stream (www.perplexity.ai) sends the whole answer
+        so far in every event, so plain concatenation returns "5858" for an answer of "58".
+
+        A piece that extends everything seen so far SUPERSEDES it; a repeat of the accumulation is
+        dropped; anything else is appended. The `len(acc) >= 2` guard on the repeat case keeps a
+        genuine delta of one repeated character ("a" then "a" -> "aa") from being swallowed.
+        """
+        acc = ""
+        for p in pieces:
+            if not p:
+                continue
+            if acc and p.startswith(acc) and len(p) > len(acc):
+                acc = p
+            elif acc and p == acc and len(acc) >= 2:
+                continue
+            else:
+                acc += p
+        return acc
+
     def _extract_response(self, response_text: str):
         """Return (assembled_text, error_message). Universal across SSE and whole-body JSON."""
         import re
-        text = (response_text or "").strip()
+        text = self._strip_xssi((response_text or "").strip())
+
+        # Checked before the generic paths: a Google body is JSON nested in a JSON string, so the
+        # SSE and whole-body branches both miss it and the raw fallback used to hand back `)]}'`.
+        gerr = self._google_error(response_text or "")
+        if gerr:
+            return "", gerr
+        g = self._google_envelope(response_text or "")
+        if g:
+            return g, None
 
         def scan(objs):
             pieces, err = [], None
             for o in objs:
                 p = self._piece_from_obj(o)
-                if p:
+                if p and not self._is_echo(p):     # a replayed body often carries the user turn back
                     pieces.append(p)
                 e = self._error_from_obj(o)
                 if e:
                     err = e
-            return "".join(pieces).strip(), err
+            return self._accumulate(pieces).strip(), err
 
         # 1) SSE stream: one JSON per `data:` line
         if text.startswith("data:") or "\ndata:" in text:
@@ -223,20 +433,122 @@ class UniversalSessionClient:
         except Exception:
             pass
 
-        # 3) regex sweep for chunked "content"/"text"/"delta" fields
-        matches = re.findall(r'"(?:content|text|answer|delta)"\s*:\s*"([^"]*)"', text)
-        if matches:
-            joined = "".join(matches).replace('\\n', '\n').replace('\\"', '"').strip()
+        # 3) regex sweep for chunked "content"/"text"/"delta" fields.
+        # The sweep covers the WHOLE body, and many providers echo the user turn back inside a
+        # `content` field -- often twice, once as the message and once in the conversation record.
+        # Unfiltered, that echo is concatenated in FRONT of the real answer: chat.mistral.ai scored
+        # as answering "reply exactly one word: verifiedreply exactly one word: verifiedver", which
+        # is the prompt twice plus three generated characters. Echo fragments are dropped so what
+        # survives is what the model actually produced.
+        frags = re.findall(r'"(?:content|text|answer|delta)"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+        frags = [f for f in frags if not self._is_echo(f)]
+        if frags:
+            joined = self._accumulate(frags).replace('\\n', '\n').replace('\\"', '"').strip()
             if joined:
                 return joined, None
 
+        # 4) Nothing structured matched. Handing the raw body back as the reply is how a dead route
+        # reads as a live one: an HTML login wall, error page or marketing landing arrives as "the
+        # model's answer", and anything scoring that text for a keyword can find it in the page's own
+        # markup -- veoaifree.com scored an answer of `<!doctype html>`, and you.com's reply carried
+        # `width=device-width, initial-scale=1` from a <meta> tag. A body we cannot parse is a
+        # failure, not an answer. Short plain-text bodies are still allowed through, because some
+        # providers genuinely answer in text/plain.
+        if self._looks_like_html(text):
+            return "", (f"UNPARSEABLE_HTML: provider returned an HTML page, not an API response "
+                        f"({len(text)} bytes) -- this session does not answer over this endpoint")
+        # A stream we failed to parse is the same false-supply hazard as an HTML page, just
+        # structured: handing the raw SSE back means the caller receives `event: chunk\ndata: {...}`
+        # as the assistant's words. Observed on aymo.ai once the echo filter had wrongly emptied the
+        # parse -- the reply was 804 characters of protocol.
+        if "data: {" in text or text.lstrip().startswith("event:"):
+            return "", (f"UNPARSEABLE_STREAM: {len(text)} bytes of event-stream that no parser "
+                        f"branch could assemble -- refusing to return the protocol as a reply")
+        if len(text) > 4000:
+            return "", (f"UNPARSEABLE: {len(text)} bytes in no recognised response shape -- refusing "
+                        f"to pass a raw body off as a model reply")
         return text[:2000].strip(), None
+
+    # Providers rotate session cookies as they are used: the reply carries Set-Cookie and a real
+    # browser stores it. A replay that keeps re-sending the jar recorded at capture time therefore
+    # decays on the provider's own schedule no matter what any keepalive service does, because the
+    # jar on disk is a SNAPSHOT and nothing was writing back to it. That is the actual expiry path
+    # for these sessions -- OmniRoute's OAuth refresh endpoint cannot touch them, they are not
+    # OmniRoute connections. Absorb the rotation and persist it instead.
+    def _absorb_cookies(self, resp) -> int:
+        rotated: Dict[str, str] = {}
+        for r in list(getattr(resp, "history", []) or []) + [resp]:
+            for c in (getattr(r, "cookies", None) or []):
+                rotated[c.name] = c.value if c.value is not None else ""
+        if not rotated:
+            return 0
+
+        current = self.headers.get("cookie") or self.headers.get("Cookie") or ""
+        jar: Dict[str, str] = {}
+        order: list = []
+        for part in current.split(";"):
+            part = part.strip()
+            if not part or "=" not in part:
+                continue
+            k, _, v = part.partition("=")
+            k = k.strip()
+            if k and k not in jar:
+                order.append(k)
+            jar[k] = v.strip()
+
+        changed = 0
+        for k, v in rotated.items():
+            if not v:                       # cleared by the provider -- honour the deletion
+                if jar.pop(k, None) is not None:
+                    order = [o for o in order if o != k]
+                    changed += 1
+                continue
+            if jar.get(k) != v:
+                if k not in jar:
+                    order.append(k)
+                jar[k] = v
+                changed += 1
+        if not changed:
+            return 0
+
+        merged = "; ".join(f"{k}={jar[k]}" for k in order if k in jar)
+        self.headers["cookie"] = merged
+        self.headers["Cookie"] = merged
+        self._persist_cookies(merged)
+        return changed
+
+    def _persist_cookies(self, merged: str) -> None:
+        """Write the rotated jar back so the NEXT process starts from the fresh one, not the capture.
+
+        Atomic (tmp + replace): a half-written secrets file would take a live provider off the pool.
+        Writes to cookie_header because __init__ gives that key precedence over request_headers.
+        Never logs or returns the value.
+        """
+        if self._src is None:
+            return
+        try:
+            disk = json.loads(self._src.read_text(encoding="utf-8"))
+            disk["cookie_header"] = merged
+            # Keep the embedded copy consistent so a different reader cannot see a stale jar.
+            hdrs = (disk.get("recorded_exchange") or {}).get("request_headers")
+            if isinstance(hdrs, dict):
+                for k in list(hdrs):
+                    if k.lower() == "cookie":
+                        hdrs[k] = merged
+            disk["cookieRotatedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            tmp = self._src.with_name(self._src.name + ".tmp")
+            tmp.write_text(json.dumps(disk, indent=2), encoding="utf-8")
+            tmp.replace(self._src)
+        except Exception:
+            pass   # a stale jar on disk is survivable; losing the answer we just got is not
 
     def chat(self, messages: list, model: Optional[str] = None, **kw) -> Dict[str, Any]:
         if not messages:
             raise ChatError("NO_MESSAGES", "no messages provided")
             
         new_prompt = messages[-1]["content"]
+        # Recorded so _extract_response can tell a generated reply from the prompt echoed back.
+        self._last_prompt = str(new_prompt)
 
         # 1. Inject prompt using LLM
         new_body_str = self._inject_prompt(new_prompt)
@@ -269,7 +581,12 @@ class UniversalSessionClient:
                 req_kwargs["data"] = new_body_str.encode("utf-8")
                 
             r = requests.request(self.method, self.url, **req_kwargs)
-            
+
+            # Only from a non-error reply: a 401/403 body can carry a logged-OUT jar, and storing
+            # that would convert a recoverable session into a dead one.
+            if r.ok:
+                self._absorb_cookies(r)
+
             if r.status_code in (401, 403):
                 raise SessionExpired("Auth rejected: " + r.text[:100])
                 

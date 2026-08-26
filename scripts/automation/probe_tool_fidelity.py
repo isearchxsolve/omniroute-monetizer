@@ -175,7 +175,7 @@ def _heavy_tools() -> list[dict]:
     return tools
 
 
-def probe(model_id: str, heavy: bool = False) -> dict[str, Any]:
+def probe(model_id: str, heavy: bool = False, timeout: int = TIMEOUT) -> dict[str, Any]:
     started = time.perf_counter()
     row: dict[str, Any] = {"model": model_id, "mode": "heavy" if heavy else "light"}
     payload: dict[str, Any] = {

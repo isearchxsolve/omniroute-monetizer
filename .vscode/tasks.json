@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "session_pool_shim",
+			"type": "shell",
+			"command": "python scripts/automation/session_pool_shim.py 8190",
+			"isBackground": true
+		}
+	]
+}

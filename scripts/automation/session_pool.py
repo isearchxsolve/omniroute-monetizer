@@ -58,7 +58,10 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
             return cls
             
     # Universal fallback for any provider with a recorded exchange blueprint
-    if raw and raw.get("recorded_exchange"):
+    if raw and (raw.get("recorded_exchange") or raw.get("recorded_job")):
+        if raw.get("modality") == "video" or any(vh in host for vh in ("video", "flow", "heygen", "akool", "creen", "digen", "veo")):
+            from video_universal_replay import VideoUniversalSessionClient
+            return VideoUniversalSessionClient
         from universal_replay import UniversalSessionClient
         return UniversalSessionClient
         
