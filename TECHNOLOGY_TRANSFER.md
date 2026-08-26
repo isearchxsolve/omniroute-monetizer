@@ -482,7 +482,37 @@ subclass, so a broad `except Exception` cannot swallow it — catch `BaseExcepti
 
 ---
 
-## 9. Layer 5 — Video `[INVENTORY]`
+## 9. Layer 5 — Video
+
+### 9a. The video replay path already exists `[VERIFIED]`
+
+The greps proved it, flat out — video is **the same one-liner as chat** (Law 4), not a new engine:
+
+- `capture_sessions_cdp.py:66` — `SENTINEL = "Reply exactly one word: Omni."`; the file's own comment
+  is *"One sentinel prompt for every provider -- no per-provider adapters,"* and it **refuses to save a
+  capture with no sentinel** in the body (nothing to swap ⇒ nothing to replay).
+- `universal_replay.py` — the chat replay swap. `video_universal_replay.py` —
+  `VideoUniversalSessionClient(UniversalSessionClient)`, the **video** swap already sitting there:
+  `_transform_video_payload` substitutes the prompt into the recorded genuine body (handles Digen's
+  nested `scene_params`), `_extract_job_id` / `_extract_video_url`, `poll_job_status` (async
+  submit→poll→result). Its `chat()` submits + polls + returns the URL. (Ignore its `generate_video()` /
+  `__main__` — that's an OLD live-CDP-Playwright path, not the replay client.)
+- `record_video_job.py` — records the full async submit→poll→result exchange sequence into
+  `state/secrets/session_{host}.json` (read-only, on the ROBOT Chrome). `digen_session_replay.py`,
+  `veo_session_replay.py` — per-provider video replay, already written.
+- **Wired into the pool.** `session_pool.py:55-68` (`_client_for`) returns `VideoUniversalSessionClient`
+  for `modality=="video"` (or video-ish hosts) whenever the secret carries a `recorded_job` /
+  `recorded_exchange`; `session_pool_shim.py` already serves it over HTTP on `:8190` as model
+  `video/{host}/auto`. So the engine is complete end-to-end.
+
+**The only gap** is a face, not an engine: oioi's film kit calls the frozen ASYNC contract on **`:8189`**
+(POST `/v1/video/jobs` → GET `/v1/video/jobs/{id}` → `/v1/video/capacity` → DELETE), but the existing
+face is synchronous `/v1/chat/completions` on `:8190`. Remaining work = a thin `:8189 /v1/video/jobs`
+face over the existing pool video path (reuse `video_router.py`'s JobStore + daemon-thread for the
+202→poll shape; keep `job_key` idempotency). **`video_provider.py`'s normalise/estimate/confirm/submit
+stack is the WRONG engine — it is not on the replay supply path.**
+
+### 9b. The live-CDP router half `[INVENTORY]`
 
 - `video_router.py` (2,294 lines) — the largest file; seat routing, fault classification, tab waking.
 - `video_seat.py`, `video_provider.py`, `video_provider_flow.py`, `video_provider_rtst.py`,
@@ -528,8 +558,11 @@ The single most valuable habit in this repo: **probe, never trust recorded statu
 | `chrome_no_discard.py` | ~230 | stops tab discarding, two layers `[VERIFIED]` |
 | `chrome_live_guard.py` | 646 | refuses any touch of the operator's live Chrome `[VERIFIED]` |
 | `oauth_keepalive.py` | 195 | OmniRoute OAuth refresh (native endpoint) `[VERIFIED]` |
-| `video_router.py` | 2,294 | video seat routing + self-heal `[INVENTORY]` |
-| `session_pool.py` / `session_pool_shim.py` | — | wires harvested sessions into OmniRoute `[INVENTORY]` |
+| `video_router.py` | 2,294 | live-CDP video seat routing + self-heal (§9b) `[INVENTORY]` |
+| `video_universal_replay.py` | — | video replay swap: `VideoUniversalSessionClient`, prompt→body, job-id + URL extraction, async poll (§9a) `[VERIFIED]` |
+| `record_video_job.py` | — | read-only capture of the async submit→poll→result exchange into the secret (§9a) `[VERIFIED]` |
+| `digen_session_replay.py` / `veo_session_replay.py` | — | per-provider video replay clients `[VERIFIED]` |
+| `session_pool.py` / `session_pool_shim.py` | — | LRU router over every grabbed session (chat + video via `modality`); HTTP face on `:8190` `[VERIFIED]` |
 | `launch_and_harvest_chats.py` | — | multi-tab sweep orchestrator `[INVENTORY]` |
 | `drive_capture.py` / `drive.py` | 1,198 | the working Google-path harvester `[INVENTORY]` |
 | `signup_browser.py` / `hf_signup_cdp.py` / `grab_session.py` | — | autonomous signup + capture spine — **reuse, do not rebuild** `[INVENTORY]` |

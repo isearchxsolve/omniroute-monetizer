@@ -34,7 +34,13 @@ class VideoUniversalSessionClient(UniversalSessionClient):
         "resultUrl", "downloadUrl", "download_url", "video_path", "play_url"
     ]
 
-    def __init__(self, secret, timeout: int = 120):
+    def __init__(self, secret, timeout: int = 1800):
+        # 1800s (30min), NOT 120s. History: the synchronous oioi pipeline generated video fine and
+        # failed ONLY on a timeout mid-stage. Moving to async /v1/video/jobs fixes the HTTP timeout
+        # (the face returns 202 immediately), but the ceiling would just move DOWN here -- a 120s
+        # poll budget is far below a real multi-minute render, so every clip would report
+        # "timed out" while the provider was still working, and oioi would retry a live job forever.
+        # The async face is what makes a long ceiling safe: nothing is holding a socket open.
         super().__init__(secret)
         self.timeout = timeout
 
