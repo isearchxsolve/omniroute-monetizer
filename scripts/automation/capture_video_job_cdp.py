@@ -67,6 +67,75 @@ _SENSITIVE_HDR = {"cookie", "authorization", "x-wp-nonce", "x-csrf-token", "set-
 _RESULT_HINTS = ("videourl", "video_url", "\"url\"", ".mp4", "download_url", "downloadurl",
                  "resulturl", "result_url", "output_url", "outputurl", "playurl", "play_url", ".webm")
 
+# Key fragments that look id-shaped but identify the CONNECTION, not the job. These ride along on
+# every subsequent request, so a job id set containing one of them correlates with anything.
+_NOT_A_JOB_ID = ("session", "token", "csrf", "nonce", "secret", "auth", "cookie", "device",
+                 "client", "trace", "request", "sign", "apikey", "api_key", "visitor", "anon")
+
+
+def _result_for_our_job(body: str, ids: set) -> bool:
+    """Is the result in the SAME OBJECT as our job id -- not merely the same response body?
+
+    Measured on digen: `/v1/queue/list` returns `{data:{list:[row,...]}}` where each row is one
+    gallery entry. Our freshly-submitted row sits at `status:2` with an empty result, while four
+    older rows sit at `status:3` carrying finished `.mp4` URLs. An id test and a `.mp4` test that
+    are both scoped to the whole body therefore BOTH pass, and the recording is declared complete
+    while our clip has not started. Row scoping is what makes the id test mean anything: find the
+    object that actually holds our id, and demand the result evidence inside that object.
+
+    Non-JSON bodies cannot be scoped, so they keep the body-level test -- reported as before.
+    """
+    try:
+        doc = json.loads(body)
+    except Exception:
+        return any(i in body for i in ids)
+
+    def holds_our_id(node: dict) -> bool:
+        for v in node.values():
+            if isinstance(v, bool) or v is None or isinstance(v, (dict, list)):
+                continue
+            if str(v) in ids:          # exact, so an 8-digit id cannot match inside a longer number
+                return True
+        return False
+
+    def walk(node: Any) -> bool:
+        if isinstance(node, dict):
+            if holds_our_id(node) and _has_media_value(node):
+                return True
+            return any(walk(v) for v in node.values())
+        if isinstance(node, list):
+            return any(walk(v) for v in node)
+        return False
+
+    return walk(doc)
+
+
+def _has_media_value(node: Any) -> bool:
+    """Does this subtree carry a rendered artifact in a VALUE (not merely a url-ish KEY)?
+
+    `_RESULT_HINTS` contains `"url"`, which matches the *key* `"coverUrl":""` in a serialized row --
+    so testing hints against `json.dumps(row)` says yes for a row whose result fields are all empty.
+    digen's queued row is exactly that. Only a value may be evidence.
+    """
+    _MEDIA_EXT = (".mp4", ".webm", ".mov", ".m4v")
+    _MEDIA_KEY = ("video", "result", "output", "download", "play", "render", "clip", "media")
+
+    def walk(o: Any, key: str) -> bool:
+        if isinstance(o, dict):
+            return any(walk(v, k) for k, v in o.items())
+        if isinstance(o, list):
+            return any(walk(v, key) for v in o)
+        if isinstance(o, str):
+            low = o.lower()
+            if any(x in low for x in _MEDIA_EXT):
+                return True
+            # signed URLs often carry no extension; accept one only when its key names an artifact
+            return low.startswith("http") and len(o) > 20 and any(k in key.lower()
+                                                                  for k in _MEDIA_KEY)
+        return False
+
+    return walk(node, "")
+
 _BODY_CAP = 20000        # chars kept per response body; job JSON is small, video bytes are not
 _SETTLE_S = 45.0         # quiet period after submit that means the sequence is finished
 _TRACKERS = ("google-analytics", "googletagmanager", "doubleclick", "gstatic", "segment.", "intercom",
@@ -433,8 +502,15 @@ class JobRecorder:
                     if isinstance(v, bool) or v is None:
                         continue
                     if isinstance(v, (str, int)):
-                        s = str(v)
-                        if 4 <= len(s) <= 64 and any(t in k.lower() for t in
+                        s, kl = str(v), k.lower()
+                        # A session/trace identifier is NOT a job identifier. digen's submit answers
+                        # {data:{queueId:int}, sessionId:"<36 chars>"} and sessionId rides along on
+                        # every later request -- so correlating on it declares "result seen" for a
+                        # clip still sitting at status=2. Exclude the per-connection identifiers
+                        # BEFORE the include test, or the id set poisons the whole verdict.
+                        if any(t in kl for t in _NOT_A_JOB_ID):
+                            continue
+                        if 4 <= len(s) <= 64 and any(t in kl for t in
                                                      ("id", "uuid", "task", "job", "queue", "key")):
                             self.job_ids.add(s)
                     else:
@@ -463,7 +539,7 @@ class JobRecorder:
             low = body.lower()
             if not any(h in low for h in _RESULT_HINTS):
                 continue
-            if self.job_ids and any(j in body for j in self.job_ids):
+            if self.job_ids and _result_for_our_job(body, self.job_ids):
                 self.result_seen = True
                 self.result_correlated = True
                 return
