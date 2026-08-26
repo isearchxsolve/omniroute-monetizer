@@ -179,9 +179,9 @@ class DigenProvider(vp.Provider):
                             st = job.get("status")
                             if on_status:
                                 on_status(f"status {st}")
-                            if st == 2:  # done
+                            if st == 3:  # 3 is done/completed
                                 return job
-                            if st in (3, 4, -1):  # error states? just an example
+                            if st in (-1, 4):  # error states
                                 raise RuntimeError(f"generation failed: status {st}, job: {job}")
             except requests.RequestException:
                 pass

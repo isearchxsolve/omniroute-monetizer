@@ -107,7 +107,7 @@ class DigenSessionClient:
             raise ChatError("API_ERROR", "No queueId returned from submit", status=200)
 
         # 2. Poll
-        poll_url = "https://api.digen.ai/v1/queue/list?page=0&pageSize=10&status=2"
+        poll_url = "https://api.digen.ai/v1/queue/list?page=0&pageSize=10&status=3"
         start_t = time.time()
         
         while time.time() - start_t < self.timeout:
@@ -119,8 +119,7 @@ class DigenSessionClient:
                     jobs = pres.get("data", {}).get("list", [])
                     for job in jobs:
                         if str(job.get("id")) == str(queue_id) or str(job.get("jobId")) == str(queue_id):
-                            # In digen, status 2 is done (according to prompt: `status==2 means done`)
-                            if job.get("status") == 2:
+                            if job.get("status") == 3:
                                 video_url = job.get("videoUrl") or job.get("videoURLV1")
                                 return {
                                     "text": video_url,
@@ -130,8 +129,6 @@ class DigenSessionClient:
                                     "frames": 1,
                                     "raw_len": len(pr.text)
                                 }
-                            # status 3 is error? Wait, let's keep polling unless status clearly means failure.
-                            # We'll just check status == 2 for done.
             except requests.RequestException:
                 pass # retry on network blip
                 

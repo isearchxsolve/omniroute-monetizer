@@ -630,15 +630,31 @@ class Heartbeat(threading.Thread):
 
 
 def flatten(content: Any) -> str:
-    """Anthropic allows content as a string or a list of blocks; oioi sends both shapes."""
+    """Anthropic allows content as a string or a list of blocks; oioi sends both shapes.
+
+    tool_use and tool_result blocks are rendered to text rather than dropped. A replayed chat UI has
+    no native tool transcript, so an agentic client's second turn would otherwise arrive with the
+    tool call and its output missing -- the model would see itself having said nothing and repeat the
+    call forever.
+    """
     if isinstance(content, str):
         return content
     if isinstance(content, list):
         parts = []
         for b in content:
             if isinstance(b, dict):
-                if b.get("type") in (None, "text") and isinstance(b.get("text"), str):
+                kind = b.get("type")
+                if kind in (None, "text") and isinstance(b.get("text"), str):
                     parts.append(b["text"])
+                elif kind == "tool_use":
+                    parts.append(f"[called tool {b.get('name')} with "
+                                 f"{json.dumps(b.get('input') or {}, ensure_ascii=False)[:TOOL_RESULT_CAP]}]")
+                elif kind == "tool_result":
+                    out = flatten(b.get("content"))
+                    if len(out) > TOOL_RESULT_CAP:
+                        out = out[:TOOL_RESULT_CAP] + f"... [truncated, {len(out)} chars total]"
+                    tag = "tool error" if b.get("is_error") else "tool output"
+                    parts.append(f"[{tag}: {out}]")
             elif isinstance(b, str):
                 parts.append(b)
         return "\n".join(parts)
@@ -686,6 +702,164 @@ def as_single_prompt(messages: list) -> str:
 
 def approx_tokens(text: str) -> int:
     return max(1, len(text or "") // 4)
+
+
+# ---- pool tool-call shim -------------------------------------------------------------------
+#
+# A pool seat is a replayed browser chat exchange: one prompt field in, prose out. It has nowhere to
+# put a `tools` array, so before this shim the array was silently discarded and an agentic client saw
+# every call fail with `No such tool available: read` / `bash` -- the model could not see its tools,
+# still read in its system prompt that it had them, and invented names from habit in lowercase.
+#
+# The pool is not incapable of this. preflight_planner.py already holds these same seats to a strict
+# JSON contract 6/6 by prompt alone. A tool call is just another JSON contract, so it is asked for the
+# same way -- and because the instruction below is itself JSON-shaped, the server's existing
+# demands_json()/unwrap_json() machinery engages and does the extraction from a verbose seat for free.
+#
+# Chat-UI messages are length-capped. A full Claude Code tools array is ~61KB and overflowed the
+# replay outright (the seat returned scraped page HTML), so the rendering below is budgeted hard.
+
+TOOL_PROMPT_CEILING = 8000      # bytes of rendered tool text; observed overflow is ~61KB
+TOOL_RESULT_CAP = 1500          # per tool_result when serialising history into the prompt
+HTML_OVERFLOW_MARKS = ("<!doctype", "<html", "width=device-width", "initial-scale=1")
+
+
+def render_tools(tools: list, ceiling: int = TOOL_PROMPT_CEILING) -> tuple[str, int]:
+    """Render a tools array to prompt text under a byte ceiling. Returns (text, n_included).
+
+    Name, first sentence of the description, and required params only -- verbose schema prose is what
+    blows the budget, and the name is the only part that must survive intact. Whatever does not fit is
+    dropped and the count is returned so the caller can log it: silent truncation reads as "all tools
+    offered" when it was not, which is the wrong-layer inference this project keeps paying for.
+    """
+    lines, used, included = [], 0, 0
+    for t in tools or []:
+        if not isinstance(t, dict) or not t.get("name"):
+            continue
+        desc = str(t.get("description") or "").strip().replace("\n", " ")
+        desc = desc.split(". ")[0][:160]
+        schema = t.get("input_schema") or {}
+        props = list((schema.get("properties") or {}).keys())[:6]
+        req = [p for p in (schema.get("required") or []) if isinstance(p, str)][:6]
+        sig = ", ".join(f"{p}*" if p in req else p for p in props)
+        line = f"- {t['name']}({sig}): {desc}"
+        if used + len(line) + 1 > ceiling:
+            break
+        lines.append(line)
+        used += len(line) + 1
+        included += 1
+    return "\n".join(lines), included
+
+
+def tool_instruction(tools: list) -> tuple[str, int]:
+    """The contract appended to the prompt. Returns (text, n_tools_included)."""
+    rendered, included = render_tools(tools)
+    if not included:
+        return "", 0
+    return (
+        "\n\nYou have these tools available. A parameter marked * is required.\n"
+        f"{rendered}\n\n"
+        "To use a tool, reply with ONLY this JSON object and nothing else -- no prose, no markdown "
+        "fence, no explanation:\n"
+        '{"tool": "<exact tool name from the list above>", "input": {<arguments>}}\n'
+        "Copy the tool name EXACTLY as written above, including its capitalisation.\n"
+        'If no tool is needed, reply with ONLY: {"tool": null, "text": "<your answer>"}'
+    ), included
+
+
+def resolve_tool_name(name: str, tools: list) -> Optional[str]:
+    """Map whatever the seat wrote back to the EXACT name the client registered.
+
+    This is the load-bearing line of the whole shim. A free chat seat writes tool names from habit --
+    `bash`, `BASH`, `bash_tool` -- and the client's dispatcher is case-sensitive, so an unresolved
+    name is a dead session. Matching case- and separator-insensitively against the request's own
+    tools array kills that entire failure class here, whatever the seat returns.
+
+    Returns None when nothing matches: that is an error to report, never a name to guess.
+    """
+    if not name:
+        return None
+    def key(s: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", str(s).lower())
+    want = key(name)
+    registered = [t.get("name") for t in (tools or []) if isinstance(t, dict) and t.get("name")]
+    for real in registered:
+        if key(real) == want:
+            return real
+    # `mcp__server__do_thing` answered as `do_thing`: accept a unique suffix match, never an ambiguous one.
+    tail = [r for r in registered if key(r).endswith(want) and want]
+    if len(tail) == 1:
+        return tail[0]
+    # A seat that invents a name decorates it: `bash_tool`, `tool_bash`, `run_bash`, `bash_command`.
+    # Strip one habitual affix and retry -- still requiring a UNIQUE hit, so an ambiguous strip stays
+    # an error. Guessing between two real tools is worse than reporting that nothing matched.
+    for affix in ("tool", "function", "run", "call", "command"):
+        for stripped in (want[len(affix):] if want.startswith(affix) else "",
+                         want[: -len(affix)] if want.endswith(affix) else ""):
+            if not stripped:
+                continue
+            hit = [r for r in registered if key(r) == stripped]
+            if len(hit) == 1:
+                return hit[0]
+    return None
+
+
+def parse_tool_call(text: str, tools: list) -> tuple[Optional[str], dict, Optional[str]]:
+    """Extract a tool call from a seat's reply. Returns (resolved_name, input, unresolved_name).
+
+    (None, {}, None)        -> no tool call offered; treat the reply as prose
+    (None, {}, "readfile")  -> a call was offered naming a tool that does not exist; caller must fail
+    """
+    if not text:
+        return None, {}, None
+    blob = text.strip()
+    if blob.startswith("```"):                       # a fence survived despite the instruction
+        blob = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", blob).strip()
+    obj = None
+    try:
+        obj = json.loads(blob)
+    except ValueError:
+        # Prose wrapped around the object. Take the first balanced {...} that parses and mentions a tool.
+        for m in re.finditer(r"\{", blob):
+            depth, start = 0, m.start()
+            for i in range(start, min(len(blob), start + 20000)):
+                if blob[i] == "{":
+                    depth += 1
+                elif blob[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            cand = json.loads(blob[start:i + 1])
+                        except ValueError:
+                            break
+                        if isinstance(cand, dict) and "tool" in cand:
+                            obj = cand
+                        break
+            if obj is not None:
+                break
+    if not isinstance(obj, dict) or "tool" not in obj:
+        return None, {}, None
+    raw = obj.get("tool")
+    if raw is None:                                  # explicit "no tool needed" sentinel
+        return None, {}, None
+    resolved = resolve_tool_name(str(raw), tools)
+    if not resolved:
+        return None, {}, str(raw)
+    args = obj.get("input")
+    if not isinstance(args, dict):
+        args = {k: v for k, v in obj.items() if k not in ("tool", "input", "text")}
+    return resolved, args, None
+
+
+def looks_like_overflow(text: str) -> bool:
+    """A seat handed more than its chat UI could carry returns page chrome instead of an answer.
+
+    Observed 2026-08-27 at a 61KB payload. This must never be relayed as an assistant message: prose
+    in that position is exactly what made a routing failure look like a model failure for a whole
+    session.
+    """
+    head = (text or "")[:400].lower()
+    return any(mark in head for mark in HTML_OVERFLOW_MARKS)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -823,6 +997,16 @@ class Handler(BaseHTTPRequestHandler):
         prompt = as_single_prompt(messages)
         anthropic = path == "/v1/messages"
 
+        # A pool seat cannot receive a tools array, so render it into the prompt and ask for the call
+        # back as JSON -- the same contract these seats already satisfy 6/6 for the planner.
+        tools = body.get("tools") if isinstance(body.get("tools"), list) else []
+        tool_text, n_tools = tool_instruction(tools) if tools else ("", 0)
+        if tools:
+            if n_tools < len(tools):
+                log(f"  tools: rendered {n_tools}/{len(tools)} into the prompt "
+                    f"(ceiling {TOOL_PROMPT_CEILING}B) -- the rest were dropped")
+            prompt = prompt + tool_text
+
         text, used, detail = self._dispatch(prompt, body.get("model"))
         if text is None:
             # 503, not 500: the pool is intact, it simply has no provider free right now. A client
@@ -832,32 +1016,67 @@ class Handler(BaseHTTPRequestHandler):
             self._err(503, "overloaded_error", detail)
             return
 
+        # Fail closed on seat overflow. Relaying page chrome as an assistant message is what made a
+        # routing failure look like a model failure for an entire session.
+        if looks_like_overflow(text):
+            log(f"  {used}: reply looks like page chrome, not an answer -- seat overflowed")
+            self._err(502, "api_error",
+                      f"pool seat {used} returned page HTML rather than a reply, which means the "
+                      f"request exceeded what its chat UI can carry. Reduce the payload "
+                      f"({approx_tokens(prompt) * 4}B sent) or use a non-pool route for this call.")
+            return
+
+        tool_name, tool_args, unresolved = (parse_tool_call(text, tools) if tools else (None, {}, None))
+        if unresolved:
+            # The seat invented a tool. Never guess at what it meant: an invented name silently
+            # mapped to a real tool is a wrong action taken with confidence.
+            log(f"  {used}: named a tool that was not offered: {unresolved!r}")
+            self._err(502, "api_error",
+                      f"pool seat {used} asked to call {unresolved!r}, which is not in the tools "
+                      f"array ({n_tools} of {len(tools)} were rendered into the prompt). Not guessing "
+                      f"at the intended tool.")
+            return
+
         if anthropic:
+            if tool_name:
+                content = [{"type": "tool_use", "id": f"toolu_{uuid.uuid4().hex[:24]}",
+                            "name": tool_name, "input": tool_args}]
+                log(f"  {used}: tool_use {tool_name}")
+            else:
+                content = [{"type": "text", "text": text}]
             out = {
                 "id": f"msg_{uuid.uuid4().hex[:24]}",
                 "type": "message",
                 "role": "assistant",
                 "model": body.get("model") or f"pool/{used}",
-                "content": [{"type": "text", "text": text}],
-                "stop_reason": "end_turn",
+                "content": content,
+                "stop_reason": "tool_use" if tool_name else "end_turn",
                 "stop_sequence": None,
                 "usage": {"input_tokens": approx_tokens(prompt),
                           "output_tokens": approx_tokens(text)},
                 "x_pool_provider": used,
             }
         else:
+            msg: dict[str, Any] = {"role": "assistant", "content": None if tool_name else text}
+            if tool_name:
+                msg["tool_calls"] = [{"id": f"call_{uuid.uuid4().hex[:20]}", "type": "function",
+                                      "function": {"name": tool_name,
+                                                   "arguments": json.dumps(tool_args)}}]
             out = {
                 "id": f"chatcmpl-{uuid.uuid4().hex[:20]}",
                 "object": "chat.completion",
                 "created": int(time.time()),
                 "model": body.get("model") or f"pool/{used}",
-                "choices": [{"index": 0, "finish_reason": "stop",
-                             "message": {"role": "assistant", "content": text}}],
+                "choices": [{"index": 0,
+                             "finish_reason": "tool_calls" if tool_name else "stop",
+                             "message": msg}],
                 "usage": {"prompt_tokens": approx_tokens(prompt),
                           "completion_tokens": approx_tokens(text),
                           "total_tokens": approx_tokens(prompt) + approx_tokens(text)},
                 "x_pool_provider": used,
             }
+        if tools:
+            out["x_pool_tools_rendered"] = f"{n_tools}/{len(tools)}"
         if fb:
             # Stated in the reply, not just the log: a caller that silently got a free-tier answer
             # instead of the paid model it asked for needs to be able to see that.

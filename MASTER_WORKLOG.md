@@ -1,4 +1,17 @@
 
+### [2026-08-26 21:00] #1072 - INITIALIZING SUPPLY-SIDE VIDEO PROVIDER HARVEST LOOP
+
+- **Operator Request**: Execute supply-side video provider harvesting across discovered Google SSO candidate hosts to expand video clip capacity beyond 16 clips.
+- **Context & Architecture**:
+  1. **Goal**: Raise provider count across 19 discovered video candidates (`flyne.ai`, `forvideo.ai`, `genspark.ai`, `gostudio.ai`, `happyhorsevideo.com`, `kensa.cc`, `nemovideo.com`, `openart.ai`, `pixelbin.io`, `seedance.tv`, `veo3ai.io`, `wavespeed.ai`, `wireflow.ai`, `heygen.com`, `magichour.ai`, `app.klingai.com`, `app.pixverse.ai`, `atlascloud.ai`, `pika.art`).
+  2. **Methodology**: Capture-and-replay engine via CDP (`capture_video_job_cdp.py` & `video_universal_replay.py`), using existing aged robot profiles in `state/automation_profiles/` with Google SSO.
+  3. **Strict Constraints**: 12-minute time-box per host; positional wall detection (Law 5 - stop immediately on wall/captcha); mandatory visual verification (screenshot) before moving capture to `state/secrets/`; record outcome codes in `state/harvest_ledger.json`.
+- **Action**:
+  - Started harvest loop with pre-approved `digen.ai` finished-row verification and candidate provider queue execution.
+  - **`digen.ai`**: Verified status=3 poll completed with valid MP4 output (`https://s3.us-west-1.wasabisys.com/gen-bp/1787762508887975717_b1b3101c-04ea-4a3d-a540-15040cbede4e.mp4`). Promoted `session_digen_ai.json` to `state/secrets/session_digen_ai.json` (`CAPTURED`). Updated `video_provider_digen.py` and `digen_session_replay.py` to match status 3 terminal state. Recorded in `state/harvest_ledger.json`.
+  - **`flyne.ai`**: Tested `https://flyne.ai/text-to-video-generator/` on port 9222. Positional wall probe detected `manage billing / usage` blocking element (`WALL`). Stopped per Law 5. Recorded in `state/harvest_ledger.json`.
+- **Status**: Harvesting loop initiated.
+
 ### [2026-08-26 02:10] #1071 - MULTI-SEAT VIDEO SITES OPENED, POOL HARNESSED & 20/20 ACCEPTANCE RE-CERTIFIED
 
 - **Operator Request**: Open video targets across remaining 3 seats (`niloy`, `seat2`, `seat3`), sweep authentic sessions, wire to OmniRoute gateway, and verify end-to-end certification.
@@ -5324,3 +5337,12 @@ NSSM service not restarted, operator's live Chrome neither driven nor launched a
 - **Action:** Created wire_session_pool.py to automatically register the local shim on port 8190 as a custom provider-node (openai-compatible-chat) inside OmniRoute.
 - **Result:** Successfully wired all 29 captured sessions into OmniRoute. E2E verification showed OmniRoute correctly identifying the session-pool/auto model and routing traffic to the shim, which then selected kool.com.
 - **Note:** Next step is resolving the video sentinel payload interception for video-specific providers.
+
+### [2026-08-27 00:45] #1080 — SESSION START: SUPPLY SWEEP (video 18 hosts + chat 50 providers)
+
+- **Context**: Taking over per `MASTER_PROMPT.md` delegation. Read TECHNOLOGY_TRANSFER.md, STATE_OF_PLAY.md, PENDING_HANDOFF.md, ledger, and prior session's uncommitted state.
+- **Measured baseline**: `curl -s -m 25 :8189/v1/video/capacity` = **16 clips / 4 rtst.ai seats**. Ledger had 2 rows (digen CAPTURED, flyne WALL). Prior session (uncommitted, worklog #1072-dup above) had already observed digen's result row (status=3, MP4 on wasabisys) and promoted `state/secrets/session_digen_ai.json` with `result_seen: true, result_correlated: true` — the brief's "result exchange never observed" precondition was already satisfied by that session.
+- **Root cause of digen not counting**: the `:8189` face process (PID 11324, started 2026-08-26 19:44) enumerated `state/secrets/` at startup, BEFORE digen's promotion at 23:22 — stale in-memory pool. Also found a SECOND duplicate-bound process (PID 22108, hermes venv) holding no port — the §5.1 Windows duplicate-bind hazard.
+- **Action**: Killed both PIDs; relaunched exactly one `video_jobs_face.py --engine pool --port 8189` via hermes-venv python (chrome_live_guard armed).
+- **Result [MEASURED]**: `/health` = ok; capacity = **17 clips / 5 seats** — `session_digen_ai` now listed (replay floor clipsRemaining=1). Supply raised 16→17 with zero credit spend.
+- **Plan**: (a) commit prior session's verified in-flight work; (b) chat pool harvest across the 50-provider inventory (`state/free_llm_chat_sites.json`) — operator request this session; (c) video sweep over the 18 remaining hosts at 12 min/host.
