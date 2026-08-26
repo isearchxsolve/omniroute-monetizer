@@ -151,7 +151,12 @@ class PoolEngine:
                 return {"ok": False, "provider": r.get("provider") or "pool",
                         "error": "video engine returned no url"}
             return {"ok": True, "provider": r.get("provider") or "pool", "url": url,
-                    "inline_bytes": None, "content_type": "video/mp4", "credits": 0.0}
+                    "inline_bytes": None, "content_type": "video/mp4",
+                    # what the clip really cost, when the seat knows. A replay seat cannot know, and
+                    # 0.0 there means "unknown", not "free". Hardcoding 0.0 for a seat that DOES know
+                    # made GET /v1/video/jobs/{id} report creditsSpent: 0.0 for a clip that had just
+                    # consumed 6 of 17 credits -- a number oioi may ledger against.
+                    "credits": float(r.get("credits") or 0.0)}
         except SessionExpired:
             # seat credential is dead -> oioi must park THIS seat (auth:), not fail the clip globally.
             return {"ok": False, "provider": "pool", "error": "auth: session expired"}

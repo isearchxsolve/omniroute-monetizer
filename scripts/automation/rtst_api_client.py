@@ -271,18 +271,25 @@ class RtstApiClient:
         if not vid:
             url = pick_url(data)                          # some models answer synchronously
             if url:
-                return self._result(url, name, dur, image_refs)
+                return self._result(url, name, dur, image_refs, credits=need)
             raise ChatError("NO_JOB_ID", "rtst accepted the submit but returned no job id")
 
         final = self._poll(vid)
         url = pick_url(final)
         if not url:
             raise ChatError("NO_URL", f"rtst job {vid} finished with no downloadable url")
-        return self._result(url, name, dur, image_refs)
+        return self._result(url, name, dur, image_refs, credits=need)
 
-    def _result(self, url: str, model: str, duration: int, image_refs: list) -> Dict[str, Any]:
+    def _result(self, url: str, model: str, duration: int, image_refs: list,
+                credits: float = 0.0) -> Dict[str, Any]:
         return {"text": url, "label": self.host, "status": "completed",
                 "model": model, "duration": duration,
+                # What the clip actually COST, so the :8189 face can report a true creditsSpent
+                # instead of 0.0. This is the quoted figure, and rtst has been measured to charge
+                # exactly the quote (30->24 on a quote of 6, then 17->11 on the same). Reporting 0.0
+                # for a clip that consumed a third of the balance is the same class of lie as a
+                # hardcoded clipsRemaining: a number the caller trusts, invented by the callee.
+                "credits": float(credits or 0.0),
                 # rtst's documented /video/create body has NO image slot. Saying so is the point: a
                 # silently dropped imageRef looks like success and yields a character-inconsistent
                 # clip. The slot name needs one capture to confirm before this can be honoured.
