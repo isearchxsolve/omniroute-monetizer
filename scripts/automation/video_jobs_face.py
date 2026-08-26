@@ -90,16 +90,38 @@ class PoolEngine:
         return bool(self._live())
 
     def seats(self):
+        """Per-seat capacity, asked of the seat itself whenever the seat can answer.
+
+        A seat whose client exposes capacity() (an API-credential seat like rtst.ai, which can read
+        its own balance for free) reports its REAL credits and clips. A replay seat cannot know its
+        balance without spending, so it keeps the honest floor of 1 clip: capacity>0 iff a seat can
+        actually answer. Reporting a hardcoded 1 for the seats that DO know was understating supply
+        by half on the only live video seat -- oioi plans its motion budget off this number.
+
+        A seat that throws while being asked degrades to the floor and never propagates: a single
+        sick seat must not turn GET /v1/video/capacity into a 500. That is fix #7's discipline
+        (an unclassified non-2xx from capacity() crashes the whole tick) applied on my side of the
+        contract, where it belongs.
+        """
         out = []
         for s in self._live():
             cooldown = getattr(s, "cooldown_until", 0.0) or 0.0
+            credits, clips = 0.0, 1
+            try:
+                cap = getattr(s.client(), "capacity", None)
+                if callable(cap):
+                    c = cap() or {}
+                    credits = float(c.get("creditsRemaining") or 0.0)
+                    # a seat that knows it has zero clips left is reported as zero, not floored to
+                    # 1 -- an optimistic floor there would hand oioi a clip that cannot be rendered.
+                    clips = int(c.get("clipsRemaining") or 0)
+            except Exception:
+                credits, clips = 0.0, 1            # unknown, not empty: fall back to the floor
             out.append({
                 "seat": s.key,
                 "provider": s.host,
-                # we do not track per-seat credits precisely here; report an honest floor of 1 clip
-                # per live dispatchable seat so oioi sees capacity>0 iff a seat can actually answer.
-                "creditsRemaining": 0.0,
-                "clipsRemaining": 1,
+                "creditsRemaining": credits,
+                "clipsRemaining": clips,
                 "cooldownUntil": (cooldown if cooldown > time.time() else None),
             })
         return out
