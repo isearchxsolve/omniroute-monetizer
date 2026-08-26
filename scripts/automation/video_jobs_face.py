@@ -46,6 +46,7 @@ import pathlib
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from concurrent.futures import ThreadPoolExecutor
 
 # scripts/automation imports its siblings by bare module name; keep that working when launched from
 # any cwd.
@@ -57,6 +58,19 @@ NO_CAPACITY_RETRY = 120                 # seconds; the retryAfterSeconds we hand
 VIDEO_STATUS = {"queued", "running", "succeeded", "failed"}
 _JOBID = re.compile(r"^/v1/video/jobs/([0-9a-f]{32})$")
 _CONTENT = re.compile(r"^/v1/video/jobs/([0-9a-f]{32})/content$")
+
+# Capacity probing. Asking a seat for its real balance costs a network round trip, so with N seats a
+# naive GET /v1/video/capacity costs N of them SERIALLY: measured 46s at 4 seats, and the whole point of
+# tonight is raising N. oioi calls capacity() on every tick, and I told Codex it was tick-safe, so a
+# 46s answer is a defect I introduced by making the number honest. Two fixes, both here:
+#   * probe seats in PARALLEL  -> cold cost is one round trip, not N
+#   * cache for CAP_TTL        -> a tick pays nothing at all
+# The cache is deliberately short: credits move only when WE spend, and a spend that outdates the cache
+# just means one job may be accepted against a dry seat and fail with "wall:", which oioi already
+# handles. That is a far cheaper error than a 46-second submit path.
+CAP_TTL = 45.0
+_cap_lock = threading.Lock()
+_cap_cache: dict = {"at": 0.0, "seats": None}
 
 
 def _log(msg: str) -> None:
@@ -87,9 +101,49 @@ class PoolEngine:
         return self.pool.live(modality="video")
 
     def has_capacity(self) -> bool:
-        return bool(self._live())
+        """True iff a seat could actually render a clip.
 
-    def seats(self):
+        Uses the capacity cache ONLY when it is already warm. A cold call falls back to the cheap
+        'is any video seat dispatchable' test rather than triggering a probe, because this runs on the
+        SUBMIT path -- making the first POST after a restart wait on N network round trips would move
+        the timeout that killed the synchronous pipeline into the async one, one layer down.
+        """
+        warm = self._cached_seats()
+        if warm is None:
+            return bool(self._live())
+        return any(int(s.get("clipsRemaining") or 0) > 0 for s in warm)
+
+    @staticmethod
+    def _cached_seats():
+        with _cap_lock:
+            if _cap_cache["seats"] is not None and (time.time() - _cap_cache["at"]) < CAP_TTL:
+                return _cap_cache["seats"]
+        return None
+
+    @staticmethod
+    def _probe(s):
+        """One seat's real capacity, or the honest floor. Never raises."""
+        cooldown = getattr(s, "cooldown_until", 0.0) or 0.0
+        credits, clips = 0.0, 1
+        try:
+            cap = getattr(s.client(), "capacity", None)
+            if callable(cap):
+                c = cap() or {}
+                credits = float(c.get("creditsRemaining") or 0.0)
+                # a seat that knows it has zero clips left is reported as zero, not floored to
+                # 1 -- an optimistic floor there would hand oioi a clip that cannot be rendered.
+                clips = int(c.get("clipsRemaining") or 0)
+        except Exception:
+            credits, clips = 0.0, 1                # unknown, not empty: fall back to the floor
+        return {
+            "seat": s.key,
+            "provider": s.host,
+            "creditsRemaining": credits,
+            "clipsRemaining": clips,
+            "cooldownUntil": (cooldown if cooldown > time.time() else None),
+        }
+
+    def seats(self, force: bool = False):
         """Per-seat capacity, asked of the seat itself whenever the seat can answer.
 
         A seat whose client exposes capacity() (an API-credential seat like rtst.ai, which can read
@@ -102,28 +156,23 @@ class PoolEngine:
         sick seat must not turn GET /v1/video/capacity into a 500. That is fix #7's discipline
         (an unclassified non-2xx from capacity() crashes the whole tick) applied on my side of the
         contract, where it belongs.
+
+        Probes run in parallel and the result is cached for CAP_TTL -- see the note at CAP_TTL.
         """
-        out = []
-        for s in self._live():
-            cooldown = getattr(s, "cooldown_until", 0.0) or 0.0
-            credits, clips = 0.0, 1
-            try:
-                cap = getattr(s.client(), "capacity", None)
-                if callable(cap):
-                    c = cap() or {}
-                    credits = float(c.get("creditsRemaining") or 0.0)
-                    # a seat that knows it has zero clips left is reported as zero, not floored to
-                    # 1 -- an optimistic floor there would hand oioi a clip that cannot be rendered.
-                    clips = int(c.get("clipsRemaining") or 0)
-            except Exception:
-                credits, clips = 0.0, 1            # unknown, not empty: fall back to the floor
-            out.append({
-                "seat": s.key,
-                "provider": s.host,
-                "creditsRemaining": credits,
-                "clipsRemaining": clips,
-                "cooldownUntil": (cooldown if cooldown > time.time() else None),
-            })
+        if not force:
+            warm = self._cached_seats()
+            if warm is not None:
+                return warm
+        live = list(self._live())
+        if not live:
+            out = []
+        else:
+            # max 4 workers: these are free balance reads, one per DISTINCT account, at most once per
+            # CAP_TTL. Wide enough to collapse the latency, narrow enough not to look like load.
+            with ThreadPoolExecutor(max_workers=min(4, len(live))) as ex:
+                out = list(ex.map(self._probe, live))
+        with _cap_lock:
+            _cap_cache["seats"], _cap_cache["at"] = out, time.time()
         return out
 
     def generate(self, *, prompt, aspect_ratio, duration, image_refs, seed):
@@ -150,6 +199,11 @@ class PoolEngine:
             if not url:
                 return {"ok": False, "provider": r.get("provider") or "pool",
                         "error": "video engine returned no url"}
+            # A successful render is the ONLY moment a balance actually changes, so invalidate the
+            # capacity cache here and nowhere else. Invalidating on failures too would leave the cache
+            # permanently cold once jobs are in flight, putting the N-round-trip probe back on the tick.
+            with _cap_lock:
+                _cap_cache["seats"] = None
             return {"ok": True, "provider": r.get("provider") or "pool", "url": url,
                     "inline_bytes": None, "content_type": "video/mp4",
                     # what the clip really cost, when the seat knows. A replay seat cannot know, and
@@ -615,6 +669,17 @@ def serve(bind: str, port: int, engine, public_base=None):
     httpd = ThreadingHTTPServer((bind, port), Handler)
     _log(f"listening on {bind}:{port}  engine={engine.name}  public_base={PUBLIC_BASE}")
     _log("oioi film kit -> POST http://127.0.0.1:8189/v1/video/jobs (frozen async contract)")
+
+    # Warm the capacity cache off the request path. Without this, oioi's FIRST tick after a restart pays
+    # the full parallel probe; with it, the first tick is already warm and every later one is free.
+    def _prime():
+        try:
+            n = engine.seats(force=True) if "force" in engine.seats.__code__.co_varnames else engine.seats()
+            _log(f"capacity primed: {len(n)} seat(s), {sum(int(s.get('clipsRemaining') or 0) for s in n)} clip(s)")
+        except Exception as e:                                   # never let priming break startup
+            _log(f"capacity prime skipped: {type(e).__name__}")
+    threading.Thread(target=_prime, daemon=True).start()
+
     httpd.serve_forever()
 
 
