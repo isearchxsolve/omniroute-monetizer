@@ -39,8 +39,11 @@ _PAYWALL = ("insufficient", "upgrade your plan", "not enough credit", "payment r
             "subscribe", "quota exceeded", "purchase", "out of credit", "no credit", "upgrade to")
 
 
-def _secret_path(host: str) -> pathlib.Path:
-    return SECRETS / f"session_{host.replace('.', '_').replace('/', '_')}.json"
+def _secret_path(host: str, seat: str = "") -> pathlib.Path:
+    stem = f"session_{host.replace('.', '_').replace('/', '_')}"
+    # One provider, several accounts: session_pool globs session_*.json, so a suffixed file is simply
+    # another seat. Without this, recording a second account overwrites the first one's credential.
+    return SECRETS / (f"{stem}_{seat}.json" if seat else f"{stem}.json")
 
 
 def _sld(host: str) -> str:
@@ -57,7 +60,8 @@ def _is_tracker(url: str) -> bool:
     return any(t in u for t in _TRACKERS)
 
 
-def record_job(match: str, host: str, api_substr: str, wait: int, port: int, keep_all: bool) -> int:
+def record_job(match: str, host: str, api_substr: str, wait: int, port: int, keep_all: bool,
+               seat: str = "") -> int:
     print(f"[record-job] armed on {host} — capturing first-party API calls containing {api_substr!r}"
           f"{' (+ all XHR/Fetch)' if keep_all else ''}.")
     print(f"[record-job] >>> now trigger ONE video generation in the {host} tab. Watching {wait}s...")
@@ -154,7 +158,7 @@ def record_job(match: str, host: str, api_substr: str, wait: int, port: int, kee
             "body_truncated": e.get("body_truncated", False),
         })
 
-    path = _secret_path(host)
+    path = _secret_path(host, seat)
     data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"host": host}
     data["recorded_job"] = {"recorded_at": int(time.time()), "api_substr": api_substr,
                             "exchanges": job}
@@ -201,9 +205,12 @@ def main() -> int:
                     help="only record URLs containing this (default: the host's SLD label)")
     ap.add_argument("--wait", type=int, default=300, help="seconds to watch for the generation")
     ap.add_argument("--keep-all", action="store_true", help="also record non-first-party XHR/Fetch")
+    ap.add_argument("--seat", default="",
+                    help="account label, e.g. niloy/seat2 — writes session_<host>_<seat>.json so a "
+                         "second account of the SAME provider is another pool seat, not an overwrite")
     a = ap.parse_args()
     return record_job(a.match, a.host, (a.api_substr or _sld(a.host)).lower(),
-                      a.wait, a.port, a.keep_all)
+                      a.wait, a.port, a.keep_all, a.seat)
 
 
 if __name__ == "__main__":
