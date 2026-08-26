@@ -317,11 +317,19 @@ class Upstream:
         return r.status_code, text, ctype, ""
 
     def models(self) -> list:
-        """Upstream's model list, or [] if it will not answer. Never raises."""
+        """Upstream's model list, or [] if it will not answer QUICKLY. Never raises.
+
+        6s, not 30s, on purpose. GET /v1/models is a discovery call and the free pool's own entries are
+        already in hand, so a slow paid gateway must not decide how long the whole list takes -- at 30s a
+        client times out and sees NOTHING, including the healthy pool models. That is the same shape as
+        letting one sick seat 500 the capacity endpoint: a caller must never lose the part that works
+        because the part that does not work is slow. `x_upstream_reachable: false` in the response is how
+        the caller learns the paid side was skipped.
+        """
         import requests
         hdrs = {"authorization": f"Bearer {self.key}"} if self.key else {}
         try:
-            r = requests.get(f"{self.base}/v1/models", headers=hdrs, timeout=30)
+            r = requests.get(f"{self.base}/v1/models", headers=hdrs, timeout=6)
             d = r.json()
         except Exception:
             return []

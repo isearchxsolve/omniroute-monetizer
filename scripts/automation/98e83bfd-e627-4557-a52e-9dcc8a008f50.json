@@ -1,7 +1,7 @@
 {
   "inferenceProvider": "gateway",
   "inferenceCredentialKind": "static",
-  "inferenceGatewayBaseUrl": "http://127.0.0.1:20128",
+  "inferenceGatewayBaseUrl": "http://127.0.0.1:20130",
   "inferenceGatewayApiKey": "sk-omniroute",
   "inferenceGatewayAuthScheme": "bearer",
   "modelDiscoveryEnabled": false,
@@ -804,6 +804,36 @@
     {
       "name": "sealion/aisingapore/Gemma-SEA-LION-v4-27B-IT",
       "labelOverride": "OmniRoute confirmed: sealion/aisingapore/Gemma-SEA-LION-v4-27B-IT",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "pool/auto",
+      "labelOverride": "Free pool - auto (rotates over every healthy captured session)",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "pool/api-cohere-com",
+      "labelOverride": "Free pool - Cohere (4.3s median, 6/6 clean)",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "pool/www-perplexity-ai",
+      "labelOverride": "Free pool - Perplexity (4.8s median, 7/7 clean)",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "pool/huggingface-co",
+      "labelOverride": "Free pool - HuggingFace (5.4s median, 6/6 clean)",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "pool/you-com",
+      "labelOverride": "Free pool - You.com (13.2s, verbose: avoid for strict JSON)",
+      "isFamilyDefault": false
+    },
+    {
+      "name": "pool/aymo-ai",
+      "labelOverride": "Free pool - Aymo (walled at last check; recovers on cooldown)",
       "isFamilyDefault": false
     }
   ]
