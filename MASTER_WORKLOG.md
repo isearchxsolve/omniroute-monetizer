@@ -5346,3 +5346,14 @@ NSSM service not restarted, operator's live Chrome neither driven nor launched a
 - **Action**: Killed both PIDs; relaunched exactly one `video_jobs_face.py --engine pool --port 8189` via hermes-venv python (chrome_live_guard armed).
 - **Result [MEASURED]**: `/health` = ok; capacity = **17 clips / 5 seats** — `session_digen_ai` now listed (replay floor clipsRemaining=1). Supply raised 16→17 with zero credit spend.
 - **Plan**: (a) commit prior session's verified in-flight work; (b) chat pool harvest across the 50-provider inventory (`state/free_llm_chat_sites.json`) — operator request this session; (c) video sweep over the 18 remaining hosts at 12 min/host.
+
+### [2026-08-27 01:30] #1081 — CHAT HARVEST PASS: 50-PROVIDER INVENTORY SWEPT, REPLAYABLE SUPPLY UNCHANGED AT 5
+
+- **Operator request**: "please harvest chat pool too 50 providers".
+- **Ground truth first**: refreshed `seat_readiness_audit.py` — all 4 seats READY (providers, niloy, seat2, seat3); 34 sweepable sites aggregated. Baseline chat supply: 5 replayable (aymo, cohere, huggingface, perplexity, you.com) per `state/replay_check.json`.
+- **Quarantine**: moved 13 stale failing session files (AUTH/UNPARSEABLE/HTTP_409/SINGLE_USE/NO_ANSWER/BAD_FILE verdicts) to `state/secrets_stale_replayfail/` so the capture planner would re-attempt them. WALL-verdict files kept in place (terminal, not retried).
+- **Sweeps**: `capture_sessions_cdp.py` on ports 9222/9223/9224/9225 with `--all --open`. Recovered two discarded tabs by closing + reopening fresh (`Runtime.enable` hang did not clear with `/json/activate` alone).
+- **New captures this pass (8)**: DeepSeek, Felo, Gemini, Meta AI, VeoAIFree-chat, ChatGPT, Mistral, Monica.
+- **Replay gate result [MEASURED, replay_check.py one-request-each]**: **0 of 8 replayable.** Structural causes per transfer doc §6: DeepSeek pow-token bound (SINGLE_USE), Felo message_id bound (SINGLE_USE), Mistral bootstrap+second-stream, Monica server-side conversation state, ChatGPT captured a `/f/conversation/prepare` bootstrap, Gemini refuses (BardErrorInfo-shaped NO_ANSWER), Meta graphql captured the wrong layer, VeoAIFree-chat now honestly WALL.
+- **Walls encountered and left alone (Law 5)**: pollinations.ai (credit card), yuewen.cn/StepFun (credit card), cloud.sambanova.ai (add payment method). Copilot = websocket-only transport. Puter = discarded tab CDP_ERROR.
+- **Measured outcome: chat pool supply is UNCHANGED at 5 sessions.** `:20130` does not need a restart (its REPLAY_OK gate file gained no new entries). All outcomes recorded in `state/harvest_ledger.json` (14 rows total).
