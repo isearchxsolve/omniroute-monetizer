@@ -572,5 +572,144 @@ borealis explanation, i.e. it is a search product and prefers natural-language p
 Gemini and the three auth-dead seats (`cerebras`, `groq`, `chatgpt` — CDP recorded only 6 headers for
 Cerebras and no auth header; consider merging `Network.requestWillBeSentExtraInfo`).
 
+## 14. The superset gateway `[VERIFIED 2026-08-26]`
+
+A client config carries exactly **one** gateway base URL. Pointing oioi at the pool would therefore cut
+it off from the paid OmniRoute routes, and pointing it at OmniRoute means the free pool is unreachable.
+The obvious answer — ship two configs and swap them when credits die — fails for a human reason: the
+swap is a manual step that gets forgotten at precisely the moment it matters.
+
+So `:20130` is a **superset** of `:20128`:
+
+| request | handled by |
+| --- | --- |
+| `model` starts with `pool/` | served locally from a captured session |
+| anything else | forwarded verbatim to `:20128`, `Authorization` passed through |
+| upstream refuses, or is unreachable | served from the pool; reply carries `x_pool_fallback_reason` |
+
+One config covers both, and the failover is automatic.
+
+**Forward the raw bytes.** `Handler._read_json` stashes `self._raw` and `Upstream.forward` posts *that*,
+not a re-serialised dict. Re-serialising silently drops every field the pool does not model — `tools`,
+`temperature`, `cache_control`, thinking budgets — which is exactly what the paid routes exist for.
+Verified with an echo upstream: all five body keys arrived intact and the auth header was present.
+
+**The fallback trigger is deliberately narrow.** `CREDIT_HINTS` is only matched when the response is
+*already* an error — `status >= 400`, or a 200 whose body carries an `"error"` envelope. A model's own
+prose can contain the word "credit"; treating that as exhaustion would throw away a paid reply **and**
+burn a free session for nothing. A healthy 200 is always relayed untouched, `X-Pool-Source: upstream`.
+
+**Upstream is tried once, never retried.** A wall or a drained account does not clear in milliseconds.
+
+Verified paths: `pool/auto` → `58` locally via aymo; a non-pool model relayed from a stand-in upstream;
+and a real `:20128` reply of HTTP 404 `"no active credentials"` falling back to cohere with the reason
+stated in the response body.
+
+`GET /v1/models` merges both sides, tags each row with `source`, and reports `x_upstream_reachable`.
+`:20128` currently serves no model list, so the merge degrades to pool-only and says so rather than
+pretending.
+
 ---
+
+## 15. The cookie keepalive — solved `[VERIFIED 2026-08-26]`
+
+§7 established that `OmniRouteOAuthKeepAlive` does nothing for harvested browser sessions: there is no
+token to refresh, only traffic. §4.5 established that a successful reply carries `Set-Cookie` which
+`universal_replay._absorb_cookies` writes back to disk. Put together, the keepalive is obvious in
+hindsight: **make sure nothing sits idle long enough to decay.**
+
+`Heartbeat` is a daemon thread inside `chat_pool_server.py` (`--heartbeat-hours`, default 6).
+
+**It must be in-process.** A standalone keepalive daemon would replay the same session concurrently
+with the pool, rotate the cookie on disk under the pool's in-memory jar, and break the next real
+request — and the symptom would look like a dead provider, sending the next agent to re-capture a
+session that was fine. The heartbeat takes the provider's own `threading.Lock`, so it can never overlap
+a real call. Do not "extract this into its own service".
+
+**It is a floor, not a schedule.** Only a provider idle past the window is touched, so a busy pool costs
+nothing extra. Tick is `clamp(idle_s / 10, 5s, 300s)` — a 6-hour window does not need a 5-minute tick,
+and deriving it means a short window is actually testable, which is how this shipped proven instead of
+assumed.
+
+**Two defects found by measuring, both fixed:**
+
+1. `_due()` first gave never-rotated providers a small `idle_s + 1` sentinel, so the one provider that
+   *does* rotate outranked every other forever. Measured: 4 beats to aymo in 40 s, zero to the other
+   four — a breadth-not-depth violation hidden inside a keepalive. Fixed: no stamp now means
+   `float("inf")`, because unknown freshness is the *weakest* state, not the strongest.
+2. Testing with a 3.6-second window walled aymo inside a minute. The 3600 s stand-down caught it and
+   never retried. That is direct evidence the 6-hour production window is load-bearing. **Never test a
+   heartbeat window under ~1 h against a live seat.**
+
+Proof it works: `session_aymo_ai.json` `cookieRotatedAt` moved 08:24:33Z → 09:00:08Z from heartbeat
+traffic alone, and the round-robin then covered all five providers evenly.
+
+Reading `/health`: a provider with `heartbeats > 0` and `state: cooling` failed *on a heartbeat*, which
+means the session is genuinely gone rather than merely idle. That distinction is the whole diagnostic
+value of the counter.
+
+---
+
+## 16. Restoration and portability `[VERIFIED 2026-08-26]`
+
+### What survives what
+
+| failure | chat supply | video supply |
+| --- | --- | --- |
+| pool process crash | survives — supply is files on disk | unaffected |
+| Chrome crash | **survives entirely** | **destroyed** — needs live CDP tabs |
+| full reboot | survives | destroyed until tabs are re-opened |
+| move to a new machine | survives (see below) | destroyed — profiles cannot be copied |
+
+That asymmetry is the payoff of capturing to JSON rather than driving a live browser, and it is worth
+stating explicitly because the intuition runs the other way: people expect a browser-based harness to
+be fragile against a browser crash.
+
+### `omni_supervisor.py`
+
+Declarative service table, `--once` / `--up` / `--watch`, writes `state/supervisor_status.json`.
+
+Three rules encoded in the code, not just the docs:
+
+- **OmniRoute is never restarted, stopped, or killed from here.** Probe and report only. It holds live
+  OAuth connections whose refresh state is server-side, and bouncing the process to "fix" a bad probe
+  has cost real credentials before. A red line in the report *is* the correct output.
+- **The video router belongs to the 5-minute scheduled task** (`OmniRoute Video Router (keepalive)`).
+  Do not fight it; it always wins. Marked `owned=False`.
+- **Restarts match on the command line, not the port.** A port can be held by somebody else's service,
+  and killing it would be the outage rather than the fix. A foreign process on our port is reported as
+  `PORT_TAKEN_BY_OTHER` and left alone. Backoff is `[5, 15, 60, 180]` and then it **gives up and
+  reports** — a supervisor in a restart loop is indistinguishable from the fault it is hiding.
+
+Verified: killed the pool → detected `DOWN` → `--up` → restarted → answering `58` again.
+
+### `omni_portable.py`
+
+The hard line is **credential storage**, not code.
+
+**Portable** — `state/secrets/session_*.json` (the whole chat supply), `state/replay_check.json`,
+client configs, the repo. Nothing in a session file is machine-bound.
+
+**Never copy** — `state/omniroute_password.bin` (DPAPI-sealed to this user+machine) and
+`state/automation_profiles/**` / `browser_profile` / `harvest_profile`. Chrome's cookie encryption key
+is DPAPI-bound, so a copied profile has a `Cookies` database it cannot read: **every file present,
+every login gone.** That is the worst possible failure mode because it reads as a successful restore.
+Google is worse — DBSC can treat the move as a compromise and revoke permanently (§8).
+
+Three things always need a human on a new machine: Chrome sign-ins for the video seats, re-sealing the
+OmniRoute password locally, and re-connecting OmniRoute's OAuth providers. `--doctor` prints them every
+time, so nobody concludes an import was complete when it structurally cannot be.
+
+Two guards worth keeping:
+
+- `--export` **refuses to write inside the repo.** The bundle holds live cookie jars and would be one
+  `git add -A` from publication.
+- `--import` **will not roll a cookie backwards.** Rotation is written into the session file on every
+  successful call, so a bundle taken last week holds jars the provider has since rotated away from;
+  restoring it looks like success and leaves dead sessions. Any session file whose local copy has a
+  newer `cookieRotatedAt` is skipped and named. Verified with a deliberately staled bundle: 27 files
+  restored, the live aymo jar kept.
+
+---
+
 *Living document — appended as work proceeds. Last updated 2026-08-26.*

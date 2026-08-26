@@ -35,6 +35,24 @@ cooldown, because those are usually ours.
 
 No secret is logged. Session files hold cookies and tokens; only the host, the verdict, the latency
 and the reply length ever reach stdout or /health.
+
+Superset gateway: one config, both kinds of supply
+-------------------------------------------------
+A client config carries exactly ONE gateway base URL, so pointing it here would normally cut it off
+from the paid OmniRoute routes on :20128. Instead this server is a SUPERSET of :20128:
+
+    model starts with "pool/"   -> served here, from a free captured session
+    anything else               -> forwarded verbatim to :20128, auth header passed through
+    upstream refuses or is down -> served here instead, and the reply says why
+
+That last line is the point. When the paid credits run out, the free pool takes over inside the same
+endpoint, with no config swap and no client change. `--no-upstream` turns the forwarding off and makes
+this a pool-only server again.
+
+The fallback trigger is deliberately conservative. A model's own answer can easily contain the word
+"credit", and treating that as an exhausted account would throw away a paid reply AND burn a free
+session for nothing. So the body is only inspected for credit language when the response is already an
+error -- a healthy 200 is always passed through untouched.
 """
 
 from __future__ import annotations
@@ -63,6 +81,9 @@ COOLDOWN_FAIL_S = 90.0        # transport / parse failure: probably ours, short 
 COOLDOWN_WALL_S = 3600.0      # credits, captcha, quota, auth: long stand-down, never retried
 WAIT_FOR_SLOT_S = 8.0         # how long a request will wait for a provider to come off interval
 
+UPSTREAM_DEFAULT = "http://127.0.0.1:20128"   # OmniRoute chat -- the paid/OAuth side
+UPSTREAM_TIMEOUT_S = 180.0    # generous: OmniRoute has been measured taking ~60s+ on some routes
+
 
 def now() -> float:
     return time.monotonic()
@@ -90,6 +111,8 @@ class Provider:
         self.calls = 0
         self.ok = 0
         self.fail = 0
+        self.beats = 0
+        self.last_beat_iso = ""
         self.lock = threading.Lock()
         self._client = None
 
@@ -123,6 +146,12 @@ class Provider:
             "calls": self.calls,
             "ok": self.ok,
             "fail": self.fail,
+            # Idleness is the interesting number, not busyness. A session that keeps serving keeps
+            # absorbing rotated cookies and looks after itself; an idle one decays on the provider's
+            # own schedule. This is what the heartbeat watches.
+            "idleSeconds": None if not self.last_used else round(now() - self.last_used),
+            "heartbeats": self.beats,
+            "lastHeartbeat": self.last_beat_iso or None,
         }
 
 
@@ -218,6 +247,229 @@ def classify_failure(msg: str) -> tuple[float, str]:
     return COOLDOWN_FAIL_S, "replay failed"
 
 
+# Language that means the PAID side has nothing left to give, so the free pool should answer instead.
+# Only ever matched against a response already known to be an error (see Upstream.forward), because a
+# model's own prose about "credits" or "quota" must not be mistaken for an exhausted account.
+CREDIT_HINTS = ("credit", "quota", "insufficient", "billing", "payment", "exhausted", "balance",
+                "no active credentials", "rate limit", "too many requests", "unauthorized",
+                "forbidden", "expired")
+
+
+class Upstream:
+    """OmniRoute (:20128) seen from here: forward, and say when the caller should fall back.
+
+    Deliberately NOT a streaming proxy. :20128 force-streams SSE even for stream:false, and the reply
+    has to be inspected before it can be trusted, so it is buffered whole. That is fine for chat and
+    would not be for video -- which is one more reason the two faces stay separate processes.
+    """
+
+    def __init__(self, base: str, key: str = ""):
+        self.base = (base or "").rstrip("/")
+        self.key = key
+        self.calls = 0
+        self.ok = 0
+        self.fallbacks = 0
+        self.last_reason = ""
+
+    def forward(self, path: str, raw: bytes, auth: str) -> tuple:
+        """Returns (status, text, content_type, fallback_reason).
+
+        A non-empty fallback_reason means "do not serve this response; use the free pool" -- either
+        because the paid side refused, or because it is not answering at all.
+        """
+        import requests
+        hdrs = {"content-type": "application/json"}
+        tok = auth or (f"Bearer {self.key}" if self.key else "")
+        if tok:
+            hdrs["authorization"] = tok
+        self.calls += 1
+        try:
+            r = requests.post(f"{self.base}{path}", data=raw, headers=hdrs,
+                              timeout=UPSTREAM_TIMEOUT_S)
+        except Exception as e:
+            self.last_reason = f"upstream {self.base} unreachable: {type(e).__name__}"
+            self.fallbacks += 1
+            return None, "", "", self.last_reason
+
+        text = r.text or ""
+        ctype = r.headers.get("content-type", "application/json")
+        low = text.lower()
+
+        if r.status_code >= 400:
+            hint = next((h for h in CREDIT_HINTS if h in low), None)
+            why = (f"upstream HTTP {r.status_code}"
+                   + (f" and the body says {hint!r} -- treating the paid side as out"
+                      if hint else " -- paid side refused"))
+            self.last_reason = why
+            self.fallbacks += 1
+            return r.status_code, text, ctype, why
+
+        # A 200 that is really an error. Checked narrowly: the body has to look like an error
+        # envelope AND carry credit language before a paid answer is thrown away.
+        if '"error"' in low and any(h in low for h in CREDIT_HINTS):
+            hint = next(h for h in CREDIT_HINTS if h in low)
+            why = f"upstream returned 200 with an error envelope mentioning {hint!r}"
+            self.last_reason = why
+            self.fallbacks += 1
+            return r.status_code, text, ctype, why
+
+        self.ok += 1
+        return r.status_code, text, ctype, ""
+
+    def models(self) -> list:
+        """Upstream's model list, or [] if it will not answer. Never raises."""
+        import requests
+        hdrs = {"authorization": f"Bearer {self.key}"} if self.key else {}
+        try:
+            r = requests.get(f"{self.base}/v1/models", headers=hdrs, timeout=30)
+            d = r.json()
+        except Exception:
+            return []
+        rows = d.get("data") if isinstance(d, dict) else None
+        return rows if isinstance(rows, list) else []
+
+    def status(self) -> dict[str, Any]:
+        return {
+            "base": self.base,
+            "role": "paid/OAuth routes, tried first for any model not named pool/*",
+            "calls": self.calls,
+            "ok": self.ok,
+            "fellBackToPool": self.fallbacks,
+            "lastFallbackReason": self.last_reason or None,
+        }
+
+
+HEARTBEAT_PROMPT = "Reply with only the word: ok"
+HEARTBEAT_TICK_MAX_S = 300.0    # how often the thread looks; NOT how often a provider is touched
+HEARTBEAT_TICK_MIN_S = 5.0
+
+
+class Heartbeat(threading.Thread):
+    """Keeps idle captured sessions alive by giving them the one thing that actually refreshes them:
+    a small amount of real traffic.
+
+    This is the answer to "can we keep the cookies alive". There is no token to refresh -- these are
+    browser sessions, not OAuth grants, so `POST /api/providers/{id}/refresh` does nothing for them
+    (that is OmniRoute's mechanism, for OmniRoute's connections). What refreshes them is a successful
+    request: the provider replies with `Set-Cookie`, and `universal_replay._absorb_cookies` merges it
+    back into the jar on disk. A session that serves traffic therefore renews itself, and an IDLE
+    session is the one that dies. So the "keepalive" is simply: make sure nothing sits idle too long.
+
+    Three properties make this safe rather than a hammer:
+
+      * It runs INSIDE the pool process and takes the provider's own lock. A separate keepalive process
+        would replay the same session concurrently, rotate the cookie under the pool's in-memory copy,
+        and break the next real request -- the failure would look like a dead provider and be blamed on
+        the provider.
+      * It is a FLOOR, not a schedule. A provider that real traffic already touched inside the window
+        is skipped, so a busy pool costs nothing extra. Only genuine idleness triggers a call.
+      * At most one provider per tick, and a failure goes through the same `stand_down` path as a real
+        request -- so a walled or dead session is dropped, never retried in a loop. A keepalive that
+        keeps knocking on a wall is worse than no keepalive.
+    """
+
+    def __init__(self, pool: "Pool", idle_hours: float):
+        super().__init__(daemon=True, name="heartbeat")
+        self.pool = pool
+        self.idle_s = idle_hours * 3600.0
+        # A tenth of the window, clamped. Checking every 5 minutes for a 6-hour window is pointless
+        # precision, and it also makes a short window untestable -- which is how a keepalive ships
+        # unproven and is discovered dead months later.
+        self.tick_s = min(HEARTBEAT_TICK_MAX_S, max(HEARTBEAT_TICK_MIN_S, self.idle_s / 10.0))
+        self.beats = 0
+        self.failures = 0
+        self.skipped_busy = 0
+        self.last_note = ""
+        self._stop = threading.Event()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def _due(self) -> Optional["Provider"]:
+        """The single stalest provider that is idle past the window, or None."""
+        best, best_idle = None, -1.0
+        for p in self.pool.providers:
+            if not p.available():
+                continue                       # cooling: leave it entirely alone
+            if p.last_used:
+                idle = now() - p.last_used
+            else:
+                # Not touched in this process. Fall back to the file's own rotation stamp so a restart
+                # does not re-beat everything at once.
+                #
+                # A provider with NO stamp ranks as maximally stale, not minimally. Most providers
+                # never rotate a cookie at all, so "no stamp" is the normal case, and an earlier
+                # version used a small sentinel here -- which made every never-stamped provider lose
+                # to the one provider that does rotate. Measured: aymo took 4 beats in 40s while the
+                # other four were never touched. Unknown freshness is the weakest state, so it wins.
+                stamp = self._file_stamp(p)
+                idle = (now() - stamp) if stamp else float("inf")
+            if idle < self.idle_s:
+                self.skipped_busy += 1
+                continue
+            if idle > best_idle:
+                best, best_idle = p, idle
+        return best
+
+    @staticmethod
+    def _file_stamp(p: "Provider") -> float:
+        """Monotonic-clock equivalent of when the session file was last rotated, or 0 if never."""
+        try:
+            disk = json.loads(p.path.read_text(encoding="utf-8"))
+            stamp = disk.get("cookieRotatedAt")
+            if not stamp:
+                return 0.0
+            t = time.mktime(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ")) - time.timezone
+            return now() - max(0.0, time.time() - t)
+        except Exception:
+            return 0.0
+
+    def run(self) -> None:
+        # Wait one tick before the first beat: at startup every provider looks maximally idle, and
+        # beating all of them the moment the server comes up is a burst, which is the thing to avoid.
+        while not self._stop.wait(self.tick_s):
+            try:
+                p = self._due()
+                if p is None:
+                    continue
+                with p.lock:                      # cannot overlap a real request, ever
+                    if not p.available():         # re-check under the lock
+                        continue
+                    started = time.perf_counter()
+                    try:
+                        res = p.client().chat([{"role": "user", "content": HEARTBEAT_PROMPT}])
+                        text = str((res or {}).get("text") or "").strip()
+                        if not text:
+                            raise RuntimeError("empty reply")
+                        ms = round((time.perf_counter() - started) * 1000)
+                        p.last_used = now()
+                        p.beats += 1
+                        p.last_beat_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                        self.beats += 1
+                        self.last_note = f"{p.name} kept warm"
+                        log(f"  heartbeat {p.name:22s} OK   {ms:6d}ms")
+                    except Exception as e:
+                        cd, reason = classify_failure(f"{type(e).__name__}: {e}")
+                        p.stand_down(cd, f"heartbeat {reason}: {type(e).__name__}")
+                        self.failures += 1
+                        self.last_note = f"{p.name} failed its heartbeat: {reason}"
+                        log(f"  heartbeat {p.name:22s} FAIL {reason} (cooling {int(cd)}s)")
+            except Exception as e:
+                # A heartbeat must never be able to take the server down with it.
+                self.last_note = f"heartbeat thread error: {type(e).__name__}"
+
+    def status(self) -> dict[str, Any]:
+        return {
+            "idleWindowHours": round(self.idle_s / 3600.0, 2),
+            "tickSeconds": self.tick_s,
+            "beatsSent": self.beats,
+            "beatFailures": self.failures,
+            "note": self.last_note or "no beat needed yet",
+            "mechanism": ("traffic, not token refresh -- a successful reply carries Set-Cookie which "
+                          "is absorbed back into the jar on disk"),
+        }
+
+
 def flatten(content: Any) -> str:
     """Anthropic allows content as a string or a list of blocks; oioi sends both shapes."""
     if isinstance(content, str):
@@ -280,6 +532,8 @@ def approx_tokens(text: str) -> int:
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     pool: Pool = None                                   # set on the class before serve_forever
+    upstream: Optional[Upstream] = None                 # None => pool-only, no forwarding
+    heartbeat: Optional[Heartbeat] = None               # None => no idle-session keepalive
     server_version = "OmniChatPool/1.0"
 
     def log_message(self, fmt: str, *args) -> None:
@@ -299,16 +553,35 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
     def _read_json(self) -> Optional[dict]:
+        self._raw = b""
         try:
             n = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             return None
         if n <= 0:
             return {}
+        # The raw bytes are kept because a forwarded request must reach :20128 byte-for-byte.
+        # Re-serialising the parsed dict would drop any field this server does not model, and those
+        # fields (tools, thinking budgets, cache_control) are exactly what the paid routes are for.
+        self._raw = self.rfile.read(n)
         try:
-            return json.loads(self.rfile.read(n).decode("utf-8", "replace"))
+            return json.loads(self._raw.decode("utf-8", "replace"))
         except ValueError:
             return None
+
+    def _send_raw(self, code: int, text: str, ctype: str) -> None:
+        """Relay an upstream reply unchanged. Content-Type is carried over so an SSE body still
+        announces itself as SSE, even though it arrived here fully buffered."""
+        raw = text.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", ctype or "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("X-Pool-Source", "upstream")
+        self.end_headers()
+        try:
+            self.wfile.write(raw)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def _err(self, code: int, kind: str, msg: str) -> None:
         self._send(code, {"type": "error", "error": {"type": kind, "message": msg}})
@@ -318,13 +591,34 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = self.path.split("?", 1)[0].rstrip("/") or "/"
         if path in ("/health", "/"):
-            self._send(200, self.pool.status())
+            st = self.pool.status()
+            st["upstream"] = self.upstream.status() if self.upstream else {
+                "base": None, "role": "disabled (--no-upstream): pool-only server"}
+            st["heartbeat"] = self.heartbeat.status() if self.heartbeat else {
+                "idleWindowHours": None,
+                "note": "disabled (--heartbeat-hours 0): idle sessions will decay on the provider's "
+                        "own schedule until real traffic or a re-capture refreshes them",
+            }
+            self._send(200, st)
         elif path == "/v1/models":
-            self._send(200, {"object": "list", "data": [
-                {"id": f"pool/{p.name}", "object": "model", "owned_by": p.host,
-                 "state": p.status()["state"]}
-                for p in self.pool.providers
-            ]})
+            mine = [{"id": f"pool/{p.name}", "object": "model", "owned_by": p.host,
+                     "source": "pool", "state": p.status()["state"]}
+                    for p in self.pool.providers]
+            # `pool/auto` is advertised explicitly. It is the id a client should normally send, and a
+            # model that never appears in a list is a model no client will ever pick.
+            mine.insert(0, {"id": "pool/auto", "object": "model", "owned_by": "pool",
+                            "source": "pool", "state": "rotates over every healthy provider"})
+            up = []
+            if self.upstream:
+                for row in self.upstream.models():
+                    if isinstance(row, dict) and row.get("id"):
+                        r = dict(row)
+                        r["source"] = "upstream"
+                        up.append(r)
+            # Upstream first: those are the paid routes, and a client that takes the head of the list
+            # should get the good one while credits last.
+            self._send(200, {"object": "list", "data": up + mine,
+                             "x_upstream_reachable": bool(up) if self.upstream else None})
         else:
             self._err(404, "not_found", f"no route {path}")
 
@@ -337,6 +631,22 @@ class Handler(BaseHTTPRequestHandler):
         if body is None:
             self._err(400, "invalid_request_error", "body is not JSON")
             return
+        model = str(body.get("model") or "")
+
+        # ---- superset routing --------------------------------------------------------------
+        # Anything not named pool/* belongs to the paid side first. One attempt, never retried:
+        # if :20128 refuses, the reason is a wall or a drained account, and neither clears on a
+        # retry -- so the free pool answers instead and says why in the reply.
+        fb = ""
+        if self.upstream and not model.startswith("pool/"):
+            code, text, ctype, fb = self.upstream.forward(
+                path, self._raw, self.headers.get("Authorization") or "")
+            if not fb:
+                log(f"  upstream {model or '(default)':26s} OK   HTTP {code}")
+                self._send_raw(code, text, ctype)
+                return
+            log(f"  upstream {model or '(default)':26s} -> pool: {fb}")
+
         messages = to_messages(body)
         if not messages:
             self._err(400, "invalid_request_error", "no messages in request")
@@ -348,11 +658,13 @@ class Handler(BaseHTTPRequestHandler):
         if text is None:
             # 503, not 500: the pool is intact, it simply has no provider free right now. A client
             # that retries later succeeds, which is a different instruction than "this broke".
+            if fb:
+                detail = f"upstream fell back ({fb}) and the pool could not cover it: {detail}"
             self._err(503, "overloaded_error", detail)
             return
 
         if anthropic:
-            self._send(200, {
+            out = {
                 "id": f"msg_{uuid.uuid4().hex[:24]}",
                 "type": "message",
                 "role": "assistant",
@@ -363,9 +675,9 @@ class Handler(BaseHTTPRequestHandler):
                 "usage": {"input_tokens": approx_tokens(prompt),
                           "output_tokens": approx_tokens(text)},
                 "x_pool_provider": used,
-            })
+            }
         else:
-            self._send(200, {
+            out = {
                 "id": f"chatcmpl-{uuid.uuid4().hex[:20]}",
                 "object": "chat.completion",
                 "created": int(time.time()),
@@ -376,7 +688,12 @@ class Handler(BaseHTTPRequestHandler):
                           "completion_tokens": approx_tokens(text),
                           "total_tokens": approx_tokens(prompt) + approx_tokens(text)},
                 "x_pool_provider": used,
-            })
+            }
+        if fb:
+            # Stated in the reply, not just the log: a caller that silently got a free-tier answer
+            # instead of the paid model it asked for needs to be able to see that.
+            out["x_pool_fallback_reason"] = fb
+        self._send(200, out)
 
     # ---- dispatch -------------------------------------------------------------------------
 
@@ -470,6 +787,17 @@ def main() -> int:
                          "/health reports that the gate was overridden.")
     ap.add_argument("--allow", default="",
                     help="comma-separated host substrings to serve regardless of verdict")
+    ap.add_argument("--upstream", default=UPSTREAM_DEFAULT,
+                    help=f"OmniRoute chat base URL to forward non-pool models to "
+                         f"(default {UPSTREAM_DEFAULT})")
+    ap.add_argument("--no-upstream", action="store_true",
+                    help="do not forward anything; serve only pool/* from captured sessions")
+    ap.add_argument("--upstream-key", default="",
+                    help="bearer token for upstream when the caller sends no Authorization header")
+    ap.add_argument("--heartbeat-hours", type=float, default=6.0,
+                    help="touch a session that has been idle this long, to absorb a fresh cookie. "
+                         "0 disables. This is the only working cookie keepalive: there is no token to "
+                         "refresh, only traffic.")
     a = ap.parse_args()
 
     pool = Pool(serve_all=a.all, allow=[s for s in a.allow.split(",") if s.strip()])
@@ -481,6 +809,13 @@ def main() -> int:
         log("nothing to serve; starting anyway so /health can explain why")
 
     Handler.pool = pool
+    if a.no_upstream:
+        Handler.upstream = None
+        log("upstream: DISABLED -- pool-only. A non-pool model name will be answered by the pool.")
+    else:
+        Handler.upstream = Upstream(a.upstream, a.upstream_key)
+        log(f"upstream: {a.upstream} -- any model not named pool/* goes there first, and falls back "
+            f"to the pool if it refuses")
     try:
         srv = PoolServer((a.host, a.port), Handler)
     except OSError as e:
@@ -489,11 +824,20 @@ def main() -> int:
         return 1
     log(f"listening on http://{a.host}:{a.port}  "
         f"(POST /v1/messages | /v1/chat/completions, GET /health, GET /v1/models)")
+    if a.heartbeat_hours > 0 and pool.providers:
+        Handler.heartbeat = Heartbeat(pool, a.heartbeat_hours)
+        Handler.heartbeat.start()
+        log(f"heartbeat: a session idle more than {a.heartbeat_hours}h gets one small call so it can "
+            f"absorb a fresh cookie (checked every {int(Handler.heartbeat.tick_s)}s, one provider per check)")
+    else:
+        log("heartbeat: off")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         log("stopped")
     finally:
+        if Handler.heartbeat:
+            Handler.heartbeat.stop()
         srv.server_close()
     return 0
 
