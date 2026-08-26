@@ -99,10 +99,18 @@ def nearest_duration(want: int, allowed: List[int]) -> int:
 
 
 def is_wall(status: Optional[int], body: str) -> bool:
+    """A wall is only ever declared on an ERROR response.
+
+    An earlier version scanned every body for WALL_WORDS and so classified a perfectly good
+    `GET /user/credits` 200 as a paywall, because a success payload legitimately mentions billing or
+    upgrade fields. Keyword-matching a success body is the same defect as scoring a route "alive"
+    because its HTML happened to contain the expected word: the word is not the meaning.
+    """
     if status == 402:
-        return True
-    low = (body or "").lower()
-    return any(w in low for w in WALL_WORDS)
+        return True                       # unambiguous: Payment Required
+    if status is not None and status < 400:
+        return False                      # a success is never a wall, whatever words it contains
+    return any(w in (body or "").lower() for w in WALL_WORDS)
 
 
 class RtstApiClient:
@@ -142,15 +150,19 @@ class RtstApiClient:
         text = r.text or ""
         if r.status_code in (401, 403):
             raise SessionExpired(f"rtst rejected the bearer token on {path} ({r.status_code})")
-        if is_wall(r.status_code, text):
-            raise ChatError("wall", f"rtst {path} is walled (HTTP {r.status_code})")
+        if r.status_code == 402:
+            raise ChatError("wall", f"rtst {path} requires payment (HTTP 402)")
         if r.status_code == 429:
             raise ChatError("RATE", f"rtst rate-limited on {path}")
         try:
             j = r.json()
         except ValueError:
             raise ChatError("UNPARSEABLE", f"{path} returned {r.status_code} non-JSON")
-        if r.status_code >= 400 or not j.get("success", True):
+        refused = r.status_code >= 400 or not j.get("success", True)
+        if refused:
+            # Only NOW is wall language meaningful: the call already failed, so the words explain why.
+            if is_wall(r.status_code if r.status_code >= 400 else 400, text):
+                raise ChatError("wall", f"rtst {path} is walled (HTTP {r.status_code})")
             raise ChatError(f"HTTP_{r.status_code}", f"{path} refused")
         return j
 
@@ -331,8 +343,12 @@ def _selftest() -> int:
     chk("nearest ignores junk entries", nearest_duration(6, ["5", "x", 8]) == 5)
 
     chk("402 is a wall", is_wall(402, "{}"))
-    chk("insufficient is a wall", is_wall(200, '{"message":"Insufficient credits"}'))
-    chk("upgrade is a wall", is_wall(200, "please upgrade your plan"))
+    chk("insufficient on an ERROR is a wall", is_wall(400, '{"message":"Insufficient credits"}'))
+    chk("upgrade on an ERROR is a wall", is_wall(403, "please upgrade your plan"))
+    # The regression that shipped and was caught by --capacity: a SUCCESS body legitimately mentions
+    # billing/upgrade/purchase fields, and scanning it for wall words called a good balance a paywall.
+    chk("a 200 is never a wall, whatever words it holds",
+        not is_wall(200, '{"success":true,"credits":17,"billing":{"can_upgrade":true}}'))
     chk("a clean body is not a wall", not is_wall(200, '{"success":true,"credits":120}'))
 
     chk("url from the top level", pick_url({"video_url": "https://a/b.mp4"}) == "https://a/b.mp4")
