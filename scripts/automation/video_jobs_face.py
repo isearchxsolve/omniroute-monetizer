@@ -79,9 +79,9 @@ class PoolEngine:
 
     name = "pool"
 
-    def __init__(self) -> None:
+    def __init__(self, secrets=None) -> None:
         from session_pool import SessionPool          # lazy: only real mode pays the import
-        self.pool = SessionPool()
+        self.pool = SessionPool(pathlib.Path(secrets)) if secrets else SessionPool()
 
     def _live(self):
         return self.pool.live(modality="video")
@@ -449,6 +449,81 @@ def serve(bind: str, port: int, engine, public_base=None):
     httpd.serve_forever()
 
 
+def _selftest_pool_wiring(check) -> None:
+    """Prove a record_video_job.py-shaped secret actually reaches the video replay client.
+
+    This guards a SILENT failure: if the pool marks a captured video seat non-dispatchable, the face
+    answers 503 no_capacity forever and nothing looks broken. Costs a live seat to discover, so it is
+    pinned here instead. Fixtures are synthetic -- no network, no credentials, no credits.
+    """
+    import tempfile
+
+    try:
+        import session_pool as sp
+    except Exception as e:
+        check("pool wiring (import session_pool)", False, f"SKIP {type(e).__name__}: {e}")
+        return
+
+    body = json.dumps({"prompt": "Reply exactly one word: Omni.", "aspect_ratio": "16:9"})
+    exchange = {"seq": 1, "ts_rel": 0.0, "method": "POST", "url": "https://api.pika.art/v1/generate",
+                "type": "XHR", "request_headers": {"Cookie": "sid=synthetic", "content-type": "application/json"},
+                "request_body": body, "status": 200, "mimeType": "application/json",
+                "response_headers": {}, "response_body": json.dumps({"id": "job-synthetic"}),
+                "response_base64": False, "body_truncated": False}
+
+    def rec_job():
+        return {"recorded_at": 1, "api_substr": "pika", "exchanges": [exchange]}
+
+    # Host deliberately carries NO video word (not flow/heygen/digen/veo/...) -- that is the point:
+    # dispatch must not depend on a host allowlist.
+    fixtures = {
+        # what record_video_job.py writes today (modality stamped by the recorder)
+        "session_pika_art.json": {"host": "pika.art", "modality": "video", "recorded_job": rec_job()},
+        # a capture made BEFORE the modality stamp existed -> must still infer video
+        "session_kling_ai.json": {"host": "kling.ai", "recorded_job": rec_job()},
+        # a chat capture must stay chat (proves the fix didn't convert the chat pool to video)
+        "session_chat_example_com.json": {"host": "chat.example.com",
+                                          "recorded_exchange": dict(exchange, request_body=body)},
+    }
+    with tempfile.TemporaryDirectory() as d:
+        tmp = pathlib.Path(d)
+        for name, doc in fixtures.items():
+            (tmp / name).write_text(json.dumps(doc), encoding="utf-8")
+
+        pool = sp.SessionPool(tmp)
+        by_host = {s.host: s for s in pool.sessions}
+
+        for host in ("pika.art", "kling.ai"):
+            s = by_host.get(host)
+            ok = bool(s and s.has_recording and s.modality == "video" and s.dispatchable
+                      and getattr(s.client_cls, "__name__", "") == "VideoUniversalSessionClient")
+            check(f"video seat dispatchable: {host}", ok,
+                  f"rec={getattr(s,'has_recording',None)} modality={getattr(s,'modality',None)} "
+                  f"dispatchable={getattr(s,'dispatchable',None)} "
+                  f"client={getattr(getattr(s,'client_cls',None),'__name__',None)} "
+                  f"reason={getattr(s,'reason',None)}")
+
+        c = by_host.get("chat.example.com")
+        ok = bool(c and c.modality == "chat" and c.dispatchable
+                  and getattr(c.client_cls, "__name__", "") == "UniversalSessionClient")
+        check("chat seat still routes to chat client", ok,
+              f"modality={getattr(c,'modality',None)} client={getattr(getattr(c,'client_cls',None),'__name__',None)}")
+
+        live = pool.live(modality="video")
+        check("pool.live(video) sees both video seats", len(live) == 2, f"n={len(live)}")
+
+        # ...and the face's own engine reports that as capacity, which is what stops the 503.
+        try:
+            eng = PoolEngine(secrets=tmp)
+            seats = eng.seats()
+            ok = eng.has_capacity() and len(seats) == 2 \
+                and all({"seat", "provider", "clipsRemaining"} <= set(r) for r in seats)
+            check("PoolEngine reports capacity (no false 503)", ok,
+                  f"capacity={eng.has_capacity()} seats={len(seats)}")
+        except Exception as e:
+            check("PoolEngine reports capacity (no false 503)", False, f"{type(e).__name__}: {e}")
+
+
 # --------------------------------------------------------------------------------------------------
 # Hermetic contract smoke test: spins the real server on ephemeral ports with StubEngine and drives
 # the full contract over real HTTP. Zero live seats, zero credits, no network.
@@ -574,6 +649,10 @@ def _selftest() -> int:
     ok = st == 503 and isinstance(doc, dict) and doc.get("error") == "no_capacity" \
         and isinstance(doc.get("retryAfterSeconds"), int)
     check("dry pool -> 503 no_capacity", ok, f"status={st} body={doc}")
+
+    # --- the real pool wiring (synthetic secrets, still no network/credits) -------------------
+    print("", flush=True)
+    _selftest_pool_wiring(check)
 
     passed = sum(1 for _, ok, _ in results if ok)
     total = len(results)

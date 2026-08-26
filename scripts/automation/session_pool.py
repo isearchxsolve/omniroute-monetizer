@@ -59,7 +59,14 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
             
     # Universal fallback for any provider with a recorded exchange blueprint
     if raw and (raw.get("recorded_exchange") or raw.get("recorded_job")):
-        if raw.get("modality") == "video" or any(vh in host for vh in ("video", "flow", "heygen", "akool", "creen", "digen", "veo")):
+        # A recorded_job IS a video capture (only record_video_job.py writes one), so it picks the
+        # video client on its own -- the host-token list below is a convenience for files that were
+        # stamped modality=video by hand, NOT a provider allowlist. Relying on the token list alone
+        # meant a new provider whose name happens to lack a video word (pika.art, kling.ai, ...) got
+        # the CHAT client: no job polling, and the submit's job-id JSON mis-parsed as an answer.
+        video_job = bool(raw.get("recorded_job")) and not raw.get("recorded_exchange")
+        if raw.get("modality") == "video" or video_job or any(
+                vh in host for vh in ("video", "flow", "heygen", "akool", "creen", "digen", "veo")):
             from video_universal_replay import VideoUniversalSessionClient
             return VideoUniversalSessionClient
         from universal_replay import UniversalSessionClient
@@ -92,8 +99,17 @@ class PooledSession:
         raw = json.loads(path.read_text(encoding="utf-8"))
         self.host: str = raw.get("host") or path.stem.replace("session_", "").replace("_", ".")
         self.key: str = path.stem                              # stable non-secret id for cooldown
-        self.modality: str = raw.get("modality") or "chat"     # forward-compat: "chat" | "video"
-        self.has_recording: bool = "recorded_exchange" in raw
+        # Two capture shapes reach this pool: `recorded_exchange` (capture_sessions_cdp.py, one-shot
+        # chat) and `recorded_job` (record_video_job.py, the async submit->poll->result sequence).
+        # universal_replay._normalise_exchange already accepts BOTH, so testing only the chat key
+        # here made every freshly captured VIDEO seat non-dispatchable: pool.live(modality="video")
+        # came back empty, the :8189 face answered 503 no_capacity forever, and `list` blamed
+        # "no_recording" on a perfectly good capture.
+        self.has_recording: bool = bool(raw.get("recorded_exchange") or raw.get("recorded_job"))
+        # record_video_job.py records ONLY video generations, so a recorded_job means video unless
+        # the file explicitly says otherwise (a dual chat+video host keeps its declared modality).
+        self.modality: str = raw.get("modality") or \
+            ("video" if raw.get("recorded_job") and not raw.get("recorded_exchange") else "chat")
         status = raw.get("status") or {}
         # alive unless keepalive explicitly flagged it dead; a MISSING status = unknown-but-usable
         # (cookie/record verbs don't write status — only keepalive does).

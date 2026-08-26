@@ -158,6 +158,11 @@ def record_job(match: str, host: str, api_substr: str, wait: int, port: int, kee
     data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"host": host}
     data["recorded_job"] = {"recorded_at": int(time.time()), "api_substr": api_substr,
                             "exchanges": job}
+    # Stamp the modality the recorder just proved. Without it session_pool defaulted the seat to
+    # "chat", so pool.live(modality="video") never saw it and the :8189 face reported no capacity.
+    # setdefault, not assignment: a host that serves BOTH (veoaifree) keeps its declared modality
+    # rather than having its chat dispatch silently converted to video.
+    data.setdefault("modality", "video")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
