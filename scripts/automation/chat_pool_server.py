@@ -246,19 +246,36 @@ class Pool:
     def healthy(self) -> list:
         return [p for p in self.providers if p.available()]
 
-    def acquire(self) -> Optional[Provider]:
+    def acquire(self, deprioritize: tuple = ()) -> Optional[Provider]:
         """Least-recently-used provider that is off cooldown and past its minimum interval.
 
         Waits briefly rather than failing instantly: with a small pool and a 3s interval, two
         back-to-back requests would otherwise 503 even though the pool is perfectly healthy.
+
+        `deprioritize` is a tuple of host/name substrings (e.g. the dirty-JSON seat). A matching
+        provider is used ONLY when no clean seat can answer -- clean-ready first; if none are ready
+        we wait for a clean seat that is merely cooling; only when every clean seat is walled/dead,
+        or the wait budget is spent, do we hand back the deprioritized one. A dirty reply still beats
+        a 503, and the caller can reject it -- but the clean seats are exhausted first. An empty
+        tuple (the default, every non-JSON request) makes this identical to plain LRU.
         """
+        def demoted(p: Provider) -> bool:
+            hay = f"{p.host} {p.name}".lower()
+            return any(d in hay for d in deprioritize)
+
         deadline = now() + WAIT_FOR_SLOT_S
         while True:
             with self.pick_lock:
                 ready = [p for p in self.providers if p.ready()]
-                if ready:
-                    pick = min(ready, key=lambda p: p.last_used)
+                preferred = [p for p in ready if not demoted(p)]
+                clean_up = [p for p in self.providers if p.available() and not demoted(p)]
+                take_demoted = (not clean_up) or now() >= deadline
+                candidates = preferred or (ready if take_demoted else [])
+                if candidates:
+                    pick = min(candidates, key=lambda p: p.last_used)
                     pick.last_used = now()
+                    if deprioritize and demoted(pick):
+                        log(f"  json-intent: no clean seat available, falling back to {pick.name}")
                     return pick
                 any_up = [p for p in self.providers if p.available()]
             if not any_up or now() >= deadline:
@@ -299,6 +316,19 @@ def classify_failure(msg: str) -> tuple[float, str]:
 CREDIT_HINTS = ("credit", "quota", "insufficient", "billing", "payment", "exhausted", "balance",
                 "no active credentials", "rate limit", "too many requests", "unauthorized",
                 "forbidden", "expired")
+
+
+# you.com is the one pool seat that regularly answers HTTP 200 with DIRTY json -- prose wrapped around
+# the object, code fences, trailing commas. Harmless for free-form chat, poison for a caller parsing
+# strict JSON: oioi's film planner gets unparseable output ~1 request in 4 (measured: 73% of pool
+# replies were clean, and every dirty one was you.com) and silently builds a storyless board from the
+# garbage -> junk stills. So when a prompt is asking for JSON, you.com is demoted to last-resort in
+# acquire(): a cleaner seat answers unless none can. It keeps full capacity for every non-JSON request.
+DIRTY_JSON_HOSTS = ("you.com", "you-com")
+
+
+def wants_json(prompt: str) -> bool:
+    return "json" in (prompt or "").lower()
 
 
 class Upstream:
@@ -778,10 +808,13 @@ class Handler(BaseHTTPRequestHandler):
             if pinned is None:
                 log(f"{want!r} names no seat -- rotating instead of refusing")
 
+        # An explicit pin is always honoured (the client asked for you.com, it gets you.com). Only the
+        # rotating path deprioritizes the dirty-JSON seat, and only when the prompt is asking for JSON.
+        demote = DIRTY_JSON_HOSTS if wants_json(prompt) else ()
         tried = set()
         attempts = 1 if pinned else max(1, len(self.pool.providers))
         for _ in range(attempts):
-            p = pinned if pinned else self.pool.acquire()
+            p = pinned if pinned else self.pool.acquire(deprioritize=demote)
             if p is None:
                 break
             if p.name in tried:
