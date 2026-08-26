@@ -60,6 +60,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import re
 import sys
 import threading
 import time
@@ -329,6 +330,74 @@ DIRTY_JSON_HOSTS = ("you.com", "you-com")
 
 def wants_json(prompt: str) -> bool:
     return "json" in (prompt or "").lower()
+
+
+# Deprioritizing you.com was not enough. Measured 2026-08-26: huggingface-co answers a JSON-only
+# request with a Markdown-fenced body (```json ... ```), which is *correct chat behaviour* and still a
+# contract violation for a caller that asked for JSON. oioi's planner rightly refuses to add a lenient
+# parser ("router contract failure"), so the unwrapping belongs here, at the boundary.
+_STRICT_MARKERS = ("json only", "only json", "strict json", "valid json", "return json",
+                   "respond with json", "output json", "as json", "json object", "json array",
+                   "no prose", "no markdown", "no commentary", "nothing else", "raw json")
+
+
+def demands_json(prompt: str) -> bool:
+    """True when the caller wants a JSON *body*, not merely a reply that mentions JSON.
+
+    The distinction matters: "explain what JSON is" must not be retried across every seat and
+    rejected, while "return strict JSON" must never come back fenced.
+    """
+    low = (prompt or "").lower()
+    return "json" in low and any(m in low for m in _STRICT_MARKERS)
+
+
+def _is_json_body(text: str) -> bool:
+    """Does this reply consist of a JSON value and nothing else?"""
+    s = (text or "").strip()
+    if not s or s[0] not in "{[":
+        return False
+    try:
+        json.loads(s)
+        return True
+    except Exception:
+        return False
+
+
+def unwrap_json(text: str) -> tuple[str, str]:
+    """Return (body, how). Strips fences/prose ONLY when what is left provably parses as JSON.
+
+    This is not a lenient parser and must never become one. Every candidate is validated with
+    json.loads before it is returned, so the gateway can remove wrapping it did not want but can never
+    invent structure that the provider did not send. If nothing parses, the original text is returned
+    untouched and the caller still sees exactly what the provider said.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return text, ""
+    ok = _is_json_body
+    if ok(raw):
+        return raw, ""
+
+    cands: list[tuple[str, str]] = []
+
+    # 1. fenced block, with or without a language tag
+    m = re.search(r"```[ \t]*[A-Za-z0-9_+-]*[ \t]*\r?\n(.*?)```", raw, re.S)
+    if m:
+        cands.append((m.group(1), "fence"))
+    # 2. fence opened but never closed (a truncated reply)
+    m = re.search(r"```[ \t]*[A-Za-z0-9_+-]*[ \t]*\r?\n(.*)$", raw, re.S)
+    if m:
+        cands.append((m.group(1), "unclosed-fence"))
+    # 3. prose before/after: widest span between the first opener and its matching last closer
+    for opener, closer in (("{", "}"), ("[", "]")):
+        i, j = raw.find(opener), raw.rfind(closer)
+        if 0 <= i < j:
+            cands.append((raw[i:j + 1], "prose"))
+
+    for cand, how in cands:
+        if ok(cand):
+            return cand.strip(), how
+    return text, ""
 
 
 class Upstream:
@@ -811,6 +880,8 @@ class Handler(BaseHTTPRequestHandler):
         # An explicit pin is always honoured (the client asked for you.com, it gets you.com). Only the
         # rotating path deprioritizes the dirty-JSON seat, and only when the prompt is asking for JSON.
         demote = DIRTY_JSON_HOSTS if wants_json(prompt) else ()
+        strict = demands_json(prompt)
+        best: tuple[str, str] | None = None      # least-bad reply, if no seat produces clean JSON
         tried = set()
         attempts = 1 if pinned else max(1, len(self.pool.providers))
         for _ in range(attempts):
@@ -843,8 +914,24 @@ class Handler(BaseHTTPRequestHandler):
                 if not text:
                     raise RuntimeError("empty reply")
                 ms = round((time.perf_counter() - started) * 1000)
+
+                how = ""
+                if wants_json(prompt):
+                    text, how = unwrap_json(text)
                 p.ok += 1
-                log(f"  {p.name:26s} OK   {ms:6d}ms  {len(text)} chars")
+                log(f"  {p.name:26s} OK   {ms:6d}ms  {len(text)} chars"
+                    f"{'  [unwrapped:' + how + ']' if how else ''}")
+
+                if strict and not _is_json_body(text):
+                    # It answered, but not with the JSON body the caller's contract requires. That is
+                    # a dirty reply, not a dead seat: no stand_down, just move on and keep it as the
+                    # fallback so a caller still gets SOMETHING if no seat can do strict JSON.
+                    log(f"  {p.name:26s} .... reply is not a JSON body; trying another seat")
+                    if best is None:
+                        best = (text, p.name)
+                    if pinned:
+                        return text, p.name, "reply was not a JSON body (pinned, not retried)"
+                    continue
                 return text, p.name, ""
             except Exception as e:
                 ms = round((time.perf_counter() - started) * 1000)
@@ -859,6 +946,12 @@ class Handler(BaseHTTPRequestHandler):
         if not self.pool.providers:
             return None, "", ("no providers served -- run replay_check.py so sessions can be "
                               "verdicted, or start with --all")
+        if best is not None:
+            # Every seat answered with prose instead of a JSON body. Hand back the best one and SAY so
+            # -- a caller that strict-parses will fail loudly on real content, which is far more
+            # debuggable than an empty 503 that looks like the pool being down.
+            return best[0], best[1], ("no seat produced a JSON body for a strict-JSON request; "
+                                      "returning the closest reply unmodified")
         return None, "", (f"all {len(self.pool.providers)} provider(s) are cooling or failed this "
                           f"request; GET /health for per-provider reasons")
 
