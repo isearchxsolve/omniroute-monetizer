@@ -184,6 +184,148 @@ class StubEngine:
                 "content_type": "video/mp4", "credits": 30.0}
 
 
+class RtstEngine:
+    """rtst.ai -- the one provider PROVEN end-to-end (state/harvest/probes/FINDINGS.json:
+    id 96089, vidu 3s@540p, quoted 6 credits and charged exactly 6, delivered a real 872KB mp4).
+
+    Why this and not replay: rtst exposes a documented REST contract AND quotes the price for FREE
+    before you commit (`/video/estimate-credits`), so every cost question is settled without
+    spending. Auth is the bearer JWT already in the signed-in tab's localStorage -- read inside the
+    page by rtst_client, never handled here, never logged.
+
+    Money rules, enforced here:
+      * submit is refused unless confirm_spend=True AND a FRESH quote says can_afford AND the quoted
+        cost is <= max_spend. Default is therefore a no-spend engine.
+      * HTTP 402 / insufficient credit is reported as `wall:` so oioi PARKS it and never retries.
+        We do not pay, ever.
+      * one call at a time (a single CDP tab, and the breadth-not-depth rule: never burst a provider).
+    """
+
+    name = "rtst"
+    # the cheapest proven-affordable combination; FINDINGS.json priced these for free.
+    MODEL, RES, DUR = "vidu", 540, 3
+    _CACHE_TTL = 30.0                      # oioi polls capacity often; one CDP hop per 30s is plenty
+
+    def __init__(self, *, confirm_spend: bool = False, max_spend: int = 6,
+                 port: int = 9222, model: str = MODEL, resolution: int = RES,
+                 duration: int = DUR) -> None:
+        self.confirm_spend = bool(confirm_spend)
+        self.max_spend = int(max_spend)
+        self.port = int(port)
+        self.model, self.resolution, self.duration = model, int(resolution), int(duration)
+        self._lock = threading.Lock()      # one provider, one call at a time
+        self._bal = None
+        self._bal_at = 0.0
+        self._unit_cost = None
+
+    # -- plumbing -------------------------------------------------------------------------------
+    def _open(self):
+        from rtst_client import Rtst      # lazy: keeps --engine stub free of CDP deps
+        return Rtst(port=self.port)
+
+    def _unit(self, c) -> int:
+        """Cost of one clip at our configured settings, from the FREE quote endpoint."""
+        if self._unit_cost is None:
+            q = c.quote(model=self.model, duration=self.duration, resolution=self.resolution)
+            self._unit_cost = int(q.get("credits_required") or 0) or 6
+        return self._unit_cost
+
+    def _balance(self, force: bool = False):
+        now = time.time()
+        if not force and self._bal is not None and (now - self._bal_at) < self._CACHE_TTL:
+            return self._bal
+        with self._lock:
+            with self._open() as c:
+                self._bal = int(c.credits())
+                self._unit(c)
+        self._bal_at = now
+        return self._bal
+
+    # -- engine surface -------------------------------------------------------------------------
+    def has_capacity(self) -> bool:
+        try:
+            return self._balance() >= (self._unit_cost or 6)
+        except Exception as e:
+            _log(f"rtst capacity unknown ({type(e).__name__}); reporting none")
+            return False
+
+    def seats(self):
+        try:
+            bal = self._balance()
+        except Exception:
+            return []
+        unit = self._unit_cost or 6
+        return [{"seat": "rtst.ai", "provider": "rtst.ai", "creditsRemaining": float(bal),
+                 "clipsRemaining": int(bal // unit) if unit else 0, "cooldownUntil": None}]
+
+    def generate(self, *, prompt, aspect_ratio, duration, image_refs, seed):
+        # rtst validates BEFORE charging: a prompt under 10 words is a hard 400, never a spend.
+        if len(str(prompt).split()) < 10:
+            return {"ok": False, "provider": "rtst.ai",
+                    "error": "rtst rejects prompts under 10 words (VALIDATION_INVALID_PROMPT)"}
+        try:
+            with self._lock:
+                with self._open() as c:
+                    q = c.quote(model=self.model, duration=self.duration, resolution=self.resolution,
+                                aspect=aspect_ratio or "16:9")
+                    cost = int(q.get("credits_required") or 0)
+                    self._unit_cost = cost or self._unit_cost
+                    if not q.get("can_afford"):
+                        # out of credits is a WALL: park it, never retry, never pay.
+                        return {"ok": False, "provider": "rtst.ai",
+                                "error": f"wall: rtst credits exhausted "
+                                         f"(need {cost}, have {q.get('current_balance')})"}
+                    if not self.confirm_spend:
+                        return {"ok": False, "provider": "rtst.ai",
+                                "error": f"wall: spend not confirmed -- {cost} credits required; "
+                                         f"start the face with --confirm-spend to authorise"}
+                    if cost > self.max_spend:
+                        return {"ok": False, "provider": "rtst.ai",
+                                "error": f"wall: quote {cost} exceeds --max-spend {self.max_spend}"}
+
+                    job = c.submit(prompt=prompt, model=self.model, duration=self.duration,
+                                   resolution=self.resolution, aspect=aspect_ratio or "16:9")
+                    vid = str(job.get("id") or job.get("video_id") or "")
+                    if not vid:
+                        return {"ok": False, "provider": "rtst.ai",
+                                "error": "rtst submit returned no job id"}
+                    self._bal_at = 0.0                       # balance just changed; drop the cache
+                    _log(f"rtst submitted id={vid} cost={cost} credits")
+
+                    # Poll to completion. NO short deadline: a real render legitimately takes
+                    # minutes, and a ceiling below that just re-creates the original timeout bug
+                    # one layer down. The clip is already paid for -- give it time to arrive.
+                    from rtst_client import DONE, FAILED, pick_url
+                    deadline = time.time() + 1800
+                    while time.time() < deadline:
+                        time.sleep(6)
+                        try:
+                            d = c.status(vid)
+                        except Exception:
+                            continue                          # transport blip: keep waiting
+                        st = str(d.get("status") or "").lower()
+                        url = pick_url(d)
+                        if url:
+                            return {"ok": True, "provider": "rtst.ai", "url": url,
+                                    "inline_bytes": None, "content_type": "video/mp4",
+                                    "credits": float(cost)}
+                        if st in FAILED:
+                            return {"ok": False, "provider": "rtst.ai",
+                                    "error": f"rtst reported {st or 'failed'}"}
+                        if st in DONE:                        # done but no url yet: keep looking
+                            continue
+                    return {"ok": False, "provider": "rtst.ai",
+                            "error": f"rtst job {vid} still running after 1800s (clip may yet land)"}
+        except Exception as e:
+            msg = str(e) or type(e).__name__
+            low = msg.lower()
+            if "signed out" in low or "no auth_token" in low:
+                return {"ok": False, "provider": "rtst.ai", "error": f"auth: {msg[:180]}"}
+            if "402" in low or "credit_insufficient" in low or "insufficient" in low:
+                return {"ok": False, "provider": "rtst.ai", "error": f"wall: {msg[:180]}"}
+            return {"ok": False, "provider": "rtst.ai", "error": msg[:200]}
+
+
 # --------------------------------------------------------------------------------------------------
 # Job store. Persists CONTRACT-SAFE fields only (id/jobKey/status/provider/progress/url/error/
 # creditsSpent/timestamps). Run params (the prompt etc.) and media (bytes or the provider's signed
@@ -664,14 +806,26 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--bind", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT)
-    ap.add_argument("--engine", choices=("pool", "stub"), default="pool")
+    ap.add_argument("--engine", choices=("pool", "stub", "rtst"), default="pool")
+    ap.add_argument("--cdp-port", type=int, default=9222, help="rtst engine: robot Chrome CDP port")
+    ap.add_argument("--confirm-spend", action="store_true",
+                    help="rtst engine: AUTHORISE REAL CREDIT SPEND. Without this the engine quotes "
+                         "and then refuses every submit, so the face is safe to leave running.")
+    ap.add_argument("--max-spend", type=int, default=6,
+                    help="rtst engine: refuse any clip whose fresh quote exceeds this (credits)")
     ap.add_argument("--public-base", default=None,
                     help="origin oioi should fetch clip content from (default http://<bind>:<port>)")
     ap.add_argument("--selftest", action="store_true", help="run the hermetic contract smoke test")
     a = ap.parse_args()
     if a.selftest:
         return _selftest()
-    engine = StubEngine() if a.engine == "stub" else PoolEngine()
+    if a.engine == "stub":
+        engine = StubEngine()
+    elif a.engine == "rtst":
+        engine = RtstEngine(confirm_spend=a.confirm_spend, max_spend=a.max_spend, port=a.cdp_port)
+        _log(f"rtst engine: spend {'AUTHORISED up to ' + str(a.max_spend) + ' credits/clip' if a.confirm_spend else 'NOT authorised (quotes only, every submit refused)'}")
+    else:
+        engine = PoolEngine()
     serve(a.bind, a.port, engine, public_base=a.public_base)
     return 0
 

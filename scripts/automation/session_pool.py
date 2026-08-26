@@ -53,10 +53,18 @@ DEFAULT_COOLDOWN = 20.0
 
 
 def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
+    # An API-CREDENTIAL seat comes first: it carries a bearer token plus a documented contract, so it
+    # has no recorded exchange to replay and never will. Dispatch on the declared `api.kind`, not on
+    # the host string, so a second account on the same provider needs no new entry anywhere.
+    kind = ((raw or {}).get("api") or {}).get("kind")
+    if kind == "rtst":
+        from rtst_api_client import RtstApiClient
+        return RtstApiClient
+
     for key, cls in CLIENTS.items():
         if key in host:
             return cls
-            
+
     # Universal fallback for any provider with a recorded exchange blueprint
     if raw and (raw.get("recorded_exchange") or raw.get("recorded_job")):
         # A recorded_job IS a video capture (only record_video_job.py writes one), so it picks the
@@ -106,6 +114,14 @@ class PooledSession:
         # came back empty, the :8189 face answered 503 no_capacity forever, and `list` blamed
         # "no_recording" on a perfectly good capture.
         self.has_recording: bool = bool(raw.get("recorded_exchange") or raw.get("recorded_job"))
+        # A seat can also be usable WITHOUT a recording: an API-credential seat holds a bearer token
+        # plus a documented contract (rtst.ai publishes quote/create/poll), so there is no genuine
+        # exchange to replay and there never will be. Judging such a seat by has_recording alone made
+        # it permanently non-dispatchable -- the pool reported no video capacity while sitting on real
+        # credits. Same failure class as the two fixed in 7e2945b: the pool assumed every seat is a
+        # replay seat.
+        self.has_api: bool = bool(raw.get("api"))
+
         # record_video_job.py records ONLY video generations, so a recorded_job means video unless
         # the file explicitly says otherwise (a dual chat+video host keeps its declared modality).
         self.modality: str = raw.get("modality") or \
@@ -129,7 +145,7 @@ class PooledSession:
 
     @property
     def dispatchable(self) -> bool:
-        return bool(self.has_recording and self.client_cls
+        return bool((self.has_recording or self.has_api) and self.client_cls
                     and not self.flagged_dead and not self.dead)
 
     def client(self):
