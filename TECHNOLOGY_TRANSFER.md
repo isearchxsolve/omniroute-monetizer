@@ -710,6 +710,81 @@ Two guards worth keeping:
   newer `cookieRotatedAt` is skipped and named. Verified with a deliberately staled bundle: 27 files
   restored, the live aymo jar kept.
 
+### `install_autostart.py` — making reboot recovery real `[VERIFIED 2026-08-26]`
+
+`omni_supervisor.py` brings the rig back after a crash, but only while it is itself running. After a
+full reboot nothing starts it, so "complete reboot recovery" is only real once the supervisor launches
+at logon. `install_autostart.py` arms exactly that — the supervisor's `--watch` loop at logon — by one
+of two mechanisms, and nothing else.
+
+- **Dry run by default.** With no flags it prints the exact command and changes nothing. `--status`
+  reports whether either mechanism is armed; `--uninstall` removes both. Both are fully reversible,
+  which is why arming is a normal action rather than a one-way door.
+- **`--install` → a Windows Scheduled Task** (`OmniRoute Rig Supervisor`, `ONLOGON`). This needs
+  elevation. On this rig the operator's shell is a **non-elevated Admin split token**, so
+  `schtasks /Create` returns *Access is denied* while `/Query` succeeds — proof it is a UAC boundary,
+  not the sandbox. Use it only from an elevated shell.
+- **`--startup` → a hidden `.vbs` in the user's Startup folder** (`%APPDATA%\…\Startup\
+  omniroute_rig_supervisor.vbs`). No elevation, and it matches the omniroute `*.vbs` launchers already
+  parked there. **This is the mechanism armed 2026-08-26.**
+- **Run it with the venv python.** `_task_command()` fires `sys.executable`'s sibling `pythonw.exe`, so
+  the interpreter you invoke the installer with is the one the launcher runs at logon; a bare system
+  python would miss the supervisor's deps.
+- **It launches the supervisor, not the rig.** The supervisor's safety model is unchanged: it restarts
+  only the chat pool (owned), never touches OmniRoute, and does not fight the video router's own
+  5-minute keepalive task. Neither mechanism launches Chrome — auto-launching a real profile is the one
+  move that has cost a Google session (DBSC), so video-seat sign-in stays a deliberate operator step.
+  Chat supply (files on disk) returns fully and automatically; the video asymmetry is inherent.
+- Verified 2026-08-26: `--install` reproduced the *Access is denied* elevation boundary; `--startup`
+  wrote a well-formed (quote-doubled) launcher and `--status` confirms it present.
+
+## 17. Layer 6 — The character-image relay `[VERIFIED (logic) 2026-08-26]`
+
+**The need.** A film kit has characters — "Alice", "Bob" — each a reference image uploaded once. Every
+generator that renders a clip (Flow, digen, rtst, veoaifree) needs those faces pushed into *its* image
+inputs. Across a 2,160-clip film that is not a by-hand job. `character_relay.py` uploads each character
+**once per generator**, remembers the asset handle the generator returns, and reuses it in every
+generate request for that character.
+
+**The "omni way" applies unchanged — one substitution differs.** Chat replay carries a text *sentinel*
+in a recorded POST and string-replaces it with the prompt. Upload relay carries a *file part* in a
+recorded multipart POST and swaps that one part's bytes + filename for the character image, leaving the
+rest of the recorded envelope byte-identical. Both replay a real exchange with the seat's jar; neither
+reconstructs a request (Law 4). The per-generator "which field takes the handle" table is a payload
+*shape* contract (same category as the veoaifree MODELS map or the digen submit/poll/result contract),
+not a request adapter.
+
+**Pieces (all built, in `character_relay.py`):**
+
+- `GENERATORS` — the contract table for flow / digen / rtst / veoaifree. Endpoints are **not**
+  hard-coded; they arrive with the recorded upload session. Slot names carry `confidence:"assumed"`
+  until a capture confirms them on the wire.
+- `load_kit()` — a film-kit directory → characters, keyed by **content hash** not filename, so the same
+  face under two names uploads once. Non-images and oversized files are refused with a reason, not
+  skipped silently.
+- `swap_file_part()` — the faithful multipart swap: locate the part by `name="…"`, rewrite its
+  `filename`, replace the payload between its header terminator and the next boundary, touch nothing
+  else. Raises if the part is absent (a silent no-op upload is worse than a stop).
+- `bind_slots()` — pure, deep-copying injector that places a handle into a generate payload per the
+  contract (`id` / `url` / `array_append` forms). This is the hot path; it does no I/O and never fails
+  on a network condition.
+- `state/character_relay_map.json` — the upload-once cache, keyed `film::generator::sha256`.
+- Transport is isolated behind one callable so `--selftest` injects a fake and the engine is provable
+  without a network. Card / captcha / quota language in a response → `WALL`, stopped and reported,
+  never solved (Law 5).
+
+**The one external input, captured later.** Each generator needs a recorded upload exchange saved as
+`state/secrets/upload_<generator>.json` (same capture step every chat session went through: upload one
+image by hand in a signed-in tab, record the multipart POST). Until that file exists, `relay()` returns
+`PENDING_CAPTURE` and names exactly what to record — it never fabricates an upload.
+
+**Verified 2026-08-26:** `--selftest` passes 25/25 — multipart swap (inject/drop/keep-others/rename/
+boundary-count), image sniffing, all three slot forms, non-mutation of input, asset extraction, wall
+detection, and a full `relay_one` against a fake transport including recomputed `Content-Length` and
+upload-once caching. `--plan` against a real 2-character kit correctly emits 8 `PENDING_CAPTURE` rows
+with actionable capture instructions and touches no network. Live upload is the "testing later" step,
+gated on the recorded sessions.
+
 ---
 
 *Living document — appended as work proceeds. Last updated 2026-08-26.*
