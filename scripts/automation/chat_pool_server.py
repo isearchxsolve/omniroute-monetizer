@@ -81,6 +81,12 @@ MIN_INTERVAL_S = 3.0          # never call the same provider more often than thi
 COOLDOWN_FAIL_S = 90.0        # transport / parse failure: probably ours, short stand-down
 COOLDOWN_WALL_S = 3600.0      # credits, captcha, quota, auth: long stand-down, never retried
 WAIT_FOR_SLOT_S = 8.0         # how long a request will wait for a provider to come off interval
+# Strict-JSON callers get retry PASSES inside one request. oioi's film planner sends ~60 sequential
+# six-shot-scene requests, which keeps every seat inside MIN_INTERVAL_S, so a single pass routinely
+# ends with all seats either cooling or dirty. Its transport timeout is 45s, so the budget must stay
+# comfortably under that -- converting a malformed-JSON failure into a timeout is no improvement.
+STRICT_BUDGET_S = 38.0        # wall clock for all passes of one strict-JSON request
+STRICT_PASSES = 3             # how many times a strict request may revisit the same seats
 
 UPSTREAM_DEFAULT = "http://127.0.0.1:20128"   # OmniRoute chat -- the paid/OAuth side
 UPSTREAM_TIMEOUT_S = 180.0    # generous: OmniRoute has been measured taking ~60s+ on some routes
@@ -884,11 +890,27 @@ class Handler(BaseHTTPRequestHandler):
         best: tuple[str, str] | None = None      # least-bad reply, if no seat produces clean JSON
         tried = set()
         attempts = 1 if pinned else max(1, len(self.pool.providers))
+        # A seat that answered prose is DIRTY, not dead, so revisiting it inside the same request is
+        # not hammering -- the MIN_INTERVAL_S brake inside acquire() still governs the pace. Only
+        # strict-JSON callers get the extra passes, and only within STRICT_BUDGET_S.
+        budget_end = None
+        if strict and not pinned:
+            attempts *= STRICT_PASSES
+            budget_end = now() + STRICT_BUDGET_S
         for _ in range(attempts):
+            if budget_end is not None and now() >= budget_end:
+                log(f"  strict-JSON budget of {STRICT_BUDGET_S:.0f}s spent; giving up this request")
+                break
             p = pinned if pinned else self.pool.acquire(deprioritize=demote)
             if p is None:
+                # Every seat is inside its minimum interval. For a strict-JSON caller that is a
+                # PACING problem, not an answer -- waiting for the brake to release is right, whereas
+                # breaking here is what used to fall through and hand the caller prose.
+                if budget_end is not None and now() < budget_end:
+                    time.sleep(min(1.0, budget_end - now()))
+                    continue
                 break
-            if p.name in tried:
+            if p.name in tried and not strict:
                 break
             tried.add(p.name)
             if pinned and not p.available():
@@ -947,10 +969,21 @@ class Handler(BaseHTTPRequestHandler):
             return None, "", ("no providers served -- run replay_check.py so sessions can be "
                               "verdicted, or start with --all")
         if best is not None:
-            # Every seat answered with prose instead of a JSON body. Hand back the best one and SAY so
-            # -- a caller that strict-parses will fail loudly on real content, which is far more
-            # debuggable than an empty 503 that looks like the pool being down.
-            return best[0], best[1], ("no seat produced a JSON body for a strict-JSON request; "
+            # Measured against oioi's film planner: handing prose to a strict-JSON caller does not
+            # "fail loudly", it fails in the WRONG PLACE. The consumer's parser raises on content it
+            # was right to reject, the run dies, and the blame lands on the planner instead of on the
+            # pool that never produced a JSON body. A strict request therefore gets an honest refusal
+            # -- the caller can retry the one scene instead of losing the whole film.
+            if strict:
+                log(f"  no JSON body after {len(tried)} seat(s) within {STRICT_BUDGET_S:.0f}s; "
+                    f"refusing rather than returning prose")
+                return None, "", (f"no seat produced a JSON body for a strict-JSON request after "
+                                  f"{len(tried)} seat(s) in {STRICT_BUDGET_S:.0f}s. This is a "
+                                  f"TRANSIENT pool condition, not malformed planner output -- retry "
+                                  f"this request. Closest reply came from {best[1]} and is withheld "
+                                  f"deliberately so it cannot be mistaken for a planner answer.")
+            # Non-strict callers asked for JSON without demanding a bare body; prose is still useful.
+            return best[0], best[1], ("no seat produced a JSON body for a JSON-ish request; "
                                       "returning the closest reply unmodified")
         return None, "", (f"all {len(self.pool.providers)} provider(s) are cooling or failed this "
                           f"request; GET /health for per-provider reasons")
