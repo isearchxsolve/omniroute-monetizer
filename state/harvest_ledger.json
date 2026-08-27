@@ -1,0 +1,114 @@
+[
+ {
+  "host": "digen.ai",
+  "outcome": "CAPTURED",
+  "url": "https://digen.ai",
+  "elapsed_s": 120,
+  "evidence": "submit+poll+auth contract proven with MP4 output on status=3"
+ },
+ {
+  "host": "flyne.ai",
+  "outcome": "WALL",
+  "url": "https://flyne.ai/text-to-video-generator/",
+  "elapsed_s": 180,
+  "evidence": "manage billing / plan wall present"
+ },
+ {
+  "host": "chatgpt.com",
+  "outcome": "NO_RESULT",
+  "url": "https://chatgpt.com",
+  "elapsed_s": 0,
+  "evidence": "captured backend-api/f/conversation/prepare (bootstrap); reply carried no computed expectation -> not supply"
+ },
+ {
+  "host": "chat.deepseek.com",
+  "outcome": "TEXT_REJECTED",
+  "url": "https://chat.deepseek.com",
+  "elapsed_s": 0,
+  "evidence": "capture ok; replay verdict SINGLE_USE (proof-of-work token bound, structural)"
+ },
+ {
+  "host": "felo.ai",
+  "outcome": "TEXT_REJECTED",
+  "url": "https://felo.ai",
+  "elapsed_s": 0,
+  "evidence": "capture ok; replay verdict SINGLE_USE (message_id bound, structural)"
+ },
+ {
+  "host": "gemini.google.com",
+  "outcome": "NO_RESULT",
+  "url": "https://gemini.google.com",
+  "elapsed_s": 0,
+  "evidence": "recaptured StreamGenerate via enter; replay NO_ANSWER (session refuses; extraction pinned, session dead)"
+ },
+ {
+  "host": "www.meta.ai",
+  "outcome": "NO_RESULT",
+  "url": "https://www.meta.ai",
+  "elapsed_s": 0,
+  "evidence": "graphql captured 99B body - searchconversations layer, not the chat call"
+ },
+ {
+  "host": "chat.mistral.ai",
+  "outcome": "NO_RESULT",
+  "url": "https://chat.mistral.ai",
+  "elapsed_s": 0,
+  "evidence": "bootstrap POST only; answer arrives on second stream (structural per transfer doc 6)"
+ },
+ {
+  "host": "monica.im",
+  "outcome": "NO_RESULT",
+  "url": "https://monica.im",
+  "elapsed_s": 0,
+  "evidence": "server-side conversation state replays captured prompt, not ours"
+ },
+ {
+  "host": "pollinations.ai",
+  "outcome": "WALL",
+  "url": "https://pollinations.ai",
+  "elapsed_s": 0,
+  "evidence": "credit card wall in page; left alone per Law 5"
+ },
+ {
+  "host": "yuewen.cn",
+  "outcome": "WALL",
+  "url": "https://yuewen.cn/chat",
+  "elapsed_s": 0,
+  "evidence": "StepFun chat ships as yuewen.cn; credit card wall; left alone per Law 5"
+ },
+ {
+  "host": "cloud.sambanova.ai",
+  "outcome": "WALL",
+  "url": "https://cloud.sambanova.ai/playground",
+  "elapsed_s": 0,
+  "evidence": "add-payment-method wall; left alone per Law 5"
+ },
+ {
+  "host": "copilot.microsoft.com",
+  "outcome": "WEBSOCKET",
+  "url": "https://copilot.microsoft.com/",
+  "elapsed_s": 0,
+  "evidence": "sentinel left over a websocket frame only - not HTTP-replayable"
+ },
+ {
+  "host": "puter.com",
+  "outcome": "CDP_ERROR",
+  "url": "https://puter.com",
+  "elapsed_s": 0,
+  "evidence": "discarded tab; Runtime.enable no reply even after /json/activate"
+ },
+ {
+  "host": "forvideo.ai",
+  "outcome": "WALL",
+  "url": "https://forvideo.ai",
+  "elapsed_s": 0,
+  "evidence": "Google SSO one-click OK (signed in as Kunal); sentinel verified in video composer by screenshot; Generate -> Insufficient Credits modal with Get Credits; stopped per Law 5"
+ },
+ {
+  "host": "genspark.ai",
+  "outcome": "WALL",
+  "url": "https://www.genspark.ai/",
+  "elapsed_s": 420,
+  "evidence": "Robot-profile Google SSO completed without challenge; AI Video composer verified by screenshot with sentinel; genuine submit produced seven exchanges but provider UI reported insufficient credits and no result was correlated; pending capture is not supply"
+ }
+]
