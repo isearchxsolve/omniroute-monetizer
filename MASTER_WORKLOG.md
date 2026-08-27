@@ -5999,3 +5999,63 @@ session, no signup/login/wall-solving. No secrets logged.
 **Artifacts:** `scripts/automation/adapter_invoke_generic.py`,
 `state/adapter_invoke_chatglm.json` (FAIL, default model),
 `state/adapter_invoke_chatglm_glm53.json` (REPLAY_OK).
+
+### [2026-08-27 17:15] #1098 — CEREBRAS REPLAY_OK VIA ADAPTER INVOCATION + GENERIC DRIVER HARDENED (reCAPTCHA-shadow trap fixed)
+
+**User directive (verbatim):** *"yup"* (approve sweep of remaining class-(a) providers).
+
+**Step 1 — first cerebras run: FAIL, correctly diagnosed as class (c) entry-point bug.**
+Generic driver on `chat.cerebras.ai/chat`: inject reported `kind: textarea, len=80` but
+the poll found nothing. DOM diagnosis (`scratch_diagnose_cerebras.py`) revealed the trap:
+the ONLY `<textarea>` on the page was `g-recaptcha-response-100000` — the HIDDEN reCAPTCHA
+field. My driver had injected the prompt into reCAPTCHA, not the chat box
+(`prompt_in_dom: false`). The real chat input is a visible textarea
+(`w-full h-20 p-6 scrollbar-hide`) that my picker never reached because the hidden
+reCAPTCHA textarea shadowed it. The send button (36x36, beside the "Gemma 4 31B" model
+selector) was `disabled` because the real input was empty. A `cky-*` cookie-consent
+banner was also overlaying. Classification: NOT dead, NOT a send-time gap — a capture/
+entry-point bug in MY driver. Fixable, fixed.
+
+**Step 2 — generic driver hardened (the fix is generic, not cerebras-specific).**
+Patched `scripts/automation/adapter_invoke_generic.py`:
+1. Input picker now requires VISIBILITY (non-zero box + computed display/visibility)
+   and skips any element whose id/class/name contains `recaptcha`. Applies to both
+   textarea and contenteditable candidates.
+2. Send trigger uses the same visible/non-recaptcha picker.
+3. Button-click fallback now: skips cookie-banner buttons (`cky-|cookie|consent`),
+   prefers `type=submit` or send/submit aria-labels, else picks the enabled button
+   CLOSEST to the chat input (send buttons sit beside the input).
+This trap can hit ANY reCAPTCHA-embedded site, so the fix belongs in the generic driver.
+
+**Step 3 — re-run: REPLAY_OK.** Same driver, zero provider-specific code:
+inject `kind: textarea, len=80` (the REAL visible textarea this time), Enter fired
+(remaining=80 — cerebras clears async, same lesson as chatglm), button-click fallback
+engaged, poll hit at 1243ms strength=strong, hit len=35 = EXACTLY the phrase.
+Note: 1243ms is plausible for cerebras — they advertise thousands of tokens/sec
+inference; the speed is their product, not a false-positive signal. Still verified.
+
+**Step 4 — FALSE-POSITIVE CHECK (Law 2/3, scratch_verify_cerebras.py):**
+```
+[6] len=80  cls=text-dark-primary user-message ...  'Repeat exactly this phrase...' <== PHRASE
+[7] len=35  cls=playgroundMessage break-words       'the holy cow jumps over the stricks' <== PHRASE
+```
+The phrase sits in `playgroundMessage` (assistant class), len=35 = exactly the phrase,
+ORDERED AFTER the `user-message` bubble (len=80 = full prompt). Fresh assistant reply,
+not an echo. Input now empty (len=0) — message consumed. Verdict:
+REPLAY_OK_ADAPTER_INVOCATION.
+
+**Doctrine note:** this also dissolves cerebras' old class-(a) label ("stale multi-turn
+context") — adapter invocation creates a FRESH turn in the live conversation, so stale
+recorded context is irrelevant. Another win for invoking the app over replaying bytes.
+
+**Scoreboard:** REPLAY_OK now 12 total — 9 via in-browser fetch (1min, gemini,
+perplexity, mistral, cohere, qwen, groq, felo, chatx) + 3 via ADAPTER INVOCATION
+(deepseek, chatglm/GLM-5.3, cerebras). Remaining class-(a): innerai (CORS origin) —
+no live tab currently open; needs a tab or re-capture.
+
+**Law 5 compliance:** replay-only, one message on the operator's already-signed-in
+session, no signup/login/wall-solving. No secrets logged.
+
+**Artifacts:** `scripts/automation/adapter_invoke_generic.py` (hardened),
+`scratch_diagnose_cerebras.py`, `scratch_verify_cerebras.py`,
+`state/adapter_invoke_cerebras.json` (REPLAY_OK).

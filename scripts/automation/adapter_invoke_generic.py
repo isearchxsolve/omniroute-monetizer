@@ -72,10 +72,24 @@ SNAP_JS = r"""
 """
 
 # ---- inject into textarea or contenteditable ----
+# IMPORTANT: skip hidden/reCAPTCHA textareas. Some pages (cerebras) have a hidden
+# `g-recaptcha-response` textarea that shadows the real contenteditable chat input.
+# Require the candidate to be VISIBLE (non-zero box) and not a recaptcha field.
 INJECT_JS = r"""
 (function(prompt){
-  // textarea path
-  let ta = document.querySelector('textarea');
+  function visible(el){
+    const r = el.getBoundingClientRect();
+    if(r.width<=0 || r.height<=0) return false;
+    const st = window.getComputedStyle(el);
+    return st.display!=='none' && st.visibility!=='hidden';
+  }
+  function isRecaptcha(el){
+    const s = ((el.id||'')+' '+(el.className||'')+' '+(el.name||'')).toLowerCase();
+    return s.includes('recaptcha') || s.includes('g-recaptcha');
+  }
+  // visible, non-recaptcha textarea path
+  let ta = Array.from(document.querySelectorAll('textarea'))
+             .find(el=>visible(el) && !isRecaptcha(el));
   if(ta){
     ta.focus();
     const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;
@@ -83,8 +97,9 @@ INJECT_JS = r"""
     ta.dispatchEvent(new Event('input',{bubbles:true}));
     return {ok:true, kind:'textarea', len:(ta.value||'').length};
   }
-  // contenteditable path
-  let ce = document.querySelector('[contenteditable="true"]');
+  // visible contenteditable path
+  let ce = Array.from(document.querySelectorAll('[contenteditable="true"],[contenteditable="plaintext-only"]'))
+             .find(el=>visible(el));
   if(ce){
     ce.focus();
     let inserted=false;
@@ -93,34 +108,70 @@ INJECT_JS = r"""
     ce.dispatchEvent(new Event('input',{bubbles:true}));
     return {ok:true, kind:'contenteditable', len:(ce.innerText||'').length};
   }
-  return {ok:false, why:'no textarea or contenteditable found'};
+  return {ok:false, why:'no visible textarea or contenteditable found'};
 })(arguments[0])
 """
 
 # ---- trigger send: Enter, report whether input was consumed ----
 SEND_JS = r"""
 (function(){
-  const el = document.querySelector('textarea') || document.querySelector('[contenteditable="true"]');
+  function visible(el){
+    const r = el.getBoundingClientRect();
+    if(r.width<=0 || r.height<=0) return false;
+    const st = window.getComputedStyle(el);
+    return st.display!=='none' && st.visibility!=='hidden';
+  }
+  function isRecaptcha(el){
+    const s = ((el.id||'')+' '+(el.className||'')+' '+(el.name||'')).toLowerCase();
+    return s.includes('recaptcha');
+  }
+  const el = Array.from(document.querySelectorAll('textarea'))
+               .find(e=>visible(e)&&!isRecaptcha(e))
+            || Array.from(document.querySelectorAll('[contenteditable="true"],[contenteditable="plaintext-only"]'))
+               .find(e=>visible(e));
   if(!el) return {ok:false, why:'no input'};
   const opts={key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true};
   el.dispatchEvent(new KeyboardEvent('keydown',opts));
   el.dispatchEvent(new KeyboardEvent('keypress',opts));
   el.dispatchEvent(new KeyboardEvent('keyup',opts));
   const left = (el.value!==undefined?el.value:el.innerText)||'';
-  return {ok:true, method:'enter', remaining:left.length};
+  return {ok:true, method:'enter', remaining:left.length, kind: el.tagName};
 })()
 """
 
-# ---- fallback: click best send button ----
+# ---- fallback: click best send button (near the input, skip cookie banners) ----
 CLICK_JS = r"""
 (function(){
+  function visible(el){
+    const r = el.getBoundingClientRect();
+    if(r.width<=0 || r.height<=0) return false;
+    const st = window.getComputedStyle(el);
+    return st.display!=='none' && st.visibility!=='hidden';
+  }
   const cands = Array.from(document.querySelectorAll('button,[role="button"]'))
-    .filter(el=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0&&!el.disabled;});
+    .filter(el=>visible(el) && !el.disabled
+      && !/cky-|cookie|consent/i.test((el.className||'')+' '+(el.getAttribute('aria-label')||'')));
   if(!cands.length) return {ok:false, why:'no enabled button'};
-  const pick = cands.find(el=>/send|submit|arrow/i.test((el.getAttribute('aria-label')||'')+(el.className||'')))
-            || cands[cands.length-1];
+  // 1) explicit submit/send semantics
+  let pick = cands.find(el=>el.getAttribute('type')==='submit')
+          || cands.find(el=>/send|submit/i.test((el.getAttribute('aria-label')||'')+(el.getAttribute('data-testid')||'')))
+          || null;
+  // 2) else: enabled button closest to the chat input (send buttons sit beside it)
+  if(!pick){
+    const input = Array.from(document.querySelectorAll('textarea,[contenteditable="true"]'))
+                    .find(e=>visible(e) && !/recaptcha/i.test((e.id||'')+(e.className||'')));
+    if(input){
+      const ir = input.getBoundingClientRect();
+      const cx = ir.x+ir.width/2, cy = ir.y+ir.height/2;
+      pick = cands.map(el=>{
+        const r = el.getBoundingClientRect();
+        return {el, d: Math.hypot(r.x+r.width/2-cx, r.y+r.height/2-cy)};
+      }).sort((a,b)=>a.d-b.d)[0].el;
+    }
+  }
+  if(!pick) pick = cands[cands.length-1];
   pick.click();
-  return {ok:true, picked:((pick.getAttribute('aria-label')||pick.className||'')+'').slice(0,60)};
+  return {ok:true, picked:((pick.getAttribute('aria-label')||pick.getAttribute('data-testid')||pick.className||'')+'').replace(/\s+/g,' ').slice(0,60)};
 })()
 """
 
