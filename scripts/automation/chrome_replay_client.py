@@ -66,6 +66,11 @@ CHROME_CLIENTS: Dict[str, str] = {
     "genspark.ai": "genspark.ai",
     "v0.app": "v0.app",
     "yi.baichuan-ai.com": "baichuan-ai.com",
+    # 2026-08-28 Track 1 (worklog #1116): meta.ai's recorded_exchange is a
+    # searchConversations GraphQL query (a conversation-search, NOT a send mutation) —
+    # replaying it returns a JSON envelope, a false green. Route to Chrome (live tab is
+    # signed in) until a genuine send-mutation blueprint is captured.
+    "www.meta.ai": "www.meta.ai",
 }
 
 # Per-host response-container selector override for POLL_JS. The generic selector set
