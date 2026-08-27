@@ -287,11 +287,16 @@ const runid = arguments[1];
 const cb = arguments[2];
 const flat = s => (s||'').toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();
 const flatPrompt = flat(prompt);
-// Transient loading placeholders (v0 "Thinking...", grok "Thinking about your request",
-// etc.). These are NOT answers -- they are the provider's own "still working" UI. Never
-// delivered as the reply; keep listening until real content replaces them. Short-text
-// guard so a genuine one-word answer is never mistaken for a placeholder.
-const PLACEHOLDER_RE = /^(thinking|generating|typing|working|drafting|reasoning|searching|loading|processing|waiting)( about( your)? request)?[.\s…]*$/i;
+// Transient loading placeholders (v0 "Thinking..."/"Cooking...", grok "Thinking about
+// your request", etc.). These are NOT answers -- they are the provider's own "still
+// working" UI. Never delivered as the reply; keep listening until real content replaces
+// them. Short-text guard so a genuine one-word answer is never mistaken for a placeholder.
+// 2026-08-28 fleet sweep: v0.app returned "Cooking..." as a false green because "cooking"
+// was missing from this list -- the quiet-debounce armed on the placeholder render.
+// v0 cycles several status verbs (Thinking/Cooking/Sending/...), so the list covers the
+// whole family. The regex only matches a SINGLE status word (+ optional "about your
+// request"), so a genuine one-word answer can never be swallowed.
+const PLACEHOLDER_RE = /^(thinking|generating|typing|working|drafting|reasoning|searching|loading|processing|waiting|cooking|creating|building|running|sending|streaming|composing|analyzing|planning|coding|executing)( about( your)? request)?[.\s…]*$/i;
 const isPlaceholder = t => t.length <= 48 && PLACEHOLDER_RE.test(t.trim());
 const sels = '__RESPONSE_SELECTORS__';
 const QUIET_MS = 1200;   // no render event for this long after the last one => stream done
