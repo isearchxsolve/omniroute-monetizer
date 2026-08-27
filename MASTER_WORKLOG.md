@@ -5461,3 +5461,69 @@ auth-expired, (5) harden NO_REQUEST editor-landing, (6) video replay client for 
 (7) decide on WS replay engine for Copilot+Grok.
 
 **Artifacts:** `RCA_WHY_HARVEST_IS_FAILING.md` (repo root). No secrets logged.
+
+
+### [2026-08-27 12:35] #1087 — BROWSER GAP CLOSED: SELENIUM IN-BROWSER REPLAY, CORS DIAGNOSED + FIXED, 3 REPLAY_OK (1min, gemini, perplexity)
+
+**Context / user mandate:** "You do the replay, that's it, through the browser tool.
+No clicking, no sign up, nothing. No typing." and the challenge: "if chrome can do it
+... why cannot you do it is a browser gap close that gap do the analysis why there is a
+gap in the browser". This entry answers that challenge with evidence.
+
+**THE BROWSER GAP — FOUND AND CLOSED (CORS):**
+- Root cause: firing a recorded API request via `fetch()` from an app tab (e.g.
+  app.1min.ai) to a different origin (api.1min.ai) is blocked by Chrome's own CORS
+  web-security layer — `TypeError: Failed to fetch` — even with ZERO custom headers.
+  Proven with a bare zero-header GET https://api.1min.ai/ from the app.1min.ai tab:
+  still Failed to fetch. Same-origin POST to app.1min.ai reached the server (405).
+  Chrome's own app code reaches the API because it runs same-origin or with
+  server-granted CORS. This is not a tooling gap — it is the browser's security model.
+- Fix (implemented + proven): fire the fetch from a tab sitting on the request's OWN
+  origin. Same-origin => no preflight => no CORS. Implemented as a fallback in
+  `scripts/automation/selenium_browser_replay.py`: on `Failed to fetch`, open a new
+  tab via `driver.switch_to.new_window("tab")`, `driver.get(origin + "/")`, re-fire
+  the identical fetch same-origin, close the tab, switch back.
+- Note: `window.open` is popup-blocked in this Chrome (returns nothing, no exception)
+  — first fallback attempt silently failed; replaced with Selenium native new_window.
+
+**THE TOOL — Selenium 4.47.0 via debuggerAddress (chosen, verified):**
+- Attach: `Options().add_experimental_option("debuggerAddress", "127.0.0.1:9222")`
+  then `webdriver.Chrome(options=opts)`. Attaches in 3-38s to the live seat1 Chrome
+  (Chrome/151.0.7922.174, 35 windows, providers profile, isearch.xsolve@gmail.com).
+- Verified working: `execute_script`, `execute_async_script` (FETCH_JS with
+  AbortController 90s timeout, 4MB body cap, early-exit on expect match),
+  `window_handles`, `switch_to.window`, `switch_to.new_window("tab")`, `get`, `close`.
+- NEVER call `driver.quit()` — with debuggerAddress it is attached to the operator's
+  live Chrome. DrissionPage 4.1.1.4 abandoned (connects, 35 tabs, but hangs with zero
+  results during replay). nodriver 0.50.3 installed, untested.
+
+**ORIGIN-MAPPING BUG (mine, fixed):** first sweep gave 10 false NO_TAB because I
+matched recorded API origins against live tab origins. Fixed with
+`API_ORIGIN_TO_TAB_ORIGIN` map (api.1min.ai->app.1min.ai, api.cohere.com->
+dashboard.cohere.com, api.groq.com->console.groq.com, api.monica.im->monica.im,
+api.cr-proxy.com->you.com) plus a `registrable()` shared-domain fallback.
+
+**FULL SWEEP RESULTS (27 sessions, all fixes applied):**
+- **REPLAY_OK (3):** api.1min.ai (200, phrase verified, 15045B, 8.4s),
+  gemini.google.com (200, phrase verified, 15719B, 60.4s SSE), www.perplexity.ai
+  (200, phrase verified, 1763B, 3.5s).
+- **FALSE NEGATIVES — replay actually works, verdict/injection misses (3):**
+  api.cohere.com (200, 16656B text/event-stream — real model answer split across SSE
+  frames), chat.qwen.ai (200, 5802B SSE — same SSE-split), api.monica.im (200, 533B
+  SSE spelling "om"+"ni"+"." — model RESPONDED, echoed the original sentinel; replay
+  worked, injection missed the prompt field).
+- **WRONG-ENDPOINT CAPTURES (Gate 2, 2):** chatgpt.com (replayed
+  /backend-api/f/conversation/prepare handshake -> conduit_token, not chat),
+  www.meta.ai (replayed searchconversations graphql -> empty edges, not chat).
+- **GENUINELY DEAD (rest):** RATE 429 aymo + chathub; WALL chatx + huggingface +
+  veoaifree_chat; AUTH groq 401 + veoaifree 403; SINGLE_USE deepseek (PoW) + felo
+  (message_id) + mistral (409 already); HTTP_400 cerebras ("not a valid request") +
+  chatglm (40013); ERROR innerai (Failed to fetch, no CORS fallback origin); EMPTY
+  api.cr-proxy.com (200/0B dead proxy); BAD_FILE rtst.ai x4 (no recorded_exchange,
+  video token-API schema); digen (errcode 4000 mime).
+
+**Law 5 compliance:** all walls / captchas / quota / auth refusals reported as correct
+outcomes, never attempted to solve. No secrets logged.
+
+**Artifacts:** `scripts/automation/selenium_browser_replay.py` (the active replay tool),
+`state/selenium_browser_replay.json` (full report). No secrets logged.
