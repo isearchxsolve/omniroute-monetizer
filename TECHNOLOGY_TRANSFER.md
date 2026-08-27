@@ -1123,4 +1123,71 @@ rotation spreads requests across all of them.
 
 ---
 
-*Living document — appended as work proceeds. Last updated 2026-08-27.*
+## 24. Zero-Restart Hot-Add of Providers (worklog #1112, 2026-08-28)
+
+**Doctrine:** "one chrome, infinite sites" — Chrome needs no adaptation to serve a new site,
+and neither does the pool. Adding a provider is now a DATA operation, not a code or restart
+operation.
+
+### The contract
+
+| Action | What you do | What the endpoint does |
+|---|---|---|
+| Add a provider | drop `state/secrets/session_<host>.json` (+ open the signed-in tab in any seat Chrome) | next request auto-rescans; host appears in `/v1/models` — NO restart, NO code edit |
+| Remove a provider | delete the seat file | next request drops it — NO restart |
+| Force a rescan now | `POST /v1/rescan` | returns `{added, removed, changed, total}` + dispatchable count |
+
+### Seat-file-declared Chrome backing (no registry entry needed)
+
+A seat file may declare its Chrome backing inline. Three accepted forms:
+
+```json
+{"host": "chat.newsite.com", "modality": "chat", "chrome": {"tab": "chat.newsite.com"}}
+{"host": "chat.newsite.com", "modality": "chat", "chrome": "chat.newsite.com"}
+{"host": "chat.newsite.com", "modality": "chat", "chrome": true}
+```
+
+- dict form: `tab` is the tab-URL substring (plus optional `gen` regex for video seats);
+- string form: the string IS the tab substring;
+- `true` form: tab substring defaults to the host.
+
+Chat seats route to `ChromeReplayClient`; `modality=video` seats route to
+`ChromeVideoClient`, which builds a generic `{"tab": ..., "kind": "ui"}` spec from the seat
+file when no `VIDEO_HOSTS` entry exists. The static registries (`CHROME_CLIENTS`,
+`VIDEO_HOSTS`) remain a CONVENIENCE for legacy seats, not a gate on new ones.
+
+### How hot-reload works (session_pool.py + session_pool_shim.py)
+
+- `SessionPool.rescan()` re-globs the secrets dir under the pool lock. New files become live
+  sessions; vanished files are dropped; changed files (mtime moved) are re-parsed while
+  carrying runtime state (last_used / cooldown_until / dead) across; UNTOUCHED sessions keep
+  the exact same object (including any instantiated client), so a rescan never disturbs
+  in-flight load spreading.
+- The shim does ONE cheap `os.stat` of the secrets dir per request (mtime_ns + ctime_ns
+  signature) and only calls `rescan()` when the directory actually changed — double-checked
+  under a lock so concurrent requests rescan once. This mirrors the already-proven
+  `_tenant_map()` per-request read pattern.
+
+### One shim, one port (bug fixed in #1112)
+
+`http.server` sets `allow_reuse_address=True` (SO_REUSEADDR), which on Windows lets a SECOND
+process bind the same port — the OS then hands incoming connections to EITHER listener. Four
+shim instances (two stale-code) were found sharing :8190, making requests land on a random
+instance. The shim now uses `ExclusiveThreadingHTTPServer` with `allow_reuse_address=False`:
+a duplicate start fails loudly at bind time, guaranteeing exactly one shim owns the port and
+the keepalive task's "is it answering?" guard stays honest.
+
+### Proven (not asserted)
+
+- Offline: 28-check suite against a temp secrets dir — hot-add chat + video via inline decl,
+  BOM'd files, no-op second rescan, object identity + runtime-state preservation, changed-file
+  re-parse with state carry-over, removal, no registry regression. ALL PASS.
+- Live on :8190 with NO restart between steps: drop seat file → host appears in `/v1/models`
+  (50→51); delete → host gone (51→50); re-drop → back; `POST /v1/rescan` returns clean diff;
+  targeted chat call routes through ChromeReplayClient with the seat-file tab substring and
+  fails over cleanly with NO_TAB (no tab open, no credits spent).
+
+---
+
+*Living document — appended as work proceeds. Last updated 2026-08-28.*
+
