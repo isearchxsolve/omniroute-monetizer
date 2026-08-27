@@ -66,6 +66,7 @@ from chrome_live_guard import (  # noqa: E402  (path bootstrap must come first)
     is_refusal,
     safe_profile_dir,
 )
+from chrome_no_discard import NO_DISCARD_FLAGS  # noqa: E402  -- stop Chrome discarding idle tabs
 
 PROJECT_ROOT = HERE.parents[1]
 PROFILE_TAG = "providers"
@@ -675,6 +676,7 @@ def run_harvest_browser() -> int:
         f"--remote-debugging-port={ROBOT_CDP_PORT}",
         "--no-first-run",
         "--no-default-browser-check",
+        *NO_DISCARD_FLAGS,
         "--window-size=1280,900",
         "--window-position=60,40",
         "about:blank",

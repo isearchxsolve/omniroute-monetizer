@@ -87,6 +87,7 @@ from typing import Any, Optional
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from chrome_live_guard import assert_safe, safe_profile_dir  # noqa: E402
+from chrome_no_discard import NO_DISCARD_FLAGS  # noqa: E402  -- stop Chrome discarding idle tabs
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 # Recordings are TRACKED, not runtime state: they are the test cases the operator asked for
@@ -269,6 +270,7 @@ def start_chrome() -> int:
          f"--remote-debugging-port={CDP_PORT}",
          "--remote-allow-origins=*",
          "--no-first-run", "--no-default-browser-check", "--disable-sync",
+         *NO_DISCARD_FLAGS,
          "--window-size=1400,950", "about:blank"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
         creationflags=flags, close_fds=True)

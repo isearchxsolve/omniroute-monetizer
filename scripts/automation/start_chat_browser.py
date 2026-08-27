@@ -1,7 +1,11 @@
 import subprocess
 import os
+import sys
 import time
 import urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from chrome_no_discard import NO_DISCARD_FLAGS  # stop Chrome discarding idle tabs
 
 chrome = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 profile = r"D:\omniroute-monetizer\state\automation_profiles\providers"
@@ -23,6 +27,7 @@ cmd = [
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-sync',
+    *NO_DISCARD_FLAGS,
     '--window-size=1400,900'
 ] + urls
 

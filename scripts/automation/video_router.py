@@ -102,6 +102,7 @@ import video_provider_flow  # noqa: E402,F401
 import video_provider_rtst  # noqa: E402,F401
 import video_provider_digen  # noqa: E402,F401
 from cdp import DEFAULT_PORT, Page, list_targets  # noqa: E402
+from chrome_no_discard import NO_DISCARD_FLAGS  # noqa: E402  -- stop Chrome discarding idle tabs
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STATE = ROOT / "state"
@@ -436,6 +437,7 @@ class Fleet:
                  f"--remote-debugging-port={acct.port}",
                  "--remote-allow-origins=*",
                  "--no-first-run", "--no-default-browser-check", "--disable-sync",
+                 *NO_DISCARD_FLAGS,
                  *window, "about:blank"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
                 creationflags=flags, close_fds=True)

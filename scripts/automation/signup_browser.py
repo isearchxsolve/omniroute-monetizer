@@ -12,12 +12,16 @@ Read-only helpers here never print secrets (T11-safe).
 """
 import json
 import os
+import pathlib
 import socket
 import subprocess
 import sys
 import time
 
 sys.stdout.reconfigure(encoding="utf-8")
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from chrome_no_discard import NO_DISCARD_FLAGS  # noqa: E402  -- stop Chrome discarding idle tabs
 
 CHROME_EXE = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
 PROFILE_DIR = r"d:\omniroute-chrome-profile"
@@ -68,6 +72,7 @@ def ensure_chrome() -> None:
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-session-crashed-bubble",
+        *NO_DISCARD_FLAGS,
     ]
     print(f"[*] launching plain Chrome with CDP on :{CDP_PORT} ...")
     subprocess.Popen(args)

@@ -97,6 +97,7 @@ from harvest_free_keys import (  # noqa: E402
     wire,
 )
 from provider_login_helper import ROBOT_CDP_PORT  # noqa: E402
+from chrome_no_discard import NO_DISCARD_FLAGS  # noqa: E402  -- stop Chrome discarding idle tabs
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 REPORT = ROOT / "state" / "harvest" / "auto_harvest.json"
@@ -1037,6 +1038,7 @@ def restart_attached(pw, wait_s: int = 25):
     subprocess.Popen(
         [str(chrome), f"--user-data-dir={udd}", f"--remote-debugging-port={ROBOT_CDP_PORT}",
          "--no-first-run", "--no-default-browser-check",
+         *NO_DISCARD_FLAGS,
          "--window-size=1360,940", "--window-position=60,40", "about:blank"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     end = time.monotonic() + wait_s

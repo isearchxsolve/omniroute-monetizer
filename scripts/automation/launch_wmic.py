@@ -1,8 +1,13 @@
 import subprocess
+import sys
 import time
 import urllib.request
+import pathlib
 
-cmd = r'"C:\Program Files\Google\Chrome\Application\chrome.exe" --user-data-dir="D:\omniroute-monetizer\state\automation_profiles\providers" --profile-directory=Default --remote-debugging-port=9222 --remote-allow-origins=* --no-first-run --no-default-browser-check --disable-sync --window-size=1400,900 https://arena.lmsys.org https://duckduckgo.com/ai https://huggingface.co/chat https://poe.com https://www.phind.com https://www.blackbox.ai'
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from chrome_no_discard import NO_DISCARD_FLAGS  # stop Chrome discarding idle tabs
+
+cmd = r'"C:\Program Files\Google\Chrome\Application\chrome.exe" --user-data-dir="D:\omniroute-monetizer\state\automation_profiles\providers" --profile-directory=Default --remote-debugging-port=9222 --remote-allow-origins=* --no-first-run --no-default-browser-check --disable-sync ' + " ".join(NO_DISCARD_FLAGS) + r' --window-size=1400,900 https://arena.lmsys.org https://duckduckgo.com/ai https://huggingface.co/chat https://poe.com https://www.phind.com https://www.blackbox.ai'
 
 print("Spawning via WMIC...")
 wmic_cmd = f'wmic process call create \'{cmd}\''

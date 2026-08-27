@@ -31,6 +31,9 @@ import time
 import urllib.error
 import urllib.request
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from chrome_no_discard import NO_DISCARD_FLAGS  # noqa: E402  -- stop Chrome discarding idle tabs
+
 ROOT = pathlib.Path(r"D:\omniroute-monetizer")
 SECRETS = ROOT / "state" / "secrets"
 READINESS = ROOT / "state" / "seat_readiness.json"
@@ -106,6 +109,7 @@ def launch(seat: dict, url: str = "https://rtst.ai") -> str | None:
         "--no-default-browser-check",
         "--disable-session-crashed-bubble",
         "--restore-last-session=false",
+        *NO_DISCARD_FLAGS,
         url,
     ]
     print(f"[*] launching chrome  profile={seat['profile']}  sub={seat['chrome_profile']}  port={port}")

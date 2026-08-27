@@ -28,6 +28,9 @@ from urllib.parse import urlsplit
 
 from playwright.async_api import async_playwright
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from chrome_no_discard import NO_DISCARD_FLAGS  # noqa: E402  -- stop Chrome discarding idle tabs
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STATE = ROOT / "state"
 SECRETS_DIR = STATE / "secrets"
@@ -160,6 +163,7 @@ def cmd_launch(port: int = 9222, profile_tag: str = "providers") -> int:
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-sync",
+        *NO_DISCARD_FLAGS,
         "--window-size=1450,960",
     ] + urls
 

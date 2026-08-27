@@ -7,6 +7,9 @@ import sys
 import time
 import urllib.request
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from chrome_no_discard import NO_DISCARD_FLAGS  # stop Chrome discarding idle tabs
+
 ROOT = pathlib.Path(r"D:\omniroute-monetizer")
 STATE = ROOT / "state"
 PROFILES_DIR = STATE / "automation_profiles"
@@ -56,6 +59,7 @@ def main():
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-sync",
+        *NO_DISCARD_FLAGS,
         "--window-size=1400,900"
     ] + TARGET_URLS
 

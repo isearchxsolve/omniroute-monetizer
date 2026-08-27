@@ -6526,3 +6526,70 @@ shim :8190; prove one free MP4 via veoaifree (zero cost).
 
 **Artifacts:** `scratch_rescan_seats_1_2.py`, `state/rescan_seats_1_2.json`,
 `state/rescan_seats_1_2_stdout.txt`.
+
+### [2026-08-27 23:59] #1107 — SERVICE REGISTRATION + NO-DISCARD PERMANENCE: all 4 services registered as Windows scheduled tasks, supervisor owns shim, NO_DISCARD_FLAGS spliced into all 10 Chrome launchers
+
+**Context:** Operator requested (1) all important processes including shim registered as Windows services, (2) revisit PORTING.md/recovery/keep-alive for fail-proofing, (3) permanently stop the auto-reload of tabs.
+
+**1. Duplicate process cleanup:**
+- Found TWO `session_pool_shim.py 8190` processes (PID 9416 system Python owning :8190, PID 33508 venv Python duplicate not owning port). Killed 33508.
+- Found TWO `video_jobs_face.py --engine pool --port 8189` processes (PIDs 21776, 22008, 15512 — three total). Killed duplicates.
+- Found TWO `video_router.py serve` processes (PIDs 35640 venv, 26376 system). 26376 owns :8189+:8188. Left both running (task relaunches every 5 min; killing the port owner would drop :8189).
+- Found TWO `omni_supervisor.py --watch` processes appearing from different Python interpreters. Killed duplicates. Supervisor kept dying after one pass — root cause: concurrent agent sessions launching/killing processes simultaneously. Stopped the kill-restart fight; the scheduled task now handles supervisor persistence.
+
+**2. Service registration (Windows Scheduled Tasks — the repo's established pattern, NOT raw sc.exe services which run in Session 0 and can't access DPAPI/Chrome per AGENTS.md anti-pattern #8):**
+
+| Task Name | Interval | Status | What it does |
+|---|---|---|---|
+| `OmniRoute OAuth KeepAlive` | 15 min | Ready (re-enabled) | Runs `oauth_keepalive.py --once` — refreshes all OAuth provider tokens via native REST API |
+| `OmniRoute Video Router (keepalive)` | 5 min | Running | Runs `video_router_task.bat` — starts video_router.py serve if :8189 not answering |
+| `OmniRoute Session Pool Shim (keepalive)` | 5 min | Ready (NEW) | Runs `session_pool_shim_task.bat` — starts shim if :8190/v1/models not answering |
+| `OmniRoute Rig Supervisor (keepalive)` | 5 min | Ready (NEW) | Runs `supervisor_task.bat` — starts omni_supervisor.py --watch if not already running |
+
+New files created:
+- `scripts/automation/session_pool_shim_task.bat` — probes :8190/v1/models, starts shim if down
+- `scripts/automation/supervisor_task.bat` — checks for omni_supervisor process via wmic, starts --watch if absent
+
+**3. Supervisor service table updated (`omni_supervisor.py`):**
+- Added `session_pool_shim` (port 8190, health `/v1/models`, owned=True, match `session_pool_shim.py`) to the `services()` list. The supervisor now monitors and restarts the shim alongside the chat pool.
+
+**4. Re-enabled disabled scheduled tasks:**
+- `OmniRoute OAuth KeepAlive` was Disabled → re-enabled via `schtasks /Change /ENABLE`
+- `OmniRoute Video Router (keepalive)` was Disabled → re-enabled
+
+**5. NO_DISCARD_FLAGS spliced into ALL 10 Chrome launchers (permanent auto-reload fix):**
+
+The `chrome_no_discard.py` module defines two layers: (1) `NO_DISCARD_FLAGS` command-line flags, (2) `patch_profile()` persistent Preferences. The Preferences layer was already applied to all 13 profiles. The command-line layer was missing from EVERY launcher — zero call sites of `NO_DISCARD_FLAGS` existed.
+
+Patched files (import + splice into Chrome argv):
+1. `video_router.py` — the main seat launcher (self-heal relaunches all 4 seat Chromes)
+2. `chat_seat_daemon.py` — providers profile on :9222
+3. `start_chat_browser.py` — providers profile on :9222
+4. `launch_wmic.py` — providers profile on :9222 (hardcoded string)
+5. `auto_key_harvester.py` — robot profile restart
+6. `drive.py` — robot profile launch
+7. `harvest_rtst_seat.py` — rtst seat launch
+8. `launch_and_harvest_chats.py` — chat harvest launch
+9. `provider_login_helper.py` — robot profile launch
+10. `signup_browser.py` — signup Chrome launch
+
+All 10 files syntax-checked OK. The flags take effect on every future Chrome launch, including video_router's self-heal relaunches. Currently-running Chromes (launched without flags) will get the flags on their next relaunch.
+
+**6. Final verified state:**
+- :20130 chat_pool_server — UP (PID 19900)
+- :20128 OmniRoute — UP (PID 8580, hands-off by design)
+- :8190 session_pool_shim — UP (PID 19768)
+- :8189 video_router direct face — UP (PID 26376)
+- :8188 video_router ComfyUI face — UP (PID 26376)
+- Chrome CDP ports: 9222, 9223, 9224, 9225 — all 4 seats alive
+- All 4 scheduled tasks: Ready/Running
+- Preferences no-discard patch: applied to all 13 profiles (6 LOCKED by running Chrome = already patched)
+
+**7. PORTING.md / recovery / keep-alive fail-proof assessment:**
+- PORTING.md step 10 (`omni_supervisor.py --up`) now covers the shim too (added to service table).
+- Recovery: supervisor Startup VBS armed (`omniroute_rig_supervisor.vbs` present). The new `OmniRoute Rig Supervisor (keepalive)` task provides a second layer: even if the Startup VBS fails, the 5-minute task restarts the supervisor.
+- Keep-alive: OAuth KeepAlive task re-enabled (15 min). Chat pool Heartbeat thread running inside chat_pool_server (6h idle window). Video router self-heal running (5 min task).
+- Remaining gap: the currently-running Chromes lack NO_DISCARD_FLAGS (launched before the patch). They will get the flags on next relaunch. To apply immediately requires closing and relaunching each seat Chrome — an operator decision since relaunch risks losing in-progress tab state.
+
+**Files changed:** omni_supervisor.py, video_router.py, chat_seat_daemon.py, start_chat_browser.py, launch_wmic.py, auto_key_harvester.py, drive.py, harvest_rtst_seat.py, launch_and_harvest_chats.py, provider_login_helper.py, signup_browser.py
+**Files created:** session_pool_shim_task.bat, supervisor_task.bat

@@ -120,6 +120,14 @@ def services() -> list:
             note="Owned by the 'OmniRoute Video Router (keepalive)' scheduled task, which relaunches "
                  "it every 5 minutes. Do not fight the task -- it always wins.",
         ),
+        Service(
+            key="session_pool_shim", label="Session pool shim (chat+video face)", port=8190,
+            health="/v1/models", owned=True,
+            argv=[py, f"{auto}/session_pool_shim.py", "8190"],
+            match="session_pool_shim.py",
+            note="OpenAI-compatible face over the SessionPool. Its supply is session files on disk, "
+                 "so it survives reboot exactly like the chat pool.",
+        ),
     ]
 
 
