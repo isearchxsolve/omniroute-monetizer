@@ -67,6 +67,29 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
         from youcom_api_client import YouComApiClient
         return YouComApiClient
 
+    # GRADUATION LEVER (worklog #1113 — runtime-Chrome is an anti-pattern).
+    # Driving a live Chrome tab per request serializes every call through ONE
+    # global driver lock (chrome_replay_client._DRIVER_LOCK, held for the WHOLE
+    # call) — concurrent requests queue behind a single browser, which is the
+    # exact opposite of the breadth-not-depth load spreader this pool exists to
+    # be. Chrome is a CAPTURE / onboard / re-auth instrument, not a runtime
+    # server. A seat that carries a recorded_exchange (or recorded_job) AND
+    # declares "runtime": "replay" is served by the stateless HTTP replay client
+    # (curl_cffi browser-TLS impersonation) instead of a live tab — parallel-safe,
+    # no browser in the request path. Opt-in per seat: nothing changes until a
+    # seat is explicitly graduated, so this is safe by default. Checked BEFORE
+    # every Chrome dispatch so a graduated seat never touches a browser.
+    if (raw or {}).get("runtime") == "replay" and (
+            (raw or {}).get("recorded_exchange") or (raw or {}).get("recorded_job")):
+        if (raw or {}).get("recorded_job") and not (raw or {}).get("recorded_exchange"):
+            from video_universal_replay import VideoUniversalSessionClient
+            return VideoUniversalSessionClient
+        if (raw or {}).get("modality") == "video":
+            from video_universal_replay import VideoUniversalSessionClient
+            return VideoUniversalSessionClient
+        from universal_replay import UniversalSessionClient
+        return UniversalSessionClient
+
     # Chrome-doctrine VIDEO seats (worklog #1108): the host's own UI in the live signed-in
     # tab generates the video. Checked FIRST (after API-kind dispatch) so that even hosts
     # with a legacy replay client in CLIENTS (e.g. digen) get the Chrome path when the
