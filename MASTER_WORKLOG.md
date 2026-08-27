@@ -5712,3 +5712,87 @@ to prefix/length only).
 **Artifacts:** `scratch_groq_live_bearer_replay.py`, `scratch_probe_groq_storage.py`,
 `scratch_debug_groq_*.py` (diagnostics). Canonical fix in
 `scripts/automation/selenium_browser_replay.py`.
+
+
+### [2026-08-27 14:55] #1092 — CHROME GAP DOCTRINE CLASS (a) FIX: FELO REPLAY_OK VIA 2-LEG FLOW (stream_key -> SSE stream)
+
+**User directive (verbatim):** "go there" (felo/chatx follow-up poll).
+
+**The gap (class a, fixable):** felo leg-1 (POST .../question) returned 200 + a
+`stream_key`, but the answer arrives on a SECOND leg that was never recorded. The
+recorded capture only had leg 1, so a naive single-request replay could never see the
+answer. This is a 2-step flow, not a dead site.
+
+**Leg-2 endpoint discovered from felo's own JS bundles (doctrine: reproduce what
+Chrome does):** grepping the loaded script sources for stream consumption found:
+  `fetch(`${base}/api/message/v1/stream/${encodeURIComponent(stream_key)}?offset=${o}`,
+        {method:'GET', headers:{Accept:'text/event-stream', Authorization:<bearer>},
+         credentials:'include'})`
+So leg 2 = GET https://felo.ai/api/message/v1/stream/{stream_key}?offset=0, SSE.
+
+**Critical transport bug found & fixed:** the first leg-1 attempt 422'd with "Input
+should be a valid dictionary" — the server received a JSON *string*, not an object.
+Root cause: `json.loads` then `json.dumps` re-serialization of the recorded body
+double-encoded it. Fix: surgical regex edits on the RAW recorded body string (swap
+query/search_uuid/process_id only), keeping everything else byte-identical. Sending
+exactly what Chrome sends. Verified: raw-string body -> HTTP 200.
+
+**Fix implemented:** `scratch_felo_2leg_replay.py` — leg 1 POST (raw-body surgical
+edit, fresh search_uuid/process_id) -> parse stream_key -> leg 2 GET SSE stream with
+incremental reader + early-exit on phrase.
+
+**Verification:** LEG1 HTTP 200 (stream_key=8035f282-...), LEG2 HTTP 200 early_exit,
+phrase found in SSE stream -> **REPLAY_OK**.
+
+**Doctrine status:** felo reclassified from "accepted-200, no answer" to CLASS (a)
+FIXED via 2-leg flow. Proves the doctrine: an accepted-200 with a handle is a
+multi-step flow whose answer leg must be reconstructed, never a dead site.
+
+**REPLAY_OK count now 8:** 1min, gemini, perplexity, mistral, cohere, qwen, groq, felo.
+
+**Law 5 compliance:** reported, never solved. No secrets logged (bearer redacted).
+
+**Artifacts:** `scratch_felo_2leg_replay.py`, `scratch_discover_felo_*.py` (JS-bundle
+endpoint discovery), `scratch_debug_felo_*.py` (transport diagnostics).
+
+
+### [2026-08-27 15:10] #1093 — CHROME GAP DOCTRINE CLASS (a) FIX: CHATX REPLAY_OK VIA 2-LEG FLOW (sendchat -> chats_stream SSE)
+
+**User directive (verbatim):** "go there" (felo/chatx follow-up poll).
+
+**The gap (class a, fixable):** chatx leg-1 (POST /sendchat) returned 200 +
+conversions_id/ass_conversions_id, but the answer arrives on a SECOND leg that was
+never recorded. The recorded capture only had leg 1, so a naive single-request replay
+could never see the answer. Same pattern as felo — a 2-step flow, not a dead site.
+
+**Leg-2 endpoint discovered from chatx's own inline JS (doctrine: reproduce what
+Chrome does):** grepping the page scripts for conversions_id consumption found:
+  `new EventSource(locale+"chats_stream?user_id="+e+"&chats_id="+t+"&current_model="+a
+     +"&conversions_id="+s+"&ass_conversions_id="+i+"&g_recaptcha_response="+o
+     +"&is_web="+is_web+"&is_youtube="+is_youtube+"&reasoning_effort="+..+"&verbosity="+..)`
+Stream parse (also from the JS): first SSE message carries conversions_id; then
+events with type=="response.output_text.delta" accumulate d.delta.
+
+**Fix implemented:** `scratch_chatx_2leg_replay.py` —
+  - Leg 1: POST /sendchat with surgical regex edits on the RAW recorded form body
+    (fresh _token from meta[name="csrf-token"], fresh prompt), X-CSRF-TOKEN header
+    swapped to the fresh token. -> HTTP 200, conversions_id=80091987.
+  - Leg 2: GET /chats_stream?user_id=&chats_id=&current_model=&conversions_id=
+    &ass_conversions_id=&g_recaptcha_response=&is_web=&is_youtube=&reasoning_effort=
+    &verbosity= with Accept: text/event-stream, credentials include, incremental
+    reader + early-exit on phrase.
+
+**Verification:** LEG1 HTTP 200 (conversions_id=80091987, ass=80091988, quota left=10),
+LEG2 HTTP 200 early_exit, deltas='the holy cow jumps over the stricks' -> **REPLAY_OK**.
+
+**Doctrine status:** chatx reclassified from "accepted-200, no answer" to CLASS (a)
+FIXED via 2-leg flow. Second consecutive proof of the doctrine: an accepted-200 with a
+handle is a multi-step flow whose answer leg must be reconstructed, never a dead site.
+
+**REPLAY_OK count now 9:** 1min, gemini, perplexity, mistral, cohere, qwen, groq,
+felo, chatx.
+
+**Law 5 compliance:** reported, never solved. No secrets logged (CSRF token redacted).
+
+**Artifacts:** `scratch_chatx_2leg_replay.py`, `scratch_discover_chatx_leg2.py`
+(JS endpoint discovery), `scratch_inspect_chatx.py`.
