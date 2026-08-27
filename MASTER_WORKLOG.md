@@ -5663,3 +5663,52 @@ exhaustions, reportable and resettable only by the provider's own timers/upgrade
 **Law 5 compliance:** reported, never solved. No secrets logged.
 
 **Artifacts:** `scratch_open_quota_hosts_seat1.py` (attach-only tab-focus helper).
+
+
+### [2026-08-27 14:20] #1091 — CHROME GAP DOCTRINE CLASS (a) FIX: GROQ REPLAY_OK VIA LIVE STYTCH BEARER HARVEST
+
+**User directive (verbatim):** "groq".
+
+**The gap (class a, fixable send-time gap):** groq replay failed 401 "invalid or
+expired jwt". The recorded bearer was a SHORT-LIVED Stytch-minted JWT that expired.
+Per the doctrine, Chrome's console pulls a FRESH bearer from browser storage at
+send-time — the recorded bytes are stale, the site is NOT dead.
+
+**Root cause located:** `scratch_probe_groq_storage.py` probed console.groq.com
+storage. Groq uses Stytch auth. The live session JWT lives in the
+`stytch_session_jwt` cookie (len=1850) and the Stytch SDK state blob in
+localStorage. That is where Chrome's app reads the fresh bearer.
+
+**Fix implemented (two parts):**
+1. `scratch_groq_live_bearer_replay.py` (proof): harvest live JWT from
+   `stytch_session_jwt` cookie, swap into `authorization` header, fire from an
+   api-origin tab (CORS fallback). HTTP 200. Verdict initially FAIL only because SSE
+   content deltas split the phrase MID-WORD ("str" + "icks"); a space-join broke the
+   keyword match. Fixed by concatenating SSE `delta.content` fragments with NO
+   separator (they are contiguous pieces of the final text). REPLAY_OK.
+2. Folded into the canonical tool `scripts/automation/selenium_browser_replay.py` as
+   a reusable `LIVE_BEARER_RULES` map (host-substring -> (harvest JS, header name))
+   plus `harvest_live_bearer()`, wired into `replay_session` after tab focus, before
+   fetch. This generalizes to any provider that mints short-lived tokens.
+
+**Second bug found & fixed (load-bearing):** the harvest JS is an IIFE. Prepending
+`"return "` to a string that STARTS with a newline triggers JavaScript
+automatic-semicolon-insertion (`return;` + dead IIFE) -> token came back null.
+Fix: `harvest_js.strip()` before prepending `return`. Documented inline.
+
+**Verification:** `python scripts/automation/selenium_browser_replay.py --port 9222
+--only groq` -> `OK api.groq.com REPLAY_OK 4714ms ... phrase verified via frame
+aggregation`. liveBearerHarvested=groq.
+
+**Doctrine status:** groq reclassified from "expired jwt" to CLASS (a) FIXED. This is
+the first live-bearer-harvest fix and proves the auth-side doctrine: a stale bearer
+is a send-time gap, never a dead site.
+
+**REPLAY_OK count now 7:** 1min, gemini, perplexity, mistral, cohere, qwen, groq.
+
+**Law 5 compliance:** reported, never solved. No secrets logged (token values redacted
+to prefix/length only).
+
+**Artifacts:** `scratch_groq_live_bearer_replay.py`, `scratch_probe_groq_storage.py`,
+`scratch_debug_groq_*.py` (diagnostics). Canonical fix in
+`scripts/automation/selenium_browser_replay.py`.

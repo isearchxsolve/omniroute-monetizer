@@ -200,6 +200,62 @@ def reconstruct_send_time(host: str, headers: Dict[str, str], body: Optional[str
     return headers, body
 
 
+# CHROME GAP DOCTRINE (auth side): some providers mint SHORT-LIVED bearer tokens that
+# Chrome's app refreshes from browser storage at send-time. The recorded bearer is stale
+# and the server rejects it ("invalid or expired jwt"). The fix is NOT a dead site — it is
+# to harvest the LIVE token from the signed-in tab's storage and swap it into the header,
+# exactly as Chrome's app does. Each entry: host-substring -> (js returning token or null,
+# header name to overwrite). The JS runs in the resolved tab BEFORE the fetch.
+LIVE_BEARER_RULES: Dict[str, Tuple[str, str]] = {
+    # groq: Stytch-minted JWT. Live copy sits in the stytch_session_jwt cookie (and the
+    # Stytch SDK state blob in localStorage). Verified 2026-08-27: harvesting it turns a
+    # 401 "invalid or expired jwt" into HTTP 200 REPLAY_OK.
+    "groq": (
+        r"""
+        (function(){
+          try {
+            var m = document.cookie.match(/(?:^|;\s*)stytch_session_jwt=([^;]+)/);
+            if (m && m[1]) return decodeURIComponent(m[1]);
+          } catch (e) {}
+          try {
+            for (var i = 0; i < localStorage.length; i++) {
+              var k = localStorage.key(i);
+              if (k && k.indexOf('stytch_sdk_state') === 0 && k.indexOf('::') === -1) {
+                var v = localStorage.getItem(k) || '';
+                var jm = v.match(/"session_jwt"\s*:\s*"([^"]+)"/) || v.match(/"jwt"\s*:\s*"([^"]+)"/);
+                if (jm && jm[1]) return jm[1];
+              }
+            }
+          } catch (e) {}
+          return null;
+        })()
+        """,
+        "authorization",
+    ),
+}
+
+
+def harvest_live_bearer(driver, host: str, headers: Dict[str, str]) -> Tuple[Dict[str, str], Optional[str]]:
+    """If this host mints short-lived tokens, pull the live one from the tab's storage and
+    overwrite the auth header. Returns (headers, source-or-None). Must be called while the
+    driver is focused on the host's signed-in tab."""
+    headers = dict(headers or {})
+    for sub, (harvest_js, header_name) in LIVE_BEARER_RULES.items():
+        if sub not in (host or "").lower():
+            continue
+        try:
+            # NOTE: strip() is load-bearing. A newline between `return` and the IIFE
+            # triggers JS automatic-semicolon-insertion (`return;` + dead IIFE).
+            token = driver.execute_script("return " + harvest_js.strip())
+        except Exception:
+            token = None
+        if token:
+            headers[header_name] = "Bearer " + str(token)
+            return headers, sub
+        return headers, None
+    return headers, None
+
+
 # CHROME GAP DOCTRINE (verdict side): streaming APIs split the answer across many
 # frames (tRPC patches, SSE deltas). The phrase is present but never contiguous in
 # the raw body. Aggregate all JSON text-bearing string values in order, then check.
@@ -265,6 +321,12 @@ def replay_session(file_path: pathlib.Path, driver, handle_by_origin: Dict[str, 
     except Exception as e:
         row.update(verdict="ERROR", detail=f"switch_to failed: {str(e)[:100]}", latencyMs=0)
         return row
+
+    # CHROME GAP DOCTRINE (auth side): harvest a live short-lived bearer from the signed-in
+    # tab's storage and swap it into the auth header, exactly as Chrome's app does at send-time.
+    new_headers, bearer_src = harvest_live_bearer(driver, host, new_headers)
+    if bearer_src:
+        row["liveBearerHarvested"] = bearer_src
 
     started = time.perf_counter()
     try:
