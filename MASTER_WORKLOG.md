@@ -5527,3 +5527,68 @@ outcomes, never attempted to solve. No secrets logged.
 
 **Artifacts:** `scripts/automation/selenium_browser_replay.py` (the active replay tool),
 `state/selenium_browser_replay.json` (full report). No secrets logged.
+
+
+### [2026-08-27 13:20] #1088 — CHROME GAP DOCTRINE CODIFIED + APPLIED: 6 REPLAY_OK (mistral/cohere/qwen unlocked via send-time reconstruction + frame aggregation)
+
+**User directive (verbatim):** "chrome gap doctrine you follow like religion in
+agents.md" and "every failure has an answer chrome gap this is the doctrine" and
+"(b) Real death then in chrome it is reproducing also".
+
+**ACTION 1 — Doctrine codified in AGENTS.md as Top-Priority Rule 3:**
+"THE CHROME GAP DOCTRINE": if Chrome can do it, automation can do it; the gap is never
+"the site is dead", always a gap in how automation reproduces what Chrome does. NEVER
+declare a host dead/rate-limited/walled/auth-expired/single-use without proof the
+failure reproduces in Chrome itself. Recorded-bytes failing != site dead (the live site
+sends a freshly-constructed request: new message_id, new PoW, new CSRF/nonce, new
+bearer from localStorage). Every failure must be classified with evidence as (a) fixable
+send-time gap, (b) real server-side death proven by Chrome reproduction, or (c) capture
+bug. Cross-referenced from CHROME_RULES_FOR_AGENTS.md context.
+
+**ACTION 2 — RCA of all 17 "dead" hosts (scratch_rca_dead_hosts.py, real schema
+recorded_exchange.url/method/request_headers/request_body):** ZERO are proven (b).
+- (a) fixable send-time gap: mistral (stale messageId -> 409), chathub (stale streamId
+  + x-client-time), felo (stale search_uuid), huggingface (stale generationId), chatglm
+  (stale x-nonce/x-timestamp/x-request-id; x-sign signing algo = deeper gap), groq
+  (expired JWT bearer), deepseek (consumed x-ds-pow-response), chatx (stale _token CSRF),
+  veoaifree (stale WP nonce), aymo (stale chat-id), cerebras (stale multi-turn context),
+  innerai (CORS origin mapping missing).
+- (c) capture bug: chatgpt (/conversation/prepare not /conversation), meta
+  (searchconversations graphql not chat mutation), you_com (telemetry batch not chat),
+  digen (no recorded_exchange).
+
+**ACTION 3 — Doctrine implemented in selenium_browser_replay.py:**
+- `SEND_TIME_RULES` per-host reconstructor: fresh UUIDs for mistral messageId, chathub
+  streamId, felo search_uuid, huggingface generationId; fresh epoch-ms x-client-time;
+  fresh x-nonce/x-timestamp/x-request-id for chatglm. Wired into replay_session.
+- `aggregated_text()` verdict fix: streaming APIs split the answer across tRPC patch /
+  SSE delta frames; aggregate all JSON text/value/content/message/delta/answer/reply
+  string values in order, then keyword-check. This is the verdict-side half of the
+  doctrine.
+- Added innerai -> app.innerai.com to API_ORIGIN_TO_TAB_ORIGIN.
+- Added `bodyPreview` (1600ch) to non-OK rows so the send-time gap is visible evidence.
+- Fixed f-string SyntaxError (Python 3.11): rewrote lambdas as string concatenation.
+
+**RESULTS (verified, in-browser through live Chrome :9222):**
+- **mistral: 409 -> 200 -> REPLAY_OK** (fresh messageId fixed it; body literally
+  contains "the"+" holy cow jumps over the stricks" in tRPC patch frames).
+- **cohere: NO_ANSWER -> REPLAY_OK** (frame aggregation).
+- **qwen: NO_ANSWER -> REPLAY_OK** (frame aggregation).
+- **REPLAY_OK total now 6:** api.1min.ai, gemini.google.com, www.perplexity.ai,
+  chat.mistral.ai, api.cohere.com, chat.qwen.ai.
+- chatglm error code moved 40013 -> 40012 with fresh nonce/timestamp = proof
+  reconstruction works; remaining gap is the x-sign signing algorithm (class a, deeper).
+- felo + chatx both ACCEPTED the message (200 + stream_key / conversions_id) = 2-step
+  flows, not dead; answer arrives on a follow-up poll/stream endpoint.
+- huggingface bodyPreview revealed REAL (b): "402 You have depleted your monthly
+  included credits" — this one IS genuine server-side quota death, now with evidence.
+- aymo bodyPreview: "Daily credit limit exceeded" (429) — genuine daily quota, resets.
+- chathub bodyPreview: "usage limit: 6 advanced queries per month" — genuine monthly cap.
+- veoaifree bodyPreview: "Limit Reached: maximum allowance of 2 videos" — genuine cap.
+- groq bodyPreview: "invalid or expired jwt" — class (a): Chrome pulls fresh bearer from
+  localStorage; replay uses recorded expired JWT. Fixable by harvesting live token.
+
+**Law 5 compliance:** walls/quota/captcha reported, never solved. No secrets logged.
+
+**Artifacts:** `scripts/automation/selenium_browser_replay.py` (send-time reconstruction
++ frame aggregation), `state/selenium_browser_replay.json`, `scratch_rca_dead_hosts.py`.

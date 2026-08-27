@@ -8,8 +8,8 @@ HTTP/2, and cookie jar. No clicking, no typing, no sign-up. Replay only.
 """
 from __future__ import annotations
 
-import argparse, json, pathlib, sys, time, urllib.parse
-from typing import Any, Dict, Optional
+import argparse, json, pathlib, re, sys, time, urllib.parse, uuid
+from typing import Any, Dict, List, Optional, Tuple
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -56,6 +56,7 @@ API_ORIGIN_TO_TAB_ORIGIN = {
     "https://api.groq.com": "https://console.groq.com",
     "https://api.monica.im": "https://monica.im",
     "https://api.cr-proxy.com": "https://you.com",
+    "https://chat-api-v3.innerai.com": "https://app.innerai.com",
 }
 
 
@@ -144,6 +145,77 @@ def inject_prompt_extended(client: UniversalSessionClient, prompt: str) -> str:
     return injected
 
 
+# ---------------------------------------------------------------------------
+# CHROME GAP DOCTRINE — send-time reconstruction.
+# Chrome's app does NOT resend recorded bytes. On every send it regenerates a
+# set of per-request fields (fresh UUIDs, fresh timestamps, fresh nonces, fresh
+# bearer pulled from localStorage). Replaying the recorded values is exactly why
+# these hosts looked "dead". Reconstruct them here. Each rule: host substring ->
+# list of (where, regex, generator). where in {"body","header:<name>"}.
+# ---------------------------------------------------------------------------
+def _now_ms() -> str:
+    return str(int(time.time() * 1000))
+
+
+def _uuid4() -> str:
+    return str(uuid.uuid4())
+
+
+SEND_TIME_RULES: List[Tuple[str, List[Tuple[str, str, Any]]]] = [
+    # mistral: messageId must be fresh or the server 409 "already".
+    ("mistral", [("body", r'"messageId"\s*:\s*"[0-9a-f-]{36}"', lambda m: '"messageId":"' + _uuid4() + '"')]),
+    # chathub: fresh streamId + fresh x-client-time (epoch ms).
+    ("chathub", [
+        ("body", r'"streamId"\s*:\s*"[0-9a-f-]{36}"', lambda m: '"streamId":"' + _uuid4() + '"'),
+        ("header:x-client-time", r".*", lambda m: _now_ms()),
+    ]),
+    # felo: fresh search_uuid per question.
+    ("felo", [("body", r'"search_uuid"\s*:\s*"[^"]+"', lambda m: '"search_uuid":"' + _uuid4()[:21] + '"')]),
+    # huggingface: fresh generationId per message.
+    ("huggingface", [("body", r'"generationId"\s*:\s*"[0-9a-f-]{36}"', lambda m: '"generationId":"' + _uuid4() + '"')]),
+    # chatglm: fresh nonce/timestamp/request-id (x-sign needs the signing algo — deeper gap).
+    ("chatglm", [
+        ("header:x-nonce", r".*", lambda m: _uuid4().replace("-", "")[:16]),
+        ("header:x-timestamp", r".*", lambda m: str(int(time.time()))),
+        ("header:x-request-id", r".*", lambda m: _uuid4()),
+    ]),
+    # innerai: fresh device-id is fine; the gap is CORS origin mapping (handled separately).
+]
+
+
+def reconstruct_send_time(host: str, headers: Dict[str, str], body: Optional[str]) -> Tuple[Dict[str, str], Optional[str]]:
+    """Apply per-host send-time field reconstruction. Returns (headers, body)."""
+    headers = dict(headers or {})
+    for sub, rules in SEND_TIME_RULES:
+        if sub not in (host or "").lower():
+            continue
+        for where, pat, gen in rules:
+            if where == "body" and body:
+                body = re.sub(pat, gen, body, flags=re.I)
+            elif where.startswith("header:"):
+                hname = where.split(":", 1)[1]
+                for k in list(headers.keys()):
+                    if k.lower() == hname.lower():
+                        headers[k] = re.sub(pat, gen, str(headers[k]), flags=re.I)
+    return headers, body
+
+
+# CHROME GAP DOCTRINE (verdict side): streaming APIs split the answer across many
+# frames (tRPC patches, SSE deltas). The phrase is present but never contiguous in
+# the raw body. Aggregate all JSON text-bearing string values in order, then check.
+_TEXT_FIELD_RE = re.compile(r'"(?:text|value|content|message|delta|answer|reply)"\s*:\s*"((?:[^"\\]|\\.)*)"', re.I)
+
+
+def aggregated_text(body: str) -> str:
+    parts = []
+    for m in _TEXT_FIELD_RE.finditer(body or ""):
+        try:
+            parts.append(json.loads('"' + m.group(1) + '"'))
+        except Exception:
+            parts.append(m.group(1))
+    return "".join(parts)
+
+
 def replay_session(file_path: pathlib.Path, driver, handle_by_origin: Dict[str, str],
                    prompt: str, expect: str) -> Dict[str, Any]:
     row: Dict[str, Any] = {"file": file_path.name}
@@ -164,6 +236,11 @@ def replay_session(file_path: pathlib.Path, driver, handle_by_origin: Dict[str, 
     except Exception as e:
         row.update(verdict="BAD_FILE", detail=str(e)[:140], latencyMs=0)
         return row
+
+    # CHROME GAP DOCTRINE: Chrome regenerates per-request fields on every send.
+    # Reconstruct them so we send what Chrome would send, not stale recorded bytes.
+    new_headers, new_body = reconstruct_send_time(host, client.headers, new_body)
+    row["sendTimeReconstructed"] = True
 
     # Resolve the tab to fire the fetch from: exact origin -> explicit API->app map ->
     # registrable-domain fallback (api.groq.com matches console.groq.com via "groq.com").
@@ -191,7 +268,7 @@ def replay_session(file_path: pathlib.Path, driver, handle_by_origin: Dict[str, 
 
     started = time.perf_counter()
     try:
-        js = build_fetch_js(client.url, client.method, client.headers, new_body, expect)
+        js = build_fetch_js(client.url, client.method, new_headers, new_body, expect)
         res = driver.execute_async_script(js)
     except Exception as e:
         row.update(verdict="ERROR", detail=f"execute_async_script failed: {str(e)[:120]}",
@@ -240,10 +317,16 @@ def replay_session(file_path: pathlib.Path, driver, handle_by_origin: Dict[str, 
     if keyword_in_body(body, expect):
         row["verdict"] = "REPLAY_OK"
         row["detail"] = f"Selenium in-browser fetch status {status}, phrase verified ({len(body)}B)"
+    elif keyword_in_body(aggregated_text(body), expect):
+        row["verdict"] = "REPLAY_OK"
+        row["detail"] = (f"Selenium in-browser fetch status {status}, phrase verified via "
+                         f"frame aggregation ({len(body)}B raw)")
     else:
         verdict, detail = classify(body, status, None, expect)
         row["verdict"] = verdict
         row["detail"] = detail
+        # Doctrine evidence: keep a long preview so the send-time gap is visible.
+        row["bodyPreview"] = body[:1600]
     return row
 
 
