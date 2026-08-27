@@ -73,7 +73,7 @@ CHROME_CLIENTS: Dict[str, str] = {
     "www.meta.ai": "www.meta.ai",
 }
 
-# Per-host response-container selector override for POLL_JS. The generic selector set
+# Per-host response-container selector override for LISTEN_JS. The generic selector set
 # works for most hosts, but some UIs put toolbar chrome in elements that also match
 # (e.g. Copilot's "Edit in a page" action bar matches [class*="message"]). When a host
 # has a stable, specific reply selector, override here. worklog #1105.
@@ -149,7 +149,7 @@ SNAP_JS = r"""
 })(arguments[0])
 """
 
-# Default generic response-container selector set, shared by SNAP_JS and POLL_JS.
+# Default generic response-container selector set, shared by SNAP_JS and LISTEN_JS.
 DEFAULT_RESPONSE_SELECTORS = (
     '[class*="message"],[class*="Message"],[class*="markdown"],[class*="turn"],'
     '[class*="chat-item"],[class*="answer"],[class*="response"],[data-role]')
@@ -179,6 +179,57 @@ INJECT_JS = r"""
   return {ok:false, why:'no visible textarea or contenteditable found'};
 })(arguments[0])
 """ % _visible_guard()
+
+# THE COMPOSER IS THE HUMAN PART OF THE PLAY (operator correction 2026-08-28) -- it is
+# neither Chrome's part nor the provider's. The prompt must arrive the way a human's
+# does: as a real IME-level edit delivered through Chrome's input pipeline (CDP
+# Input.insertText). DOM text surgery (setting value/textContent) writes into a place
+# no real actor touches: editor state machines (meta.ai's Lexical, grok's editor, ...)
+# only accept input that arrives as genuine input events -- DOM-injected text shows in
+# the DOM but the provider's JS reads its own state (empty) and sends nothing. That is
+# exactly how meta.ai returned NO_ANSWER while the capture instrument, which types via
+# Input.insertText, got a real "Omni" answer back.
+#
+# FOCUS_JS therefore only LOCATES and FOCUSES the composer (and selects any stale
+# content so the IME edit replaces it, like a human Ctrl+A). The typing itself happens
+# through Chrome in chat(). INJECT_JS above is kept only as a fallback for the rare
+# editor that refuses IME edits.
+FOCUS_JS = r"""
+(function(){
+%s
+  let el = Array.from(document.querySelectorAll('textarea'))
+             .find(el=>visible(el) && !isRecaptcha(el));
+  let kind = 'textarea';
+  if(!el){
+    el = Array.from(document.querySelectorAll('[contenteditable="true"],[contenteditable="plaintext-only"],[contenteditable=""]'))
+           .find(el=>visible(el));
+    kind = 'contenteditable';
+  }
+  if(!el) return {ok:false, why:'no visible textarea or contenteditable found'};
+  el.scrollIntoView({block:'center'});
+  el.focus();
+  try{
+    if(el.tagName==='TEXTAREA' || el.tagName==='INPUT'){ if(el.select) el.select(); }
+    else{
+      const sel = window.getSelection();
+      if(sel){ const r = document.createRange(); r.selectNodeContents(el); sel.removeAllRanges(); sel.addRange(r); }
+    }
+  }catch(e){}
+  return {ok:true, kind:kind};
+})()
+""" % _visible_guard()
+
+# Reads back whatever the focused composer now holds (pierces shadow roots, because
+# document.activeElement stops at the shadow host).
+READ_ACTIVE_JS = r"""
+(function(){
+  let a = document.activeElement;
+  while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
+  if (!a) return { ok:false, text:'' };
+  const t = ('value' in a && typeof a.value === 'string') ? a.value : (a.innerText || a.textContent || '');
+  return { ok:true, text:String(t).slice(0, 400) };
+})()
+"""
 
 SEND_JS = r"""
 (function(){
@@ -225,19 +276,40 @@ CLICK_JS = r"""
 })()
 """ % _visible_guard()
 
-POLL_JS = r"""
+LISTEN_JS = r"""
+// LISTEN, never poll (operator directive 2026-08-28): the provider's own JS renders the
+// answer into the DOM, and that render IS a DOM mutation. A MutationObserver fires exactly
+// when it happens -- no setInterval asking Chrome "is it there yet?" on a timer. Stream
+// completion is a debounce that only arms AFTER a render event and only fires when the
+// events go quiet; it confirms silence, it never discovers content.
 const prompt = arguments[0];
 const runid = arguments[1];
 const cb = arguments[2];
 const flat = s => (s||'').toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();
 const flatPrompt = flat(prompt);
+// Transient loading placeholders (v0 "Thinking...", grok "Thinking about your request",
+// etc.). These are NOT answers -- they are the provider's own "still working" UI. Never
+// delivered as the reply; keep listening until real content replaces them. Short-text
+// guard so a genuine one-word answer is never mistaken for a placeholder.
+const PLACEHOLDER_RE = /^(thinking|generating|typing|working|drafting|reasoning|searching|loading|processing|waiting)( about( your)? request)?[.\s…]*$/i;
+const isPlaceholder = t => t.length <= 48 && PLACEHOLDER_RE.test(t.trim());
+const sels = '__RESPONSE_SELECTORS__';
+const QUIET_MS = 1200;   // no render event for this long after the last one => stream done
 const t0 = Date.now();
-let lastText = null, stableCount = 0, bestEl = null;
-const timer = setInterval(()=>{
-  const seen = new Set();
-  const sels = '__RESPONSE_SELECTORS__';
-  // newest container that (a) was NOT marked by the pre-send snapshot and (b) is not the
+let done = false, lastText = null, bestEl = null, quietTimer = null, hardTimer = null;
+
+function finish(payload){
+  if(done) return; done = true;
+  try{ observer.disconnect(); }catch(e){}
+  if(quietTimer) clearTimeout(quietTimer);
+  if(hardTimer) clearTimeout(hardTimer);
+  cb(payload);
+}
+
+function candidate(){
+  // Newest container that (a) was NOT marked by the pre-send snapshot and (b) is not the
   // echoed prompt. Attribute marking survives repeated identical answers ("pong" twice).
+  const seen = new Set();
   let cand = null;
   document.querySelectorAll(sels).forEach(el=>{
     if(seen.has(el)) return; seen.add(el);
@@ -250,23 +322,44 @@ const timer = setInterval(()=>{
     if(ft.includes(flatPrompt) && t.length <= prompt.length*1.5) return;
     cand = {el, t};                       // DOM order: last match = newest message
   });
-  if(cand){
-    if(cand.t === lastText){ stableCount++; }
-    else { lastText = cand.t; stableCount = 0; }
-    bestEl = cand;
-    // stable for 2 consecutive polls (~1.6s) => streaming finished
-    if(stableCount >= 2 && lastText){
-      clearInterval(timer);
-      cb({found:true, ms:Date.now()-t0, text:lastText});
-      return;
-    }
+  return cand;
+}
+
+function onRender(){
+  // Fired by DOM mutations: the provider's JS just rendered/updated something. Re-read
+  // the newest reply container.
+  const cand = candidate();
+  if(!cand) return;
+  bestEl = cand;
+  if(isPlaceholder(cand.t)){ lastText = null; return; }   // still working; keep listening
+  if(cand.t !== lastText){
+    lastText = cand.t;
+    if(quietTimer) clearTimeout(quietTimer);
+    quietTimer = setTimeout(()=>{
+      finish({found:true, ms:Date.now()-t0, text:lastText});
+    }, QUIET_MS);
   }
-  if(Date.now()-t0 > TIMEOUT_MS){
-    clearInterval(timer);
-    if(bestEl && bestEl.t){ cb({found:true, ms:Date.now()-t0, text:bestEl.t, unstable:true}); }
-    else { cb({found:false, ms:Date.now()-t0}); }
+}
+
+// Coalesce mutation bursts into one check per animation frame -- still event-driven (runs
+// BECAUSE a mutation happened), never a discovery timer.
+let scheduled = false;
+const observer = new MutationObserver(()=>{
+  if(scheduled) return; scheduled = true;
+  requestAnimationFrame(()=>{ scheduled = false; if(!done) onRender(); });
+});
+observer.observe(document.body, {childList:true, subtree:true, characterData:true});
+
+hardTimer = setTimeout(()=>{
+  if(bestEl && bestEl.t && !isPlaceholder(bestEl.t)){
+    finish({found:true, ms:Date.now()-t0, text:bestEl.t, unstable:true});
+  } else {
+    finish({found:false, ms:Date.now()-t0});
   }
-}, 800);
+}, TIMEOUT_MS);
+
+// The answer may already be rendered by the time the listener attaches.
+onRender();
 """
 
 
@@ -351,21 +444,38 @@ class ChromeReplayClient:
             sels = RESPONSE_SELECTORS.get(self.host, DEFAULT_RESPONSE_SELECTORS)
             snap = SNAP_JS.replace("__RESPONSE_SELECTORS__", sels)
             driver.execute_script("return " + snap.strip(), runid)
-            r1 = driver.execute_script("return " + INJECT_JS.strip(), prompt)
+
+            # The human part of the play: focus the composer, then let Chrome deliver
+            # the prompt as a real IME-level edit. The provider's own JS takes it from
+            # there (encodes, sends, decodes, renders) -- we never touch its state.
+            r1 = driver.execute_script("return " + FOCUS_JS.strip())
             if not r1.get("ok"):
                 raise ChatError("NO_INPUT", r1.get("why", "no visible input"))
+            injected = False
+            try:
+                driver.execute_cdp_cmd("Input.insertText", {"text": prompt})
+                time.sleep(0.4)
+                back = driver.execute_script("return " + READ_ACTIVE_JS.strip()) or {}
+                injected = bool(back.get("ok")) and prompt[:40] in (back.get("text") or "")
+            except Exception:
+                injected = False
+            if not injected:
+                # Fallback for editors that refuse IME edits: legacy DOM injection.
+                r1b = driver.execute_script("return " + INJECT_JS.strip(), prompt)
+                if not r1b.get("ok"):
+                    raise ChatError("TEXT_REJECTED", "composer did not accept the prompt")
 
             r2 = driver.execute_script("return " + SEND_JS.strip())
             time.sleep(2)
             if r2.get("remaining", 0) > 0:
                 # Enter did not consume — some apps clear async (chatglm/cerebras), some
-                # need a button. Click fallback; the poll below is the arbiter either way.
+                # need a button. Click fallback; the listener below is the arbiter either way.
                 driver.execute_script("return " + CLICK_JS.strip())
                 time.sleep(2)
 
-            poll = POLL_JS.replace("TIMEOUT_MS", str(ANSWER_TIMEOUT_S * 1000))
-            poll = poll.replace("__RESPONSE_SELECTORS__", sels)
-            r4 = driver.execute_async_script(poll, prompt, runid)
+            listen = LISTEN_JS.replace("TIMEOUT_MS", str(ANSWER_TIMEOUT_S * 1000))
+            listen = listen.replace("__RESPONSE_SELECTORS__", sels)
+            r4 = driver.execute_async_script(listen, prompt, runid)
 
         if not r4 or not r4.get("found"):
             raise ChatError("NO_ANSWER", f"no reply within {ANSWER_TIMEOUT_S}s")
