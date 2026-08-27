@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional, Type
 from veoaifree_chat_client import ChatError
 from digen_session_replay import DigenSessionClient
 from veo_session_replay import VeoSessionClient, SessionExpired
+from chrome_replay_client import ChromeReplayClient, CHROME_CLIENTS
 
 SECRETS = pathlib.Path(r"D:\omniroute-monetizer\state\secrets")
 # last-used timestamps ONLY (no cookie, no header) so the cooldown spreads load across CLI runs too.
@@ -64,6 +65,14 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
     for key, cls in CLIENTS.items():
         if key in host:
             return cls
+
+    # Chrome-backed seats (Adapter Thesis, worklog #1094-#1100): these hosts were proven
+    # REPLAY_OK only THROUGH the live signed-in Chrome (in-browser fetch or adapter
+    # invocation). Python `requests` replay fails for them (CORS / PoW / x-sign / live
+    # bearer), so they must be served by driving their own UI in the attached browser.
+    # Checked BEFORE the universal fallback so requests-replay never gets a turn.
+    if host in CHROME_CLIENTS:
+        return ChromeReplayClient
 
     # Universal fallback for any provider with a recorded exchange blueprint
     if raw and (raw.get("recorded_exchange") or raw.get("recorded_job")):
@@ -114,6 +123,11 @@ class PooledSession:
         # came back empty, the :8189 face answered 503 no_capacity forever, and `list` blamed
         # "no_recording" on a perfectly good capture.
         self.has_recording: bool = bool(raw.get("recorded_exchange") or raw.get("recorded_job"))
+        # Chrome-backed seat (Adapter Thesis): the credential is the LIVE signed-in tab in
+        # the operator's Chrome, not recorded bytes. Such a seat is dispatchable even with
+        # no recording — ChromeReplayClient drives the provider's own UI. Its liveness is
+        # "is the tab open", enforced at call time (NO_TAB -> failover), not here.
+        self.has_chrome: bool = self.host in CHROME_CLIENTS
         # A seat can also be usable WITHOUT a recording: an API-credential seat holds a bearer token
         # plus a documented contract (rtst.ai publishes quote/create/poll), so there is no genuine
         # exchange to replay and there never will be. Judging such a seat by has_recording alone made
@@ -145,7 +159,7 @@ class PooledSession:
 
     @property
     def dispatchable(self) -> bool:
-        return bool((self.has_recording or self.has_api) and self.client_cls
+        return bool((self.has_recording or self.has_api or self.has_chrome) and self.client_cls
                     and not self.flagged_dead and not self.dead)
 
     def client(self):

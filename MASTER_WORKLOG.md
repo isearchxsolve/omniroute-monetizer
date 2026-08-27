@@ -6102,3 +6102,61 @@ business bridge (Chrome-backed pool-server path so in-browser-only providers bec
 servable supply).
 
 **Artifacts:** `scratch_open_innerai_tab.py`.
+
+### [2026-08-27 19:40] #1100 — BUSINESS BRIDGE: Chrome-backed pool client wired into :8190 (12 REPLAY_OK hosts now servable)
+
+**Goal (operator-approved: "Both: bridge first, then re-captures"):** the 12 REPLAY_OK
+providers were proven only THROUGH live Chrome (9 in-browser fetch + 3 adapter
+invocation), but the pool (:8190) could only serve `requests`-replay seats — so that
+supply sat invisible to the business. Build the bridge so Chrome-backed seats become
+first-class pool citizens.
+
+**What was built:**
+1. `scripts/automation/chrome_replay_client.py` (new) — `ChromeReplayClient` implements
+   the EXACT pool client contract (`__init__(secret=...)`, `chat(messages, model, **kw)`
+   → `{"text","label"}`, raises the pool's own `ChatError`/`SessionExpired` classes so
+   failover/cooldown logic applies unchanged). Mechanism = generalized adapter
+   invocation: attach to live Chrome via debuggerAddress :9222 (NEVER quit — operator's
+   browser), focus tab by URL substring, mark pre-existing message containers with a
+   `data-crc-seen` run-id attribute, inject prompt into the VISIBLE non-recaptcha input
+   (native setter / insertText), Enter + nearest-button fallback, then poll for a NEW
+   unmarked container whose text stabilizes for 2 polls (~1.6s). `CHROME_CLIENTS`
+   registry maps all 12 hosts to their UI tab substring (API-host recordings like
+   `api.cohere.com` map to `dashboard.cohere.com`). ONE global driver + lock: one
+   browser, one typist — Chrome-backed calls serialize correctly.
+2. `scripts/automation/session_pool.py` — three edits: import the client; `_client_for()`
+   returns `ChromeReplayClient` when `host in CHROME_CLIENTS`, placed BEFORE the
+   universal requests-replay fallback (replay is exactly what fails for these hosts);
+   new `has_chrome` flag makes such seats dispatchable even without a recording — the
+   credential is the LIVE signed-in tab, not recorded bytes. Liveness ("is the tab
+   open") is enforced at call time: `NO_TAB` → `ChatError` → clean pool failover.
+
+**Two bugs found and fixed during testing (both logged per failure-honesty rule):**
+- **Text-dedup false negative:** first pool test sent "pong" to a tab that already had
+  a "pong" reply from the self-test; the poll's text-set dedup skipped the genuine new
+  reply → 120s timeout. Fix: attribute-marking (`data-crc-seen=<runid>`) instead of
+  text comparison — survives repeated identical answers.
+- **Selenium HTTP read timeout race:** `execute_async_script` holds the HTTP connection
+  for the whole poll; with `ANSWER_TIMEOUT_S=120` equal to urllib3's 120s read timeout,
+  the socket timeout fired first. Fix: `ANSWER_TIMEOUT_S=90` (must stay under 120).
+
+**Verification (all three layers, live):**
+1. Client self-test: `chrome_replay_client.py chat.cerebras.ai` → `OK 12780ms
+   label=chrome/chat.cerebras.ai text='pong'`; repeated identical prompt also OK
+   (14347ms) — proves the run-id fix.
+2. Pool CLI: `SessionPool.chat(host='chat.cerebras.ai')` → `PROVIDER: chat.cerebras.ai
+   LABEL: chrome/chat.cerebras.ai TEXT: pong`.
+3. HTTP e2e via :8190 (shim restarted as background task `session_pool_shim`):
+   `POST /v1/chat/completions {"model":"chat.cerebras.ai/auto"}` → `MODEL:
+   chrome/chat.cerebras.ai`, `TEXT: pong`. Second host `chatglm.cn/auto` → `MODEL:
+   chrome/chatglm.cn`, `TEXT: ChatGLM` — registry generalizes.
+
+**Result:** the 12 REPLAY_OK hosts are now servable supply through the standard
+OpenAI-compatible :8190 face. `session_pool.py list` shows 27/27 dispatchable.
+REPLAY_OK scoreboard unchanged at 12; this entry converts them from "proven" to
+"productized".
+
+**Next:** class-(c) re-captures (chatgpt, meta, you_com, digen) — fresh captures in
+live tabs, then replay.
+
+**Artifacts:** `scripts/automation/chrome_replay_client.py`, `scripts/automation/session_pool.py`.
