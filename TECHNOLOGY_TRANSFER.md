@@ -335,11 +335,17 @@ retries**, direct to the provider (so it costs nothing on any paid route). Verdi
 `SENTINEL_NOT_FOUND` contains the substring `"not found"`, which would otherwise be misread as a
 provider rejecting a stale id.
 
-**Structural defeats of pure replay** (these need multi-step replay with id threading, ~2h work):
-- **DeepSeek** — binds a proof-of-work token (`INVALID_POW_RESPONSE`).
-- **Felo** — binds a `message_id`.
-- **Claude / ChatHub** — HTTP **409**: one-shot conversation/parent ids.
+**Structural defeats of pure replay** (these need multi-step replay with id threading, ~2h work).
+**Status as of 2026-08-27:** most were resolved by moving replay *inside* the browser (§18) — the
+defeat was never the site, it was firing recorded bytes from outside the runtime that mints the
+send-time fields. Resolutions in brackets:
+- **DeepSeek** — binds a proof-of-work token (`INVALID_POW_RESPONSE`). [still class (a); the PoW
+  solver is in-page and callable — see the Adapter Thesis §19 for the correct fix]
+- **Felo** — binds a `message_id`. [**RESOLVED → REPLAY_OK** via 2-leg flow §18.5]
+- **Claude / ChatHub** — HTTP **409**: one-shot conversation/parent ids. [chathub since confirmed
+  a genuine class-(b) quota death, operator-verified in Chrome §18.6]
 - **Mistral** — the POST returns only a *bootstrap*; the answer arrives on a second stream.
+  [**RESOLVED → REPLAY_OK** via send-time reconstruction §18.3]
 - **Monica** — re-answers from **server-side** conversation state, so it replies to the *captured*
   prompt even when both sentinel copies were substituted. This is the subtlest false-positive in the
   set: substitution succeeded and the reply still was not ours.
@@ -563,6 +569,7 @@ The single most valuable habit in this repo: **probe, never trust recorded statu
 | `record_video_job.py` | — | read-only capture of the async submit→poll→result exchange into the secret (§9a) `[VERIFIED]` |
 | `digen_session_replay.py` / `veo_session_replay.py` | — | per-provider video replay clients `[VERIFIED]` |
 | `session_pool.py` / `session_pool_shim.py` | — | LRU router over every grabbed session (chat + video via `modality`); HTTP face on `:8190` `[VERIFIED]` |
+| `selenium_browser_replay.py` | ~430 | **in-browser** replay: attaches to the live signed-in Chrome, fires the recorded exchange via `fetch()` from the request's own origin, with send-time reconstruction + live-bearer harvest (§18) `[VERIFIED 2026-08-27]` |
 | `launch_and_harvest_chats.py` | — | multi-tab sweep orchestrator `[INVENTORY]` |
 | `drive_capture.py` / `drive.py` | 1,198 | the working Google-path harvester `[INVENTORY]` |
 | `signup_browser.py` / `hf_signup_cdp.py` / `grab_session.py` | — | autonomous signup + capture spine — **reuse, do not rebuild** `[INVENTORY]` |
@@ -820,4 +827,136 @@ gated on the recorded sessions.
 
 ---
 
-*Living document — appended as work proceeds. Last updated 2026-08-26.*
+## 18. Layer 7 — In-browser replay (Selenium attach) `[VERIFIED 2026-08-27]`
+
+**The shift.** §4's `universal_replay.py` fires recorded bytes from *outside* the browser with
+`requests`. That works for providers whose request is fully described by the recorded bytes plus one
+prompt substitution. It structurally cannot work for providers that add something **at send-time**
+inside the page — a fresh nonce, PoW, CSRF, message id, or a short-lived bearer minted by in-page
+SDK code. §6 listed those as "structural defeats". This layer defeats the defeats by firing the
+request **from inside the live signed-in browser**, on the request's own origin, where all the
+send-time context (cookies, storage, CORS, SDK state) is already present.
+
+**File:** `scripts/automation/selenium_browser_replay.py` (~430 lines).
+**Run:** `python scripts/automation/selenium_browser_replay.py --port 9222 --only <name-substrings>`
+**Output:** `state/selenium_browser_replay.json`.
+
+### 18.1 Attach, never launch — and NEVER quit
+The tool attaches to the operator's already-running, already-signed-in Chrome via
+`Options().add_experimental_option("debuggerAddress", "127.0.0.1:9222")` then
+`webdriver.Chrome(options=opts)` (~3.4 s attach to ~37 live windows). It **never launches a browser,
+never signs in, never clicks, never types** — the mandate is replay-only. And it **never calls
+`driver.quit()`**: that would close the operator's live Chrome.
+
+### 18.2 The CORS gap and its fix
+A `fetch()` from the app tab (e.g. `chat.deepseek.com`) to the API origin (e.g.
+`api.deepseek.com`) dies with `TypeError: Failed to fetch` — cross-origin, no CORS grant. Fix:
+fire from a tab **on the request's own origin**. `API_ORIGIN_TO_TAB_ORIGIN` maps API origins to the
+signed-in app origin; when the recorded URL's origin has no open tab, the tool opens one via
+`switch_to.new_window("tab")` (NOT popup-blocked, unlike `window.open`) + `get(origin + "/")`,
+fires, then `close()`s it and switches back.
+
+### 18.3 Send-time reconstruction (`SEND_TIME_RULES`)
+Some providers reject a byte-identical replay because one field must be *fresh at send-time*. The
+tool rewrites exactly those fields and nothing else: mistral `messageId`, chathub
+`streamId`+`x-client-time`, felo `search_uuid`, huggingface `generationId`, chatglm
+`nonce`/`timestamp`/`request-id`. This is not request reconstruction (Law 4 stands) — it is
+replacing the stale send-time values with fresh ones, the same single-substitution discipline
+applied to the fields the provider regenerates.
+
+### 18.4 Live-bearer harvest (`LIVE_BEARER_RULES`) — the groq fix
+Providers whose auth is a **short-lived token minted by in-page SDK code** reject the recorded
+bearer minutes later. groq returned 401 "invalid or expired jwt": the recorded bearer was a
+short-lived **Stytch** JWT. The live one sits in the signed-in tab — in the `stytch_session_jwt`
+cookie, else the `stytch_sdk_state` localStorage blob (`session_jwt`/`jwt` key). The tool harvests
+it at send-time and swaps it into the `Authorization` header. **A stale bearer is a class-(a)
+send-time gap, never evidence the site is dead.**
+
+### 18.5 Two-leg flows — the felo and chatx fixes
+Some hosts answer on a **second leg** the capture never recorded. An accepted-200-with-a-handle is
+a multi-step flow, not a dead site:
+- **felo:** leg 1 POST `.../question` → 200 + `stream_key`; leg 2 GET
+  `/api/message/v1/stream/{stream_key}?offset=0` (SSE, same bearer). Leg 2 was discovered by
+  grepping felo's own JS bundles.
+- **chatx:** leg 1 POST `/sendchat` (form body; fresh `_token` from `meta[name="csrf-token"]`) →
+  200 + `conversions_id`/`ass_conversions_id`; leg 2 GET
+  `/chats_stream?user_id=&chats_id=&current_model=&conversions_id=&ass_conversions_id=&...`
+  (SSE EventSource; parse `type=="response.output_text.delta"` → accumulate `d.delta`). Leg 2 was
+  discovered from chatx's inline JS.
+
+**Body handling trap (load-bearing):** surgical regex edits on the **RAW recorded body string**.
+Never `json.loads` then `json.dumps` — re-serialization double-encodes the body (server receives a
+JSON *string*, not an object → felo 422 "Input should be a valid dictionary"). Keep everything else
+byte-identical.
+
+### 18.6 Verdict rules and current state
+- SSE `delta.content` fragments are **contiguous** — concatenate with **no separator**
+  (space-join breaks mid-word splits like `"str"+"icks"`). Exclude non-content deltas (groq's
+  `delta.reasoning`).
+- **REPLAY_OK (9):** 1min, gemini, perplexity, mistral, cohere, qwen, groq, felo, chatx.
+- **Confirmed class-(b) dead (4), operator-verified in Chrome:** huggingface, aymo, chathub,
+  veoaifree — all genuine quota walls.
+
+### 18.7 Two Selenium traps that cost real time
+- **JS ASI trap:** `driver.execute_script("return " + js)` where `js` **starts with a newline** →
+  automatic-semicolon-insertion makes it `return;` + dead code → returns `None`. Always
+  `js.strip()` before prepending `return`.
+- **Pass bodies as script arguments:** `execute_async_script(js, url, method, headers, body)` —
+  never string-embed the body into the JS source.
+
+---
+
+## 19. The Adapter Thesis — why one Chrome serves every provider `[VERIFIED 2026-08-27]`
+
+**The question that produced this section:** if every provider needs different send-time behavior,
+how does Chrome — a *single* architecture — know what each one wants? How does it "smell" it?
+
+**The answer:** Chrome knows **nothing** provider-specific. It is a universal executor — one fixed
+machine (JS engine + web primitives: `fetch`/XHR/EventSource/WebSocket, cookies, storage, crypto,
+DOM) for every site on Earth. The per-provider adaptation is **not in Chrome**. It is the
+**provider's own JavaScript**, shipped with every page load and executed by Chrome. That JS *is*
+the adapter: it encodes the endpoint, the auth scheme, the PoW algorithm, the x-sign signing, the
+2-leg flow, the CSRF location. Chrome "behaves accordingly" because the provider hands it the exact
+program for talking back, and Chrome faithfully runs it.
+
+**Recorded bytes are the corpse of one run of the adapter.** Replaying the corpse dies; you must
+re-run the machine. This is precisely why every class-(a) fix in §18 was re-deriving the adapter by
+hand (groq's Stytch bearer, felo/chatx's 2-leg stream, chatx's CSRF meta tag).
+
+**Live proof (read-only, nothing fired):** `scratch_prove_adapter_in_page.py` attached to seat1,
+opened the deepseek tab, and surfaced deepseek's own request pipeline from its loaded
+`requests.js` — it monkey-patches `XMLHttpRequest.prototype.open/.send`
+(`this.__METHOD__=..., this.__URL__=...`, `_$interceptRequest({method,url,body})`). The adapter is
+present and executable in-page. Chrome didn't bring it; deepseek shipped it.
+
+**The doctrine upgrade (the strategic pivot):**
+- **OLD:** replay what Chrome *sent* — reconstruct the bytes. O(n) reverse-engineering, brittle.
+- **NEW:** make the site *send* what Chrome would send — **invoke the site's own sender** in the
+  live signed-in tab. Correct-by-construction: fresh CSRF/PoW/bearer/2-leg/signing all free, because
+  that is literally what the site's own code does.
+
+**Adapter-invocation blueprint** (for each provider, live tab already open, adapter loaded):
+1. Locate the site's own send entry-point (submit handler / send function).
+2. Call it with the sentinel prompt via `execute_script`.
+3. The site's own code builds the request correctly by construction.
+4. Read the answer from the DOM / the site's own stream handler.
+
+This collapses "reverse-engineer N protocols" into "locate N entry-points" — generic and
+mechanical. It is the correct generalization of everything in §18.
+
+**Honest limits:** class-(b) real deaths (empty quota tanks) are fixed by no adapter;
+device-attestation / TLS-fingerprint / DRM bindings are genuine walls; a live signed-in session is
+still required. Law 5 stands — walls are reported, never solved.
+
+**CS anchor:** the stored-program / universal-machine principle applied to network clients. The web
+is the only large-scale RPC system that is **self-describing in executable form** — the server ships
+its own client as code. REST/OpenAPI describe shape, not behavior; gRPC needs a proto; native apps
+are closed. Browsers exploit this; byte-replay throws it away. The grail is to stop throwing it
+away.
+
+**Artifacts:** `scratch_prove_adapter_in_page.py`, worklog #1094, repo memory
+`/memories/repo/adapter_thesis.md`.
+
+---
+
+*Living document — appended as work proceeds. Last updated 2026-08-27.*

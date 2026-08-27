@@ -5847,3 +5847,34 @@ away. The grail is to stop throwing it away.
 
 **Artifacts:** `scratch_prove_adapter_in_page.py`, repo memory
 `/memories/repo/adapter_thesis.md`.
+
+
+### [2026-08-27 15:50] #1095 — TECHNOLOGY_TRANSFER.md UPDATED: Layer 7 in-browser replay + Adapter Thesis
+
+**User directive (verbatim):** "update technology transfer doc also"
+
+**Changes to `TECHNOLOGY_TRANSFER.md`:**
+1. **New §18 — Layer 7: In-browser replay (Selenium attach) [VERIFIED 2026-08-27].**
+   Documents `scripts/automation/selenium_browser_replay.py`: attach-not-launch via
+   debuggerAddress :9222 (never quit), the CORS same-origin fix (API_ORIGIN_TO_TAB_ORIGIN
+   + switch_to.new_window("tab")), SEND_TIME_RULES send-time reconstruction,
+   LIVE_BEARER_RULES live-bearer harvest (groq Stytch), the 2-leg flow pattern (felo
+   stream_key -> SSE; chatx sendchat -> chats_stream EventSource), the raw-body
+   surgical-edit rule (never json.loads/dumps re-serialize), SSE contiguous-concatenation
+   verdict rule, current REPLAY_OK(9) / class-(b)(4) state, and the two Selenium traps
+   (JS ASI newline trap; pass bodies as script arguments).
+2. **New §19 — The Adapter Thesis [VERIFIED 2026-08-27].** The strategic finding from
+   #1094: Chrome is a universal executor with zero provider-specific knowledge; the
+   per-provider adaptation is the provider's own JS shipped with the page (the adapter).
+   Recorded bytes = corpse of one adapter run. Doctrine upgrade: OLD replay the bytes ->
+   NEW invoke the site's own sender in the live tab (correct-by-construction). Includes
+   the live deepseek requests.js proof, the adapter-invocation blueprint, honest limits,
+   and the CS anchor (stored-program principle; web is self-describing in executable form).
+3. **§6 updated:** the "structural defeats of pure replay" list now carries 2026-08-27
+   resolution status — felo and mistral RESOLVED -> REPLAY_OK; chathub reclassified as
+   genuine class-(b) quota death (operator-verified); deepseek still class (a) with the
+   correct fix named (in-page PoW solver, per §19).
+4. **§11 updated:** `selenium_browser_replay.py` added to the live-technology table.
+5. Footer date bumped to 2026-08-27.
+
+**Law 5 compliance:** no secrets logged; walls reported, never solved.
