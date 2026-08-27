@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import os
 import pathlib
 import threading
 import time
@@ -112,10 +113,20 @@ def _load_pool_state() -> Dict[str, float]:
         return {}
 
 
+# Serializes state-file writes: the shim is a ThreadingHTTPServer, so concurrent successes used to
+# call write_text() at the same moment -- last-writer-wins at best, a torn half-written file at
+# worst (which would read back as {} and silently zero every cooldown). One lock + write-to-temp
+# + os.replace makes every persisted snapshot atomic. (2026-08-27, worklog #1110)
+_PERSIST_LOCK = threading.Lock()
+
+
 def _save_pool_state(state: Dict[str, float]) -> None:
     try:
-        POOL_STATE.parent.mkdir(parents=True, exist_ok=True)
-        POOL_STATE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        with _PERSIST_LOCK:
+            POOL_STATE.parent.mkdir(parents=True, exist_ok=True)
+            tmp = POOL_STATE.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            os.replace(tmp, POOL_STATE)         # atomic on NTFS -- readers never see a torn file
     except Exception:
         pass                                    # best-effort; cooldown still holds within a run
 
@@ -227,6 +238,26 @@ class SessionPool:
         cands.sort(key=lambda s: s.last_used)                  # least-recently-used first
         return cands[0]
 
+    def reserve(self, modality: Optional[str] = None,
+                host: Optional[str] = None) -> Optional[tuple]:
+        """Atomically pick AND book the least-recently-used off-cooldown session.
+
+        The old chat() called pick() OUTSIDE any lock: N concurrent consumers all read the same
+        LRU head, then queued on the per-host lock and hammered ONE session in sequence -- the
+        exact burst-on-one-provider the pool exists to prevent. Booking last_used + cooldown under
+        self._lock makes every concurrent caller land on a DIFFERENT session, which is what turns
+        the shim into a real parallel load spreader. Returns (session, reserved_at) or None.
+        (2026-08-27, worklog #1110)
+        """
+        with self._lock:
+            now = time.time()
+            s = self.pick(now, modality, host)
+            if s is None:
+                return None
+            s.last_used = now
+            s.cooldown_until = now + self.cooldown
+            return s, now
+
     def chat(self, messages, model=None, modality: Optional[str] = None,
              tries: Optional[int] = None, host: Optional[str] = None, **kw) -> Dict[str, Any]:
         """Route ONE call to the least-recently-used live session; on expiry/failure fall to the
@@ -235,9 +266,10 @@ class SessionPool:
         attempted = 0
         last_exc: Optional[Exception] = None
         while attempted < max_tries:
-            s = self.pick(time.time(), modality, host)
-            if s is None:
+            res = self.reserve(modality, host)                 # atomic pick+book (no double-book)
+            if res is None:
                 break
+            s, res_at = res
             attempted += 1
             with self._host_lock(s.host):
                 try:
@@ -251,8 +283,9 @@ class SessionPool:
                     s.dead, s.last_error, last_exc = True, "session_expired", e
                     continue                                   # try the next provider
                 except ChatError as e:
-                    s.last_used = time.time()
-                    s.cooldown_until = s.last_used + max(self.cooldown, 30.0)
+                    base = max(time.time(), res_at)
+                    s.last_used = base
+                    s.cooldown_until = base + max(self.cooldown, 30.0)
                     s.last_error, last_exc = str(e)[:60], e
                     continue
         if last_exc:

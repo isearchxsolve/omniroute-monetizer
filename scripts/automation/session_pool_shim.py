@@ -2,9 +2,17 @@
 
 Provides an OpenAI-compatible /v1/chat/completions endpoint over the SessionPool.
 Listens on port 8190 by default.
+
+Multi-tenancy (2026-08-27, worklog #1110): if state/secrets/tenant_map.json exists, every request
+must carry `Authorization: Bearer <api_key>` for a key listed there; the mapped tenant name is
+tagged onto every response for per-consumer accounting. When the file is absent the endpoint stays
+open (single-operator mode), exactly as before. Tenants share one pool by design -- the pool's
+whole purpose is spreading every consumer's load across many providers so no single account gets
+hammered; strict per-tenant seat isolation is deliberately NOT offered.
 """
 import json
 import logging
+import pathlib
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -13,8 +21,42 @@ from session_pool import SessionPool, ChatError
 # Initialize global pool
 pool = SessionPool()
 
+# {"<api_key>": "<tenant_name>", ...}. Presence of this file turns auth ON for every consumer.
+TENANT_MAP_PATH = pathlib.Path(r"D:\omniroute-monetizer\state\secrets\tenant_map.json")
+
+
+def _tenant_map():
+    try:
+        # utf-8-sig: Windows tooling (PowerShell Set-Content, Notepad) writes JSON with a BOM;
+        # json.loads() chokes on it and would silently drop the whole map -> open endpoint.
+        m = json.loads(TENANT_MAP_PATH.read_text(encoding="utf-8-sig"))
+        return m if isinstance(m, dict) else {}
+    except Exception:
+        return {}
+
+
+def _tenant_for(auth_header):
+    """Return (tenant, None) when the caller may proceed, else (None, error_dict)."""
+    m = _tenant_map()
+    if not m:
+        return "local", None                       # no map -> open single-operator mode
+    h = (auth_header or "").strip()
+    if not h.lower().startswith("bearer "):
+        return None, {"message": "missing API key: send Authorization: Bearer <api_key>", "type": "unauthorized"}
+    key = h[7:].strip()
+    if key not in m:
+        return None, {"message": "unknown API key", "type": "unauthorized"}
+    return m[key], None
+
 class ShimHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        tenant, err = _tenant_for(self.headers.get("Authorization"))
+        if err:
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": err}).encode())
+            return
         if self.path == "/v1/models":
             models = [
                 {"id": "session-pool/auto", "object": "model", "created": int(time.time()), "owned_by": "session_pool"},
@@ -45,7 +87,15 @@ class ShimHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
             return
-            
+
+        tenant, err = _tenant_for(self.headers.get("Authorization"))
+        if err:
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": err}).encode())
+            return
+
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length)
         
@@ -83,16 +133,24 @@ class ShimHandler(BaseHTTPRequestHandler):
             # Route based on detected modality
             result = pool.chat(messages, model=model, modality=modality, host=host_target)
         except ChatError as e:
-            self.send_response(500)
+            # Pool exhausted (every session dead/cooling) is a RATE condition, not a server fault:
+            # answer like OpenAI does so consumers can back off with Retry-After instead of
+            # treating a healthy-but-busy pool as broken. (worklog #1110)
+            exhausted = getattr(e, "kind", None) == "NO_LIVE_SESSION"
+            self.send_response(429 if exhausted else 500)
+            if exhausted:
+                self.send_header("Retry-After", str(int(max(pool.cooldown, 30))))
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": {"message": str(e)}}).encode())
+            self.wfile.write(json.dumps({"error": {"message": str(e),
+                                                   "type": "pool_exhausted" if exhausted else "chat_error",
+                                                   "tenant": tenant}}).encode())
             return
         except Exception as e:
             self.send_response(500)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": {"message": str(e)}}).encode())
+            self.wfile.write(json.dumps({"error": {"message": str(e), "tenant": tenant}}).encode())
             return
             
         # Format response as OpenAI chat completion
@@ -105,6 +163,7 @@ class ShimHandler(BaseHTTPRequestHandler):
             # consumer can verify load is actually spreading across providers/sessions.
             "provider": result.get("provider"),
             "session": result.get("session"),
+            "tenant": tenant,
             "choices": [
                 {
                     "index": 0,
