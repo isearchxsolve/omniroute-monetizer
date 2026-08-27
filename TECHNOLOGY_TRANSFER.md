@@ -691,20 +691,22 @@ value of the counter.
 
 ---
 
-## 16. Restoration and portability `[VERIFIED 2026-08-26]`
+## 16. Restoration and portability `[VERIFIED 2026-08-26, UPDATED 2026-08-27]`
 
 ### What survives what
 
-| failure | chat supply | video supply |
-| --- | --- | --- |
-| pool process crash | survives — supply is files on disk | unaffected |
-| Chrome crash | **survives entirely** | **destroyed** — needs live CDP tabs |
-| full reboot | survives | destroyed until tabs are re-opened |
-| move to a new machine | survives (see below) | destroyed — profiles cannot be copied |
+| failure | chat supply (file-backed) | Chrome-backed chat seats | video supply |
+| --- | --- | --- | --- |
+| pool process crash | survives — supply is files on disk | survives — tabs stay open | survives if Chrome alive |
+| Chrome crash | **survives entirely** | destroyed until tabs re-opened | **destroyed** — needs live CDP tabs |
+| full reboot | survives | **survives** — cookies persist in profile on disk; video router task relaunches seat Chromes at 5-min interval | survives after video router relaunches seats (≤5 min) |
+| move to a new machine | survives (session files) | **provider sessions port via CDP cookie export** (`cookie_porter.py`, proven 2026-08-27: 1,842 cookies / 335 domains); Google SSO does not (DBSC) | same as chat Chrome seats — cookie export ports the sign-ins |
 
-That asymmetry is the payoff of capturing to JSON rather than driving a live browser, and it is worth
-stating explicitly because the intuition runs the other way: people expect a browser-based harness to
-be fragile against a browser crash.
+The 2026-08-27 correction: the old table said "profiles cannot be copied" — that is true of a
+**raw directory copy** (DPAPI-sealed Cookies DB). But a live CDP session exposes all decrypted
+cookies via `Storage.getCookies`, and those re-inject cleanly on any machine via
+`Storage.setCookies`. Provider sessions ARE portable; only the Google account layer and
+localStorage-bound tokens are not. See PORTING.md §Provider Session Portability.
 
 ### `omni_supervisor.py`
 
@@ -731,15 +733,21 @@ The hard line is **credential storage**, not code.
 **Portable** — `state/secrets/session_*.json` (the whole chat supply), `state/replay_check.json`,
 client configs, the repo. Nothing in a session file is machine-bound.
 
-**Never copy** — `state/omniroute_password.bin` (DPAPI-sealed to this user+machine) and
+**Never raw-copy** — `state/omniroute_password.bin` (DPAPI-sealed to this user+machine) and
 `state/automation_profiles/**` / `browser_profile` / `harvest_profile`. Chrome's cookie encryption key
-is DPAPI-bound, so a copied profile has a `Cookies` database it cannot read: **every file present,
+is DPAPI-bound, so a raw-copied profile has a `Cookies` database it cannot read: **every file present,
 every login gone.** That is the worst possible failure mode because it reads as a successful restore.
 Google is worse — DBSC can treat the move as a compromise and revoke permanently (§8).
 
-Three things always need a human on a new machine: Chrome sign-ins for the video seats, re-sealing the
-OmniRoute password locally, and re-connecting OmniRoute's OAuth providers. `--doctor` prints them every
-time, so nobody concludes an import was complete when it structurally cannot be.
+**But provider sessions DO port via CDP cookie export (proven 2026-08-27).** `cookie_porter.py`
+attaches to the live seat Chromes and calls `Storage.getCookies`, which returns all cookies
+**decrypted** — including HttpOnly auth tokens — because the DPAPI seal only protects the on-disk
+DB, not the running browser's memory. Verified: 1,842 cookies across 335 provider domains exported
+from ports 9222-9225, 253 of them auth-like (session/token/JWT). `--import` re-injects them into a
+fresh profile on any machine via `Storage.setCookies`. What still needs a human on a new machine:
+Google SSO sign-in (DBSC device-bound), localStorage-bound tokens, and re-sealing the OmniRoute
+password. `--doctor` prints them every time, so nobody concludes an import was complete when it
+structurally cannot be.
 
 Two guards worth keeping:
 
@@ -957,6 +965,161 @@ away.
 
 **Artifacts:** `scratch_prove_adapter_in_page.py`, worklog #1094, repo memory
 `/memories/repo/adapter_thesis.md`.
+
+---
+
+## 20. The 24-hour sweep (2026-08-26 → 2026-08-27) — what changed since §19 `[VERIFIED]`
+
+Worklog #1081–#1110. The system went from "5 replayable chat hosts" to a **consumer-ready
+load-balanced endpoint serving 50 models (25 chat + 23 video + auto routes)**. The arc:
+
+1. **Chrome Gap Doctrine codified (#1088):** every replay failure must be classified as
+   (a) fixable send-time gap, (b) real server-side death (proven by operator-in-Chrome
+   reproduction), or (c) capture bug. This killed the "declare site dead" failure mode.
+2. **In-browser replay / Selenium attach (#1087, §18):** attach to the live signed-in tab,
+   execute the request IN the browser context. Fixed CORS, unlocked 1min/gemini/perplexity.
+3. **Send-time reconstruction + live-bearer harvest (#1088–#1093, §18.3–18.5):** groq (Stytch
+   bearer), felo/chatx (2-leg SSE flows), mistral (409 fix), qwen/cohere (frame aggregation).
+4. **Adapter Thesis proven (#1094–#1098, §19):** invoke the site's own JS sender. deepseek
+   (PoW solved free), chatglm (GLM 5.3), cerebras (reCAPTCHA-shadow trap fixed). Generic
+   adapter driver built.
+5. **Chrome-backed pool wired (#1100):** 12 REPLAY_OK hosts servable through the pool via
+   `ChromeReplayClient` — the live tab IS the credential.
+6. **Tab-coverage sweep (#1105):** 9 signed-in-but-unwired tabs found; 4 wired live
+   (claude.ai, grok.com, copilot.microsoft.com, v0.app), 3 retired honestly.
+7. **Chrome-doctrine VIDEO pool (#1108):** `chrome_video_client.py` (14 hosts) drives the
+   provider's own UI in-tab to generate video. 17 video seat files. REAL MP4 proven end-to-end
+   via Google Flow (4.6 MB, ftypisom magic).
+8. **Full-pool load balancing fixed (#1109):** exception class-identity bug killed rotation
+   after the first 429. Unified `ChatError`/`SessionExpired` across all 5 adapters. Chat (25)
+   + video (23) pools now rotate with proven fall-through.
+9. **Consumer-readiness hardening (#1110):** atomic `reserve()` (no double-booking under
+   concurrency — proven 8 threads → 8 distinct providers), atomic state persistence
+   (temp+`os.replace`), Bearer-key multi-tenancy gate (`tenant_map.json`, hot-reloadable),
+   429+`Retry-After` on pool exhaustion. All four properties proven, not asserted.
+
+**The endpoint today:** `http://127.0.0.1:8190/v1` (use 127.0.0.1, never localhost — system
+proxy intercepts loopback). OpenAI-compatible. Currently in open single-operator mode
+(no `tenant_map.json`); drop one into `state/secrets/` to enable Bearer-key tenancy without
+restart.
+
+---
+
+## 21. Windows services registry — everything that keeps this rig alive `[VERIFIED 2026-08-27]`
+
+Four scheduled tasks + one Startup-folder launcher. All verified present and running:
+
+| Task name | Runs | Schedule | Status | Purpose |
+|---|---|---|---|---|
+| `OmniRoute Rig Supervisor (keepalive)` | `supervisor_task.bat` → `omni_supervisor.py --watch` | every 5 min | Ready | Crash recovery for all owned services; reports Chrome state; never touches OmniRoute or video router |
+| `OmniRoute Session Pool Shim (keepalive)` | `session_pool_shim_task.bat` → `session_pool_shim.py 8190` | every 5 min | Running | Keeps the :8190 consumer endpoint alive |
+| `OmniRoute Video Router (keepalive)` | `video_router_task.bat` → `video_router.py` | every 5 min | Running | Video router + **Chrome seat self-heal** (relaunches dead seat Chromes, re-opens tabs) |
+| `OmniRoute OAuth KeepAlive` | `oauth_keepalive_task.bat` → `oauth_keepalive.py` | hourly | Ready | Refreshes OmniRoute's own OAuth provider tokens via `POST /api/providers/{id}/refresh` |
+
+| Launcher | Location | Purpose |
+|---|---|---|
+| `omniroute_rig_supervisor.vbs` | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` | Starts the supervisor `--watch` loop at logon (no elevation needed) |
+
+**Ownership rules (encoded in `omni_supervisor.py`, not just docs):**
+- OmniRoute (:20128) is **never restarted, stopped, or killed**. Probe and report only.
+- Video router (:8189) belongs to its own scheduled task. Supervisor marks it `owned=False`.
+- Restarts match on command line, not port. Foreign process on our port = `PORT_TAKEN_BY_OTHER`,
+  left alone. Backoff `[5, 15, 60, 180]` then gives up and reports.
+
+---
+
+## 22. Crash / reboot / reset recovery — what comes back by itself `[VERIFIED 2026-08-27]`
+
+### The recovery chain
+
+```
+reboot/reset
+  → Windows logon
+    → omniroute_rig_supervisor.vbs starts supervisor --watch
+      → supervisor task (every 5 min) restarts any dead owned service:
+          • chat pool (:20130)
+          • session pool shim (:8190)
+      → video router task (every 5 min) self-heals Chrome seats:
+          • detects dead seat Chrome (port not answering)
+          • relaunches with correct profile + CDP flags + NO_DISCARD_FLAGS
+          • re-opens the remembered tab URLs (from state/video_accounts.json)
+      → OAuth keepalive task (hourly) refreshes OmniRoute provider tokens
+```
+
+### What persists across reboot (no human needed)
+
+| Component | Persists? | Mechanism |
+|---|---|---|
+| Chat supply (session files) | ✅ | Files on disk — never touched by reboot |
+| Provider sign-in sessions in Chrome profiles | ✅ | Cookies persist in profile's `Cookies` DB on disk; Chrome re-opens with them intact |
+| Chrome seat processes | ✅ (≤5 min) | Video router task relaunches dead seats automatically |
+| Tab URLs | ✅ | Remembered in `state/video_accounts.json`, re-opened on seat relaunch |
+| Shim / chat pool / video router processes | ✅ (≤5 min) | Supervisor + scheduled tasks restart them |
+| OmniRoute OAuth tokens | ✅ | Hourly keepalive refreshes them |
+| Pool cooldown state | ✅ | `state/session_pool_state.json` (atomic writes) |
+
+### What does NOT survive (needs human)
+
+| Component | Why | Recovery |
+|---|---|---|
+| Google account sign-in (Chrome Sync) | DBSC device-bound; server-side revocation on profile move | Manual Google sign-in in the seat Chrome |
+| OmniRoute password | DPAPI-sealed to this user+machine | Re-enter password on new machine |
+| OmniRoute OAuth provider connections | Per-machine tokens | Reconnect in OmniRoute UI |
+
+### The key insight: provider sessions persist natively
+
+Chrome profiles store cookies in an on-disk SQLite DB. Across a reboot on the SAME machine,
+those cookies survive untouched — Chrome re-opens with all provider sign-ins intact. The DPAPI
+seal only matters when you try to READ the DB from outside Chrome or COPY it to another machine.
+On the same machine, across reboots, provider sessions are fully persistent. The video router
+task handles the only gap: the Chrome *process* dies on reboot, but the task relaunches it
+within 5 minutes, and the profile's cookies are still there.
+
+---
+
+## 23. Do we need Chrome running for the endpoint to work? `[VERIFIED 2026-08-27]`
+
+**Short answer: it depends on which supply you're asking about.**
+
+### The three supply tiers and their Chrome dependency
+
+| Tier | Supply source | Needs live Chrome? | Survives Chrome death? |
+|---|---|---|---|
+| **File-backed replay** | `state/secrets/session_*.json` (cookie + recorded exchange) | ❌ NO | ✅ Yes — pure HTTP replay via `requests` |
+| **API-credential seats** | Bearer token in seat file (rtst.ai, you.com) | ❌ NO | ✅ Yes — direct API calls |
+| **Chrome-backed seats** | Live signed-in tab (Adapter Thesis) | ✅ YES | ❌ No — tab IS the credential |
+
+### What works with Chrome completely dead
+
+- All file-backed chat replay seats (the original 5 + any with `recorded_exchange`)
+- API-credential video seats (rtst.ai, you.com, digen.ai)
+- The shim itself (:8190) — it's a Python HTTP server, no browser dependency
+- OmniRoute (:20128) — independent service
+
+### What dies with Chrome
+
+- All 18 `CHROME_CLIENTS` hosts (claude.ai, grok.com, perplexity.ai, deepseek, cerebras, etc.)
+- All 14 `VIDEO_HOSTS` in `chrome_video_client.py` (Google Flow, veo, kling, etc.)
+- These hosts return `NO_TAB` → pool falls through to next session → eventually 429 if
+  no file-backed fallback exists for that host
+
+### The practical answer
+
+**For the endpoint to serve its FULL 50-model catalog: yes, the 4 seat Chromes must be running.**
+They carry the Chrome-backed chat seats (18 hosts) and all video generation (14 hosts).
+
+**For the endpoint to serve file-backed supply only: no Chrome needed.** The ~10 file-backed
+seats replay via pure HTTP.
+
+**After a reboot:** the video router task relaunches all 4 seat Chromes within 5 minutes.
+Provider sessions persist in the profiles. So the full catalog comes back automatically.
+
+### Why the 4 seats exist
+
+The 4 seats (ports 9222-9225) are 4 separate Chrome profiles, each holding different provider
+accounts. This is the "breadth beats depth" strategy: spread load across multiple accounts to
+avoid per-account rate limits. Each seat holds ~10-15 signed-in provider tabs. The pool's LRU
+rotation spreads requests across all of them.
 
 ---
 
