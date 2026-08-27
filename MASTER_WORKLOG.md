@@ -5796,3 +5796,54 @@ felo, chatx.
 
 **Artifacts:** `scratch_chatx_2leg_replay.py`, `scratch_discover_chatx_leg2.py`
 (JS endpoint discovery), `scratch_inspect_chatx.py`.
+
+
+### [2026-08-27 15:35] #1094 — STRATEGIC FINDING: THE ADAPTER THESIS (why Chrome adapts to every provider with one architecture)
+
+**User question (verbatim):** "how does chrome know that it has to adapt based on the
+provider... chrome is a single architecture... how does it smell what the provider wants"
+
+**The answer:** Chrome knows NOTHING provider-specific. It is a universal executor —
+one fixed architecture (JS engine + web primitives: fetch/XHR/EventSource/WebSocket,
+cookies, storage, crypto, DOM) for every site on Earth. The per-provider adaptation is
+NOT in Chrome. It is the PROVIDER'S OWN JAVASCRIPT, shipped with every page load and
+executed by Chrome. That JS IS the adapter: it encodes the endpoint, auth scheme, PoW
+algorithm, x-sign signing, 2-leg flow, CSRF location. Chrome "smells" what the provider
+wants because the provider TELLS it, in executable form, at load time.
+
+Recorded bytes = one dead output (corpse) of running the adapter once. Replaying the
+corpse dies; you must re-run the machine. This is exactly why every class-(a) fix this
+session was re-deriving the adapter by hand (groq Stytch bearer, felo/chatx 2-leg
+stream, chatx CSRF meta tag).
+
+**Live proof (read-only, no requests fired):** `scratch_prove_adapter_in_page.py`
+attached to seat1, opened the deepseek tab, and surfaced deepseek's own request
+pipeline from its loaded `requests.js`: it monkey-patches
+`XMLHttpRequest.prototype.open/.send` (`this.__METHOD__=..., this.__URL__=...`,
+`_$interceptRequest({method,url,body})`). The adapter is present and executable
+in-page. Chrome didn't bring it; deepseek shipped it.
+
+**Doctrine upgrade (the pivot):**
+- OLD: replay what Chrome SENT (reconstruct the bytes). O(n) reverse-engineering.
+- NEW: make the site SEND what Chrome would send — invoke the site's own sender in the
+  live signed-in tab. Correct-by-construction: fresh CSRF/PoW/bearer/2-leg/signing all
+  free, because that is literally what the site's own code does.
+
+**New replay engine blueprint (adapter-invocation):** for each provider (live tab
+already open, adapter loaded): (1) locate the site's own send entry-point (submit
+handler / send function); (2) call it with the sentinel prompt via execute_script;
+(3) the site's own code builds the request correctly by construction; (4) read the
+answer from the DOM / the site's own stream handler. This collapses "reverse-engineer
+N protocols" into "locate N entry-points" — generic and mechanical.
+
+**Honest limits:** class-(b) real deaths (empty quota tanks) are not fixed by any
+adapter; device-attestation / TLS-fingerprint / DRM bindings are genuine walls; a live
+signed-in session is still required (mandate guarantees this).
+
+**CS anchor:** stored-program / universal-machine principle applied to network clients.
+The web is the only large-scale RPC system that is self-describing in EXECUTABLE form —
+the server ships its own client as code. Browsers exploit this; byte-replay throws it
+away. The grail is to stop throwing it away.
+
+**Artifacts:** `scratch_prove_adapter_in_page.py`, repo memory
+`/memories/repo/adapter_thesis.md`.
