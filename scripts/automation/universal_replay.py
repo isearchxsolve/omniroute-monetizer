@@ -26,11 +26,13 @@ except ImportError:
 # matters; the HTTP headers are the recorded ones, so this is not per-site.
 _IMPERSONATE = "chrome"
 
-class SessionExpired(Exception):
-    pass
-
-class ChatError(Exception):
-    pass
+# CANONICAL exception classes. session_pool.py's full-pool fall-through catches the exact class
+# objects defined in veoaifree_chat_client / veo_session_replay. This file used to define its own
+# lookalike classes here -- so a 429 raised below escaped the pool's `except ChatError` and the
+# load balancer stopped after the FIRST session instead of rotating across the whole pool
+# (2026-08-27, worklog #1109). Import the canonical ones; never redefine them.
+from veoaifree_chat_client import ChatError          # noqa: E402
+from veo_session_replay import SessionExpired        # noqa: E402  (subclass of ChatError)
 
 # A prompt shorter than this is never used to detect an echo by containment: aymo.ai's real answer
 # "Hi!" contains the prompt "hi", and dropping it as an echo emptied the extraction entirely.
@@ -655,7 +657,8 @@ class UniversalSessionClient:
         # anyway often returns HTTP 200 from an error/landing page and reads as success.
         if str(self.method).upper() in ("POST", "PUT", "PATCH") and not new_body_str:
             raise ChatError(
-                f"EMPTY_BODY: capture for {self.raw.get('host')} has no replayable request "
+                "EMPTY_BODY",
+                f"capture for {self.raw.get('host')} has no replayable request "
                 f"body (schema keys present: {sorted(self.raw.keys())}). Re-capture it; "
                 f"do not treat a 200 from a bodyless POST as a working session."
             )
@@ -664,7 +667,8 @@ class UniversalSessionClient:
         # probe prompt and log the model's answer to *that* as if it answered the caller.
         if new_body_str == self.base_body and new_prompt not in new_body_str:
             raise ChatError(
-                f"SENTINEL_NOT_FOUND: could not inject the prompt into the recorded body for "
+                "SENTINEL_NOT_FOUND",
+                f"could not inject the prompt into the recorded body for "
                 f"{self.raw.get('host')} -- no known sentinel matched, so the replay would "
                 f"re-send the captured probe prompt instead of the caller's."
             )
@@ -680,7 +684,7 @@ class UniversalSessionClient:
                 self._absorb_cookies(r)
 
             if r.status_code in (401, 403):
-                raise SessionExpired("Auth rejected: " + r.text[:100])
+                raise SessionExpired("AUTH", "Auth rejected: " + r.text[:100])
 
             r.raise_for_status()
 

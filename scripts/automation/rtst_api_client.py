@@ -126,7 +126,7 @@ class RtstApiClient:
         api = raw.get("api") or {}
         token = (api.get("token") or "").strip()
         if not token:
-            raise SessionExpired("rtst seat carries no api.token -- re-harvest this seat")
+            raise SessionExpired("NO_TOKEN", "rtst seat carries no api.token -- re-harvest this seat")
         self.host: str = raw.get("host") or "rtst.ai"
         self.base: str = (api.get("base") or DEFAULT_BASE).rstrip("/")
         # The one place the token is handled, so there is exactly one thing to audit. Never printed.
@@ -149,7 +149,7 @@ class RtstApiClient:
             raise ChatError("TRANSPORT", f"{method} {path}: {type(e).__name__}")
         text = r.text or ""
         if r.status_code in (401, 403):
-            raise SessionExpired(f"rtst rejected the bearer token on {path} ({r.status_code})")
+            raise SessionExpired("AUTH", f"rtst rejected the bearer token on {path} ({r.status_code})")
         if r.status_code == 402:
             raise ChatError("wall", f"rtst {path} requires payment (HTTP 402)")
         if r.status_code == 429:

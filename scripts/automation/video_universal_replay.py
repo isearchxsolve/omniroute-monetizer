@@ -179,7 +179,7 @@ class VideoUniversalSessionClient(UniversalSessionClient):
                 
             r = requests.request(self.method, self.url, **req_kwargs)
             if r.status_code in (401, 403):
-                raise SessionExpired("Auth rejected: " + r.text[:100])
+                raise SessionExpired("AUTH", "Auth rejected: " + r.text[:100])
             r.raise_for_status()
             
             try:

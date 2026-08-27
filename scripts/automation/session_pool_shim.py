@@ -101,6 +101,10 @@ class ShimHandler(BaseHTTPRequestHandler):
             "object": "chat.completion",
             "created": int(time.time()),
             "model": result.get("label", model),
+            # Non-standard but harmless to OpenAI clients; makes pool rotation observable so a
+            # consumer can verify load is actually spreading across providers/sessions.
+            "provider": result.get("provider"),
+            "session": result.get("session"),
             "choices": [
                 {
                     "index": 0,
