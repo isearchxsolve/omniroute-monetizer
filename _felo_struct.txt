@@ -1,0 +1,31 @@
+﻿host: felo.ai
+url: https://felo.ai/api-proxy/main/search/threads/UAYyTN7iDtHKxtq6eTweQw/question
+method: POST
+headers: ['Accept', 'Authorization', 'Content-Type', 'Referer', 'User-Agent', 'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform']
+body len: 551
+body json:
+{
+ "query": "Reply exactly one word: Omni.",
+ "search_uuid": "6OA90Law_Mgh2Tqp-IUnb",
+ "lang": "",
+ "agent_lang": "en",
+ "search_options": {
+  "langcode": "en-GB"
+ },
+ "search_video": true,
+ "query_from": "followup",
+ "category": "google",
+ "model": "",
+ "auto_routing": true,
+ "mode": "concise",
+ "device_id": "37fcef17a43c29d0a3b680e92471be5e",
+ "source_message_rid": "",
+ "documents": [],
+ "document_action": "",
+ "slide_template_uid": "",
+ "selected_resource_ids": [],
+ "process_id": "6OA90Law_Mgh2Tqp-IUnb",
+ "stream_protocol": "message_center_v1",
+ "enable_task_state": true,
+ "short_id": "UAYyTN7iDtHKxtq6eTweQw"
+}

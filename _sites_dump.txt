@@ -1,0 +1,50 @@
+LMSYS Chatbot Arena -> https://arena.lmsys.org
+LMSYS Direct Chat -> https://chat.lmsys.org
+Poe -> https://poe.com
+DuckDuckGo AI Chat -> https://duckduckgo.com/ai
+HuggingChat -> https://huggingface.co/chat
+V0 by Vercel -> https://v0.dev
+Vercel AI Playground -> https://sdk.vercel.ai/playground
+ChatHub Web -> https://app.chathub.gg
+MultipleChat -> https://multiplechat.com
+Monica AI -> https://monica.im
+1min.AI -> https://1min.ai
+ChatX -> https://chatx.ai
+Aymo AI -> https://aymo.ai
+Coze Web -> https://www.coze.com
+Puter Chat -> https://puter.com
+Phind -> https://www.phind.com
+Blackbox AI -> https://www.blackbox.ai
+Perplexity Free Web -> https://www.perplexity.ai
+You.com Chat -> https://you.com
+DeepInfra Chat -> https://deepinfra.com/chat
+Groq Chat -> https://groq.com
+Cerebras Inference Chat -> https://inference.cerebras.ai
+SambaNova Cloud Chat -> https://cloud.sambanova.ai
+Hyperbolic Chat -> https://app.hyperbolic.xyz
+Together AI Chat -> https://api.together.ai/playground
+Claude Official Web -> https://claude.ai
+ChatGPT Free Web -> https://chatgpt.com
+Google Gemini Web -> https://gemini.google.com
+Microsoft Copilot Web -> https://copilot.microsoft.com
+Meta AI Web -> https://www.meta.ai
+Mistral Le Chat -> https://chat.mistral.ai
+Cohere Coral Web -> https://coral.cohere.com
+Grok on X / Grok Web -> https://grok.com
+DeepSeek Chat -> https://chat.deepseek.com
+Qwen Chat (Alibaba) -> https://chat.qwen.ai
+Kimi Chat (Moonshot) -> https://kimi.moonshot.cn
+Doubao Web (ByteDance) -> https://www.doubao.com
+Zhipu GLM Chat -> https://chatglm.cn
+Baidu ERNIE Bot -> https://yiyan.baidu.com
+MiniMax Hailuo AI -> https://hailuoai.com
+StepFun Web -> https://stepfun.com
+SenseNova Chat -> https://chat.sensetime.com
+Tencent Yuanbao -> https://yuanbao.tencent.com
+iFlytek SparkDesk -> https://xinghuo.xfyun.cn
+Baichuan Web -> https://www.baichuan-ai.com/chat
+Pollinations AI Web -> https://pollinations.ai
+VeoAIFree Chat Web -> https://veoaifree.com
+Felo AI Web -> https://felo.ai
+Inner AI Web -> https://app.innerai.com
+PromptQL Web -> https://prompt.ql.app

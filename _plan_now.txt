@@ -1,0 +1,4 @@
+﻿port 9222: 33 page targets   plan: 1 sites
+sentinel: 'Reply exactly one word: Omni.'   secrets -> state\secrets
+
+  TAB  Baichuan Web                     session_only         baichuan-ai.com

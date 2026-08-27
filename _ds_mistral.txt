@@ -1,0 +1,71 @@
+﻿
+============================================================
+session_deepseek_chat.json
+host: chat.deepseek.com
+url: https://chat.deepseek.com/api/v0/chat/completion
+method: POST
+headers: ['Referer', 'User-Agent', 'accept', 'authorization', 'content-type', 'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform', 'x-client-bundle-id', 'x-client-locale', 'x-client-platform', 'x-client-timezone-offset', 'x-client-version', 'x-ds-pow-response', 'x-hif-dliq', 'x-hif-leim']
+body len: 234
+body json:
+{
+ "chat_session_id": "e0089748-fb27-4bfd-a616-e5f753ab8ab3",
+ "parent_message_id": 4,
+ "model_type": null,
+ "prompt": "Reply exactly one word: Omni.",
+ "ref_file_ids": [],
+ "thinking_enabled": false,
+ "search_enabled": true,
+ "action": null,
+ "preempt": false
+}
+ANSWER: {'text': '{"code":40301,"msg":"INVALID_POW_RESPONSE","data":null}', 'label': 'universal-adapter', 'status': 200}
+raw status: 200
+raw body: {"code":40301,"msg":"INVALID_POW_RESPONSE","data":null}
+
+============================================================
+session_mistral_le_chat.json
+host: chat.mistral.ai
+url: https://chat.mistral.ai/api/chat
+method: POST
+headers: ['Referer', 'User-Agent', 'baggage', 'content-type', 'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform', 'sentry-trace']
+body len: 805
+body json:
+{
+ "chatId": "90cd2ab7-d1fc-4350-8c0c-07b10034c03c",
+ "mode": "append",
+ "messageInput": [
+  {
+   "type": "text",
+   "text": "Reply exactly one word: Omni."
+  }
+ ],
+ "messageFiles": [],
+ "messageId": "73269e7b-45da-4b81-a967-2f108a7abfa9",
+ "features": [
+  "beta-code-interpreter",
+  "beta-imagegen",
+  "beta-trampoline",
+  "..."
+ ],
+ "libraries": [],
+ "integrations": [],
+ "disabledFeatures": [],
+ "reviewComments": [],
+ "preventFeaturesAndIntegrationsPersistence": false,
+ "transcriptionsMetadata": [],
+ "clientPromptData": {
+  "currentDate": "2026-08-27",
+  "userTimezone": "T+05:30 (Asia/Calcutta)"
+ },
+ "stableAnonymousIdentifier": "1tfxq1r",
+ "supportedTaskCallbacks": [
+  "ask_user_question",
+  "ask_user_confirmation",
+  "enable_connector",
+  "..."
+ ],
+ "boostMode": false
+}
+EXC: ChatError ('HTTP_ERROR', '409 Client Error: Conflict for url: https://chat.mistral.ai/api/chat')
+raw status: 409
+raw body: {"code":6400,"detail":"Cannot append, a message with the same id already exists"}

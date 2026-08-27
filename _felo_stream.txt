@@ -1,0 +1,11 @@
+﻿POST status 200 len 265
+bootstrap keys: ['expiration_time', 'message_id', 'rid', 'stream_key', 'task_id', 'thread_short_id']
+stream_key: a7088d9b-71e4-41a8-ac1c-9f5e71bfdb63 short_id: UAYyTN7iDtHKxtq6eTweQw
+
+GET https://felo.ai/api/message/v1/stream/a7088d9b-71e4-41a8-ac1c-9f5e71bfdb63?offset=0
+GET EXC TypeError 'Response' object does not support the context manager protocol
+
+stream total bytes: 0
+contains holy cow? False
+stream head: ''
+stream tail: ''

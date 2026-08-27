@@ -1,0 +1,18 @@
+﻿replay check: 12 captured sessions, direct to provider, 1 request each
+
+  OK api.1min.ai                      REPLAY_OK      4961ms  okay, let me process this step by step. the user is asking for the sum
+     chat.cerebras.ai                 HTTP_400       2552ms  ('http_error', '400 client error: bad request for url: https://chat.ce
+     app.chathub.gg                   RATE           2595ms  rate limited (429) -- left alone, not retried
+     chatx.ai                         WALL           2201ms  wall text in reply -- left alone, not retried
+  OK api.cohere.com                   REPLAY_OK      2248ms  58
+     chat.deepseek.com                SINGLE_USE     1332ms  matched 'pow' in a short body
+     felo.ai                          SINGLE_USE     3326ms  matched 'message_id' in a short body
+     api.groq.com                     AUTH           1175ms  auth refused (in body) -- cookie alone is not enough
+     chat.mistral.ai                  HTTP_409       2411ms  ('http_error', '409 client error: conflict for url: https://chat.mistr
+     api.monica.im                    NO_ANSWER      3079ms  200 but the reply never contains '58': omni.
+  OK www.perplexity.ai                REPLAY_OK      4217ms  58what is 58 minus 17multiply 41 by 17what is 41 squaredfind the sum o
+  OK chat.qwen.ai                     REPLAY_OK      4997ms  58
+
+replayable      (4): api.1min.ai, api.cohere.com, chat.qwen.ai, www.perplexity.ai
+single-use bound(2): chat.deepseek.com, felo.ai
+wrote D:\omniroute-monetizer\state\replay_check.json

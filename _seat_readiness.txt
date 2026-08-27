@@ -1,0 +1,107 @@
+﻿True
+{
+ "generatedAt": "2026-08-26T19:17:57.747490+00:00",
+ "readOnly": true,
+ "verdictMeaning": {
+  "signed_in_probable": "auth-named cookie present and unexpired, with a persistent one",
+  "session_only": "auth cookie present but dies with the browser window",
+  "expired": "auth cookies present but all past expiry -- re-sign-in needed",
+  "visited": "cookies on the domain but none auth-shaped -- not signed in"
+ },
+ "seats": [
+  {
+   "profile": "providers",
+   "chrome_profile": "Default",
+   "ports": [
+    9222,
+    9222
+   ],
+   "labels": [
+    "pro-1",
+    "rtst-1"
+   ],
+   "providers": [
+    "flow",
+    "rtst"
+   ],
+   "profileDir": "D:\\omniroute-monetizer\\state\\automation_profiles\\providers",
+   "subprofileExists": true,
+   "accountLabels": [
+    "isearch.xsolve@gmail.com"
+   ],
+   "readMethod": "cdp-raw:9222",
+   "cookieTotal": 1623,
+   "distinctDomains": 316,
+   "sites": {
+    "Google Flow (labs.google)": {
+     "domain": "labs.google",
+     "category": "Video generators",
+     "verdict": "signed_in_probable",
+     "cookiesOnDomain": 7,
+     "authCookieNames": [
+      "__Host-next-auth.csrf-token",
+      "__Secure-next-auth.callback-url",
+      "__Secure-next-auth.session-token"
+     ],
+     "persistentAuthCookies": 1
+    },
+    "rtst.ai": {
+     "domain": "rtst.ai",
+     "category": "Video generators",
+     "verdict": "signed_in_probable",
+     "cookiesOnDomain": 14,
+     "authCookieNames": [
+      "crisp-client%2Fsession%2F15147508-4f07-43ea-818e-fd9f6fdb41fc",
+      "token"
+     ],
+     "persistentAuthCookies": 2
+    },
+    "digen.ai": {
+     "domain": "digen.ai",
+     "category": "Video generators",
+     "verdict": "signed_in_probable",
+     "cookiesOnDomain": 12,
+     "authCookieNames": [
+      "digen_token",
+      "intercom-session-wgkan4nt"
+     ],
+     "persistentAuthCookies": 2
+    },
+    "veoaifree": {
+     "domain": "veoaifree.com",
+     "category": "Video generators",
+     "verdict": "signed_in_probable",
+     "cookiesOnDomain": 19,
+     "authCookieNames": [
+      "wordpress_logged_in_04e805bfa8c7064a04c2e480966a748b"
+     ],
+     "persistentAuthCookies": 1
+    },
+    "Poe": {
+     "domain": "poe.com",
+     "category": "Multi-Model Arenas & Aggregators (Claude / GPT-4 / Frontier)",
+     "verdict": "visited",
+     "cookiesOnDomain": 9,
+     "authCookieNames": [],
+     "persistentAuthCookies": 0
+    },
+    "HuggingChat": {
+     "domain": "huggingface.co",
+     "category": "Multi-Model Arenas & Aggregators (Claude / GPT-4 / Frontier)",
+     "verdict": "signed_in_probable",
+     "cookiesOnDomain": 4,
+     "authCookieNames": [
+      "aws-waf-token",
+      "token"
+     ],
+     "persistentAuthCookies": 2
+    },
+    "ChatHub Web": {
+     "domain": "chathub.gg",
+     "category": "Multi-Model Arenas & Aggregators (Claude / GPT-4 / Frontier)",
+     "verdict": "signed_in_probable",
+     "cookiesOnDomain": 6,
+     "authCookieNames": [
+      "intercom-session-j1v8bydx",
+      "sb-srhhtcujthkgdfcqybbw-auth-token.0",
+      "sb-srhhtcujthkgdfcqy

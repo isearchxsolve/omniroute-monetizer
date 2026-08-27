@@ -1,0 +1,9 @@
+﻿injected differs from recorded? True
+
+--- recorded body (byte-for-byte) ---
+  A recorded/curl_cffi             status=200 len=  6315 answer=YES 401frame=no 
+  C recorded/requests              status=200 len=  4905 answer=YES 401frame=no 
+
+--- injected body (prompt swapped) ---
+  B injected/curl_cffi             status=200 len=  6574 answer=YES 401frame=no 
+  D injected/requests              status=200 len=  6505 answer=YES 401frame=no 

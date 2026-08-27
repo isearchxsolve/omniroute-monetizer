@@ -1,0 +1,111 @@
+﻿[
+ {
+  "category": "Multi-Model Arenas & Aggregators (Claude / GPT-4 / Frontier)",
+  "sites": [
+   {
+    "name": "LMSYS Chatbot Arena",
+    "url": "https://arena.lmsys.org",
+    "models": [
+     "claude-3-5-sonnet",
+     "gpt-4o",
+     "gemini-1.5-pro",
+     "deepseek-r1"
+    ]
+   },
+   {
+    "name": "LMSYS Direct Chat",
+    "url": "https://chat.lmsys.org",
+    "models": [
+     "claude-3-5-sonnet",
+     "claude-3-opus",
+     "gpt-4o"
+    ]
+   },
+   {
+    "name": "Poe",
+    "url": "https://poe.com",
+    "models": [
+     "Claude-3.5-Sonnet",
+     "GPT-4o",
+     "Claude-3-Opus",
+     "Llama-3.3-70B"
+    ]
+   },
+   {
+    "name": "DuckDuckGo AI Chat",
+    "url": "https://duckduckgo.com/ai",
+    "models": [
+     "claude-3-haiku",
+     "gpt-4o-mini",
+     "llama-3.3-70b",
+     "mixtral-8x7b"
+    ]
+   },
+   {
+    "name": "HuggingChat",
+    "url": "https://huggingface.co/chat",
+    "models": [
+     "deepseek-r1",
+     "llama-3.3-70b-instruct",
+     "qwen-2.5-72b"
+    ]
+   },
+   {
+    "name": "V0 by Vercel",
+    "url": "https://v0.dev",
+    "models": [
+     "claude-3-5-sonnet",
+     "gpt-4o"
+    ]
+   },
+   {
+    "name": "Vercel AI Playground",
+    "url": "https://sdk.vercel.ai/playground",
+    "models": [
+     "claude-3-5-sonnet",
+     "gpt-4o",
+     "llama-3"
+    ]
+   },
+   {
+    "name": "ChatHub Web",
+    "url": "https://app.chathub.gg",
+    "models": [
+     "claude-3.5-sonnet",
+     "chatgpt",
+     "gemini"
+    ]
+   },
+   {
+    "name": "MultipleChat",
+    "url": "https://multiplechat.com",
+    "models": [
+     "claude-3.5-sonnet",
+     "chatgpt-4o",
+     "gemini-pro",
+     "grok"
+    ]
+   },
+   {
+    "name": "Monica AI",
+    "url": "https://monica.im",
+    "models": [
+     "claude-3.5-sonnet",
+     "gpt-4o",
+     "deepseek-v3"
+    ]
+   },
+   {
+    "name": "1min.AI",
+    "url": "https://1min.ai",
+    "models": [
+     "claude-3-5-sonnet",
+     "gpt-4o",
+     "gemini-1.5-pro"
+    ]
+   },
+   {
+    "name": "ChatX",
+    "url": "https://chatx.ai",
+    "models": [
+     "claude-3.5

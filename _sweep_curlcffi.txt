@@ -1,0 +1,33 @@
+﻿replay check: 27 captured sessions, direct to provider, 1 request each
+
+  OK api.1min.ai                      REPLAY_OK      5524ms  okay, let's see. the user wants me to repeat exactly the phrase "the h
+     aymo.ai                          NO_ANSWER      2517ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     chat.cerebras.ai                 AUTH            605ms  auth refused (in body) -- cookie alone is not enough
+     chatgpt.com                      NO_ANSWER       685ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     app.chathub.gg                   NO_ANSWER      1971ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     chatx.ai                         WALL            908ms  wall text in reply -- left alone, not retried
+  OK api.cohere.com                   REPLAY_OK      1059ms  the holy cow jumps over the stricks
+     chat.deepseek.com                SINGLE_USE      484ms  matched 'pow' in a short body
+     digen.ai                         BAD_FILE          4ms  no sentinel in the recorded body -- capture is not replayable at all
+     felo.ai                          EMPTY          3755ms  200 but nothing in the body
+     gemini.google.com                AUTH            323ms  auth refused (in body) -- cookie alone is not enough
+     api.groq.com                     AUTH            271ms  auth refused (in body) -- cookie alone is not enough
+     huggingface.co                   WALL           1227ms  wall text in reply -- left alone, not retried
+     chat-api-v3.innerai.com          NO_ANSWER      1391ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     www.meta.ai                      NO_ANSWER      1075ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     chat.mistral.ai                  NO_ANSWER      1576ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     api.monica.im                    NO_ANSWER      2278ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+  OK www.perplexity.ai                REPLAY_OK      1574ms  the holy cow jumps over the stricks
+  OK chat.qwen.ai                     REPLAY_OK      8238ms  the holy cow jumps over the stricksthe holy cow jumps over the stricks
+     rtst.ai                          NO_ANSWER         0ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     rtst.ai                          NO_ANSWER         0ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     rtst.ai                          NO_ANSWER         1ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     rtst.ai                          NO_ANSWER         0ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     veoaifree.com                    AUTH           1050ms  auth refused (in body) -- cookie alone is not enough
+     veoaifree.com                    WALL            943ms  wall text in reply -- left alone, not retried
+     api.cr-proxy.com                 EMPTY          1266ms  200 but nothing in the body
+     chatglm.cn                       NO_ANSWER       914ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+
+replayable      (4): api.1min.ai, api.cohere.com, chat.qwen.ai, www.perplexity.ai
+single-use bound(1): chat.deepseek.com
+wrote D:\omniroute-monetizer\state\replay_check.json

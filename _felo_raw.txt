@@ -1,0 +1,6 @@
+﻿ANSWER: {'text': '{"task_id":"01a04182-9448-0a2f-3958-29744a96da05","message_id":"da6817c3-3422-4c8b-9e5c-db42a81e98c4","thread_short_id":"UAYyTN7iDtHKxtq6eTweQw","rid":"f86e1a3e-8979-4e14-b5ed-96e96744d51d","expiration_time":7200,"stream_key":"da6817c3-3422-4c8b-9e5c-db42a81e98c4"}', 'label': 'universal-ad
+
+--- raw ---
+status: 200
+body: {"task_id":"01a04182-9448-0a2f-3958-29744a96da05","message_id":"da6817c3-3422-4c8b-9e5c-db42a81e98c4","thread_short_id":"UAYyTN7iDtHKxtq6eTweQw","rid":"f86e1a3e-8979-4e14-b5ed-96e96744d51d","expiration_time":7200,"stream_key":"da6817c3-3422-4c8b-9e5c-db42a81e98c4"}
+content-type: application/json

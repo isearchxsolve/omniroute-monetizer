@@ -1,0 +1,8 @@
+﻿replay check: 2 captured sessions, direct to provider, 1 request each
+
+     chat.deepseek.com                SINGLE_USE     2202ms  matched 'pow' in a short body
+  OK chat.mistral.ai                  REPLAY_OK      3022ms  58
+
+replayable      (1): chat.mistral.ai
+single-use bound(1): chat.deepseek.com
+wrote D:\omniroute-monetizer\state\replay_check.json

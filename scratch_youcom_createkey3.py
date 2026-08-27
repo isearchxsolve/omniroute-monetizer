@@ -1,0 +1,132 @@
+# -*- coding: utf-8 -*-
+"""you.com: delete botched key, create a fresh one, capture the REAL ydc-sk- reveal.
+Capture targets the ydc-sk- prefix specifically (not the name field). NEVER prints the key."""
+import json, time, os, re
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+
+SECRET_PATH = "state/secrets/youcom_api_key.json"
+KEY_NAME = "omniroute-auto-%d" % int(time.time())
+
+opts = Options()
+opts.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+d = webdriver.Chrome(options=opts)
+d.set_script_timeout(60)
+
+for h in d.window_handles:
+    try:
+        d.switch_to.window(h)
+        if "you.com" in d.current_url:
+            break
+    except Exception:
+        continue
+else:
+    raise SystemExit("NO you.com tab")
+
+if "api-keys" not in d.current_url:
+    d.get("https://you.com/platform/api-keys")
+    time.sleep(4)
+print("on:", d.current_url)
+
+# --- Step 0: delete any prior omniroute-auto keys (cleanup) ---
+deleted = d.execute_script(r"""
+return (function(){
+  function visible(el){const r=el.getBoundingClientRect();if(r.width<=0||r.height<=0)return false;const st=getComputedStyle(el);return st.display!=='none'&&st.visibility!=='hidden';}
+  const rows=Array.from(document.querySelectorAll('table tr,[role="row"]')).filter(r=>/omniroute-auto/.test(r.innerText||''));
+  let n=0;
+  for(const row of rows){
+    const del=Array.from(row.querySelectorAll('button,[role="button"],svg,[aria-label*="delete" i],[aria-label*="trash" i]')).find(b=>{
+      const al=(b.getAttribute&&b.getAttribute('aria-label'))||'';
+      const t=(b.innerText||'').trim();
+      return /delete|trash|remove/i.test(al)||/delete|remove/i.test(t)|| (b.tagName==='SVG');
+    });
+    if(del){ del.click(); n++; }
+  }
+  return n;
+})()
+""")
+print("delete-clicks on old rows:", deleted)
+time.sleep(2)
+# confirm any confirm-dialog
+d.execute_script(r"""
+(function(){
+  function visible(el){const r=el.getBoundingClientRect();if(r.width<=0||r.height<=0)return false;const st=getComputedStyle(el);return st.display!=='none'&&st.visibility!=='hidden';}
+  const btns=Array.from(document.querySelectorAll('button,[role="button"]')).filter(visible);
+  const c=btns.find(b=>/^(delete|confirm|yes|remove)$/i.test((b.innerText||'').trim()));
+  if(c) c.click();
+})()
+""")
+time.sleep(2)
+
+# --- Step 1: fill Key Name ---
+filled = d.execute_script(r"""
+const name=arguments[0];
+return (function(){
+  function visible(el){const r=el.getBoundingClientRect();if(r.width<=0||r.height<=0)return false;const st=getComputedStyle(el);return st.display!=='none'&&st.visibility!=='hidden';}
+  const inputs=Array.from(document.querySelectorAll('input[type="text"],input:not([type]),input[type="search"]')).filter(visible);
+  if(!inputs.length) return {ok:false,why:'no input'};
+  const h2=Array.from(document.querySelectorAll('h1,h2,h3')).find(h=>/create new key/i.test(h.innerText||''));
+  let el=inputs[0];
+  if(h2){const hr=h2.getBoundingClientRect();let best=1e9;for(const i of inputs){const r=i.getBoundingClientRect();const dist=Math.hypot(r.x-hr.x,r.y-hr.y);if(dist<best){best=dist;el=i;}}}
+  const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
+  const tr=el._valueTracker; if(tr) tr.setValue('');
+  setter.call(el,name);
+  el.dispatchEvent(new Event('input',{bubbles:true}));
+  el.dispatchEvent(new Event('change',{bubbles:true}));
+  return {ok:true,domValue:el.value};
+})()
+""", KEY_NAME)
+print("fill name:", json.dumps(filled))
+time.sleep(1)
+
+# --- Step 2: click Create ---
+clicked = d.execute_script(r"""
+return (function(){
+  function visible(el){const r=el.getBoundingClientRect();if(r.width<=0||r.height<=0)return false;const st=getComputedStyle(el);return st.display!=='none'&&st.visibility!=='hidden';}
+  const btns=Array.from(document.querySelectorAll('button,[role="button"]')).filter(visible);
+  const t=btns.find(b=>/^create$/i.test((b.innerText||'').trim()));
+  if(t){t.click();return (b=>b.innerText.trim())(t);}
+  return {fail:true,btns:btns.map(b=>(b.innerText||'').trim()).filter(Boolean).slice(0,15)};
+})()
+""")
+print("clicked create:", clicked)
+
+# --- Step 3: poll for the ydc-sk- reveal (the REAL key) ---
+captured=None
+for attempt in range(20):
+    body=d.execute_script("return document.body.innerText||''")
+    m=re.search(r'ydc-sk-[A-Za-z0-9_\-\.=+/]{16,}', body)
+    if m:
+        captured=m.group(0)
+        break
+    # also check input/pre/code values
+    vals=d.execute_script(r"""
+    return Array.from(document.querySelectorAll('input,textarea,pre,code')).map(n=>(n.value!==undefined&&n.value)?n.value:(n.innerText||'')).filter(Boolean);
+    """)
+    for v in vals:
+        mm=re.search(r'ydc-sk-[A-Za-z0-9_\-\.=+/]{16,}', v)
+        if mm:
+            captured=mm.group(0)
+            break
+    if captured:
+        break
+    time.sleep(1.2)
+
+if captured:
+    os.makedirs(os.path.dirname(SECRET_PATH), exist_ok=True)
+    rec={
+        "host":"api.you.com",
+        "modality":"chat",
+        "site":"You.com Answer API",
+        "api_key":captured,
+        "key_name":KEY_NAME,
+        "credits_note":"free promotional credits, zero money invested (operator-confirmed)",
+        "captured_at":int(time.time()),
+    }
+    with open(SECRET_PATH,"w",encoding="utf-8") as f:
+        json.dump(rec,f,indent=1)
+    print("\nREAL KEY CAPTURED -> saved to", SECRET_PATH)
+    print("redacted:", captured[:10]+"..."+captured[-4:], "len", len(captured))
+else:
+    print("\nNO ydc-sk- KEY FOUND. Body head:")
+    print((d.execute_script("return document.body.innerText||''")[:800]).replace("\n"," | "))

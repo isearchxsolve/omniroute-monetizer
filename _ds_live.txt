@@ -1,0 +1,49 @@
+﻿
+>>> REQ POST https://chat.deepseek.com/api/v0/chat/create_pow_challenge
+    authorization: Bearer HIkYEXqyiCG/zlIaTOdKcGXHmbpeh427qH8UaHQy3BOrcgwVC42aG6w3Qv8hkLeu
+    body: {"target_path":"/api/v0/chat/completion"}
+
+>>> REQ POST https://chat.deepseek.com/api/v0/chat/create_pow_challenge
+    authorization: Bearer HIkYEXqyiCG/zlIaTOdKcGXHmbpeh427qH8UaHQy3BOrcgwVC42aG6w3Qv8hkLeu
+    body: {"target_path":"/api/v0/chat/completion"}
+<<< RESP 200 application/json https://chat.deepseek.com/api/v0/chat/create_pow_challenge
+    BODY[406B]: {"code":0,"msg":"","data":{"biz_code":0,"biz_msg":"","biz_data":{"challenge":{"algorithm":"DeepSeekHashV1","challenge":"6f5533518d8fcb4e9a790cefc9323cf6dc9b3f0bbcc013c967f87aa13decb6aa","salt":"589f84f8b24ddca11b82","signature":"22a78429f18f4bcba7ffa4fcf0dc86822d3b623f32dc9070a7cf9334346fa0ea","diff
+
+>>> REQ POST https://chat.deepseek.com/api/v0/chat/completion
+    x-ds-pow-response: eyJhbGdvcml0aG0iOiJEZWVwU2Vla0hhc2hWMSIsImNoYWxsZW5nZSI6IjYxYjEzMmUzMjA2N2E1MTRkOGU1NTQ3ZjRmYjFjNTM3ODI0NThlMjY0ZDc1YmI5
+    authorization: Bearer HIkYEXqyiCG/zlIaTOdKcGXHmbpeh427qH8UaHQy3BOrcgwVC42aG6w3Qv8hkLeu
+    body: {"chat_session_id":"e0089748-fb27-4bfd-a616-e5f753ab8ab3","parent_message_id":6,"model_type":null,"prompt":"Reply with only the number: 41 + 17","ref_file_ids":[],"thinking_enabled":false,"search_enab
+<<< RESP 200 text/event-stream https://chat.deepseek.com/api/v0/chat/completion
+    BODY[941B]: event: ready
+data: {"request_message_id":7,"response_message_id":8,"model_type":"default"}
+
+event: update_session
+data: {"updated_at":1787806985.0960588}
+
+data: {"v":{"response":{"message_id":8,"parent_id":7,"model":"","role":"ASSISTANT","thinking_enabled":false,"ban_edit":false,"ban_regenerate":fal
+
+>>> REQ GET https://chat.deepseek.com/api/v0/client/settings?did=3f7d101b-b210-4295-8191-5bba78144224&scope=provider
+    authorization: Bearer HIkYEXqyiCG/zlIaTOdKcGXHmbpeh427qH8UaHQy3BOrcgwVC42aG6w3Qv8hkLeu
+
+>>> REQ GET https://chat.deepseek.com/api/v0/client/settings?did=3f7d101b-b210-4295-8191-5bba78144224&scope=model
+    authorization: Bearer HIkYEXqyiCG/zlIaTOdKcGXHmbpeh427qH8UaHQy3BOrcgwVC42aG6w3Qv8hkLeu
+
+>>> REQ GET https://chat.deepseek.com/api/v0/client/settings?did=3f7d101b-b210-4295-8191-5bba78144224&scope=web_upgrade
+    authorization: Bearer HIkYEXqyiCG/zlIaTOdKcGXHmbpeh427qH8UaHQy3BOrcgwVC42aG6w3Qv8hkLeu
+<<< RESP 200 application/json https://chat.deepseek.com/api/v0/client/settings?did=3f7d101b-b210-4295-8191-5bb
+python : Traceback (most recent call last):
+At line:1 char:1
++ python scratch_ds_live_pow.py 2>&1 | Out-File -Encoding utf8 _ds_live ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last) 
+   ::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "D:\omniroute-monetizer\scratch_ds_live_pow.py", line 99, in <module>
+    print(f"    BODY[{len(bodies[rid])}B]: {bodies[rid][:300]}")
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python311\Lib\encodings\cp
+1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 
+243-245: character maps to <undefined>

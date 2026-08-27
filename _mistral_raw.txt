@@ -1,0 +1,18 @@
+﻿status: 200
+content-type: text/event-stream
+raw len: 1640
+raw first 2000:
+15:{"json":{"type":"message","messageId":"2fc9aa3e-4d5d-4bc9-b9da-7dd0f121f4a1","messageVersion":0,"patches":[{"op":"replace","path":"/","value":{"role":"assistant","content":"","contentChunks":null,"turn":4,"createdAt":"2026-08-27T04:49:21.929Z","agentId":null,"agentsApiAgentId":null,"chatId":"90cd2ab7-d1fc-4350-8c0c-07b10034c03c","createdById":"28926087-7ca5-4884-8840-37c443e5d138","files":[],"id":"2fc9aa3e-4d5d-4bc9-b9da-7dd0f121f4a1","isAcceleratedAnswer":true,"moderationCategory":null,"reaction":"neutral","references":null,"memories":null,"followups":[],"status":"active","generationStatus":"in-progress","parentId":"ab32c839-572c-4dfe-9058-bedb1af0046c","parentVersion":0,"version":0,"nextVersion":null,"prevVersion":null,"versionCount":1,"visibility":"private","model":null,"quotedContent":null,"reviewComments":[],"workflowExecution":null}}]},"meta":{"values":{"patches.0.value.createdAt":["Date"]},"v":1}}
+15:{"json":{"type":"message","messageId":"ab32c839-572c-4dfe-9058-bedb1af0046c","messageVersion":0,"patches":[{"op":"replace","path":"/moderationCategory","value":"safe"}]}}
+15:{"json":{"type":"message","messageId":"2fc9aa3e-4d5d-4bc9-b9da-7dd0f121f4a1","messageVersion":0,"patches":[{"op":"replace","path":"/contentChunks","value":[{"type":"text","text":"5"}]}]}}
+15:{"json":{"type":"message","messageId":"2fc9aa3e-4d5d-4bc9-b9da-7dd0f121f4a1","messageVersion":0,"patches":[{"op":"append","path":"/contentChunks/0/text","value":"8"}]}}
+15:{"json":{"type":"message","messageId":"2fc9aa3e-4d5d-4bc9-b9da-7dd0f121f4a1","messageVersion":0,"patches":[{"op":"replace","path":"/generationStatus","value":"success"}]}}
+8:null
+
+...
+raw last 500:
+9aa3e-4d5d-4bc9-b9da-7dd0f121f4a1","messageVersion":0,"patches":[{"op":"replace","path":"/contentChunks","value":[{"type":"text","text":"5"}]}]}}
+15:{"json":{"type":"message","messageId":"2fc9aa3e-4d5d-4bc9-b9da-7dd0f121f4a1","messageVersion":0,"patches":[{"op":"append","path":"/contentChunks/0/text","value":"8"}]}}
+15:{"json":{"type":"message","messageId":"2fc9aa3e-4d5d-4bc9-b9da-7dd0f121f4a1","messageVersion":0,"patches":[{"op":"replace","path":"/generationStatus","value":"success"}]}}
+8:null
+

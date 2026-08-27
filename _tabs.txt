@@ -1,0 +1,74 @@
+﻿36 page tabs on :9222
+
+  Felo ù Free Multilingual AI Search &amp; Creatio https://felo.ai/search/UAYyTN7iDtHKxtq6eTweQw
+      ws: ws://127.0.0.1:9222/devtools/page/B5C24BCB4EAA25129201892317313C81
+  Cerebras Inference                               https://chat.cerebras.ai/chat
+      ws: ws://127.0.0.1:9222/devtools/page/4DE92A17C52E2FE2DE2C5FF2C442919F
+  Chat | Cohere                                    https://dashboard.cohere.com/playground/chat
+      ws: ws://127.0.0.1:9222/devtools/page/EFB2EABDE9E400737A5AB2E373E8683E
+  Lighthouse Beam Midnight Shot - Grok             https://grok.com/c/e70a95f2-d16f-4d02-9c4e-fcf1f0ae5f82?rid=3999ac77-8
+      ws: ws://127.0.0.1:9222/devtools/page/A6F416598C8963201C3C59E62232327C
+  ChatGPT English ù No Login Required              https://chatx.ai/gpt
+      ws: ws://127.0.0.1:9222/devtools/page/98D673A0B111666E3DE629F979EDCD11
+  Lighthouse beam at midnight                      https://chat.mistral.ai/work/90cd2ab7-d1fc-4350-8c0c-07b10034c03c
+      ws: ws://127.0.0.1:9222/devtools/page/8D0F60582D3C1C0D42DB61152B57327F
+  Lighthouse beam over dark ocean at midnight - Mo https://monica.im/home/chat/Monica/monica?convId=conv%3A34d7cd2d-2514-
+      ws: ws://127.0.0.1:9222/devtools/page/733E7F06258861723E655EC462C3C657
+  Bai Xiaoyi                                       https://yi.baichuan-ai.com/
+      ws: ws://127.0.0.1:9222/devtools/page/BF5EB9E5649046CF2DD0F25DE6461F38
+  Wisdom and Pure Words                            https://chatglm.cn/main/alltoolsdetail?lang=zh&cid=6a8e6d2563656ad140d
+      ws: ws://127.0.0.1:9222/devtools/page/3D48D6FE86D95F05EB40A446A6F4469D
+  Qwen Studio                                      https://chat.qwen.ai/c/930b4619-aeb4-4033-83c2-b90bc8923630
+      ws: ws://127.0.0.1:9222/devtools/page/BC71782D57DB8F948D554FF2E35BE32F
+  Lighthouse beam midnight ocean - DeepSeek        https://chat.deepseek.com/a/chat/s/e0089748-fb27-4bfd-a616-e5f753ab8ab
+      ws: ws://127.0.0.1:9222/devtools/page/8494E78FCFFAEFBE7E563EB6DDEE5DB8
+  Meta AI                                          https://www.meta.ai/
+      ws: ws://127.0.0.1:9222/devtools/page/BE9F011CC7A5E774FB2B159AB25D6127
+  Reply exactly one word: Omni. - Google Gemini    https://gemini.google.com/app/0c5b1ae2e238e5a8
+      ws: ws://127.0.0.1:9222/devtools/page/CB9C1484B32ACE2B4DD1256F0C4F7EC2
+  New chat - Claude                                https://claude.ai/new?incognito=
+      ws: ws://127.0.0.1:9222/devtools/page/85A59162615A1FEF2A19366B516138F9
+  Microsoft Copilot: Your AI companion             https://copilot.microsoft.com/chats/GYDAcatXUGsCHN7iFCKRh
+      ws: ws://127.0.0.1:9222/devtools/page/9F8F03BC023E9BAD685CB135D7960815
+  ChatHub                                          https://app.chathub.gg/c/d90a1d21-960e-49e3-9c56-85d6c8f6fae5
+      ws: ws://127.0.0.1:9222/devtools/page/17FE5FEB0EFD53A6A0AE8ECC9EB173A4
+  1min.AI                                          https://app.1min.ai/chat-with-ai/66b9eb4b-0e0b-4df6-999f-4f2b0da13a69
+      ws: ws://127.0.0.1:9222/devtools/page/0BA7CE95E87A3C8406C3F052DDD50BEF
+  Reply exactly one word: Omni.                    https://www.perplexity.ai/search/53b6d7fd-7974-4199-97f3-81a87cc3b844
+      ws: ws://127.0.0.1:9222/devtools/page/E4868A0C6E37E3DFF0766E0ADF6F9AB2
+  Repetitive Omni Word Exchange | Aymo AI          https://aymo.ai/chats/7cb10c99-08c4-442a-bb5b-45e7bb284196
+      ws: ws://127.0.0.1:9222/devtools/page/A268D73EA253746E2DE4391B1F23877C
+  You.com | The Leading Web Search APIs for AI     https://you.com/platform/playground/answer?query=Omni+sentinel+shot%3A
+      ws: ws://127.0.0.1:9222/devtools/page/25569F1948B48F99AF9BA1F9E911A803
+  GroqCloud                                        https://console.groq.com/playground
+      ws: ws://127.0.0.1:9222/devtools/page/C49DD07F869A4FF2508573D855FCA0AF
+  GroqCloud                                        https://console.groq.com/playground
+      ws: ws://127.0.0.1:9222/devtools/page/1244E48344F49E484FC8A5213D867BDB
+  Omni - v0 by Vercel                              https://v0.app/isearchxsolve-6191s-projects/chat/omni-jvPa7gqKGGu
+      ws: ws://127.0.0.1:9222/devtools/page/222A72B329C583CF9F344A0E3EB942FF
+  Lighthouse at midnight                           https://duck.ai/chat
+      ws: ws://127.0.0.1:9222/devtools/page/EBAA537D290BE052524D151D213B1864
+  RTST.ai - AI Image &amp; Video Generator         https://rtst.ai/
+      ws: ws://127.0.0.1:9222/devtools/page/E0E2B4328057F8D2F729B538042EA267
+  Google Flow - AI Creative Studio for Video, Imag https://labs.google/fx/tools/flow
+      ws: ws://127.0.0.1:9222/devtools/page/D3085CBC3DFCC10706E31A9D48ACCBDF
+  Microsoft Copilot: Your AI companion             https://copilot.microsoft.com/chats/QgVdc7qTTcJ8Tno9E7xZk
+      ws: ws://127.0.0.1:9222/devtools/page/71900B1BE13F2BB92EA8A825FE896987
+  GroqCloud                                        https://console.groq.com/playground
+      ws: ws://127.0.0.1:9222/devtools/page/F3580A74E711ADD3CBEFAE910B5DD874
+  Microsoft Copilot: Your AI companion             https://copilot.microsoft.com/chats/MvBYVAUVxFcRK9gL6tGga
+      ws: ws://127.0.0.1:9222/devtools/page/6C4E915C0527106EE9A58B006BE926A6
+  Bai Xiaoyi                                       https://yi.baichuan-ai.com/
+      ws: ws://127.0.0.1:9222/devtools/page/7297EA4BD136020A2FB70274FCF8D23A
+  BeaconEdit - NemoVideo                           https://www.nemovideo.com/workspace/project/project_67ae6b6e8745/sessi
+      ws: ws://127.0.0.1:9222/devtools/page/A4CD805C316379CD2AB8CEAA65D35A65
+  Omni sentinel lighthouse ocean beam image reques https://www.genspark.ai/agents?id=25e26563-1473-4dee-b3e6-816a12f08615
+      ws: ws://127.0.0.1:9222/devtools/page/814990A4A3F14DF4C7076B3100E1FB0D
+  Microsoft Copilot: Chat                          https://copilot.microsoft.com/chats/kTL4XNByoCALbcmbf8AM8
+      ws: ws://127.0.0.1:9222/devtools/page/85798146BE79C2A556D817A371944E3C
+  GroqCloud                                        https://console.groq.com/playground
+      ws: ws://127.0.0.1:9222/devtools/page/05BF2345722F662FEA6B8E0A76338E47
+  Unlimited VEO 3.1 AI Video Generator - Veo AI Fr https://veoaifree.com/veo-video-generator/
+      ws: ws://127.0.0.1:9222/devtools/page/F489C0634BD27633CB62A2EFE9943417
+  Microsoft Copilot: Chat                          https://copilot.microsoft.com/chats/eAqY4fw7YaRKEhjW88ZVQ
+      ws: ws://127.0.0.1:9222/devtools/page/B0514CCFE0D2FAB921647FCCA64EF2B6

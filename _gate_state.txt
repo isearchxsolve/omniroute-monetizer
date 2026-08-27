@@ -1,0 +1,16 @@
+﻿session_you_com_chat.json -> host: api.cr-proxy.com | url: https://api.cr-proxy.com/v1/site/ac9b65c1-644b-4e91-804d-0bb3dfb95fbb/batch | body len: 302
+session_zhipu_glm_chat.json -> host: chatglm.cn | url: https://chatglm.cn/chatglm/backend-api/assistant/stream?refer__991=2790552d-hbuE | body len: 452
+
+gate rows: 12
+  api.1min.ai -> REPLAY_OK
+  chat.cerebras.ai -> HTTP_400
+  app.chathub.gg -> RATE
+  chatx.ai -> WALL
+  api.cohere.com -> REPLAY_OK
+  chat.deepseek.com -> SINGLE_USE
+  felo.ai -> SINGLE_USE
+  api.groq.com -> AUTH
+  chat.mistral.ai -> HTTP_409
+  api.monica.im -> NO_ANSWER
+  www.perplexity.ai -> REPLAY_OK
+  chat.qwen.ai -> REPLAY_OK

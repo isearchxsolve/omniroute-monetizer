@@ -1,0 +1,19 @@
+﻿=== DeepSeek PoW-related headers ===
+  authorization: Bearer HIkYEXqyiCG/zlIaTOdKcGXHmbpeh427qH8UaHQy3BOrcgwVC42aG6w3Qv8hkLeu
+  x-client-bundle-id: com.deepseek.chat
+  x-client-locale: en_US
+  x-client-platform: web
+  x-client-timezone-offset: 19800
+  x-client-version: 2.4.0
+  x-ds-pow-response: eyJhbGdvcml0aG0iOiJEZWVwU2Vla0hhc2hWMSIsImNoYWxsZW5nZSI6IjlkMjEyZWY2NmQzODI5MTEy...(364 chars)
+  x-hif-dliq: AlmeGWH5JDYOuD0Co+poAfsqDde93GJggNYTqtnzWFkoj9JMSQs+F7k=.jaTDlbt1OsWaPvVm
+  x-hif-leim: ezID8gNIw0Vgl+gbLB6YJWKVkT7rf2CANO6XY7HkxiyhiRNFy4vyPAM=.DIuVEPGExADmd3UR
+
+=== full x-ds-pow-response ===
+'eyJhbGdvcml0aG0iOiJEZWVwU2Vla0hhc2hWMSIsImNoYWxsZW5nZSI6IjlkMjEyZWY2NmQzODI5MTEyZDAyMGNjYTYzNTE3MzViNzdjMDNkM2E1YWEwYjI4ZWEyMWRmMjM2ZDg2YWE3ZTciLCJzYWx0IjoiNzFlN2QwYWM4MzRiNjE1NjQ0MzYiLCJhbnN3ZXIiOjE5OTk1LCJzaWduYXR1cmUiOiJlOTg3MzQwNWQzZjBkYTdlMTI5ZjY5ZWM1ODU3ZDE0N2IzMTVmZTkyN2NmNDU0OWIzOGJmNjFmMTYzZDNlYWJiIiwidGFyZ2V0X3BhdGgiOiIvYXBpL3YwL2NoYXQvY29tcGxldGlvbiJ9'
+
+=== other top-level keys in session file ===
+['cookie_header', 'host', 'modality', 'recorded_exchange', 'sentinel', 'site', 'status', 'updated_at']
+
+=== 'pow' occurrences in file ===
+  ... ", \"Chromium\";v=\"151\"", "sec-ch-ua-mobile": "?0", "x-ds-pow-response": "eyJhbGdvcml0aG0iOiJEZWVwU2Vla0hhc2hWMSIsImNoYWxsZW5nZSI6IjlkMjEyZWY ...

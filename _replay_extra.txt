@@ -1,0 +1,8 @@
+﻿replay check: 2 captured sessions, direct to provider, 1 request each
+
+     api.cr-proxy.com                 EMPTY          2057ms  200 but nothing in the body
+     chatglm.cn                       HTTP_400       1273ms  ('http_error', '400 client error: bad request for url: https://chatglm
+
+replayable      (0): none
+single-use bound(0): none
+wrote D:\omniroute-monetizer\state\replay_check.json

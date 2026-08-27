@@ -1,0 +1,2 @@
+﻿state/replay_check.bak_20260827.json : ['chatgpt.com', 'chat.deepseek.com', 'felo.ai', 'gemini.google.com', 'www.meta.ai', 'chat.mistral.ai', 'api.monica.im', 'veoaifree.com']
+state/replay_check.bak2_20260827.json : ['api.1min.ai', 'chatx.ai', 'chat.deepseek.com', 'felo.ai', 'api.groq.com', 'chat.mistral.ai', 'api.monica.im', 'chat.qwen.ai']

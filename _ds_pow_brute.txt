@@ -1,0 +1,29 @@
+﻿Testing which formulation makes answer=19995 special vs 19994/19996...
+
+  no leading-zero-bit candidate found; trying int-value minimality over a window...
+
+  No formulation found. Dumping leading-zero-bit profile for all at answer=19995:
+    sha(c+s+a)             bits= 2  230fbb609bd901ada421
+    sha(a+c+s)             bits= 2  2bf3769ca5a928eff3c5
+    sha(c+a+s)             bits= 0  edada6ec7f3d11d75ce0
+    sha(s+c+a)             bits= 1  72046e41f1d389020c00
+    sha(s+a+c)             bits= 0  f2983addc27cc5c8c2a8
+    sha(a+s+c)             bits= 0  8c6c5b7335ee8655b004
+    sha(c+s+ab8)           bits= 0  e3b6e4ef564eb1d2baa1
+    sha(c+s+ab4)           bits= 2  31a59447ef9a9c29905d
+    sha(ab8+c+s)           bits= 0  d7e6abc1c9e55c489677
+    sha(sha(c+s)+a)        bits= 0  fd292419189af721fba4
+    sha(a+sha(c+s))        bits= 1  53b63d8cb1c17890d6a2
+    sha(sha(c)+s+a)        bits= 1  4d4f11c09b815ae5beff
+    sha(c+sha(s)+a)        bits= 1  68210e7267367c0cca2e
+    sha(sha(c+s)+ab8)      bits= 1  63d0f3fac22bda70e695
+    sha(c|s|a colon)       bits= 5  0497f85d85ade6c6feb4
+    sha(c:s:a)             bits= 2  2a651bda50b07a6f0000
+    sha(c-s-a)             bits= 6  02c3b215e40ecff3ad4e
+    sha(csa nosp)          bits= 2  230fbb609bd901ada421
+    hmac(c, s+a)           bits= 0  ddfd7a5c0a852ffc2830
+    hmac(s, c+a)           bits= 0  a69069ce4ed0935f1d8a
+    hmac(c+s, a)           bits= 3  1030e8d4e6cf0d910f59
+    sha(sha(a)+c+s)        bits= 0  eb7298c5588c91d67861
+    sha(c+sha(a)+s)        bits= 0  d0e676059452bf870c2b
+    sha2(sha(c+s+a))       bits= 0  93c8854c36748da5fad5

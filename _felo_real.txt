@@ -1,0 +1,9 @@
+﻿HAVE_CURL_CFFI: True
+POST status 200 len 265
+
+=== felo_followup result ===
+error: None
+answer len: 4
+contains holy cow? False
+answer head: 'Omni'
+answer tail: 'Omni'

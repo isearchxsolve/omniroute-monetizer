@@ -1,0 +1,12 @@
+﻿
+===== gemini.google.com (session_google_gemini_web.json) =====
+  POST https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?bl=boq_assistan
+  status=200 final_url=https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?bl=boq_assistan
+  content-type=application/json; charset=utf-8  body_len=6304
+  body[:600]: ')]}\'\n\n177\n[["wrb.fr",null,"[null,[\\"c_10a36613881b2e32\\",\\"r_be08d1bbeaa0a8a4\\"],{\\"18\\":\\"r_be08d1bbeaa0a8a4\\",\\"21\\":[\\"ZSCZgLxuakbifyOboE0Eb4eNj9pUQcDAtgm0JHPaydI\\"],\\"44\\":true}]"]]\n1402\n[["wrb.fr",null,"[null,[\\"c_10a36613881b2e32\\",\\"r_be08d1bbeaa0a8a4\\"],null,null,[[\\"rc_2ac342373a075ef3\\",[\\"Omni\\"],null,null,null,null,null,null,[1],\\"en\\",null,null,[null,null,null,null,null,null,null,[]],null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,[],null,null,null,null,null,null,null,null,[]]],[\\"Guwahati, Assam, India\\",\\"SWML_DESCRIPTION_FROM_YOUR_INTERNET_ADDRESS\\",f'
+
+===== felo.ai (session_felo_ai_web.json) =====
+  POST https://felo.ai/api-proxy/main/search/threads/UAYyTN7iDtHKxtq6eTweQw/question
+  status=200 final_url=https://felo.ai/api-proxy/main/search/threads/UAYyTN7iDtHKxtq6eTweQw/question
+  content-type=application/json  body_len=265
+  body[:600]: '{"task_id":"01a041c7-5115-6575-7354-baadf954ac02","message_id":"abc823a3-6d6f-4b14-85f1-a247e07e2274","thread_short_id":"UAYyTN7iDtHKxtq6eTweQw","rid":"ceafd5de-d5d3-46be-ab8c-7df26023c409","expiration_time":7200,"stream_key":"abc823a3-6d6f-4b14-85f1-a247e07e2274"}'

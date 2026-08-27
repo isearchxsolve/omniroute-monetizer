@@ -1,0 +1,7 @@
+﻿replay check: 1 captured sessions, direct to provider, 1 request each
+
+     chat.mistral.ai                  NO_ANSWER      5870ms  200 but the reply never contains '58': 5
+
+replayable      (0): none
+single-use bound(0): none
+wrote D:\omniroute-monetizer\state\replay_check.json

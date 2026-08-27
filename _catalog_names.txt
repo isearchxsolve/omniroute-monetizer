@@ -1,0 +1,87 @@
+﻿catalog names: 54
+  '1min.AI' -> https://1min.ai
+  'Aymo AI' -> https://aymo.ai
+  'Baichuan Web' -> https://www.baichuan-ai.com/chat
+  'Baidu ERNIE Bot' -> https://yiyan.baidu.com
+  'Blackbox AI' -> https://www.blackbox.ai
+  'Cerebras Inference Chat' -> https://inference.cerebras.ai
+  'ChatGPT Free Web' -> https://chatgpt.com
+  'ChatHub Web' -> https://app.chathub.gg
+  'ChatX' -> https://chatx.ai
+  'Claude Official Web' -> https://claude.ai
+  'Cohere Coral Web' -> https://coral.cohere.com
+  'Coze Web' -> https://www.coze.com
+  'DeepInfra Chat' -> https://deepinfra.com/chat
+  'DeepSeek Chat' -> https://chat.deepseek.com
+  'Doubao Web (ByteDance)' -> https://www.doubao.com
+  'DuckDuckGo AI Chat' -> https://duckduckgo.com/ai
+  'Felo AI Web' -> https://felo.ai
+  'Google Flow (labs.google)' -> https://labs.google/fx/tools/flow
+  'Google Gemini Web' -> https://gemini.google.com
+  'Grok on X / Grok Web' -> https://grok.com
+  'Groq Chat' -> https://groq.com
+  'HuggingChat' -> https://huggingface.co/chat
+  'Hyperbolic Chat' -> https://app.hyperbolic.xyz
+  'Inner AI Web' -> https://app.innerai.com
+  'Kimi Chat (Moonshot)' -> https://kimi.moonshot.cn
+  'LMSYS Chatbot Arena' -> https://arena.lmsys.org
+  'LMSYS Direct Chat' -> https://chat.lmsys.org
+  'Meta AI Web' -> https://www.meta.ai
+  'Microsoft Copilot Web' -> https://copilot.microsoft.com
+  'MiniMax Hailuo AI' -> https://hailuoai.com
+  'Mistral Le Chat' -> https://chat.mistral.ai
+  'Monica AI' -> https://monica.im
+  'MultipleChat' -> https://multiplechat.com
+  'Perplexity Free Web' -> https://www.perplexity.ai
+  'Phind' -> https://www.phind.com
+  'Poe' -> https://poe.com
+  'Pollinations AI Web' -> https://pollinations.ai
+  'PromptQL Web' -> https://prompt.ql.app
+  'Puter Chat' -> https://puter.com
+  'Qwen Chat (Alibaba)' -> https://chat.qwen.ai
+  'SambaNova Cloud Chat' -> https://cloud.sambanova.ai
+  'SenseNova Chat' -> https://chat.sensetime.com
+  'StepFun Web' -> https://stepfun.com
+  'Tencent Yuanbao' -> https://yuanbao.tencent.com
+  'Together AI Chat' -> https://api.together.ai/playground
+  'V0 by Vercel' -> https://v0.dev
+  'VeoAIFree Chat Web' -> https://veoaifree.com
+  'Vercel AI Playground' -> https://sdk.vercel.ai/playground
+  'You.com Chat' -> https://you.com
+  'Zhipu GLM Chat' -> https://chatglm.cn
+  'digen.ai' -> https://digen.ai/
+  'iFlytek SparkDesk' -> https://xinghuo.xfyun.cn
+  'rtst.ai' -> https://rtst.ai/
+  'veoaifree' -> https://veoaifree.com/
+
+--- catalog names WITHOUT a session file (fresh) ---
+  'Baichuan Web'
+  'Baidu ERNIE Bot'
+  'Blackbox AI'
+  'Claude Official Web'
+  'Coze Web'
+  'DeepInfra Chat'
+  'Doubao Web (ByteDance)'
+  'DuckDuckGo AI Chat'
+  'Google Flow (labs.google)'
+  'Grok on X / Grok Web'
+  'Hyperbolic Chat'
+  'Kimi Chat (Moonshot)'
+  'LMSYS Chatbot Arena'
+  'LMSYS Direct Chat'
+  'Microsoft Copilot Web'
+  'MiniMax Hailuo AI'
+  'MultipleChat'
+  'Phind'
+  'Poe'
+  'Pollinations AI Web'
+  'PromptQL Web'
+  'Puter Chat'
+  'SambaNova Cloud Chat'
+  'SenseNova Chat'
+  'StepFun Web'
+  'Tencent Yuanbao'
+  'Together AI Chat'
+  'V0 by Vercel'
+  'Vercel AI Playground'
+  'iFlytek SparkDesk'

@@ -1,0 +1,27 @@
+﻿replay check: 21 captured sessions, direct to provider, 1 request each
+
+  OK api.1min.ai                      REPLAY_OK      4914ms  okay, the user is asking for the result of 41 + 17 again. let me check
+  OK aymo.ai                          REPLAY_OK      6218ms  58
+     chat.cerebras.ai                 AUTH           1222ms  auth refused (in body) -- cookie alone is not enough
+     chatgpt.com                      NO_ANSWER      1240ms  200 but the reply never contains '58': {"status":"ok","conduit_token":
+     app.chathub.gg                   RATE           1358ms  rate limited (429) -- left alone, not retried
+     chatx.ai                         WALL           1734ms  wall text in reply -- left alone, not retried
+  OK api.cohere.com                   REPLAY_OK      1610ms  58
+     chat.deepseek.com                SINGLE_USE      996ms  matched 'pow' in a short body
+  OK felo.ai                          REPLAY_OK      7803ms  58
+     gemini.google.com                NO_ANSWER      3417ms  200 but the reply never contains '58': awaaaaaaaaaqwbho-lzof6ltjquybbo
+     api.groq.com                     AUTH            887ms  auth refused (in body) -- cookie alone is not enough
+     huggingface.co                   WALL           1828ms  wall text in reply -- left alone, not retried
+     chat-api-v3.innerai.com          WALL           2175ms  wall text in reply -- left alone, not retried
+     www.meta.ai                      NO_ANSWER      1486ms  200 but the reply never contains '58': {"data":{"searchconversations":
+     chat.mistral.ai                  HTTP_409       1545ms  ('http_error', '409 client error: conflict for url: https://chat.mistr
+     api.monica.im                    NO_ANSWER      2609ms  200 but the reply never contains '58': omni.
+     www.perplexity.ai                UNPARSEABLE    1142ms  200 but no recognised response shape -- not scored as an answer
+  OK chat.qwen.ai                     REPLAY_OK      4940ms  58
+     veoaifree.com                    WALL           1639ms  wall text in reply -- left alone, not retried
+     api.cr-proxy.com                 EMPTY          2275ms  200 but nothing in the body
+     chatglm.cn                       HTTP_400       1778ms  ('http_error', '400 client error: bad request for url: https://chatglm
+
+replayable      (5): api.1min.ai, api.cohere.com, aymo.ai, chat.qwen.ai, felo.ai
+single-use bound(1): chat.deepseek.com
+wrote D:\omniroute-monetizer\state\replay_check.json

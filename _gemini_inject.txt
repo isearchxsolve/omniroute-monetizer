@@ -1,0 +1,8 @@
+﻿base_body == injected? False
+sentinel still present? False
+holy cow present (encoded)? True
+
+=== chat() EXC === SessionExpired Auth rejected: )]}'
+
+103
+[["er",null,null,null,null,401,null,null,null,16],["di",5],["af.httprm",4,"-68100216410465

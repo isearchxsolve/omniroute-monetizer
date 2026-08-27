@@ -1,0 +1,9 @@
+﻿bootstrap: status=200 stream_key=8bf3c801-5891-496b-b0cf-36180aeb52f9
+stream: status=200
+
+is_complete: False
+answer length: 2
+contains '58': True
+
+--- answer (first 500) ---
+58

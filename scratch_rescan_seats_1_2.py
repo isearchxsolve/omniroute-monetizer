@@ -5,12 +5,14 @@
 #   2) auth classification for video-capable tabs (avatars / gen buttons / markers).
 # Read-only: never drives, never clicks. Writes state/rescan_seats_1_2.json.
 import json
+import sys
 import time
 import pathlib
 import urllib.request
 import websocket
 
-PORTS = (9222, 9223)
+# Ports from argv (e.g. "scratch_rescan_seats_1_2.py 9224 9225"), default seats 1+2.
+PORTS = tuple(int(p) for p in sys.argv[1:]) or (9222, 9223)
 
 VIDEO_TOKENS = (
     "flow", "veo", "video", "labs.google", "veoaifree", "digen", "rtst", "kie",
@@ -53,7 +55,9 @@ def cdp(ws, mid, method, params=None, timeout=25):
         ws.settimeout(max(1.0, deadline - time.time()))
         try:
             msg = json.loads(ws.recv())
-        except websocket.WebSocketTimeoutException:
+        except Exception:
+            # WebSocketTimeoutException OR raw socket TimeoutError -- keep waiting
+            # until the deadline, then report a timeout.
             continue
         if msg.get("id") == mid:
             return msg
@@ -176,6 +180,7 @@ print(f"\n===== WIREABLE (live + signed-in) video hosts: {len(wireable)} =====")
 for port, host in wireable:
     print(f"  :{port}  {host}")
 
-out = pathlib.Path("state/rescan_seats_1_2.json")
+suffix = "_".join(str(p) for p in PORTS)
+out = pathlib.Path(f"state/rescan_ports_{suffix}.json")
 out.write_text(json.dumps(results, indent=2), encoding="utf-8")
 print(f"\nwrote {out}")

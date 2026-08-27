@@ -1,0 +1,27 @@
+﻿step 1: POST bootstrap
+  status: 200
+  stream_key: cabd97be-814d-46f8-be57-9cc783bad963
+
+step 2: GET stream
+  status: 200
+
+--- stream (first 2000 chars) ---
+event:connected
+data:{"timestamp":1787805720693,"stream_key":"cabd97be-814d-46f8-be57-9cc783bad963","offset":0}
+
+event:stream
+data:{"is_complete":false,"content":"{\"type\":\"message\",\"data\":{\"text\":\"Task initializing...\",\"status\":\"initializing\",\"task_id\":\"01a04186-56e2-98fa-f2a5-7748c5e47bf0\",\"message_id\":\"cabd97be-814d-46f8-be57-9cc783bad963\",\"thread_short_id\":\"UAYyTN7iDtHKxtq6eTweQw\"}}","timestamp":1787805720694,"stream_key":"cabd97be-814d-46f8-be57-9cc783bad963","offset":1}
+
+event:stream
+data:{"is_complete":false,"content":"{\"process_id\":\"6OA90Law_Mgh2Tqp-IUnb\",\"data\":{\"type\":\"thread_header_info\",\"data\":{\"rid\":\"c21a3494-2c2a-4773-9387-a89875e59b58\",\"short_id\":\"UAYyTN7iDtHKxtq6eTweQw\",\"stream_key\":\"cabd97be-814d-46f8-be57-9cc783bad963\"}},\"timestamp\":1787805718449,\"status\":\"process\"}","timestamp":1787805720694,"stream_key":"cabd97be-814d-46f8-be57-9cc783bad963","offset":2}
+
+event:stream
+data:{"is_complete":false,"content":"{\"process_id\":\"6OA90Law_Mgh2Tqp-IUnb\",\"data\":{\"type\":\"thread_type\",\"data\":{\"category\":\"google\",\"contexts_from\":\"google\"}},\"timestamp\":1787805718449,\"status\":\"process\"}","timestamp":1787805720694,"stream_key":"cabd97be-814d-46f8-be57-9cc783bad963","offset":3}
+
+event:stream
+data:{"is_complete":false,"content":"{\"process_id\":\"6OA90Law_Mgh2Tqp-IUnb\",\"data\":{\"type\":\"rc_info\",\"data\":{\"relevancy_model_request\":\"No\",\"relevancy_model_name\":\"\",\"relevancy_model_use\":false}},\"timestamp\":1787805718474,\"status\":\"process\"}","timestamp":1787805720694,"stream_key":"cabd97be-814d-46f8-be57-9cc783bad963","offset":4}
+
+event:stream
+data:{"is_complete":false,"content":"{\"process_id\":\"6OA90Law_Mgh2Tqp-IUnb\",\"data\":{\"type\":\"qr_info\",\"data\":{\"query_rewriter_use\":true,\"rewriters\":[\"58\"],\"rewriter_tokens\":{\"input\":1623,\"output\":6},\"standelone_question\":\"Reply with only the number: 58\"}},\"timestamp\":1787805718474,\"status\":\"process\"}",
+
+--- contains 58? True

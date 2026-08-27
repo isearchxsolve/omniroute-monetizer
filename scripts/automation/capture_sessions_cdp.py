@@ -131,7 +131,14 @@ JS_FOCUS_COMPOSER = r"""
       if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) continue;
       if (el.disabled || el.readOnly) continue;
       // Prefer the biggest box that sits low on the page: that is the composer, not a search field.
-      cands.push({ el, score: rect.width * rect.height + rect.top * 2 });
+      // Area alone can lie: on Google Flow a wide 370x38 search bar at top=19 out-scored the slim
+      // 522x20 one-line contenteditable composer at top=629, and the prompt landed in search.
+      // Editable affordances (textarea / contenteditable / role=textbox) are almost always the
+      // composer, so give them a decisive bonus over plain inputs.
+      let bonus = 0;
+      if (el.tagName === 'TEXTAREA') bonus = 1000000;
+      else if (el.isContentEditable || (el.getAttribute && el.getAttribute('role') === 'textbox')) bonus = 500000;
+      cands.push({ el, score: rect.width * rect.height + rect.top * 2 + bonus });
     }
   }
   if (!cands.length) return { ok: false, error: 'no visible composer' };

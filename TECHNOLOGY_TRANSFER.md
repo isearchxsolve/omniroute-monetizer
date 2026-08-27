@@ -339,8 +339,9 @@ provider rejecting a stale id.
 **Status as of 2026-08-27:** most were resolved by moving replay *inside* the browser (§18) — the
 defeat was never the site, it was firing recorded bytes from outside the runtime that mints the
 send-time fields. Resolutions in brackets:
-- **DeepSeek** — binds a proof-of-work token (`INVALID_POW_RESPONSE`). [still class (a); the PoW
-  solver is in-page and callable — see the Adapter Thesis §19 for the correct fix]
+- **DeepSeek** — binds a proof-of-work token (`INVALID_POW_RESPONSE`). [**RESOLVED → REPLAY_OK**
+  via **adapter invocation** §19 — the site's own app computed the PoW for free; zero PoW
+  reverse-engineering]
 - **Felo** — binds a `message_id`. [**RESOLVED → REPLAY_OK** via 2-leg flow §18.5]
 - **Claude / ChatHub** — HTTP **409**: one-shot conversation/parent ids. [chathub since confirmed
   a genuine class-(b) quota death, operator-verified in Chrome §18.6]

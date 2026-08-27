@@ -1,0 +1,36 @@
+﻿port 9222: 33 page targets   plan: 25 sites
+sentinel: 'Reply exactly one word: Omni.'   secrets -> state\secrets
+
+  ..  Groq Chat                        opening a tab on groq.com
+  OK   Groq Chat                        CAPTURED       api.groq.com/openai/v1/chat/completions  275B body  via js_click_send
+  OK   You.com Chat                     CAPTURED       api.cr-proxy.com/v1/site/ac9b65c1-644b-4e91-804d-0bb3dfb95fbb/batch  302B body  via js_click_send
+  WALL Aymo AI                          WALL           wall: 'insufficient credits'
+  OK   Perplexity Free Web              CAPTURED       www.perplexity.ai/rest/sse/perplexity_ask  1849B body  via enter
+  OK   1min.AI                          CAPTURED       api.1min.ai/teams/4dd29bd6-f5d7-4617-b97e-3317598e000f/features/v2/unified-chat  502B body  via enter
+  OK   ChatHub Web                      CAPTURED       app.chathub.gg/api/v5/chat/completions  2301B body  via enter
+  --  V0 by Vercel                     no open tab on v0.dev
+  --  DuckDuckGo AI Chat               no open tab on duckduckgo.com
+  --  rtst.ai                          video generator, no chat composer -- Task 2's target
+  --  Google Flow (labs.google)        video generator, no chat composer -- Task 2's target
+  ..  Microsoft Copilot Web            opening a tab on microsoft.com
+  WS   Microsoft Copilot Web            WEBSOCKET      sentinel left over a websocket frame -- not replayable as HTTP
+       Claude Official Web              NO_REQUEST     all 4 submit strategies failed; 32 requests / 9 posts / 0 ws frames se
+  WALL Google Gemini Web                WALL           wall: 'credit card'
+       Meta AI Web                      NO_REQUEST     all 4 submit strategies failed; 18 requests / 8 posts / 28 ws frames s
+  OK   DeepSeek Chat                    CAPTURED       chat.deepseek.com/api/v0/chat/completion  234B body  via enter
+  OK   Qwen Chat (Alibaba)              CAPTURED       chat.qwen.ai/api/v2/chat/completions  958B body  via enter
+  OK   Felo AI Web                      CAPTURED       felo.ai/api-proxy/main/search/threads/UAYyTN7iDtHKxtq6eTweQw/question  551B body  via enter
+  OK   Zhipu GLM Chat                   CAPTURED       chatglm.cn/chatglm/backend-api/assistant/stream  452B body  via enter
+  ..  Baichuan Web                     opening a tab on baichuan-ai.com
+       Baichuan Web                     NO_REQUEST     all 4 submit strategies failed; 28 requests / 7 posts / 0 ws frames se
+  OK   Monica AI                        CAPTURED       api.monica.im/api/custom_bot/chat  2061B body  via enter
+  OK   Mistral Le Chat                  CAPTURED       chat.mistral.ai/api/chat  805B body  via enter
+  OK   ChatX                            CAPTURED       chatx.ai/sendchat  191B body  via enter
+  WS   Grok on X / Grok Web             WEBSOCKET      sentinel left over a websocket frame -- not replayable as HTTP
+  OK   Cohere Coral Web                 CAPTURED       api.cohere.com/v2/chat  11996B body  via enter
+  OK   Cerebras Inference Chat          CAPTURED       chat.cerebras.ai/api/chat/completions  2261B body  via enter
+
+captured (14): Groq Chat, You.com Chat, Perplexity Free Web, 1min.AI, ChatHub Web, DeepSeek Chat, Qwen Chat (Alibaba), Felo AI Web, Zhipu GLM Chat, Monica AI, Mistral Le Chat, ChatX, Cohere Coral Web, Cerebras Inference Chat
+websocket(2): Microsoft Copilot Web, Grok on X / Grok Web  <- not replayable as HTTP
+WALLS   (2): Aymo AI, Google Gemini Web  <- left untouched, operator decision
+wrote D:\omniroute-monetizer\state\capture_report_9222.json

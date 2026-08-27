@@ -1,0 +1,13 @@
+﻿python : Traceback (most recent call last):
+At line:1 char:1
++ python scratch_ds_dump_seq.py 2>&1 | Out-File -Encoding utf8 _ds_seq. ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last) 
+   ::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "D:\omniroute-monetizer\scratch_ds_dump_seq.py", line 5, in <module>
+    d = json.load(open("_ds_live_sequence.json", encoding="utf-8"))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 
+'_ds_live_sequence.json'

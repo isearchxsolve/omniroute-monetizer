@@ -1,0 +1,93 @@
+{
+ "generatedAt": "2026-08-26T19:35:22Z",
+ "question": "does a captured browser request survive being re-sent from python?",
+ "results": [
+  {
+   "file": "session_chatgpt_free_web.json",
+   "host": "chatgpt.com",
+   "recordedUrl": "https://chatgpt.com/backend-api/f/conversation/prepare",
+   "bodyBytes": 712,
+   "latencyMs": 2278,
+   "verdict": "NO_ANSWER",
+   "detail": "200 but the reply never contains '58': {\"status\":\"ok\",\"conduit_token\":\"eyjhbgcioijfuzi1niisinr5cci6ikpxvcj9.eyjjb25kdwl0x3v1awqio"
+  },
+  {
+   "file": "session_deepseek_chat.json",
+   "host": "chat.deepseek.com",
+   "recordedUrl": "https://chat.deepseek.com/api/v0/chat/completion",
+   "bodyBytes": 234,
+   "latencyMs": 1154,
+   "verdict": "SINGLE_USE",
+   "detail": "matched 'pow' in a short body"
+  },
+  {
+   "file": "session_felo_ai_web.json",
+   "host": "felo.ai",
+   "recordedUrl": "https://felo.ai/api-proxy/main/search/threads/khUyzWDw8x3cHo9FvJNdWc/question",
+   "bodyBytes": 551,
+   "latencyMs": 3075,
+   "verdict": "SINGLE_USE",
+   "detail": "matched 'message_id' in a short body"
+  },
+  {
+   "file": "session_google_gemini_web.json",
+   "host": "gemini.google.com",
+   "recordedUrl": "https://gemini.google.com/_/BardChatUi/data/assistant.lamda.BardFrontendService/StreamGenerate?bl=boq_assistant-bard-web",
+   "bodyBytes": 2580,
+   "latencyMs": 6189,
+   "verdict": "NO_ANSWER",
+   "detail": "200 but the reply never contains '58': awaaaaaaaaaqanm7mbjxkztjuhz5axo"
+  },
+  {
+   "file": "session_meta_ai_web.json",
+   "host": "www.meta.ai",
+   "recordedUrl": "https://www.meta.ai/api/graphql",
+   "bodyBytes": 99,
+   "latencyMs": 1484,
+   "verdict": "NO_ANSWER",
+   "detail": "200 but the reply never contains '58': {\"data\":{\"searchconversations\":{\"edges\":[],\"pageinfo\":{\"endcursor\":\"gqyzfqaa\",\"hasnextpage"
+  },
+  {
+   "file": "session_mistral_le_chat.json",
+   "host": "chat.mistral.ai",
+   "recordedUrl": "https://chat.mistral.ai/api/chat",
+   "bodyBytes": 683,
+   "latencyMs": 2587,
+   "verdict": "NO_ANSWER",
+   "detail": "200 but the reply never contains '58': 5"
+  },
+  {
+   "file": "session_monica_ai.json",
+   "host": "api.monica.im",
+   "recordedUrl": "https://api.monica.im/api/custom_bot/chat",
+   "bodyBytes": 1406,
+   "latencyMs": 2703,
+   "verdict": "NO_ANSWER",
+   "detail": "200 but the reply never contains '58': omni."
+  },
+  {
+   "file": "session_veoaifree_chat_web.json",
+   "host": "veoaifree.com",
+   "recordedUrl": "https://veoaifree.com/wp-admin/admin-ajax.php",
+   "bodyBytes": 190,
+   "latencyMs": 1204,
+   "verdict": "WALL",
+   "detail": "wall text in reply -- left alone, not retried"
+  }
+ ],
+ "summary": {
+  "replayable": [],
+  "singleUseBound": [
+   "chat.deepseek.com",
+   "felo.ai"
+  ],
+  "other": [
+   "api.monica.im",
+   "chat.mistral.ai",
+   "chatgpt.com",
+   "gemini.google.com",
+   "veoaifree.com",
+   "www.meta.ai"
+  ]
+ }
+}

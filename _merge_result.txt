@@ -1,0 +1,20 @@
+﻿replay_check.bak_20260827.json: 8 rows
+replay_check.bak2_20260827.json: 8 rows
+replay_check.json: 2 rows
+
+merged -> replay_check.json: 14 rows
+REPLAY_OK: ['api.1min.ai', 'api.groq.com', 'chat.qwen.ai']
+  api.1min.ai                          REPLAY_OK
+  api.cr-proxy.com                     EMPTY
+  api.groq.com                         REPLAY_OK
+  api.monica.im                        NO_ANSWER
+  chat.deepseek.com                    SINGLE_USE
+  chat.mistral.ai                      HTTP_409
+  chat.qwen.ai                         REPLAY_OK
+  chatglm.cn                           HTTP_400
+  chatgpt.com                          NO_ANSWER
+  chatx.ai                             HTTP_521
+  felo.ai                              SINGLE_USE
+  gemini.google.com                    NO_ANSWER
+  veoaifree.com                        WALL
+  www.meta.ai                          NO_ANSWER

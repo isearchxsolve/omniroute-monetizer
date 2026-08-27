@@ -1,0 +1,33 @@
+﻿replay check: 27 captured sessions, direct to provider, 1 request each
+
+  OK api.1min.ai                      REPLAY_OK      4796ms  okay, let's see. the user just asked to reply with only the number: 41
+  OK aymo.ai                          REPLAY_OK      5184ms  58
+     chat.cerebras.ai                 AUTH           1167ms  auth refused (in body) -- cookie alone is not enough
+     chatgpt.com                      NO_ANSWER      1466ms  200 but the reply never contains '58': {"status":"ok","conduit_token":
+     app.chathub.gg                   RATE           1350ms  rate limited (429) -- left alone, not retried
+     chatx.ai                         WALL           1851ms  wall text in reply -- left alone, not retried
+  OK api.cohere.com                   REPLAY_OK      2054ms  58
+     chat.deepseek.com                SINGLE_USE     1161ms  matched 'pow' in a short body
+     digen.ai                         BAD_FILE          3ms  no sentinel in the recorded body -- capture is not replayable at all
+  OK felo.ai                          REPLAY_OK      8918ms  58
+  OK gemini.google.com                REPLAY_OK      4180ms  keyword '58' found in raw body (4887B)
+     api.groq.com                     AUTH           1641ms  auth refused (in body) -- cookie alone is not enough
+     huggingface.co                   WALL           1767ms  wall text in reply -- left alone, not retried
+     chat-api-v3.innerai.com          WALL           2864ms  wall text in reply -- left alone, not retried
+     www.meta.ai                      NO_ANSWER      1614ms  200 but the reply never contains '58': {"data":{"searchconversations":
+  OK chat.mistral.ai                  REPLAY_OK      4328ms  58
+     api.monica.im                    NO_ANSWER      3412ms  200 but the reply never contains '58': omni.
+  OK www.perplexity.ai                REPLAY_OK      6920ms  58what is 58 multiplied by 12is 58 a prime numberwhat is 41 minus 17wh
+  OK chat.qwen.ai                     REPLAY_OK      5234ms  58
+     rtst.ai                          NO_ANSWER         0ms  200 but the reply never contains '58': no recorded_exchange found for 
+     rtst.ai                          NO_ANSWER         0ms  200 but the reply never contains '58': no recorded_exchange found for 
+     rtst.ai                          NO_ANSWER         0ms  200 but the reply never contains '58': no recorded_exchange found for 
+     rtst.ai                          NO_ANSWER         0ms  200 but the reply never contains '58': no recorded_exchange found for 
+     veoaifree.com                    AUTH           1731ms  auth refused (in body) -- cookie alone is not enough
+     veoaifree.com                    WALL           1616ms  wall text in reply -- left alone, not retried
+     api.cr-proxy.com                 EMPTY          1856ms  200 but nothing in the body
+     chatglm.cn                       HTTP_400       1240ms  ('http_error', '400 client error: bad request for url: https://chatglm
+
+replayable      (8): api.1min.ai, api.cohere.com, aymo.ai, chat.mistral.ai, chat.qwen.ai, felo.ai, gemini.google.com, www.perplexity.ai
+single-use bound(1): chat.deepseek.com
+wrote D:\omniroute-monetizer\state\replay_check.json

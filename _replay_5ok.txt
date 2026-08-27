@@ -1,0 +1,11 @@
+﻿replay check: 5 captured sessions, direct to provider, 1 request each
+
+  OK api.1min.ai                      REPLAY_OK      6142ms  okay, the user is asking for the result of 41 + 17 again. let me check
+  OK api.cohere.com                   REPLAY_OK      2330ms  58
+     api.groq.com                     AUTH           1763ms  auth refused (in body) -- cookie alone is not enough
+  OK www.perplexity.ai                REPLAY_OK      3220ms  58what is the prime factorization of 58is 58 a fibonacci numberwhat is
+  OK chat.qwen.ai                     REPLAY_OK      5121ms  58
+
+replayable      (4): api.1min.ai, api.cohere.com, chat.qwen.ai, www.perplexity.ai
+single-use bound(0): none
+wrote D:\omniroute-monetizer\state\replay_check.json

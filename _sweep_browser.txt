@@ -1,0 +1,32 @@
+﻿browser replay: 27 sessions, executed as fetch() inside the live Chrome on :9222 (36 tabs open)
+
+  OK api.1min.ai                      REPLAY_OK      7533ms  in-browser fetch, status 200, phrase in body (15047B)
+     aymo.ai                          RATE           3884ms  rate limited (429) -- left alone, not retried
+     chat.cerebras.ai                 HTTP_400       1165ms  {"error":"not a valid request"}
+     chatgpt.com                      NO_ANSWER      4409ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     app.chathub.gg                   RATE           1286ms  rate limited (429) -- left alone, not retried
+     chatx.ai                         WALL           1457ms  wall text in reply -- left alone, not retried
+     api.cohere.com                   NO_ANSWER      5153ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     chat.deepseek.com                SINGLE_USE      336ms  matched 'pow' in a short body
+     digen.ai                         BAD_FILE          0ms  SENTINEL_NOT_FOUND: no known sentinel in recorded body
+     felo.ai                          SINGLE_USE     2948ms  matched 'message_id' in a short body
+  OK gemini.google.com                REPLAY_OK      5287ms  in-browser fetch, status 200, phrase in body (3534B)
+     api.groq.com                     AUTH           4219ms  auth refused (401) -- cookie alone is not enough
+     huggingface.co                   WALL           5483ms  wall text in reply -- left alone, not retried
+     chat-api-v3.innerai.com          ERROR          5263ms  fetch: TypeError: Failed to fetch
+     www.meta.ai                      NO_ANSWER      1265ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     chat.mistral.ai                  NO_ANSWER      3008ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     api.monica.im                    ERROR        124048ms  tab/cdp: Runtime.evaluate: no reply in 120.0s
+  OK www.perplexity.ai                REPLAY_OK      1634ms  in-browser fetch, status 200, phrase in body (6746B)
+     chat.qwen.ai                     NO_ANSWER      5148ms  200 but the reply never contains 'the holy cow jumps over the stricks'
+     ?                                BAD_FILE          0ms  unreadable: No recorded_exchange found for universal replay on rtst.ai
+     ?                                BAD_FILE          0ms  unreadable: No recorded_exchange found for universal replay on rtst.ai
+     ?                                BAD_FILE          0ms  unreadable: No recorded_exchange found for universal replay on rtst.ai
+     ?                                BAD_FILE          0ms  unreadable: No recorded_exchange found for universal replay on rtst.ai
+     veoaifree.com                    AUTH           1987ms  auth refused (403) -- cookie alone is not enough
+     veoaifree.com                    WALL            604ms  wall text in reply -- left alone, not retried
+     api.cr-proxy.com                 EMPTY          4466ms  200 but nothing in the body
+     chatglm.cn                       HTTP_400       1605ms  {"status":40013,"message":"bad request(40013)","result":null,"rid":"9f
+
+replayable (3): api.1min.ai, gemini.google.com, www.perplexity.ai
+wrote D:\omniroute-monetizer\state\browser_replay.json

@@ -1,0 +1,7 @@
+﻿Initializing Playwright Python CDP connection on port 9222...
+Failed to connect Playwright Python over CDP on :9222: BrowserType.connect_over_cdp: Timeout 180000ms exceeded.
+Call log:
+  - <ws preparing> retrieving websocket url from http://127.0.0.1:9222
+  - <ws connecting> ws://127.0.0.1:9222/devtools/browser/4b0eed77-2092-4eb6-90dd-b5fb5a8bc99c
+  - <ws connected> ws://127.0.0.1:9222/devtools/browser/4b0eed77-2092-4eb6-90dd-b5fb5a8bc99c
+
