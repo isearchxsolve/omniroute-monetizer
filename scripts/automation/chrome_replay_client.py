@@ -56,6 +56,41 @@ CHROME_CLIENTS: Dict[str, str] = {
     "chat.deepseek.com": "chat.deepseek.com",
     "chatglm.cn": "chatglm.cn",
     "chat.cerebras.ai": "chat.cerebras.ai",
+    # 2026-08-27 tab-coverage sweep (worklog #1105): signed-in tabs with no seat.
+    # All verified signed-in (composer present, no login CTA) in the :9222 providers
+    # profile before wiring. The live tab IS the credential — no recorded bytes.
+    "copilot.microsoft.com": "copilot.microsoft.com",
+    "claude.ai": "claude.ai",
+    "grok.com": "grok.com",
+    "duck.ai": "duck.ai",
+    "genspark.ai": "genspark.ai",
+    "v0.app": "v0.app",
+    "yi.baichuan-ai.com": "baichuan-ai.com",
+}
+
+# Per-host response-container selector override for POLL_JS. The generic selector set
+# works for most hosts, but some UIs put toolbar chrome in elements that also match
+# (e.g. Copilot's "Edit in a page" action bar matches [class*="message"]). When a host
+# has a stable, specific reply selector, override here. worklog #1105.
+RESPONSE_SELECTORS: Dict[str, str] = {
+    # Copilot reply body: <div data-testid="ai-message-body">Omni</div> — verified in
+    # DOM after sentinel send. The outer [data-content="ai-message"] includes the
+    # "Edit in a page" toolbar; the -body node is the clean text.
+    "copilot.microsoft.com": '[data-testid="ai-message-body"]',
+    # Grok reply body: <div class="... response-content-markdown markdown chat-md ...">.
+    # The generic set also matches a "2 / 2" pagination counter that can appear AFTER
+    # the reply in DOM order, so the poll returned the counter instead of the answer.
+    # Target the markdown body specifically. worklog #1105.
+    "grok.com": '[class*="response-content-markdown"]',
+}
+
+# Per-host tab URL substrings to EXCLUDE when focusing. Some hosts open several tab
+# types and only one is the chat surface. worklog #1105.
+TAB_EXCLUDES: Dict[str, List[str]] = {
+    # Copilot's /pages/ view is a document tool: composer id '_r_ia_', no chat message
+    # DOM, so the bridge types into it and polls forever (NO_ANSWER). Land on a
+    # /chats/ (or home) tab instead. Verified 2026-08-27: 1x /pages/ + 4x /chats/ tabs.
+    "copilot.microsoft.com": ["/pages/"],
 }
 
 CDP_PORT = 9222
@@ -102,12 +137,17 @@ SNAP_JS = r"""
   // WITHOUT this marker as new. Attribute-marking (not text-dedup) is mandatory: a
   // repeated short answer ("pong" twice) has identical text to an old container and
   // text-dedup would skip the genuine new reply.
-  const sels = '[class*="message"],[class*="Message"],[class*="markdown"],[class*="turn"],[class*="chat-item"],[class*="answer"],[class*="response"],[data-role]';
+  const sels = '__RESPONSE_SELECTORS__';
   let n = 0;
   document.querySelectorAll(sels).forEach(el=>{ el.setAttribute('data-crc-seen', runid); n++; });
   return n;
 })(arguments[0])
 """
+
+# Default generic response-container selector set, shared by SNAP_JS and POLL_JS.
+DEFAULT_RESPONSE_SELECTORS = (
+    '[class*="message"],[class*="Message"],[class*="markdown"],[class*="turn"],'
+    '[class*="chat-item"],[class*="answer"],[class*="response"],[data-role]')
 
 INJECT_JS = r"""
 (function(prompt){
@@ -190,7 +230,7 @@ const t0 = Date.now();
 let lastText = null, stableCount = 0, bestEl = null;
 const timer = setInterval(()=>{
   const seen = new Set();
-  const sels = '[class*="message"],[class*="Message"],[class*="markdown"],[class*="turn"],[class*="chat-item"],[class*="answer"],[class*="response"],[data-role]';
+  const sels = '__RESPONSE_SELECTORS__';
   // newest container that (a) was NOT marked by the pre-send snapshot and (b) is not the
   // echoed prompt. Attribute marking survives repeated identical answers ("pong" twice).
   let cand = null;
@@ -256,15 +296,17 @@ class ChromeReplayClient:
 
     # ------------------------------------------------------------- plumbing ----
     def _focus_tab(self, driver):
+        excludes = TAB_EXCLUDES.get(self.host, [])
         for h in driver.window_handles:
             try:
                 driver.switch_to.window(h)
-                if self.tab_substr in driver.current_url:
+                u = driver.current_url or ""
+                if self.tab_substr in u and not any(x in u for x in excludes):
                     try:
                         driver.execute_cdp_cmd("Page.bringToFront", {})
                     except Exception:
                         pass
-                    return driver.current_url
+                    return u
             except Exception:
                 continue
         return None
@@ -289,7 +331,9 @@ class ChromeReplayClient:
                 raise ChatError("NO_TAB", f"no open tab matching {self.tab_substr!r}")
 
             runid = f"crc-{int(time.time()*1000)}"
-            driver.execute_script("return " + SNAP_JS.strip(), runid)
+            sels = RESPONSE_SELECTORS.get(self.host, DEFAULT_RESPONSE_SELECTORS)
+            snap = SNAP_JS.replace("__RESPONSE_SELECTORS__", sels)
+            driver.execute_script("return " + snap.strip(), runid)
             r1 = driver.execute_script("return " + INJECT_JS.strip(), prompt)
             if not r1.get("ok"):
                 raise ChatError("NO_INPUT", r1.get("why", "no visible input"))
@@ -303,6 +347,7 @@ class ChromeReplayClient:
                 time.sleep(2)
 
             poll = POLL_JS.replace("TIMEOUT_MS", str(ANSWER_TIMEOUT_S * 1000))
+            poll = poll.replace("__RESPONSE_SELECTORS__", sels)
             r4 = driver.execute_async_script(poll, prompt, runid)
 
         if not r4 or not r4.get("found"):
