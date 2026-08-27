@@ -6335,3 +6335,56 @@ around it. Supply is recoverable with one operator sign-in.
 **Artifacts:** `state/secrets/session_chatgpt_free_web.json` (status flip, gitignored),
 `scratch_chatgpt_shape.py`, `scratch_chatgpt_signin_check.py`,
 `state/reauth_screenshots/chatgpt_signin_check.png`, `scratch_retire_chatgpt.py`.
+
+---
+
+### [2026-08-27 22:45] #1104 — DIGEN.AI RE-CAPTURE (class c candidate): NO RE-CAPTURE NEEDED — ORIGINAL CAPTURE COMPLETE & CORRECT, TOKEN ALIVE, VIDEO SUPPLY PROVEN LIVE (zero new credits spent)
+
+**Goal:** class-(c) re-capture for digen.ai (video modality, one of the four: chatgpt,
+meta, you_com, digen). The prior note flagged "recorded_job present, no live tab".
+
+**Finding — this was NOT a capture bug. The original capture is complete and correct:**
+`session_digen_ai.json` holds a full `recorded_job` (13 exchanges) captured by
+`capture_video_job_cdp`: `submit_seq: 2`, `result_seen: True`, `result_correlated: True`,
+`job_id_count: 2`. The exchange list shows the genuine submit→poll→result sequence:
+`POST /v1/scene/job/submitv1` then repeated `GET /v1/queue/list?...status=N` polls.
+This is a SERVER-SIDE HTTP replay seat (`DigenSessionClient`, plain `requests`, a
+captured `Digen-Token` header) — **no browser in the request path**, so the "no live
+tab" note was a non-issue. Chrome rules never applied here.
+
+**Verification (all read-only — zero new generation credits spent):**
+1. **Token liveness:** `GET /v1/queue/list?page=0&pageSize=10&status=3` with the captured
+   `Digen-Token` → **HTTP 200, errCode 0, errMsg "success", 10 jobs in queue.** The token
+   still authenticates. (`scratch_digen_probe.py`)
+2. **Write path proven by the sentinel itself:** the queue contains the ORIGINAL sentinel
+   job (cid 2290343, prompt "Omni sentinel shot: a lone lighthouse beam sweeping across
+   dark ocean waves at midnight") with a completed `video_url`. This token generated that
+   video at capture time — the submit→poll→video shape is proven with THIS token.
+   (`scratch_digen_sentinel.py`)
+3. **Pool dispatch (Layer 1):** `SessionPool` → `digen.ai | modality: video |
+   dispatchable: True | client_cls: DigenSessionClient`; client init OK (24 headers).
+   (`scratch_digen_verify.py`)
+4. **Video accessibility (Layer 2):** HEAD on the sentinel `video_url` → **HTTP 200,
+   content-type video/mp4, content-length 366428.** The video supply is reachable.
+5. **HTTP face:** `GET :8190/v1/models` lists `video/digen.ai/auto`. The shim serves it.
+6. **Quota check (read-only):** `POST /v1/user/scene_info` → 200/errCode 0 but exposes no
+   credit/balance fields (data = `{"code": ...}`), so remaining free credits are not
+   directly readable. Not blocking — liveness + write-path proof are sufficient.
+
+**Why no new submit was run:** submitting a fresh job would burn one of the free
+generation credits to re-prove something already proven by the sentinel job in the queue.
+The doctrine is supply-preservation: prove liveness and shape read-only, spend nothing.
+
+**Result:** digen.ai is LIVE free video supply, already wired and dispatchable. No
+re-capture, no code change, no seat retirement. This is the fourth and final class-(c)
+candidate resolved.
+
+**Final tally of the four class-(c) re-captures:**
+- **you.com** → LIVE API-credential seat (#1101, free promo credits, zero money).
+- **meta.ai** → LIVE via Chrome bridge (#1100, `OK 9349ms 'pong'`).
+- **digen.ai** → LIVE server-side replay, verified this entry (no re-capture needed).
+- **chatgpt.com** → retired honestly (#1103): prepare-endpoint capture bug + login wall;
+  recovery path documented (operator signs in once, wire into CHROME_CLIENTS).
+
+**Artifacts:** `scratch_digen_shape.py`, `scratch_digen_probe.py`,
+`scratch_digen_sentinel.py`, `scratch_digen_verify.py`, `scratch_digen_credits.py`.
