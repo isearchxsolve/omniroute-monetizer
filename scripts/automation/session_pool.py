@@ -87,6 +87,14 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
         if (raw or {}).get("modality") == "video":
             from video_universal_replay import VideoUniversalSessionClient
             return VideoUniversalSessionClient
+        # ChatX (worklog #1115): a Laravel app whose CSRF rotates per session and whose
+        # answer arrives on a SECOND endpoint (GET /chats_stream SSE) keyed by the
+        # conversions_id that POST /sendchat returns. A single-exchange replay cannot
+        # serve it; the dedicated 2-leg client performs the full genuine flow per call
+        # (fresh CSRF from the page meta -> sendchat -> SSE), still chrome-free.
+        if "chatx" in host:
+            from chatx_replay import ChatXReplayClient
+            return ChatXReplayClient
         from universal_replay import UniversalSessionClient
         return UniversalSessionClient
 
