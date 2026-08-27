@@ -6247,3 +6247,32 @@ already proven via the Chrome bridge in #1100.
 
 **Artifacts:** `scripts/automation/youcom_api_client.py`, `scripts/automation/session_pool.py`,
 `state/secrets/session_you_com_api.json` (gitignored), `state/secrets/youcom_api_key.json` (gitignored).
+
+---
+
+### [2026-08-27 21:55] #1102 — RETIRE STALE api.cr-proxy.com TELEMETRY SEAT (follow-up to #1101)
+
+**Goal:** stop the pool from routing to the dead class-(c) telemetry capture now that
+you.com has a live replacement seat.
+
+**Action:** `state/secrets/session_you_com_chat.json` (host `api.cr-proxy.com`) had
+`status.alive: true` from its original `capture_sessions_cdp` harvest. Flipped it to
+`alive: false` via the pool's OWN status mechanism (the same field keepalive writes) —
+NOT by deleting the file or touching any DB. Reason recorded in the status block:
+"class-c telemetry capture bug (api.cr-proxy.com batch beacon, not the answer call);
+replaced by api.you.com API-credential seat, worklog #1101".
+
+**Why this is the right mechanism:** `PooledSession.flagged_dead` reads
+`status.get("alive") is False`, and `dispatchable` requires `not flagged_dead`. So a
+status flip is the pool-native way to retire a seat while preserving the file as
+evidence of the capture bug.
+
+**Verification:** `SessionPool().live()` → 27 dispatchable seats; `cr-proxy present:
+False`; `api.you.com present: True`. The stale seat no longer consumes routing
+attempts; the live API seat serves you.com traffic.
+
+**Result:** you.com supply is now exclusively the verified API-credential seat. No
+dead telemetry bytes remain dispatchable.
+
+**Artifacts:** `state/secrets/session_you_com_chat.json` (status flip, gitignored),
+`scratch_retire_crproxy.py` (one-shot helper).
