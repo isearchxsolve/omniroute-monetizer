@@ -392,6 +392,21 @@ class UniversalSessionClient:
         if g:
             return g, None
 
+        # tRPC / React-Query numbered-line patch stream (Mistral Le Chat answers the POST itself in
+        # this shape). The answer is assembled from JSON patches -- "5" then append "8" -> "58" --
+        # so neither the SSE branch nor a regex sweep for a single "text" field reaches it. This is
+        # a RESPONSE envelope handler, not a per-provider request adapter.
+        try:
+            from multistep_replay import looks_like_trpc_stream, mistral_patch_stream_parse
+        except ImportError:
+            import pathlib as _pl, sys as _sys
+            _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent))
+            from multistep_replay import looks_like_trpc_stream, mistral_patch_stream_parse
+        if looks_like_trpc_stream(text):
+            assembled = mistral_patch_stream_parse(text)
+            if assembled:
+                return assembled, None
+
         def scan(objs):
             pieces, err = [], None
             for o in objs:
@@ -553,6 +568,18 @@ class UniversalSessionClient:
         # 1. Inject prompt using LLM
         new_body_str = self._inject_prompt(new_prompt)
 
+        # 1a. Pre-flight mutations: refresh client-generated identifiers that the server
+        # rejects if reused (e.g. Mistral's messageId UUID -> 409 on reuse). Not an adapter:
+        # the recorded request is still replayed as-is except for these fresh fields.
+        try:
+            from multistep_replay import apply_preflight
+        except ImportError:
+            import pathlib as _pl, sys as _sys
+            _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent))
+            from multistep_replay import apply_preflight
+        import urllib.parse as _up
+        new_body_str = apply_preflight(_up.urlsplit(self.url).netloc, new_body_str)
+
         # A recorded POST with no body is a broken capture, not a live session. Firing it
         # anyway often returns HTTP 200 from an error/landing page and reads as success.
         if str(self.method).upper() in ("POST", "PUT", "PATCH") and not new_body_str:
@@ -595,13 +622,44 @@ class UniversalSessionClient:
         except requests.exceptions.RequestException as e:
             raise ChatError("HTTP_ERROR", str(e))
             
+        # 2b. Multi-step providers: some return a small bootstrap JSON (stream_key /
+        # conversation_id) and deliver the real answer on a second request. Detect and
+        # follow up before ordinary extraction, which would score the bootstrap as the
+        # answer (or as SINGLE_USE because it contains an id field).
+        try:
+            from multistep_replay import detect_bootstrap, run_followup
+        except ImportError:
+            import pathlib as _pl, sys as _sys
+            _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent))
+            from multistep_replay import detect_bootstrap, run_followup
+        provider_key = detect_bootstrap(r.text)
+        if provider_key:
+            follow_text, follow_err = run_followup(
+                provider_key, r.text, self.headers,
+                self.raw.get("cookie_header", ""), timeout=60.0)
+            if follow_text:
+                return {
+                    "text": follow_text,
+                    "label": f"universal-adapter+multistep:{provider_key}",
+                    "status": r.status_code,
+                    "raw": r.text,
+                }
+            # follow-up failed: fall through to normal extraction so the bootstrap
+            # is at least reported honestly rather than swallowed.
+
         # 3. Extract final answer
         final_text, err = self._extract_response(r.text)
         if not final_text and err:
-            raise ChatError("UPSTREAM_ERROR: " + err)
+            e = ChatError("UPSTREAM_ERROR: " + err)
+            # The keyword-search unlock needs the body even when no parser assembled it: a
+            # computed answer sitting in an unrecognised envelope is still a live replay.
+            e.raw = r.text
+            e.status = r.status_code
+            raise e
 
         return {
             "text": final_text,
             "label": "universal-adapter",
             "status": r.status_code,
+            "raw": r.text,
         }

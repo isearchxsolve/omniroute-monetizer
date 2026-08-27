@@ -110,5 +110,12 @@
   "url": "https://www.genspark.ai/",
   "elapsed_s": 420,
   "evidence": "Robot-profile Google SSO completed without challenge; AI Video composer verified by screenshot with sentinel; genuine submit produced seven exchanges but provider UI reported insufficient credits and no result was correlated; pending capture is not supply"
+ },
+ {
+  "host": "gostudio.ai",
+  "outcome": "WALL",
+  "url": "https://gostudio.ai/app/ai-video",
+  "elapsed_s": 300,
+  "evidence": "Google SSO auto-completed (robot account already signed in); AI Video composer verified by screenshot with text prompt, Seedance 2.0 Fast model, Generate button; sentinel dry-run OK; 0 credits with 55 required per generation; stopped per Law 5"
  }
 ]
