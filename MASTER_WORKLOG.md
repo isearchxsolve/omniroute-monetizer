@@ -6276,3 +6276,62 @@ dead telemetry bytes remain dispatchable.
 
 **Artifacts:** `state/secrets/session_you_com_chat.json` (status flip, gitignored),
 `scratch_retire_crproxy.py` (one-shot helper).
+
+---
+
+### [2026-08-27 22:20] #1103 — CHATGPT.COM RE-CAPTURE (class c): PREPARE-ENDPOINT CAPTURE BUG + LOGIN WALL — SEAT RETIRED, RECOVERY PATH DOCUMENTED (operator sign-in required)
+
+**Goal:** class-(c) re-capture for chatgpt.com (one of the four: chatgpt, meta,
+you_com, digen). The `session_chatgpt_free_web.json` replayed dead.
+
+**Root cause of the original rot (class c — capture bug, proven with evidence):**
+the recorded exchange captured `POST https://chatgpt.com/backend-api/f/conversation/prepare`
+— the PREPARE step, not the actual streaming `conversation` call. Its request headers
+carry `authorization: Bearer eyJ...` and `x-conduit-token: eyJ...` — both EPHEMERAL
+tokens minted per-session by the web app. Replaying recorded prepare-endpoint bytes
+with stale ephemeral tokens can never produce an answer. This is the same failure
+class as you.com's telemetry beacon: the capture tool grabbed the wrong request.
+
+**Chrome Gap Doctrine investigation (shallow-first, per FIRST PRINCIPLE):**
+1. **Is there a live tab?** CDP `/json` on the automation browser (port 9222, the
+   `providers` profile — the same browser the #1100 bridge uses) lists 38 pages.
+   **No chatgpt.com tab is open.** So the Chrome bridge has nothing to drive.
+2. **Is the providers profile signed in to chatgpt.com?** Opened ONE new tab to
+   `https://chatgpt.com/`, waited for SPA hydration, ran DOM diagnosis
+   (`scratch_chatgpt_signin_check.py`), closed only that tab (never quit the driver).
+   Result: `hasPrompt: true` (the anonymous composer renders) but `hasLoginCta: true`
+   and body text = "Log in to get answers based on saved chats, plus create images and
+   upload files. Log in … Sign up for free". **VERDICT: LOGIN_WALL.** Screenshot saved
+   to `state/reauth_screenshots/chatgpt_signin_check.png`.
+3. **Doctrine application:** the correct shape for chatgpt.com is the Chrome bridge
+   (Adapter Thesis — the provider's own JS is the adapter; ephemeral Bearer +
+   x-conduit-token are reconstructed by the live app at send-time, which is exactly
+   what byte-replay cannot do). But the bridge requires a SIGNED-IN tab, and the
+   automation profile has none. Per `CHROME_RULES_FOR_AGENTS.md`: **a login wall in
+   automation's own profile is a correct, complete, reportable result — not a failure
+   to route around.** I did NOT reach for the operator's personal Chrome profile.
+
+**Disposition (honest, not "site dead"):** chatgpt.com the SITE is alive; this SEAT is
+unserviceable until the operator signs in once. Marked `status.alive: false` via the
+pool's own status mechanism (same field keepalive writes — NOT file deletion, NOT DB
+hacking), with the recovery path recorded in the status reason.
+
+**Recovery path (documented, requires operator):**
+1. Operator signs in to chatgpt.com ONCE in the automation `providers` profile via
+   `SignInToProviders.cmd` (guard-applied, never the operator's personal profile).
+2. Add `"chatgpt.com": "chatgpt.com"` to `CHROME_CLIENTS` in
+   `scripts/automation/chrome_replay_client.py`.
+3. Flip the seat `status.alive: true`. The bridge then drives the live signed-in tab.
+
+**Verification:** `SessionPool().live()` → 26 dispatchable seats; `chatgpt present:
+False`. The dead prepare-endpoint replay no longer consumes routing attempts.
+
+**Doctrine note:** this is NOT a "site dead" declaration. It is a class-(c) capture
+bug (wrong request recorded) compounded by a missing signed-in session for the correct
+shape. The Chrome Gap Doctrine was honored: I proved the replay shape is wrong AND the
+bridge shape is blocked by a login wall, and reported the wall instead of routing
+around it. Supply is recoverable with one operator sign-in.
+
+**Artifacts:** `state/secrets/session_chatgpt_free_web.json` (status flip, gitignored),
+`scratch_chatgpt_shape.py`, `scratch_chatgpt_signin_check.py`,
+`state/reauth_screenshots/chatgpt_signin_check.png`, `scratch_retire_chatgpt.py`.
