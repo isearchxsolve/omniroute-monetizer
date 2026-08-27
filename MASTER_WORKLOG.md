@@ -5369,3 +5369,25 @@ NSSM service not restarted, operator's live Chrome neither driven nor launched a
 - **Measured result:** No replayable Genspark seat was added. Video capacity remains the previously measured 17 clips across five seats pending the final cold capacity check.
 - **What is NOT claimed:** `CAPTURED_NO_RESULT` is not supply; seven exchanges are not proof of a completed video; Google account selection is only evidence that the Genspark provider session authenticated, not that Chrome Sync or paid entitlement changed; no credit was spent; `:20128`, `:20130`, and `:8189` were not restarted or stopped.
 - **Todo:** Genspark is complete as a terminal wall. Continue breadth-first with `gostudio.ai`, preserving the 12-minute host limit and the same screenshot/correlation gate.
+
+### [2026-08-27 02:50] #1083 — GOSTUDIO VIDEO: REAL COMPOSER VERIFIED, BLOCKED BY ZERO CREDITS (55 NEEDED)
+
+- **Component reviewed:** `gostudio.ai`, next in the ranked video queue.
+- **Authentication:** Google SSO auto-completed — the robot account (`isearch.xsolve@gmail.com`) was already signed in from prior provider work. Dashboard loaded at `gostudio.ai/app/dashboard` showing `0` credits and `+ Add Credits` button. Screenshot: `gostudio_wall.png`.
+- **Navigation to video composer:** Initial capture tool probe reported WALL due to paywall language on the landing page. Clicked `Try For Free` which triggered SSO and landed on the dashboard. From the dashboard, navigated via the left sidebar `AI Video` link. First click landed on `AI Editor` (Image tab). Second click on the `AI Video` sidebar entry loaded the actual AI Video Generator page with a "How it works" overlay (screenshot: `gostudio_ai_video2.png`).
+- **Video composer confirmed:** Dismissed the overlay with "Got it — let's create". The uncovered page (screenshot: `gostudio_video_composer.png`) shows: `Create Video` tab active; text prompt textarea with placeholder "e.g. golden hour beach waves, slow motion, cinematic wide shot"; Model selector `Seedance 2.0 Fast`; Duration `5s`; Resolution `480p`; Cost `55 credits`; purple `Generate` button. This is an actual text-to-video composer.
+- **Sentinel dry-run:** `capture_video_job_cdp.py --dry-run` → `DRY_RUN_OK`, one textarea found, sentinel text landed.
+- **Wall determination:** Account has `0` credits; cheapest generation requires `55`. The `+ Add Credits` button is a paid purchase. Per Law 5, stopped immediately.
+- **Ledger:** Added `gostudio.ai` → `WALL` with evidence string. Ledger now at 17 rows.
+- **Commit:** `50bd467` — "harvest(video): record genspark zero-credit wall" (included both genspark and gostudio).
+- **What is NOT claimed:** No generation was attempted or completed; no credit was spent; no payment method was entered. The sentinel landing proves the composer is real, not that video generation works. `:20128`, `:20130`, `:8189` untouched.
+
+### [2026-08-27 03:00] #1084 — STRATEGY PIVOT: RESEARCH-FIRST APPROACH FOR REMAINING VIDEO + CHAT HOSTS
+
+- **Observation:** 4 out of 4 new video hosts (flyne, forvideo, genspark, gostudio) hit credits/billing walls. The original scored queue was optimized for feature richness, not free-tier availability. Continuing to grind through 15 more hosts at 12 min each (3 hours) would likely produce 15 more WALL entries.
+- **Operator directive:** "search the internet for free providers or with huge credit limit... you should not go this list because this list is having a paywall." Also: "We'll have to revisit the chat providers as well because they are also willing to do a research."
+- **Action:** Launched 5 parallel research agents:
+  - 3 video agents: (a) general free AI video generators 2025-2026, (b) specific platforms with known free/API tiers (Pollinations, HuggingFace Spaces, fal.ai, Replicate, Hailuo/MiniMax, PixVerse, Kling, Pika, CogVideoX, Mochi), (c) the remaining 15 queue hosts specifically to determine which are free vs paywalled.
+  - 2 chat agents: (a) free LLM APIs and chat endpoints (OpenAI-compatible, Groq, Cerebras, Cloudflare Workers AI, etc.), (b) replay architecture analysis (which sites use simple HTTP POST vs WebSocket/proof-of-work/server-side state).
+- **Rationale:** Research costs minutes; blind probing costs hours. The chat harvest similarly failed 8/8 structurally — sites like DeepSeek (proof-of-work), Mistral (bootstrap+second-stream), and Monica (server-side state) can never work with our replay architecture regardless of time spent. Identifying replayable architectures upfront prevents wasted capture attempts.
+- **What is NOT claimed:** No new supply was added in this entry. The research is running and results will drive the next action.
