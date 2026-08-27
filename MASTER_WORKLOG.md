@@ -5929,3 +5929,73 @@ session, no signup/login/wall-solving. No secrets logged.
 `scratch_deepseek_adapter_invoke.py`,
 `scratch_verify_deepseek_answer.py`,
 `state/deepseek_adapter_invocation.json`.
+
+### [2026-08-27 16:45] #1097 — GENERIC ADAPTER DRIVER BUILT; CHATGLM DIAGNOSED AS MODEL-LEVEL DEGRADATION (class b), THEN REPLAY_OK ON GLM 5.3 (adapter invocation #2)
+
+**User directives (verbatim):** *"this is a model prolem not your side defect"* (with
+pasted live-ChatGLM transcript showing single-char replies), then *"check now changed
+the model to glm 5.3"*.
+
+**Step 1 — generalization.** deepseek's adapter invocation was hand-tuned
+(scratch scripts). Built the GENERIC driver so remaining providers cost a small
+constant each: `scripts/automation/adapter_invoke_generic.py`. Pipeline: focus tab by
+URL substring -> find input (textarea, else contenteditable) -> inject sentinel via
+NATIVE setter + `input` event (or execCommand insertText for contenteditable) ->
+trigger send (Enter keydown; button-click fallback) -> poll with a GENERIC
+false-positive guard: the phrase must appear in a container that (a) did NOT exist
+before send and (b) is SHORT (~phrase length, not the full echoed prompt). No
+provider-specific selectors anywhere.
+
+**Step 2 — first chatglm run: FAIL, but correctly diagnosed.** Generic driver on
+chatglm (default model): inject OK (textarea, len=80), Enter not consumed
+(remaining=80), no enabled button found, 90s poll -> no answer. Verdict FAIL.
+
+**Step 3 — operator's manual reproduction = gold-standard class-(b) proof.** The
+operator typed BY HAND in live Chrome (note: human-typed "sticks", not the sentinel
+"stricks" — so no automation artifact possible):
+```
+Visitor_a04a9b: Reply exactly one word: Omni.
+model reply   : O          <- first letter only
+Visitor_a04a9b: Repeat exactly this phrase... the holy cow jumps over the sticks
+model reply   : t          <- first letter only
+```
+The FULL prompt sits in the user bubble -> request delivered intact; the model
+RESPONDED with a single character. Classification per the three causes:
+- (a) fixable send-time gap: NO — request delivered fully, model responded.
+- (b) real server-side death/degradation: YES — degenerate single-char completions,
+  reproduced by the operator's own hands in Chrome, independent of automation.
+- (c) capture bug: NO — live UI, not replayed bytes.
+Conclusion: chatglm's DEFAULT model is degraded server-side. The generic driver's
+"no enabled button" gap is MOOT — even a perfect send would get `O`/`t` garbage.
+Per doctrine: do not grind the client for a dead model. Mark and move on. This also
+absolves the generic driver of the chatglm failure.
+
+**Step 4 — operator switched model to GLM 5.3; re-run: REPLAY_OK.** Same generic
+driver, zero changes: inject OK, Enter fired (remaining=80 — chatglm does not clear
+the textarea synchronously, but the message WAS accepted), poll hit at 6405ms,
+strength=strong, hit len=35 = EXACTLY "the holy cow jumps over the stricks" in a NEW
+short container (generic false-positive guard passed). Verdict:
+REPLAY_OK_ADAPTER_INVOCATION.
+
+**New doctrine lessons:**
+1. **Single-char/degenerate completions with the full prompt visible in the user
+   bubble = model-level degradation (class b at model granularity), NOT a send-time
+   gap and NOT a driver defect.** The fix is switching the model, not fixing the
+   client. Provider-level "dead" vs model-level "degraded" are different states —
+   name which one you verified.
+2. **`remaining>0` after Enter does NOT mean send failed.** Some apps (chatglm) clear
+   the textarea asynchronously. The arbiter is the answer poll, not the input state.
+3. **Operator manual reproduction is the fastest class-(b) proof** — one human-typed
+   message settled what 90s of polling could not.
+
+**Scoreboard:** REPLAY_OK now 11 total — 9 via in-browser fetch (1min, gemini,
+perplexity, mistral, cohere, qwen, groq, felo, chatx) + 2 via ADAPTER INVOCATION
+(deepseek, chatglm/GLM-5.3). The generic driver (`adapter_invoke_generic.py`) is now
+the default path for remaining class-(a) providers (innerai, cerebras, ...).
+
+**Law 5 compliance:** replay-only, one message on the operator's already-signed-in
+session, no signup/login/wall-solving. No secrets logged.
+
+**Artifacts:** `scripts/automation/adapter_invoke_generic.py`,
+`state/adapter_invoke_chatglm.json` (FAIL, default model),
+`state/adapter_invoke_chatglm_glm53.json` (REPLAY_OK).
