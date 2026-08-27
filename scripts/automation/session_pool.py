@@ -61,6 +61,9 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
     if kind == "rtst":
         from rtst_api_client import RtstApiClient
         return RtstApiClient
+    if kind == "youcom":
+        from youcom_api_client import YouComApiClient
+        return YouComApiClient
 
     for key, cls in CLIENTS.items():
         if key in host:

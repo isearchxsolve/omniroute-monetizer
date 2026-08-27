@@ -6160,3 +6160,90 @@ REPLAY_OK scoreboard unchanged at 12; this entry converts them from "proven" to
 live tabs, then replay.
 
 **Artifacts:** `scripts/automation/chrome_replay_client.py`, `scripts/automation/session_pool.py`.
+
+### [2026-08-27 21:30] #1101 — YOU.COM RE-CAPTURE (class c): TELEMETRY-CAPTURE BUG CONFIRMED, RESOLVED AS API-CREDENTIAL SEAT (free credits, zero money)
+
+**Goal:** class-(c) re-capture for you.com (one of the four: chatgpt, meta, you_com,
+digen). The original `session_you_com_chat.json` replayed dead.
+
+**Root cause of the original rot (class c — capture bug, proven with evidence):**
+the old secret captured `host: api.cr-proxy.com` with a `.../batch` beacon — that is a
+TELEMETRY endpoint (`eventType: form`), NOT the answer call. Replaying recorded
+telemetry bytes can never produce an answer.
+
+**Chrome Gap Doctrine investigation (why browser automation is the wrong shape here):**
+1. you.com's surface is the **API Playground** (`/platform/playground/answer`), a
+   developer tool — not consumer chat. The reply is structured JSON
+   (`{"answer","citations","results"}`) rendered in a `.language-json` code block.
+2. The textarea is React/Base-UI controlled: native value setter updates DOM but not
+   React state. Fixed with `_valueTracker.setValue('')` + input/change events — after
+   that, inject registers and clicking "Run query" updates the URL to `?query=...`.
+3. BUT the response panel never populates. Decisive network diagnosis
+   (`performance.getEntriesByType('resource')`): submit fires ONLY a Next.js RSC
+   navigation (`?query=...&_rsc=`, 200) + telemetry beacons. The real answer fetch
+   (`api.you.com/v1/answer`) **never fires** — not on click, not on reload-with-?query=
+   (90s change-detection test: NO CHANGE; 62s reload test: TIMEOUT, panel stuck at
+   "// Run a query to see generated code").
+4. Why: the playground's own curl example shows `X-API-Key: YDC_API_KEY` — an UNFILLED
+   placeholder. The answer API requires an API key that was never wired. No key in
+   localStorage/sessionStorage either. So there is no send-time gap to fix in the UI —
+   the UI is a key-gated API console.
+
+**Operator correction (important):** I initially classified you.com as "paid supply"
+because the dashboard shows "$99.74 ready to use", and asked whether to spend it.
+Operator: **"lord i did not invest money anywhere zero money"** — the $99.74 is FREE
+promotional credits granted at signup. you.com is therefore legitimate FREE supply.
+Disposition flipped to: create the API key (free) and wire it as a provider.
+
+**Resolution (AGENTS.md Resolution 1 — Create New Key lifecycle):**
+1. Navigated to `/platform/api-keys` in the live signed-in tab (Kunal Das). Keys table
+   showed 0-0 of 0. Filled the inline "Key Name" form (React valueTracker fix again),
+   clicked Create, captured the one-time `ydc-sk-…` reveal (65 chars).
+   - **Failure logged honestly:** first capture attempt grabbed the NAME field
+     (`omniroute-auto-…`, len 25) instead of the key — the reveal regex was too greedy.
+     Second attempt targeted the `ydc-sk-` prefix specifically → real key captured.
+     Key saved to gitignored `state/secrets/youcom_api_key.json`, never printed/logged.
+2. **Verified before claiming (rule 7):** first verify used GET → HTTP 405 Method Not
+   Allowed. The playground's curl example is authoritative: `POST /v1/answer` with JSON
+   body `{"query": ...}`. Corrected call → **HTTP 200 in 3.2s, answer field = "Omni"**
+   for the sentinel. Only then was the credential declared harvested.
+
+**Wiring as a first-class pool seat (same class as rtst.ai — API-credential seat):**
+1. `scripts/automation/youcom_api_client.py` (new) — `YouComApiClient` implements the
+   exact pool client contract. `POST {base}/v1/answer` with `X-API-Key` header;
+   flattens messages to a single query (single-turn answer API, mirrors
+   `ChromeReplayClient._flatten_prompt`); strips you.com's inline `[[n]]` citation
+   markers; maps 401/403→`SessionExpired`, 429→`ChatError(RATE)`, 402/quota-language→
+   `ChatError(wall)`. Self-test CLI (pure logic) + `--chat` CLI. Key handled in exactly
+   one place, never printed.
+2. Seat file `state/secrets/session_you_com_api.json` (gitignored):
+   `{"host":"api.you.com","modality":"chat","api":{"kind":"youcom","token":"<redacted>","base":"https://api.you.com"}}`.
+3. `scripts/automation/session_pool.py` — `_client_for()` dispatches `api.kind=="youcom"`
+   → `YouComApiClient` (next to the existing `rtst` kind dispatch).
+
+**Verification (all three layers, live):**
+1. Client self-test: `youcom_api_client.py --selftest` → SELFTEST PASS (3/3 flatten cases).
+2. Pool CLI: `SessionPool.chat(host='api.you.com')` → `provider: api.you.com |
+   label: youcom/api.you.com | text: 'Omni'` (clean, citation markers stripped).
+3. HTTP e2e via :8190 (shim restarted — the old shim predated the seat; note the shim
+   builds its pool at import so a restart is required after adding seats):
+   `GET /v1/models` now lists `api.you.com/auto`; `POST /v1/chat/completions
+   {"model":"api.you.com/auto"}` → `model: youcom/api.you.com`, `content: 'Omni'`.
+
+**Result:** you.com converted from a dead telemetry capture (class c) to a LIVE,
+verified, API-credential free-supply seat servable through :8190. Pool now 28/28
+dispatchable. This is the most reliable possible shape — a documented REST contract
+with a bearer-style key, no browser in the request path, no replay fragility.
+
+**Doctrine note:** this re-capture resolved NOT as a better replay but as a shape
+change — the provider's genuine supply mechanism is an API key, and the correct
+automation is the Create-New-Key flow, not byte replay. The Chrome Gap Doctrine was
+honored: Chrome reproduction proved the UI fetch never fires without a key (not a
+send-time gap), which redirected to the key-creation path.
+
+**Next:** remaining class-(c) re-captures — chatgpt (ephemeral Bearer+x-conduit-token,
+adapter/bridge approach), digen (video, recorded_job present, no live tab). meta.ai
+already proven via the Chrome bridge in #1100.
+
+**Artifacts:** `scripts/automation/youcom_api_client.py`, `scripts/automation/session_pool.py`,
+`state/secrets/session_you_com_api.json` (gitignored), `state/secrets/youcom_api_key.json` (gitignored).
