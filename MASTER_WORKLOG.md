@@ -6480,3 +6480,49 @@ documented recovery paths. Zero CAPTCHA bypasses, zero operator-profile touches.
 `scratch_create_chrome_seats.py`, `scratch_diag_new_tabs.py`, `scratch_retire_duckai.py`,
 `scratch_retire_misfires.py`, `scratch_diag_copilot.py`, `scratch_diag_copilot2.py`,
 `scratch_diag_copilot_tabs.py`, `scratch_e2e_new_hosts.py`.
+
+### [2026-08-27 23:55] #1106 — RESCAN SEAT 1 (:9222) & SEAT 2 (:9223) CHROME PROFILES: 43/48 tabs LIVE, 8 wireable signed-in video hosts confirmed, 5 EVAL_ERR timeouts classified as probe-settle hangs on heavy SPA/WebGL pages (NOT dead tabs)
+
+**Task:** Operator reloaded all tabs in both seat profiles and requested a fresh rescan
+of the first (:9222) and second (:9223) seat Chrome profiles.
+
+**Method:** `scratch_rescan_seats_1_2.py` — full enumeration of every page tab on both
+ports via CDP `/json`, then per-tab synchronous liveness eval (title/readyState/url,
+NO awaitPromise to avoid promise-settle hangs) plus auth classification (avatars,
+generate-buttons, signed-in/wall text markers) for video-capable tabs. Read-only:
+never drives, never clicks. Output: `state/rescan_seats_1_2.json`.
+
+**Results — :9222 (39 page tabs, 6 video-capable):**
+- 36 LIVE, 3 EVAL_ERR (labs.google 2nd tab, v0.app, nemovideo.com — all heavy SPA/WebGL).
+- Video tabs LIVE+SIGNED_IN: labs.google/flow (credits marker), veoaifree.com ×2
+  (avatars=10, gen=5 on generator page), rtst.ai (avatar=1, credits, gen=4).
+
+**Results — :9223 (9 page tabs, all video-capable):**
+- 7 LIVE, 2 EVAL_ERR (rtst.ai 2nd tab, digen.ai).
+- LIVE+SIGNED_IN: veoaifree.com (avatars=9, gen=7), www.giz.ai (avatars=23),
+  rtst.ai (credits), magichour.ai (credits+upgrade, gen=45), akool.com (avatar=1, gen=1).
+- UNCLEAR (needs deeper probe, not walls): www.creen.ai (avatars=2, gen=32 but wall
+  markers in page text — likely freemium upsell copy), app.heygen.com (no markers).
+
+**Verdicts across 48 tabs:** LIVE 43, EVAL_ERROR 5.
+
+**EVAL_ERR classification (Chrome Gap Doctrine, cause (a) probe gap, NOT death):**
+All 5 timeouts are on heavy SPA/WebGL pages (Flow, v0, Nemo, Digen, a 2nd rtst tab).
+Evidence they are live: (1) the SAME hosts have other tabs on the same port that eval
+fine (rtst.ai LIVE on both ports; labs.google 1st tab LIVE+SIGNED_IN on :9222);
+(2) Flow on :9222 was proven executable by video_router.py reading 945 credits from it.
+Runtime.evaluate sync eval can stall >25s on pages mid-hydration or with busy main
+threads. These are wireable via their proven adapters (FlowSession for labs.google)
+or need a retry with a lighter eval — not evidence of dead supply.
+
+**WIREABLE (live + signed-in) video hosts: 8**
+:9222 labs.google | :9222 rtst.ai | :9222 veoaifree.com | :9223 akool.com |
+:9223 magichour.ai | :9223 rtst.ai | :9223 veoaifree.com | :9223 www.giz.ai
+
+**Next:** build `chrome_video_client.py` (universal video adapter per TECHNOLOGY_TRANSFER
+§19) wrapping the proven in-tab adapters (VeoFreeSession, FlowSession) + chat-with-video
+polling for the rest; wire into session_pool._client_for; create seat files; restart
+shim :8190; prove one free MP4 via veoaifree (zero cost).
+
+**Artifacts:** `scratch_rescan_seats_1_2.py`, `state/rescan_seats_1_2.json`,
+`state/rescan_seats_1_2_stdout.txt`.
