@@ -5408,3 +5408,56 @@ NSSM service not restarted, operator's live Chrome neither driven nor launched a
 - **Walls reported to operator (Law 5, left alone):** chatx.ai, huggingface.co, innerai.com, veoaifree.com — correct reportable outcomes, never hammered.
 - **What is NOT claimed:** Mistral's RATE is cooldown, not death (proven REPLAY_OK earlier this session). DeepSeek is not defeated — it is correctly classified as needing a live browser. No pool restart yet (`:20130` still serves the previous seat set). WS replay for Copilot/Meta/Grok not yet built. `:20128`, `:20130`, `:8189` untouched.
 - **Todo:** (1) restart `:20130` to pick up new REPLAY_OK seats, (2) WS capture+replay for Copilot×4/Meta/Grok, (3) Groq/Cerebras fresh re-capture, (4) CHAT_URL_OVERRIDES for v0.app/duck.ai, (5) Mistral re-check after cooldown, (6) video captures.
+
+
+### [2026-08-27 11:40] #1086 — DEEP RCA: WHY HARVEST IS FAILING (3 GATES, 8 ROOT-CAUSE CLASSES)
+
+**Directive:** "no do a deep rca why harvest is failing". Performed a full-funnel
+root-cause analysis across capture -> session files -> replay, using ground truth from
+`state/capture_report_9222.json`, `state/replay_check.json`, `state/browser_replay.json`,
+and the 27 files in `state/secrets/`. Full report: `RCA_WHY_HARVEST_IS_FAILING.md`.
+
+**Key finding:** Harvest is failing mostly at CAPTURE, not replay. Three gates:
+
+- **Gate 1 (11 of 36 tabs never produce a usable exchange):**
+  - WebSocket-only (Copilot 105 ws frames, Grok 178 ws frames) — structurally not
+    HTTP-replayable; needs a WS replay engine (capability gap, not a bug).
+  - NO_REQUEST (Claude, Meta, Baichuan) — all 4 submit strategies fired but no
+    sentinel-bearing POST; Baichuan `retypeLanded:false` proves text never reached the
+    app editor model.
+  - NO_TAB (v0.dev, duckduckgo) — pure domain-name mismatch between site directory and
+    live tabs (v0.app / duck.ai). Trivial config bug.
+  - VIDEO_PROVIDER_SKIPPED (rtst.ai, Google Flow) — correct skip by chat path.
+
+- **Gate 2 (the silent killer — wrong-exchange capture):** capture saves the FIRST
+  sentinel-bearing POST. For multi-step flows that is a handshake, not the inference call:
+  - chatgpt.com captured `/backend-api/f/conversation/prepare` (returns a 386-byte
+    `conduit_token`, never the answer). Real answer streams from `/backend-api/conversation`.
+  - meta.ai captured a `searchconversations` GraphQL query (doc_id c42ec1c7...) returning
+    empty search edges, not the chat mutation.
+  Both are permanently NO_ANSWER on every transport because the recorded endpoint can
+  never return the phrase. Fix: endpoint override table / prefer streaming-response POST.
+
+- **Gate 3 (replay of correct exchanges):**
+  - Class A auth expiry: groq 401, veoaifree 403, cerebras 400/AUTH, gemini AUTH on
+    requests but REPLAY_OK on in-browser fetch (transient; browser replay fixes it).
+  - Class B rate/quota: aymo 429, chathub 429, mistral 429/409, innerai 402. Account dry.
+  - Class C walls: chatx, huggingface, veoaifree_chat. Law 5 reportable outcomes.
+  - Class D single-use: deepseek PoW challenge consumed.
+  - Class E dead proxy: you.com 200/0-byte.
+  - Class F schema mismatch: rtst.ai x4 + digen captured as token-API (no
+    recorded_exchange) -> universal_replay raises No recorded_exchange. Need video client.
+  - Class G FALSE NEGATIVES (most fixable): monica detail is literally "omni." (replay
+    worked, injection missed, verdict rejected original sentinel); cohere + qwen REPLAY_OK
+    on requests but NO_ANSWER on browser fetch (answer split across SSE thinking frames).
+
+**One-sentence answer:** harvest dies mostly at capture (never-recorded or
+wrong-step-recorded), plus a batch of false negatives where replay actually works but
+verdict/injection logic misses it; only a minority are genuinely dead.
+
+**ROI-ordered fixes:** (1) fix 3 false negatives = +3 supply, (2) Gate-2 endpoint
+overrides for chatgpt+meta = +2, (3) NO_TAB domain mapping = +2, (4) re-capture 4
+auth-expired, (5) harden NO_REQUEST editor-landing, (6) video replay client for 5 files,
+(7) decide on WS replay engine for Copilot+Grok.
+
+**Artifacts:** `RCA_WHY_HARVEST_IS_FAILING.md` (repo root). No secrets logged.

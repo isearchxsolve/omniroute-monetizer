@@ -3,6 +3,29 @@ import time
 import requests
 from typing import Dict, Any, Optional
 
+# --- Browser-impersonation transport ---------------------------------------
+# Servers fingerprint the client at the TLS Client Hello (JA3/JA4) and the
+# HTTP/2 handshake (Akamai) BEFORE any HTTP header is read. Python `requests`
+# negotiates with OpenSSL over HTTP/1.1, which is instantly recognisable as a
+# script and is why replays get AUTH/WALL/UNPARSEABLE verdicts even with a
+# valid session cookie. curl_cffi reproduces Chrome's exact TLS Client Hello
+# and HTTP/2 frame signature while still sending OUR recorded HTTP headers
+# byte-for-byte (Law 4). Fall back to requests when it is not installed.
+try:
+    import curl_cffi
+    from curl_cffi.requests import exceptions as _cc_exc
+    _HAVE_CURL_CFFI = True
+    _TRANSPORT_EXC = (_cc_exc.RequestException, requests.exceptions.RequestException)
+except ImportError:
+    curl_cffi = None
+    _HAVE_CURL_CFFI = False
+    _TRANSPORT_EXC = (requests.exceptions.RequestException,)
+
+# Which browser to impersonate. "chrome" always tracks the latest Chrome
+# fingerprint in the installed curl_cffi. The network-level handshake is what
+# matters; the HTTP headers are the recorded ones, so this is not per-site.
+_IMPERSONATE = "chrome"
+
 class SessionExpired(Exception):
     pass
 
@@ -493,8 +516,9 @@ class UniversalSessionClient:
     def _absorb_cookies(self, resp) -> int:
         rotated: Dict[str, str] = {}
         for r in list(getattr(resp, "history", []) or []) + [resp]:
-            for c in (getattr(r, "cookies", None) or []):
-                rotated[c.name] = c.value if c.value is not None else ""
+            for name, value in self._iter_set_cookies(r):
+                if name:
+                    rotated[name] = value if value is not None else ""
         if not rotated:
             return 0
 
@@ -557,6 +581,53 @@ class UniversalSessionClient:
         except Exception:
             pass   # a stale jar on disk is survivable; losing the answer we just got is not
 
+    # --- Transport ---------------------------------------------------------
+    @staticmethod
+    def _iter_set_cookies(resp):
+        """Yield (name, value) for every Set-Cookie on a response, across both
+        transports. `requests` iterates Cookie objects; curl_cffi iterates bare
+        names with the objects on `.jar`."""
+        cookies = getattr(resp, "cookies", None)
+        if not cookies:
+            return
+        # curl_cffi: names on the wrapper, Cookie objects on .jar
+        jar = getattr(cookies, "jar", None)
+        if jar is not None:
+            for c in jar:
+                yield (getattr(c, "name", None), getattr(c, "value", None))
+            return
+        # requests: Cookie objects directly
+        for c in cookies:
+            if hasattr(c, "name"):
+                yield (c.name, getattr(c, "value", None))
+
+    def _fire(self, method: str, url: str, headers: Dict[str, str], body: Optional[bytes], timeout: float):
+        """Send one request through the best available transport.
+
+        Prefers curl_cffi browser impersonation (real Chrome TLS + HTTP/2
+        fingerprint) so the server cannot tell this is a script. Falls back to
+        plain requests when curl_cffi is unavailable. Returns a response object
+        exposing .status_code/.ok/.text/.cookies/.history/.raise_for_status().
+        """
+        if _HAVE_CURL_CFFI:
+            kwargs = {
+                "headers": headers,
+                "timeout": timeout,
+                "impersonate": _IMPERSONATE,
+                # We replay the RECORDED headers byte-for-byte; do not let
+                # curl_cffi inject its own default browser headers on top.
+                "default_headers": False,
+                "allow_redirects": True,
+            }
+            if body:
+                kwargs["content"] = body
+            return curl_cffi.request(method, url, **kwargs)
+
+        kwargs = {"headers": headers, "timeout": timeout}
+        if body:
+            kwargs["data"] = body
+        return requests.request(method, url, **kwargs)
+
     def chat(self, messages: list, model: Optional[str] = None, **kw) -> Dict[str, Any]:
         if not messages:
             raise ChatError("NO_MESSAGES", "no messages provided")
@@ -598,16 +669,10 @@ class UniversalSessionClient:
                 f"re-send the captured probe prompt instead of the caller's."
             )
         
-        # 2. Fire request
+        # 2. Fire request through the browser-impersonation transport.
         try:
-            req_kwargs = {
-                "headers": self.headers,
-                "timeout": 60
-            }
-            if self.base_body:
-                req_kwargs["data"] = new_body_str.encode("utf-8")
-                
-            r = requests.request(self.method, self.url, **req_kwargs)
+            body_bytes = new_body_str.encode("utf-8") if self.base_body else None
+            r = self._fire(self.method, self.url, self.headers, body_bytes, timeout=60)
 
             # Only from a non-error reply: a 401/403 body can carry a logged-OUT jar, and storing
             # that would convert a recoverable session into a dead one.
@@ -616,10 +681,10 @@ class UniversalSessionClient:
 
             if r.status_code in (401, 403):
                 raise SessionExpired("Auth rejected: " + r.text[:100])
-                
+
             r.raise_for_status()
-            
-        except requests.exceptions.RequestException as e:
+
+        except _TRANSPORT_EXC as e:
             raise ChatError("HTTP_ERROR", str(e))
             
         # 2b. Multi-step providers: some return a small bootstrap JSON (stream_key /

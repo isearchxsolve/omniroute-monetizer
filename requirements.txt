@@ -3,6 +3,13 @@
 # Runtime environment: Python 3.11+ (Windows host runs the scheduled tasks).
 requests>=2.31,<3
 
+# Browser-impersonation HTTP transport (universal_replay.py / multistep_replay.py).
+# Replays captured provider requests with Chrome's exact TLS (JA3/JA4) and HTTP/2
+# fingerprint, which is what stops providers from rejecting the replay below the
+# HTTP layer. Proven 2026-08-27: tls.peet.ws shows ja4 t13d1516h2 (Chrome) vs
+# requests' t13d1812h1 (OpenSSL/h1). Flipped www.perplexity.ai UNPARSEABLE -> REPLAY_OK.
+curl_cffi>=0.7,<1
+
 # Browser automation (Tier 2 DOM keygen) — optional but recommended.
 playwright>=1.40,<2
 

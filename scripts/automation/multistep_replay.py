@@ -21,6 +21,49 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 import requests
 
+# --- Browser-impersonation transport (same rationale as universal_replay.py) ---
+# The follow-up GET is fingerprinted exactly like the bootstrap POST; a plain
+# requests client can pass step 1 and still be rejected on step 2.
+try:
+    import curl_cffi
+    from curl_cffi.requests import exceptions as _cc_exc
+    _HAVE_CURL_CFFI = True
+    _STREAM_EXC = (_cc_exc.RequestException, requests.exceptions.RequestException)
+except ImportError:
+    curl_cffi = None
+    _HAVE_CURL_CFFI = False
+    _STREAM_EXC = (requests.exceptions.RequestException,)
+
+_IMPERSONATE = "chrome"
+
+
+def _stream_get(url: str, headers: Dict[str, str], timeout: float):
+    """GET a streaming endpoint through the impersonation transport."""
+    if _HAVE_CURL_CFFI:
+        return curl_cffi.request(
+            "GET", url, headers=headers, timeout=timeout,
+            impersonate=_IMPERSONATE, default_headers=False, stream=True)
+    return requests.get(url, headers=headers, timeout=timeout, stream=True)
+
+
+def _iter_text_chunks(r):
+    """Decoded text chunks from either transport's streamed response.
+
+    curl_cffi's iter_content does NOT support decode_unicode=True (it raises
+    NotImplementedError), and chunk_size is ignored. So for curl_cffi we iterate
+    raw byte chunks and decode them ourselves. requests supports decode_unicode.
+    """
+    if _HAVE_CURL_CFFI and isinstance(r, curl_cffi.requests.Response):
+        for chunk in r.iter_content():
+            yield chunk.decode("utf-8", "replace") if isinstance(chunk, bytes) else chunk
+        return
+    try:
+        for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
+            yield chunk
+    except (TypeError, NotImplementedError):
+        for chunk in r.iter_content():
+            yield chunk.decode("utf-8", "replace") if isinstance(chunk, bytes) else chunk
+
 
 # ---------------------------------------------------------------------------
 # Pre-flight body mutations: fields that must be fresh on every replay.
@@ -88,8 +131,8 @@ def felo_followup(
     }
 
     try:
-        r = requests.get(url, headers=headers, timeout=timeout, stream=True)
-    except requests.exceptions.RequestException as e:
+        r = _stream_get(url, headers, timeout)
+    except _STREAM_EXC as e:
         return None, f"FELLO_STREAM_HTTP: {e}"
 
     if r.status_code != 200:
@@ -99,7 +142,7 @@ def felo_followup(
     answer_parts: list[str] = []
     start = time.time()
     buf = ""
-    for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
+    for chunk in _iter_text_chunks(r):
         buf += chunk
         while "\n\n" in buf:
             event_block, buf = buf.split("\n\n", 1)
@@ -180,8 +223,8 @@ def mistral_followup(
     }
 
     try:
-        r = requests.get(url, headers=headers, timeout=timeout, stream=True)
-    except requests.exceptions.RequestException as e:
+        r = _stream_get(url, headers, timeout)
+    except _STREAM_EXC as e:
         return None, f"MISTRAL_STREAM_HTTP: {e}"
 
     if r.status_code != 200:
@@ -190,7 +233,7 @@ def mistral_followup(
     # Mistral uses tRPC-style numbered chunks: "15:{json}"
     answer_parts: list[str] = []
     start = time.time()
-    for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
+    for chunk in _iter_text_chunks(r):
         # Look for JSON payloads in the stream
         for m in re.finditer(r'\{[^{}]*"content"\s*:\s*"((?:[^"\\]|\\.)*)"', chunk):
             answer_parts.append(m.group(1))
