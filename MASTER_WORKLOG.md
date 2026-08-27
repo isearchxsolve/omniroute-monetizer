@@ -6059,3 +6059,46 @@ session, no signup/login/wall-solving. No secrets logged.
 **Artifacts:** `scripts/automation/adapter_invoke_generic.py` (hardened),
 `scratch_diagnose_cerebras.py`, `scratch_verify_cerebras.py`,
 `state/adapter_invoke_cerebras.json` (REPLAY_OK).
+
+### [2026-08-27 17:35] #1099 — INNERAI: DAILY QUOTA WALL (class b, operator-observed) — RETRYABLE 2026-08-28 08:30; CLASS-(a) SWEEP COMPLETE
+
+**User directive (verbatim):** operator pasted the live innerai screen:
+*"**Daily limit reached.** Upgrade to PRO to keep going. Resets on August 28th, 2026
+at 8:30 AM."* (operator cancelled the pending adapter-invocation run upon seeing it).
+
+**Sequence:** innerai had no live tab, so one was opened in the attached Chrome
+(`scratch_open_innerai_tab.py`): landed SIGNED IN on the free plan ("You're on the
+free plan... Ready to chat with AI?"), chat input present, no login wall. The generic
+adapter driver was about to run when the operator observed the quota wall directly.
+
+**Classification (three causes):**
+- (a) fixable send-time gap: NO — the site itself explicitly declares quota exhaustion.
+- (b) real server-side quota: YES — operator-observed wall in live Chrome, independent
+  of automation. Gold-standard class-(b) proof.
+- (c) capture bug: NO — n/a.
+
+**Law 5 compliance:** wall is a correct, reportable outcome. NOT solved: no upgrade,
+no second account, no workaround attempted.
+
+**Nuance — daily quota, not permanent death:** the wall states a reset at 2026-08-28
+08:30. innerai is RETRYABLE after that time with the same generic driver
+(`adapter_invoke_generic.py --host innerai --slug innerai`). The signed-in tab remains
+open in Chrome for tomorrow's retry.
+
+**Class-(a) sweep result (this session):**
+- cerebras  -> REPLAY_OK via adapter invocation (#1098)
+- chatglm   -> REPLAY_OK via adapter invocation on GLM 5.3 (#1097; default model is
+               model-level degraded, class b at model granularity)
+- innerai   -> class (b) daily quota wall, retryable 2026-08-28 08:30
+
+**Scoreboard:** REPLAY_OK = 12 total — 9 via in-browser fetch (1min, gemini,
+perplexity, mistral, cohere, qwen, groq, felo, chatx) + 3 via adapter invocation
+(deepseek, chatglm/GLM-5.3, cerebras). Confirmed class (b): huggingface, aymo,
+chathub, veoaifree (quota walls), chatglm-default-model (degenerate), innerai (daily
+quota, resets 2026-08-28 08:30).
+
+**Next candidates:** class-(c) re-captures (chatgpt, meta, you_com, digen) and the
+business bridge (Chrome-backed pool-server path so in-browser-only providers become
+servable supply).
+
+**Artifacts:** `scratch_open_innerai_tab.py`.
