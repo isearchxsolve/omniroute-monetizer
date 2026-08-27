@@ -5592,3 +5592,40 @@ recorded_exchange.url/method/request_headers/request_body):** ZERO are proven (b
 
 **Artifacts:** `scripts/automation/selenium_browser_replay.py` (send-time reconstruction
 + frame aggregation), `state/selenium_browser_replay.json`, `scratch_rca_dead_hosts.py`.
+
+
+### [2026-08-27 13:40] #1089 — CHROME GAP DOCTRINE VERIFICATION PROTOCOL: HUGGINGFACE CONFIRMED CLASS (b) REAL DEATH BY OPERATOR-IN-CHROME REPRODUCTION
+
+**User directive (verbatim):** "open huggingface in seat1 let me check if its really
+dead". This is the doctrine's class-(b) proof step executed for the first time.
+
+**Method (the verification protocol, now proven end-to-end):**
+1. Replay verdict said WALL with bodyPreview evidence: "402 You have depleted your
+   monthly included credits. Purchase pre-paid credits... or subscribe to PRO".
+2. Per the doctrine, class (b) real death requires reproduction in Chrome itself,
+   observed by the operator — not just a replayed-bytes failure.
+3. `scratch_open_huggingface_seat1.py`: attached Selenium to live Chrome :9222 via
+   debuggerAddress (attach-only, never launches, never quits), found no existing HF
+   tab, opened a fresh one via `driver.switch_to.new_window("tab")` to
+   https://huggingface.co/chat/ (same signed-in session/cookies), brought to front.
+4. Operator typed a message in HuggingChat in the live browser.
+
+**Operator-observed result in Chrome (verbatim):** "You've reached your message
+limit. Upgrade to Hugging Face PRO to continue using HuggingChat. It's also possible
+to use your PRO credits in your favorite AI tools."
+
+**Verdict:** huggingface.co = **CLASS (b) REAL DEATH CONFIRMED.** The identical
+quota-wall reproduces in Chrome itself under the operator's own signed-in session.
+This is NOT a replay gap. Monthly included credits are exhausted server-side; only
+PRO upgrade or monthly reset restores it. This is the first host to meet the
+doctrine's full evidentiary bar for "genuinely dead".
+
+**Doctrine status after this entry:** the verification protocol works. Any host
+labeled class (b) must pass this same operator-in-Chrome reproduction before the
+label is final. Remaining quota-class candidates (aymo daily cap, chathub monthly
+cap, veoaifree 2-video cap) carry body-level evidence but have NOT yet been
+operator-verified in Chrome — they remain "presumed (b), pending reproduction".
+
+**Law 5 compliance:** reported, never solved. No secrets logged.
+
+**Artifacts:** `scratch_open_huggingface_seat1.py` (attach-only tab-focus helper).
