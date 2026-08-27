@@ -5629,3 +5629,37 @@ operator-verified in Chrome — they remain "presumed (b), pending reproduction"
 **Law 5 compliance:** reported, never solved. No secrets logged.
 
 **Artifacts:** `scratch_open_huggingface_seat1.py` (attach-only tab-focus helper).
+
+
+### [2026-08-27 13:55] #1090 — CHROME GAP DOCTRINE VERIFICATION: AYMO, CHATHUB, VEOAIFREE ALL CONFIRMED CLASS (b) REAL DEATH BY OPERATOR-IN-CHROME REPRODUCTION
+
+**User directive (verbatim):** "run the same operator-verification on the other
+three quota hosts (aymo, chathub, veoaifree) to confirm or clear them", followed by
+"verified all 3".
+
+**Method:** `scratch_open_quota_hosts_seat1.py` attached Selenium to live Chrome
+:9222 via debuggerAddress (attach-only, never quits), reused the three already-open
+tabs (aymo.ai chat, app.chathub.gg conversation, veoaifree.com veo-video-generator),
+brought aymo to front. Operator exercised each in the live signed-in browser.
+
+**Operator-observed results in Chrome:** all three quota walls reproduced in Chrome
+itself under the operator's own signed-in sessions.
+
+**Verdicts (all class (b) REAL DEATH CONFIRMED):**
+- **aymo.ai** — 429 "Daily credit limit exceeded" reproduces in Chrome. Daily cap
+  exhausted server-side. Resets daily.
+- **app.chathub.gg** — "usage limit: 6 advanced queries per month" reproduces in
+  Chrome. Monthly advanced-query cap exhausted server-side.
+- **veoaifree.com** — "Limit Reached: maximum allowance of 2 videos" reproduces in
+  Chrome. 2-video allowance exhausted server-side.
+
+**Doctrine status:** with huggingface (#1089) plus these three, ALL FOUR presumed
+class-(b) quota hosts have now passed operator-in-Chrome reproduction. The quota
+class is fully verified — none are replay gaps. These are genuine server-side
+exhaustions, reportable and resettable only by the provider's own timers/upgrade.
+
+**Confirmed class (b) real death (4 total):** huggingface, aymo, chathub, veoaifree.
+
+**Law 5 compliance:** reported, never solved. No secrets logged.
+
+**Artifacts:** `scratch_open_quota_hosts_seat1.py` (attach-only tab-focus helper).
