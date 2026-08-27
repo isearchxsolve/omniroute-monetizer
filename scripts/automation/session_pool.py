@@ -67,6 +67,17 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
         from youcom_api_client import YouComApiClient
         return YouComApiClient
 
+    # WEBSOCKET seats (Doctrine 3a, CORRECTED 2026-08-28 per operator): a seat carrying
+    # `recorded_ws` was captured by capture_websocket_cdp.py — the site speaks a websocket.
+    # The capture is the CHROME BLUEPRINT (evidence of what Chrome does) and is valuable.
+    # But the RUNTIME must NOT hand-replay the provider's protocol — that is "playing the
+    # provider" (reverse-engineering / copycatting its contract). The doctrine's architecture
+    # is to BE CHROME: provide the Chrome blueprint (a real V8 engine via Selenium/Playwright)
+    # and let the provider's own JS land on it and play by itself. The provider IS the
+    # contract; we are only the environment. So recorded_ws seats deliberately fall through
+    # to the Chrome-blueprint dispatch below (ChromeReplayClient), where the provider's own
+    # JS opens its own websocket and runs its own protocol by itself. No hand-replay client.
+
     # GRADUATION LEVER (worklog #1113 — runtime-Chrome is an anti-pattern).
     # Driving a live Chrome tab per request serializes every call through ONE
     # global driver lock (chrome_replay_client._DRIVER_LOCK, held for the WHOLE
@@ -188,12 +199,17 @@ class PooledSession:
             self._file_mtime = None
         self.host: str = raw.get("host") or path.stem.replace("session_", "").replace("_", ".")
         self.key: str = path.stem                              # stable non-secret id for cooldown
-        # Two capture shapes reach this pool: `recorded_exchange` (capture_sessions_cdp.py, one-shot
-        # chat) and `recorded_job` (record_video_job.py, the async submit->poll->result sequence).
-        # universal_replay._normalise_exchange already accepts BOTH, so testing only the chat key
-        # here made every freshly captured VIDEO seat non-dispatchable: pool.live(modality="video")
-        # came back empty, the :8189 face answered 503 no_capacity forever, and `list` blamed
-        # "no_recording" on a perfectly good capture.
+        # Two capture shapes reach this pool as REPLAYABLE bytes: `recorded_exchange`
+        # (capture_sessions_cdp.py, one-shot chat) and `recorded_job` (record_video_job.py, the
+        # async submit->poll->result sequence). universal_replay._normalise_exchange accepts both.
+        # NOTE (Doctrine 3a, CORRECTED 2026-08-28): `recorded_ws` (capture_websocket_cdp.py) is a
+        # CHROME-BLUEPRINT capture, NOT replayable bytes — its runtime is the Chrome-blueprint
+        # path (let the provider's own JS play by itself in a real V8 via Selenium), so it is
+        # deliberately NOT counted here; ws seats stay dispatchable via has_chrome
+        # (ChromeReplayClient) instead. Never hand-replay the provider's websocket protocol.
+        # Testing only the chat key here made every freshly captured VIDEO seat non-dispatchable:
+        # pool.live(modality="video") came back empty, the :8189 face answered 503 no_capacity
+        # forever, and `list` blamed "no_recording" on a perfectly good capture.
         self.has_recording: bool = bool(raw.get("recorded_exchange") or raw.get("recorded_job"))
         # Chrome-backed seat (Adapter Thesis): the credential is the LIVE signed-in tab in
         # the operator's Chrome, not recorded bytes. Such a seat is dispatchable even with
