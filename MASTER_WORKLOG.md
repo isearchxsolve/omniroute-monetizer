@@ -6593,3 +6593,43 @@ All 10 files syntax-checked OK. The flags take effect on every future Chrome lau
 
 **Files changed:** omni_supervisor.py, video_router.py, chat_seat_daemon.py, start_chat_browser.py, launch_wmic.py, auto_key_harvester.py, drive.py, harvest_rtst_seat.py, launch_and_harvest_chats.py, provider_login_helper.py, signup_browser.py
 **Files created:** session_pool_shim_task.bat, supervisor_task.bat
+
+### [2026-08-27 21:33] #1108 — CHROME-DOCTRINE VIDEO POOL: chrome_video_client.py (14 hosts) built + wired into session_pool dispatch, 17 video seat files created, shim :8190 now serves 24 video models, REAL MP4 PROVEN end-to-end via Google Flow (4.6 MB, ftypisom magic)
+
+**Objective (user directive):** "dont forget the chrome doctrine set all of them" — expand the video provider surface on shim :8190 to match chat-pool breadth, driving each site's OWN JS/UI in the live signed-in tab (TECHNOLOGY_TRANSFER.md §18/§19 Adapter Thesis). NO custom per-provider HTTP bridge clients.
+
+**1. Built `scripts/automation/chrome_video_client.py` (~450 lines) — the universal Chrome-doctrine video pool client for 14 hosts.**
+
+Implements the exact pool contract: `__init__(secret=None, host=None)`, `chat(messages, model, **kw) -> {"text","label","video_url","modality":"video"}`, raises `ChatError`/`SessionExpired`.
+
+- `VIDEO_HOSTS` registry (14 hosts): labs.google (adapter=flow), veoaifree.com (adapter=veofree), akool.com, magichour.ai, www.giz.ai, www.creen.ai, app.heygen.com, digen.ai, www.nemovideo.com (all kind=ui generic driver), plus 5 dual-modal chat hosts with video: grok.com, gemini.google.com, chat.qwen.ai, www.meta.ai, chatglm.cn.
+- Two proven adapters delegated: `_gen_flow` (googleflow_client.FlowSession — mints reCAPTCHA token in live tab, speaks Flow's real batchAsyncGenerateVideoText RPC) and `_gen_veofree` (veoaifree_client.VeoFreeSession — the site's own admin-ajax nonce protocol in the logged-in tab).
+- Generic UI driver `_gen_ui` for the 12 UI hosts: inject prompt -> snapshot existing videos -> click the site's OWN generate button -> poll DOM for a new video src/download link/blob.
+- **cdp.py API constraint honored:** cdp.py `Page.evaluate(expr, timeout)` takes ONE expression string, no arguments[], awaitPromise=True. All JS inlines args as JSON literals (`__PROMPT_JSON__`, `__GENRE_JSON__`, `__RUNID_JSON__` via .replace()+json.dumps) and the poll is wrapped in `new Promise(...)` so awaitPromise holds until a video appears or the budget expires.
+
+**2. Fixed both adapter delegations to match the REAL APIs (verified by reading the source):**
+- `_gen_flow`: `gf.submit()` returns `json.loads(text)`; media_id = `r.get("media")[0].get("name")` (NOT r.get("mediaId")). `gf.wait()` returns the media dict directly and RAISES RuntimeError/TimeoutError on failure (NOT a tuple) — wrapped in try/except -> ChatError. URL built via `gf.MEDIA_URL.format(media_id)`.
+- `_gen_veofree`: `VeoFreeSession.wait(scene, timeout=...)` uses `timeout` param (NOT `budget`) and RAISES VeoFreeError on timeout — wrapped in try/except. LIMIT/BUSY mapped to ChatError("WALL") per Law 5 (report the wall, never solve it).
+- Syntax check: `py_compile` -> SYNTAX OK.
+
+**3. Wired into `session_pool.py` dispatch (`_client_for`):**
+- Added `from chrome_video_client import ChromeVideoClient, VIDEO_HOSTS`.
+- **Dispatch order (critical):** the video check sits FIRST, right after API-kind dispatch (rtst/youcom) and BEFORE the `CLIENTS` dict. This was required because `CLIENTS` maps `digen` -> `DigenSessionClient` (legacy replay) — without the reorder, digen video seats would have gotten the old replay client instead of Chrome doctrine. Verified: digen.ai video seats now route to ChromeVideoClient.
+- Gate: `if (raw or {}).get("modality") == "video" and host in VIDEO_HOSTS: return ChromeVideoClient`. Dual-modal hosts (grok.com, gemini.google.com, chat.qwen.ai, chatglm.cn) have BOTH a chat seat (ChromeReplayClient) and a video seat (ChromeVideoClient) — modality picks the path. Verified: grok.com modality=video -> ChromeVideoClient, grok.com modality=chat -> ChromeReplayClient.
+- `PooledSession`: added `has_video_chrome` flag (host in VIDEO_HOSTS and modality==video) and included it in the `dispatchable` property so video-chrome seats are dispatchable even with no recorded bytes.
+
+**4. Created 17 video seat files** (`state/secrets/session_video_*.json`) via `scratch_create_video_seats.py`. Each declares `modality=video` + `chrome_port` hint + `context.loggedIn=True`. Multi-account hosts get one seat per port (separate allowance): labs.google x2 (:9222,:9224), veoaifree.com x3 (:9222,:9223,:9225), plus akool/magichour/giz/creen/heygen/digen/nemovideo (:9223) and the 5 dual-modal chat hosts (:9222).
+
+**5. Restarted shim :8190 and verified:** TOTAL MODELS 50, VIDEO MODELS 24 (video/auto + per-host video/{host}/auto). Dispatch verification (`scratch_verify_dispatch.py`): 23 dispatchable VIDEO seats, all routed to ChromeVideoClient except the 4 rtst.ai API-key seats which correctly stay on RtstApiClient.
+
+**6. REAL MP4 PROVEN end-to-end (the proof path):**
+- veoaifree :9223 doctor: clean tab, visible input present. Generation attempt -> `VEOFREE_SUBMIT: LIMIT` — "You have already generated your maximum allowance of 2 videos." This is a GENUINE server-side wall (free allowance exhausted, 2/2), correctly reported per Law 5, NOT retried, NOT worked around.
+- veoaifree :9225 (separate account) doctor: clean. Generation -> same LIMIT wall (2/2 exhausted). Both free accounts genuinely spent.
+- **Google Flow fallback:** doctor clean (:9222, project 0db18532). Credit check (no spend): email isearch.xsolve@gmail.com, tier PAYGATE_TIER_ONE, **945 credits available**. Generated one clip (spent ~20 of 945): `MEDIA_GENERATION_STATUS_ACTIVE` at 1s -> `SUCCESSFUL` at 46s, OK in 55s, label=chrome-video/labs.google.
+- **Downloaded + verified:** `state/proof_flow_mp4.mp4` = **4,627,490 bytes**, head bytes `b'\x00\x00\x00 ftypisom...'` -> **valid MP4 (ftyp magic = True)**. End-to-end Chrome-doctrine video delivery CONFIRMED.
+
+**Walls reported honestly (Law 5):** veoaifree free allowance is 2 videos/account and BOTH :9223 and :9225 accounts are exhausted. This is real supply exhaustion, not a fixable gap. Flow is the working free-ish path (945 credits = ~47 clips at 20/clip).
+
+**Files changed:** session_pool.py (import + dispatch reorder + has_video_chrome + dispatchable)
+**Files created:** chrome_video_client.py, 17x state/secrets/session_video_*.json, scratch_create_video_seats.py, scratch_verify_dispatch.py, scratch_flow_credits.py, scratch_verify_mp4.py, state/proof_flow_mp4.mp4
+**Services:** shim :8190 restarted, serving 24 video models.

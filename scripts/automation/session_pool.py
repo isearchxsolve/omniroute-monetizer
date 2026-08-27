@@ -35,6 +35,7 @@ from veoaifree_chat_client import ChatError
 from digen_session_replay import DigenSessionClient
 from veo_session_replay import VeoSessionClient, SessionExpired
 from chrome_replay_client import ChromeReplayClient, CHROME_CLIENTS
+from chrome_video_client import ChromeVideoClient, VIDEO_HOSTS
 
 SECRETS = pathlib.Path(r"D:\omniroute-monetizer\state\secrets")
 # last-used timestamps ONLY (no cookie, no header) so the cooldown spreads load across CLI runs too.
@@ -64,6 +65,15 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
     if kind == "youcom":
         from youcom_api_client import YouComApiClient
         return YouComApiClient
+
+    # Chrome-doctrine VIDEO seats (worklog #1108): the host's own UI in the live signed-in
+    # tab generates the video. Checked FIRST (after API-kind dispatch) so that even hosts
+    # with a legacy replay client in CLIENTS (e.g. digen) get the Chrome path when the
+    # seat declares modality=video. A dual-modal host (grok.com, gemini.google.com, ...)
+    # has BOTH a chat seat (ChromeReplayClient) and a video seat (ChromeVideoClient) —
+    # modality picks the path.
+    if (raw or {}).get("modality") == "video" and host in VIDEO_HOSTS:
+        return ChromeVideoClient
 
     for key, cls in CLIENTS.items():
         if key in host:
@@ -131,6 +141,10 @@ class PooledSession:
         # no recording — ChromeReplayClient drives the provider's own UI. Its liveness is
         # "is the tab open", enforced at call time (NO_TAB -> failover), not here.
         self.has_chrome: bool = self.host in CHROME_CLIENTS
+        # Chrome-doctrine VIDEO seat: the live tab's own UI generates the video. Dispatchable
+        # even with no recording — ChromeVideoClient drives the provider's own JS in-tab.
+        self.has_video_chrome: bool = (self.host in VIDEO_HOSTS
+                                       and raw.get("modality") == "video")
         # A seat can also be usable WITHOUT a recording: an API-credential seat holds a bearer token
         # plus a documented contract (rtst.ai publishes quote/create/poll), so there is no genuine
         # exchange to replay and there never will be. Judging such a seat by has_recording alone made
@@ -162,7 +176,8 @@ class PooledSession:
 
     @property
     def dispatchable(self) -> bool:
-        return bool((self.has_recording or self.has_api or self.has_chrome) and self.client_cls
+        return bool((self.has_recording or self.has_api or self.has_chrome
+                     or self.has_video_chrome) and self.client_cls
                     and not self.flagged_dead and not self.dead)
 
     def client(self):
