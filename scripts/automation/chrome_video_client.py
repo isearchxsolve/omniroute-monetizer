@@ -416,11 +416,28 @@ class ChromeVideoClient:
         raw = {}
         if self.secret and self.secret.exists():
             try:
-                raw = json.loads(self.secret.read_text(encoding="utf-8"))
+                # utf-8-sig: a hot-add seat file dropped from PowerShell/Notepad may carry
+                # a BOM; json.loads chokes on it and would silently drop the chrome decl.
+                raw = json.loads(self.secret.read_text(encoding="utf-8-sig"))
             except Exception:
                 raw = {}
         self.host = host or raw.get("host") or ""
         self.spec = VIDEO_HOSTS.get(self.host)
+        # One Chrome, infinite sites (worklog #1112): a seat may declare its own video UI
+        # inline ("chrome": {"tab": "newsite.com", "gen": "..."} or "chrome": "newsite.com")
+        # with NO VIDEO_HOSTS entry. The site's own JS is the adapter, so we build a generic
+        # "ui" spec straight from the seat file -- zero registry code for a new provider.
+        if self.spec is None:
+            chrome_decl = raw.get("chrome")
+            tab = None
+            if isinstance(chrome_decl, dict) and chrome_decl.get("tab"):
+                tab = str(chrome_decl["tab"])
+            elif isinstance(chrome_decl, str) and chrome_decl not in ("", "true", "True"):
+                tab = chrome_decl
+            if tab:
+                self.spec = {"tab": tab, "kind": "ui"}
+                if isinstance(chrome_decl, dict) and chrome_decl.get("gen"):
+                    self.spec["gen"] = str(chrome_decl["gen"])
         self.port_hint = raw.get("chrome_port")          # pin one account/seat if set
         self.label = f"chrome-video/{self.host}"
 

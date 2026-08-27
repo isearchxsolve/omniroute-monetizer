@@ -287,11 +287,23 @@ class ChromeReplayClient:
         raw = {}
         if self.secret and self.secret.exists():
             try:
-                raw = json.loads(self.secret.read_text(encoding="utf-8"))
+                # utf-8-sig: a hot-add seat file dropped from PowerShell/Notepad may carry
+                # a BOM; json.loads chokes on it and would silently drop the chrome decl.
+                raw = json.loads(self.secret.read_text(encoding="utf-8-sig"))
             except Exception:
                 raw = {}
         self.host = host or raw.get("host") or ""
-        self.tab_substr = CHROME_CLIENTS.get(self.host, self.host)
+        # One Chrome, infinite sites (worklog #1112): the seat file may declare its own tab
+        # substring inline ("chrome": {"tab": "chat.newsite.com"} or "chrome": "chat.newsite.com"
+        # or "chrome": true). That lets a brand-new provider be served with ZERO registry
+        # entry -- the site's own UI is the adapter, Chrome needs no adaptation.
+        chrome_decl = raw.get("chrome")
+        if isinstance(chrome_decl, dict) and chrome_decl.get("tab"):
+            self.tab_substr = str(chrome_decl["tab"])
+        elif isinstance(chrome_decl, str) and chrome_decl not in ("", "true", "True"):
+            self.tab_substr = chrome_decl
+        else:
+            self.tab_substr = CHROME_CLIENTS.get(self.host, self.host)
         self.label = f"chrome/{self.host}"
 
     # ------------------------------------------------------------- plumbing ----

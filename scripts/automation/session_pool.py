@@ -73,7 +73,13 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
     # seat declares modality=video. A dual-modal host (grok.com, gemini.google.com, ...)
     # has BOTH a chat seat (ChromeReplayClient) and a video seat (ChromeVideoClient) —
     # modality picks the path.
-    if (raw or {}).get("modality") == "video" and host in VIDEO_HOSTS:
+    #
+    # One Chrome, infinite sites (worklog #1112): a seat may ALSO declare its own video UI
+    # inline ("chrome": {"tab": ...}) with NO VIDEO_HOSTS entry. The site's own JS shipped
+    # with every page load IS the adapter, so a brand-new video provider needs zero registry
+    # code -- ChromeVideoClient builds a generic "ui" spec from the seat file itself.
+    if (raw or {}).get("modality") == "video" and (
+            host in VIDEO_HOSTS or bool((raw or {}).get("chrome"))):
         return ChromeVideoClient
 
     for key, cls in CLIENTS.items():
@@ -85,7 +91,12 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
     # invocation). Python `requests` replay fails for them (CORS / PoW / x-sign / live
     # bearer), so they must be served by driving their own UI in the attached browser.
     # Checked BEFORE the universal fallback so requests-replay never gets a turn.
-    if host in CHROME_CLIENTS:
+    #
+    # One Chrome, infinite sites (worklog #1112): a seat may declare its own Chrome backing
+    # inline ("chrome": {"tab": "chat.newsite.com"} or "chrome": true) with NO CHROME_CLIENTS
+    # entry. Chrome needs no adaptation to serve a new site, and neither do we: the registry
+    # stays a convenience for legacy seats, not a gate on new ones.
+    if host in CHROME_CLIENTS or bool((raw or {}).get("chrome")):
         return ChromeReplayClient
 
     # Universal fallback for any provider with a recorded exchange blueprint
@@ -137,7 +148,13 @@ class PooledSession:
 
     def __init__(self, path: pathlib.Path):
         self.path = path
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        # utf-8-sig: a hand-written hot-add seat file dropped from PowerShell/Notepad may
+        # carry a BOM; tolerating it means the file still parses (worklog #1112).
+        raw = json.loads(path.read_text(encoding="utf-8-sig"))
+        try:
+            self._file_mtime: Optional[float] = path.stat().st_mtime
+        except OSError:
+            self._file_mtime = None
         self.host: str = raw.get("host") or path.stem.replace("session_", "").replace("_", ".")
         self.key: str = path.stem                              # stable non-secret id for cooldown
         # Two capture shapes reach this pool: `recorded_exchange` (capture_sessions_cdp.py, one-shot
@@ -151,11 +168,15 @@ class PooledSession:
         # the operator's Chrome, not recorded bytes. Such a seat is dispatchable even with
         # no recording — ChromeReplayClient drives the provider's own UI. Its liveness is
         # "is the tab open", enforced at call time (NO_TAB -> failover), not here.
-        self.has_chrome: bool = self.host in CHROME_CLIENTS
+        # A seat may also DECLARE its Chrome backing inline ("chrome": {...} or true) with
+        # zero registry entry -- the hot-add path (worklog #1112).
+        self.has_chrome: bool = self.host in CHROME_CLIENTS or bool(raw.get("chrome"))
         # Chrome-doctrine VIDEO seat: the live tab's own UI generates the video. Dispatchable
-        # even with no recording — ChromeVideoClient drives the provider's own JS in-tab.
-        self.has_video_chrome: bool = (self.host in VIDEO_HOSTS
-                                       and raw.get("modality") == "video")
+        # even with no recording -- ChromeVideoClient drives the provider's own JS in-tab.
+        # An inline "chrome" declaration is enough too (no VIDEO_HOSTS entry required).
+        self.has_video_chrome: bool = (raw.get("modality") == "video"
+                                       and (self.host in VIDEO_HOSTS
+                                            or bool(raw.get("chrome"))))
         # A seat can also be usable WITHOUT a recording: an API-credential seat holds a bearer token
         # plus a documented contract (rtst.ai publishes quote/create/poll), so there is no genuine
         # exchange to replay and there never will be. Judging such a seat by has_recording alone made
@@ -204,6 +225,7 @@ class SessionPool:
     """Least-recently-used router with per-session cooldown and per-host serialization."""
 
     def __init__(self, secrets: pathlib.Path = SECRETS, cooldown: float = DEFAULT_COOLDOWN):
+        self.secrets = secrets
         self.cooldown = cooldown
         self._lock = threading.Lock()
         self._host_locks: Dict[str, threading.Lock] = {}
@@ -216,6 +238,64 @@ class SessionPool:
         st = _load_pool_state()
         for s in self.sessions:
             s.last_used = float(st.get(s.key, 0.0))
+
+    def rescan(self) -> Dict[str, Any]:
+        """Hot-reload the seat directory WITHOUT a restart (worklog #1112).
+
+        One Chrome, infinite sites: adding a provider is dropping a seat file, nothing else.
+        Re-globs session_*.json under the pool lock:
+          * NEW files become live sessions (last_used restored from pool state),
+          * vanished files are dropped,
+          * CHANGED files (mtime moved) are re-parsed while carrying their runtime state
+            (last_used / cooldown_until / dead) across,
+          * untouched sessions keep their EXACT object -- including any instantiated
+            client -- so a rescan never disturbs in-flight load spreading.
+        Returns {"added": [...], "removed": [...], "changed": [...], "total": N}.
+        """
+        with self._lock:
+            on_disk: Dict[str, pathlib.Path] = {}
+            for f in sorted(glob.glob(str(self.secrets / "session_*.json"))):
+                p = pathlib.Path(f)
+                on_disk[p.stem] = p
+            existing = {s.key: s for s in self.sessions}
+            st = _load_pool_state()
+            sessions: List[PooledSession] = []
+            added: List[str] = []
+            removed: List[str] = []
+            changed: List[str] = []
+            for key in sorted(on_disk):
+                p = on_disk[key]
+                try:
+                    mtime = p.stat().st_mtime
+                except OSError:
+                    continue
+                cur = existing.get(key)
+                if cur is not None and getattr(cur, "_file_mtime", None) == mtime:
+                    sessions.append(cur)                       # untouched: keep object+state
+                    continue
+                try:
+                    s = PooledSession(p)
+                except Exception:
+                    if cur is not None:
+                        sessions.append(cur)                   # unreadable update: keep old
+                    continue
+                if cur is not None:
+                    s.last_used = cur.last_used                # file changed: rebuild but
+                    s.cooldown_until = cur.cooldown_until      #   carry runtime state across
+                    s.dead = cur.dead
+                    s.last_error = cur.last_error
+                    changed.append(key)
+                else:
+                    s.last_used = float(st.get(s.key, 0.0))
+                    added.append(key)
+                sessions.append(s)
+            for key in existing:
+                if key not in on_disk:
+                    removed.append(key)
+            self.sessions = sessions
+            self._persist()
+            return {"added": added, "removed": removed, "changed": changed,
+                    "total": len(sessions)}
 
     def _host_lock(self, host: str) -> threading.Lock:
         with self._lock:

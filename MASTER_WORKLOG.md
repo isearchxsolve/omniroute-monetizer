@@ -6741,3 +6741,46 @@ Implements the exact pool contract: `__init__(secret=None, host=None)`, `chat(me
 **Files changed:** PORTING.md, TECHNOLOGY_TRANSFER.md (§16 corrected, §20-23 added)
 **Files created:** scripts/automation/cookie_porter.py, scratch_prove_cookie_portability.py, state/secrets/provider_sessions_export.json (gitignored)
 **Verdict:** operator was right — provider sessions port. Docs now say so, with a tool that does it.
+
+
+### [2026-08-28 00:30] #1112 — ZERO-RESTART HOT-ADD OF PROVIDERS: operator's "one chrome, infinite sites" hypothesis made real — adding/removing a provider now needs NO shim restart and NO per-provider code; SessionPool.rescan() + seat-file-declared Chrome dispatch + per-request auto-rescan + /v1/rescan endpoint; ALSO found and fixed a silent multi-instance shim bug (SO_REUSEADDR let 4 processes share :8190, requests landing on random stale-code instances)
+
+**Operator question:** "does adding new providers result in service disruption of endpoint, does shim require a restart? it should not if we follow one chrome infinite site hypothesis — chrome does not adapt to new site signature, neither should we."
+
+**1. AUDIT — the honest answer was YES, restart required. Three hard gaps:**
+- `SessionPool.__init__` globbed `state/secrets/session_*.json` ONCE at startup → a new seat file was invisible until process restart.
+- `_client_for()` gated Chrome dispatch on two STATIC registries (`CHROME_CLIENTS` 18 hosts, `VIDEO_HOSTS` 14 hosts) → a new host needed a code edit even though the clients themselves are generic (`ChromeReplayClient.tab_substr` already fell back to the host string).
+- `ChromeVideoClient.chat()` raised `NO_ADAPTER` for any host without a `VIDEO_HOSTS` entry.
+- The shim already had the proven hot-reload pattern in-house: `_tenant_map()` re-reads `tenant_map.json` on EVERY request. Seats just weren't using it.
+
+**2. FIX — four files, all aligned to the adapter thesis (the site's own JS IS the adapter):**
+- `session_pool.py`: NEW `SessionPool.rescan()` — thread-safe (under `self._lock`) re-glob of the secrets dir. NEW files become live sessions (last_used restored from pool state); vanished files dropped; CHANGED files (mtime moved) re-parsed while carrying runtime state (last_used/cooldown_until/dead) across; UNTOUCHED sessions keep the EXACT same object (including any instantiated client) so a rescan never disturbs in-flight load spreading. Returns `{added, removed, changed, total}`. Also: `self.secrets` stored on the pool; seat reads now `utf-8-sig` (BOM-tolerant); `_file_mtime` tracked per session.
+- `session_pool.py` `_client_for()` + `PooledSession`: a seat may now DECLARE its Chrome backing inline — `"chrome": {"tab": "chat.newsite.com"}` (or `"chrome": "substr"`, or `"chrome": true` → tab=host) — with ZERO registry entry. `has_chrome` / `has_video_chrome` honor the inline declaration; video seats get `ChromeVideoClient` on `modality=video` + (registry OR inline decl).
+- `chrome_replay_client.py`: `__init__` reads the inline `chrome.tab` declaration from the seat file (dict/str/true forms); registry stays a convenience for legacy seats, not a gate. Seat read made BOM-tolerant.
+- `chrome_video_client.py`: `__init__` builds a generic `{"tab": ..., "kind": "ui"}` spec (+ optional `gen` regex) straight from the seat file when no `VIDEO_HOSTS` entry exists — the `NO_ADAPTER` wall is gone for declared seats. Seat read made BOM-tolerant.
+- `session_pool_shim.py`: per-request `_maybe_rescan()` — ONE cheap `os.stat` of the secrets dir per request (mtime_ns+ctime_ns signature); only calls `pool.rescan()` when the dir actually changed; double-checked under `_RESCAN_LOCK` so concurrent requests rescan once. NEW `POST /v1/rescan` admin endpoint (same auth gate) forces a rescan and returns the diff + dispatchable count.
+
+**3. OFFLINE PROOF (scratch_test_hotadd.py, temp secrets dir, 28 checks — ALL PASS):**
+- hot-add chat seat via inline decl → dispatchable, client=ChromeReplayClient, tab_substr from seat file;
+- hot-add video seat via inline decl → dispatchable, client=ChromeVideoClient, generic ui spec `{'tab','kind':'ui','gen'}` built from seat;
+- BOM'd seat file (PowerShell Set-Content shape) parses and dispatches;
+- second rescan is a no-op diff; untouched sessions keep the SAME object with runtime state intact;
+- changed file re-parsed but carries last_used/dead across; removed file dropped; registry hosts unaffected (no regression).
+- One failure found and fixed during this phase: the Chrome clients read seat files with plain `utf-8`, so a BOM'd file gave `raw={}` → empty host → not dispatchable. Fixed to `utf-8-sig` in both clients.
+
+**4. LIVE PROOF on :8190 (shim running, NO restart between steps):**
+- baseline: 50 models, no hotadd host;
+- dropped `state/secrets/session_chat.hotadd-demo.example.json` (inline chrome decl) → next `/v1/models` request: 51 models, `chat.hotadd-demo.example/auto` present (auto-rescan fired from the dir-mtime change);
+- deleted the file → next request: back to 50, host gone (hot-REMOVE without restart);
+- re-dropped → 51 again; `POST /v1/rescan` → `{"ok": true, "rescan": {"added": [], "removed": [], "changed": [], "total": 54}, "dispatchable": 49}` (empty diff because auto-rescan already ran);
+- dispatch proof: `POST /v1/chat/completions` with `model=chat.hotadd-demo.example/auto` → routed through ChromeReplayClient with the seat-file tab substring → clean `NO_TAB` failover (no tab open, no credits spent) — proving the full path seat-file → pool → client → Chrome attach works for a provider with zero registry code;
+- cleaned up demo artifacts → final 50 models, clean state.
+
+**5. BUG FOUND & FIXED ALONG THE WAY — silent multi-instance shim (the real cause of early 404s):**
+During the live proof, `/v1/rescan` answered 404 and the hot-add host flickered in and out per request. `netstat -ano` + `Win32_Process` revealed FOUR shim processes, TWO of them LISTENING on :8190 simultaneously (PIDs 16352 + 17196, both stale-code system-Python instances spawned by earlier debugging/keepalive runs). Root cause: `http.server` sets `allow_reuse_address=True` (SO_REUSEADDR), which on Windows lets a SECOND process bind the same port — the OS then hands incoming connections to EITHER listener, so requests landed on a random instance (old code → 404 on the new endpoint; old pool → host present/absent depending on which instance answered). This also means the keepalive task's "is it answering?" guard could be fooled by a zombie. FIX: `ExclusiveThreadingHTTPServer(ThreadingHTTPServer)` with `allow_reuse_address = False` — a duplicate start now fails LOUDLY at bind time, guaranteeing exactly one shim owns :8190. Killed the stale instances; single new-code instance now serves.
+
+**6. DOCTRINE CONFIRMED:** Chrome needs no adaptation to serve a new site — it just opens the tab and the site's own JS does the work. The pool now matches: adding a provider = drop a seat file (+ have the signed-in tab open in any seat Chrome). No restart, no code edit, no registry line. Removal = delete the file. The endpoint never blinks.
+
+**Files changed:** scripts/automation/session_pool.py, session_pool_shim.py, chrome_replay_client.py, chrome_video_client.py
+**Files created+removed (demo):** scratch_test_hotadd.py, state/secrets/session_chat.hotadd-demo.example.json (both cleaned up after proof)
+**Verdict:** zero-restart hot-add PROVEN live. Operator's hypothesis was correct and is now the implemented behavior.
