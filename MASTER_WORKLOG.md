@@ -7475,3 +7475,42 @@ GEMINI 401:
 
 **Files added (scratch):** scratch_meta_ws_find.py, scratch_meta_ws_contexts.py.
 **Verdict:** Paused cleanly. No false greens, no secrets logged, resume path is 6 concrete steps with the decisive technique documented.
+
+### [2026-08-28 17:30] #1134 — OiiOii live E2E failure: full RCA + 4 permanent provider fixes to :8190 shim. Duplicate shim process dedup + console-pop elimination.
+
+**1. OiiOii E2E FAILURE RCA (three root causes, all on :8190 side).**
+  - (a) No JSON-contract awareness: OiiOii's film planner sends "Return JSON only" prompts and parses the reply with a strict JSON parser. The pool served prose/fenced-JSON from seats that don't honour the directive, with NO failover — the consumer got garbage.
+  - (b) Video submits were synchronous and render-blocking (up to 420s) > OiiOii's 180s receipt budget. No job store, no async receipt.
+  - (c) No idempotency/reconciliation: shim ignored `video.job_key`, so retried requests could double-spend credits. No cancellation endpoint.
+
+**2. FOUR PROVIDER FIXES (all coded, compile-verified, deployed).**
+  - Fix 1 — JSON-intent failover: `_wants_strict_json(req)` detects `response_format: json_object/json_schema` or "JSON only"-style directives in messages. `pool.chat(strict_json=True)` validates each seat reply as strict JSON; non-JSON seats get cooled down and the pool fails over to the next seat.
+  - Fix 2 — Immediate video receipts: video POST now creates a durable job record FIRST (VideoJobStore), returns an OpenAI-shaped 202 receipt with jobId/statusUrl immediately, then renders in a background thread. Consumer polls `/v1/video/jobs/{id}`.
+  - Fix 3 — Idempotency: `VideoJobStore.create(job_key, ...)` is idempotent by job_key — replayed key returns the SAME record, never re-spends. Durable ledger at `state/video_jobs_8190.json` with atomic writes.
+  - Fix 4 — Cancellation: `DELETE /v1/video/jobs/{id}` cancels queued jobs (200), returns 409 for running (already submitted upstream), 200 no-op for terminal.
+
+**3. DUPLICATE SHIM PROCESS DEDUP (operator report: "two duplicate processes popping every 5 mins").**
+  - Root cause 1: ONE healthy shim shows as TWO python.exe rows — the venv launcher (parent) spawns the base interpreter (child, holds :8190 LISTEN) 33ms later. Normal Python 3.11 venv behavior on Windows. NOT a duplicate.
+  - Root cause 2: The keepalive bat's health probe ran `venv python -c "urllib..."`, spawning a transient launcher+base python.exe PAIR every 5 minutes — the visible "pop".
+  - Root cause 3 (latent race): BOTH `session_pool_shim_task.bat` AND `omni_supervisor.py` claimed `owned=True` for the shim — double ownership that could race two relaunches.
+  - Fix A: `omni_supervisor.py` — shim set to `owned=False, required=False` (hands-off, mirrors video_router pattern). Bat task is sole owner.
+  - Fix B: `session_pool_shim_task.bat` — health probe switched from python one-liner to `curl.exe` (built into Windows, spawns nothing visible).
+  - Fix C: `session_pool_shim.py run()` — wraps bind in try/except OSError(EADDRINUSE/10048) → clean "already serving, exiting (dedup)" no-op instead of traceback.
+  - Fix D: Both keepalive bats (`session_pool_shim_task.bat`, `video_router_task.bat`) + `supervisor_task.bat` — service launch changed from synchronous (bat's cmd.exe stays resident as parent) to `start "" /b` (detached; bat exits immediately, no resident cmd.exe). Verified empirically: /b child survives console close, output lands in log, no leftover cmd.
+  - Fix E: `video_router.py` generator (`_task_bat_text()`) updated to emit the `start /b` line, so future `boot --install` regenerates the fixed bat.
+
+**4. CONSOLE-POP ELIMINATION (operator report: "popping every 5 mins").**
+  - Root cause: Task Scheduler running `.bat` directly with `LogonType=Interactive` opens a visible console window each cycle.
+  - Fix: Created hidden `.vbs` wrappers (`session_pool_shim_task.vbs`, `video_router_task.vbs`, `supervisor_task.vbs`) using `WshShell.Run(cmd, 0, False)` — same pattern as the existing `oauth_keepalive` Startup vbs. Re-pointed all three scheduled tasks via `schtasks /Change` (operator ran elevated). Verified: tasks now execute `wscript.exe <vbs>`, no console window.
+
+**5. VERIFICATION.**
+  - Both services healthy: shim :8190 → HTTP 200, router :8189 → HTTP 200.
+  - Zero resident cmd.exe from our bats (verified via WMI enumeration).
+  - Zero python.exe parented by cmd.exe (no bat holding a service).
+  - All three keepalive tasks confirmed pointing to .vbs wrappers.
+  - Router relaunched successfully via the new .vbs path after a kill test (~40s init time, then LISTENING + 200).
+  - `py_compile` clean on all modified .py files. Supervisor `services()` table verified: shim owned=False.
+
+**6. FILES MODIFIED.** scripts/automation/session_pool_shim.py (JSON-intent + video receipt + job store + dedup guard), scripts/automation/session_pool.py (strict_json param), scripts/automation/video_job_store.py (NEW — durable job ledger), scripts/automation/omni_supervisor.py (shim hands-off), scripts/automation/session_pool_shim_task.bat (curl probe + start /b), scripts/automation/video_router_task.bat (start /b), scripts/automation/supervisor_task.bat (start /b), scripts/automation/video_router.py (generator emits start /b).
+**FILES ADDED.** scripts/automation/session_pool_shim_task.vbs, scripts/automation/video_router_task.vbs, scripts/automation/supervisor_task.vbs.
+**Verdict:** All four OiiOii provider fixes deployed and serving. Dedup complete: single-owner shim, no resident cmd, no console pop. Next: E2E-verify the JSON-intent + video receipt paths on :8190, then resume P3-P7.

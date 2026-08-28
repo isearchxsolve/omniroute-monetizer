@@ -55,6 +55,22 @@ CLIENTS: Dict[str, Type[Any]] = {
 DEFAULT_COOLDOWN = 20.0
 
 
+def is_strict_json(text: Any) -> bool:
+    """True iff the text IS one JSON document, exactly as a strict consumer parses it.
+
+    Worklog #1134 (2026-08-28): the OiiOii live E2E proved that JSON-intent planner requests
+    must not be served by seats that answer prose, empty content, or markdown-fenced JSON.
+    Their parser is deliberately `json.loads(text.strip())` — no fragment extraction — so this
+    check mirrors it byte for byte: fenced JSON (```json ... ```) FAILS here and the router
+    fails over to the next seat instead of shipping prose to a strict parser.
+    """
+    try:
+        json.loads(str(text or "").strip())
+        return True
+    except Exception:
+        return False
+
+
 def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
     # An API-CREDENTIAL seat comes first: it carries a bearer token plus a documented contract, so it
     # has no recorded exchange to replay and never will. Dispatch on the declared `api.kind`, not on
@@ -406,12 +422,20 @@ class SessionPool:
             return s, now
 
     def chat(self, messages, model=None, modality: Optional[str] = None,
-             tries: Optional[int] = None, host: Optional[str] = None, **kw) -> Dict[str, Any]:
+             tries: Optional[int] = None, host: Optional[str] = None,
+             strict_json: bool = False, **kw) -> Dict[str, Any]:
         """Route ONE call to the least-recently-used live session; on expiry/failure fall to the
-        next. Never runs two concurrent calls to the same host (per-host lock)."""
+        next. Never runs two concurrent calls to the same host (per-host lock).
+
+        strict_json=True (worklog #1134): the caller demands a strict-JSON answer (film planner
+        contract). A seat whose reply is prose/empty/fenced-JSON is treated exactly like a
+        ChatError — cooled down and failed over — so a strict parser downstream NEVER receives
+        non-JSON. If every candidate fails the JSON contract, raise ChatError("JSON_CONTRACT").
+        """
         max_tries = tries if tries is not None else (len(self.live(modality, host)) or 1)
         attempted = 0
         last_exc: Optional[Exception] = None
+        json_failures = 0
         while attempted < max_tries:
             res = self.reserve(modality, host)                 # atomic pick+book (no double-book)
             if res is None:
@@ -421,6 +445,19 @@ class SessionPool:
             with self._host_lock(s.host):
                 try:
                     r = s.chat(messages, model=model, **kw)
+                    if strict_json and not is_strict_json(r.get("text")):
+                        # The seat answered, but not in the contract's language. Cool it down
+                        # (it just burned a real request) and fail over — never ship prose to
+                        # a strict parser.
+                        json_failures += 1
+                        base = max(time.time(), res_at)
+                        s.last_used = base
+                        s.cooldown_until = base + max(self.cooldown, 30.0)
+                        s.last_error = "json_contract_violation"
+                        last_exc = ChatError(
+                            "JSON_CONTRACT",
+                            f"{s.host} returned non-JSON to a strict-JSON request")
+                        continue
                     s.last_used = time.time()
                     s.cooldown_until = s.last_used + self.cooldown
                     self._persist()

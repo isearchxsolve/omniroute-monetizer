@@ -13,4 +13,7 @@ wmic process where "CommandLine like '%%omni_supervisor%%'" get ProcessId /forma
 
 if not errorlevel 1 exit /b 0
 
-"D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\omni_supervisor.py" --watch >> "D:\omniroute-monetizer\logs\supervisor_stdout.log" 2>&1
+rem Detached launch (worklog #1134): `start "" /b` runs the watch loop in the background and lets
+rem THIS bat exit immediately, so no resident cmd.exe is left behind as the supervisor's parent.
+rem The wmic guard above prevents double-launch.
+start "" /b "D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\omni_supervisor.py" --watch >> "D:\omniroute-monetizer\logs\supervisor_stdout.log" 2>&1

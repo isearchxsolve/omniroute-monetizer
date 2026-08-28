@@ -2120,7 +2120,12 @@ def _task_bat_text() -> str:
         f'"{py}" -c "import urllib.request;urllib.request.urlopen('
         f"'http://127.0.0.1:{DIRECT_PORT}/healthz',timeout=3)\" >nul 2>&1\r\n"
         "if not errorlevel 1 exit /b 0\r\n"
-        f'"{py}" -u "{pathlib.Path(__file__)}" serve >> "{SERVE_LOG}" 2>&1\r\n')
+        # Detached launch (worklog #1134): `start "" /b` runs `serve` in the background and lets the
+        # bat exit immediately, so no resident cmd.exe is left behind as the server's parent. Before,
+        # the bat ran `serve` synchronously as its last line and its cmd.exe stayed alive for the whole
+        # server lifetime -- the stray "cmd.exe" the operator kept seeing. The 5-min trigger stays the
+        # supervisor: the probe guard above prevents double-launch.
+        f'start "" /b "{py}" -u "{pathlib.Path(__file__)}" serve >> "{SERVE_LOG}" 2>&1\r\n')
 
 
 def _schtasks_cmds() -> list[list[str]]:

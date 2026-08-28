@@ -122,11 +122,12 @@ def services() -> list:
         ),
         Service(
             key="session_pool_shim", label="Session pool shim (chat+video face)", port=8190,
-            health="/v1/models", owned=True,
-            argv=[py, f"{auto}/session_pool_shim.py", "8190"],
-            match="session_pool_shim.py",
-            note="OpenAI-compatible face over the SessionPool. Its supply is session files on disk, "
-                 "so it survives reboot exactly like the chat pool.",
+            health="/v1/models", owned=False, required=False,
+            note="Owned by the 'OmniRoute Session Pool Shim (keepalive)' scheduled task, which "
+                 "relaunches it every 5 minutes. Do not fight the task -- it always wins. "
+                 "(2026-08-28 worklog #1134: was owned=True here AND owned by the bat task; that "
+                 "double ownership is exactly how duplicate shim instances raced onto :8190. "
+                 "Single owner now: the bat task. Supervisor probes and reports only.)",
         ),
     ]
 
@@ -351,6 +352,8 @@ def one_pass(svcs: list, fix: bool) -> dict[str, Any]:
         "rules": [
             "OmniRoute is never restarted from here -- probe and report only.",
             "The video router belongs to a scheduled task; it relaunches itself every 5 minutes.",
+            "The session pool shim belongs to its own scheduled task; probe and report only "
+            "(worklog #1134: single owner prevents duplicate :8190 instances).",
             "A port held by a process that is not ours is reported, never killed.",
         ],
     }
