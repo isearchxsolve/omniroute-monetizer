@@ -66,6 +66,12 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
     if kind == "youcom":
         from youcom_api_client import YouComApiClient
         return YouComApiClient
+    if kind == "flow":
+        # Flow (labs.google) supply bridge (worklog #1123): the dominant video supply (~2,075
+        # credits, ~103 clips) is already served genuinely by video_router.py on :8189; this
+        # seat kind makes it visible to the :8190 pool without touching the provider side.
+        from flow_api_client import FlowApiClient
+        return FlowApiClient
 
     # WEBSOCKET seats (Doctrine 3a, CORRECTED 2026-08-28 per operator): a seat carrying
     # `recorded_ws` was captured by capture_websocket_cdp.py — the site speaks a websocket.
