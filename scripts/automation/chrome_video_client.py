@@ -151,6 +151,17 @@ INJECT_JS = r"""
              .find(el=>visible(el));
   if(ce){
     ce.focus();
+    // REPLACE, never append. A leftover prompt from a previous run sitting in the
+    // composer would otherwise get duplicated in front of the new one (worklog #1123:
+    // gemini contenteditable appended "a red ball..." to the stale sweep prompt).
+    // Select-all first so insertText overwrites the existing content.
+    try{
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(ce);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }catch(e){}
     let inserted=false;
     try{ inserted=document.execCommand('insertText', false, prompt); }catch(e){}
     if(!inserted){ ce.textContent = prompt; }
@@ -373,16 +384,20 @@ def _gen_ui(prompt: str, spec: Dict[str, Any], port: Optional[int]) -> Dict[str,
     gen_re = spec.get("gen", r"generate|create|send|submit")
 
     with Page(match=spec["tab"], timeout=30, port=port) as pg:
+        # Heavy video-site pages (heygen/magichour/giz) took >45s just to answer the
+        # inject/click evaluates (worklog #1122: three "Runtime.evaluate did not answer
+        # within 45s" false failures). Give setup steps real headroom; the long wait is
+        # the poll below, which already carries VIDEO_TIMEOUT_S.
         inject = INJECT_JS.replace("__PROMPT_JSON__", json.dumps(prompt))
-        r1 = pg.evaluate(inject)
+        r1 = pg.evaluate(inject, timeout=120)
         if not (isinstance(r1, dict) and r1.get("ok")):
             raise ChatError("NO_INPUT",
                             (r1 or {}).get("why", "no visible input") if isinstance(r1, dict)
                             else "inject returned nothing")
         runid = f"cvc-{int(time.time()*1000)}"
-        pg.evaluate(SNAP_VIDEO_JS.replace("__RUNID_JSON__", json.dumps(runid)))
+        pg.evaluate(SNAP_VIDEO_JS.replace("__RUNID_JSON__", json.dumps(runid)), timeout=120)
         click = CLICK_GEN_JS.replace("__GENRE_JSON__", json.dumps(gen_re))
-        r2 = pg.evaluate(click)
+        r2 = pg.evaluate(click, timeout=120)
         if not (isinstance(r2, dict) and r2.get("ok")):
             raise ChatError("NO_GENERATE",
                             (r2 or {}).get("why", "no generate button") if isinstance(r2, dict)

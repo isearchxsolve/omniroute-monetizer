@@ -77,6 +77,16 @@ class Page:
         self.ws = websocket.create_connection(self.t["webSocketDebuggerUrl"],
                                               timeout=timeout, max_size=64 * 1024 * 1024)
         self._id = 0
+        # Chrome's memory-saver FREEZES background tabs: once frozen, Runtime.evaluate
+        # hangs indefinitely no matter the timeout (worklog #1123: heygen/magichour/giz
+        # hung at 45s AND 120s until woken). Page.bringToFront is answered by the target
+        # layer, not the frozen JS runtime, so it wakes the tab. Reproduce what Chrome
+        # does when a user clicks a tab — bring it to the front before first evaluate.
+        # This also fixes "Document is not focused" clipboard/gesture errors (grok).
+        try:
+            self.send("Page.bringToFront", timeout=10)
+        except Exception:
+            pass
 
     def __enter__(self):
         return self

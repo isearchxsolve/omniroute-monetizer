@@ -170,6 +170,17 @@ INJECT_JS = r"""
              .find(el=>visible(el));
   if(ce){
     ce.focus();
+    // REPLACE, never append. A leftover prompt from a previous run sitting in the
+    // composer would otherwise get duplicated in front of the new one (worklog #1123:
+    // gemini contenteditable appended the new prompt to the stale sweep prompt).
+    // Select-all first so insertText overwrites the existing content.
+    try{
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(ce);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }catch(e){}
     let inserted=false;
     try{ inserted=document.execCommand('insertText', false, prompt); }catch(e){}
     if(!inserted){ ce.textContent = prompt; }
