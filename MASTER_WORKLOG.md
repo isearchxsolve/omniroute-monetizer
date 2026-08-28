@@ -7542,3 +7542,36 @@ GEMINI 401:
 
 **FILES MODIFIED.** TECHNOLOGY_TRANSFER.md, PORTING.md (docs only — no code this entry).
 **Verdict:** Both docs now match the live system. Next: E2E-verify JSON-intent + video receipt paths on :8190, then resume P3-P7 per override #1130.
+
+### [2026-08-28 18:45] #1136 — E2E verification of the :8190 consumer contract (worklog #1134 fixes): 17/17 PASS.
+
+**Why:** #1135 closed with "Next: E2E-verify JSON-intent + video receipt paths on :8190." This entry is that verification, run live against the running shim.
+
+**Pre-flight (verified before spending anything):**
+- Shim live on `:8190`: `GET /v1/models` → 53 models (28 chat + 25 video), `session-pool/auto` + `video/auto` both present.
+- 15 dispatchable video hosts (akool, heygen, qwen, chatglm, digen, gemini, grok, labs.google, magichour, rtst, veoaifree, creen, giz, meta.ai, nemovideo); 27 dispatchable chat hosts.
+- No tenant map at `state/secrets/tenant_map.json` → open single-operator mode, no Bearer key needed for the E2E calls.
+- Spend gate `OMNI_VIDEO_CONFIRM_SPEND=1` is set by `session_pool_shim_task.bat` (line 15) — the running shim already carries it; the film-runway consent covers the one render this E2E spends.
+
+**Method:** `scratch_e2e_8190.py` — a self-contained urllib client exercising both contract paths and printing PASS/FAIL per check.
+
+**PATH 1 — JSON-intent failover (#1134 fix 1): 4/4 PASS.**
+- Sent `session-pool/auto` chat with the film planner's exact directive ("Return JSON only, no prose outside JSON") + a shot-plan shape.
+- HTTP 200; reply was STRICT JSON (`json.loads` succeeded, 589 chars, correct `{"shots":[...]}` shape); non-empty; no markdown fence wrapping.
+- Answered by `www.perplexity.ai` / `session_perplexity_free_web` — proves the strict_json failover path routes to a seat that honors the contract.
+
+**PATH 2 — Video job lifecycle (#1134 fixes 2-4): 13/13 PASS.**
+- Submit `video/auto` with `job_key=e2e-1787924976` → **202 immediate receipt** with `jobId=36e5cb88aaaa477b968eaa39374b65f9`, `statusUrl`, `estimatedSeconds=300`. HTTP connection returned instantly (never blocked on the render).
+- **Idempotency:** replayed the SAME `job_key` → **200** (not 202) and the SAME `job_id` — no second render, no double spend.
+- **Lookup by job_id:** `GET /v1/video/jobs/{id}` → 200, same record.
+- **Reconciliation by job_key:** `GET /v1/video/jobs?job_key=...` → 200, same record.
+- **Status transitions:** polled → `running` (worker thread dispatched to `akool.com` / `session_video_akool`, progress 0.1).
+- **Cancellation honesty:** `DELETE` while `running` → **409** ("render already submitted upstream; cancellation not guaranteed — poll the status URL") — the published honest-no-cancel semantics hold.
+- **Unknown job:** `GET /v1/video/jobs/does-not-exist` → 404.
+
+**RESULT: 17/17 checks passed → `E2E_PASS`.**
+
+**Render outcome (async, tracked in the durable ledger):** at E2E end + 45s the job was still `running` on akool.com (progress 0.1). Video renders take minutes; the 300s estimate is realistic. The receipt/poll/idempotency/cancellation contract — the deliverable — is fully verified regardless of the final render result, which the consumer polls via the statusUrl.
+
+**FILES MODIFIED.** None (verification only). Scratch: `scratch_e2e_8190.py` (kept for re-runs).
+**Verdict:** The :8190 consumer contract is E2E-verified live. The film-kit consumer (OiiOii/Codex) can rely on JSON-intent failover and the durable video-receipt lifecycle. Next: resume P3-P7 per override #1130 (P3 deepseek PoW; P4 zhipu X-Sign; P5 v0.app multi-exchange; P6 cerebras/gemini re-capture; P7 25 live-tab-only capture pass).
