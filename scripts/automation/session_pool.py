@@ -72,6 +72,14 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
         # seat kind makes it visible to the :8190 pool without touching the provider side.
         from flow_api_client import FlowApiClient
         return FlowApiClient
+    if kind == "digen":
+        # Digen stateless graduation (worklog #1131, operator full-Chrome-independence override
+        # #1130): DigenSessionClient replays the recorded Digen-Token job flow over pure HTTP
+        # (submit -> poll -> video URL), no browser. Declared api.kind dispatches FIRST, which
+        # un-shadows it from the modality=video -> ChromeVideoClient path below. Spend-gated
+        # like flow/rtst (OMNI_VIDEO_CONFIRM_SPEND).
+        from digen_session_replay import DigenSessionClient
+        return DigenSessionClient
 
     # WEBSOCKET seats (Doctrine 3a, CORRECTED 2026-08-28 per operator): a seat carrying
     # `recorded_ws` was captured by capture_websocket_cdp.py — the site speaks a websocket.

@@ -4,9 +4,14 @@ Follows the "omni way": replay server-side over plain HTTP using the grabbed
 Digen-* headers. No browser. Safe for parallel dispatch.
 
     python digen_session_replay.py chat "a red fox running through snow, cinematic"
+
+Spend gate (worklog #1131, matches flow_api_client / rtst_api_client convention):
+`OMNI_VIDEO_CONFIRM_SPEND` must be truthy before any submit, else chat() raises.
+The shim's bat sets it; direct CLI use without it is refused (safe by default).
 """
 from __future__ import annotations
 import json
+import os
 import pathlib
 import threading
 import time
@@ -21,6 +26,14 @@ SECRET = pathlib.Path(r"D:\omniroute-monetizer\state\secrets\session_digen_ai.js
 _DROP_HDR = {"content-length", "accept-encoding", "cookie"}
 _TLS = threading.local()
 
+# Estimated credits per 5s clip (video_provider_digen.py convention). Used only for
+# read-only capacity(); the real debit happens server-side on submit.
+EST_COST_PER_CLIP = 30
+
+
+def _truthy(v) -> bool:
+    return str(v or "").strip().lower() in ("1", "true", "yes", "on")
+
 def _session() -> requests.Session:
     s = getattr(_TLS, "s", None)
     if s is None:
@@ -34,6 +47,7 @@ class DigenSessionClient:
     def __init__(self, secret: pathlib.Path = SECRET, timeout: int = 120):
         self.secret = secret
         self.timeout = timeout
+        self.confirm_spend = _truthy(os.environ.get("OMNI_VIDEO_CONFIRM_SPEND"))
         self.reload()
 
     def reload(self) -> None:
@@ -65,8 +79,24 @@ class DigenSessionClient:
             
         self._headers["accept-encoding"] = "gzip, deflate"
 
+    def capacity(self) -> int:
+        """Read-only clip capacity: credit/remain // est cost per clip. No spend."""
+        try:
+            r = requests.get("https://api.digen.ai/v1/credit/remain",
+                             headers=self._headers, timeout=15)
+            if r.status_code != 200:
+                return 0
+            bal = (r.json().get("data") or {}).get("remained", 0)
+            return int(bal) // EST_COST_PER_CLIP
+        except requests.RequestException:
+            return 0
+
     def chat(self, messages: List[Dict[str, Any]], model: Optional[str] = None, **kw) -> Dict[str, Any]:
         """Submit job, poll until done, return video URL."""
+        if not self.confirm_spend:
+            raise ChatError(
+                "SPEND_GATE_CLOSED",
+                "digen submit refused: set OMNI_VIDEO_CONFIRM_SPEND=1 to allow this seat to charge")
         prompt = messages[-1]["content"] if messages else ""
         
         # 1. Submit using the exact captured shape
