@@ -171,6 +171,7 @@ def _video_worker(job_id: str, messages: list, host: str = None) -> None:
     """
     tries = len(pool.live(modality="video", host=host)) or 1
     last_err = "no dispatchable video session"
+    attempts = []                                   # worklog #1137: never lose a failure reason
     for _ in range(tries):
         rec = JOBS.get(job_id)
         if rec is None or rec["status"] == "cancelled":
@@ -191,7 +192,7 @@ def _video_worker(job_id: str, messages: list, host: str = None) -> None:
             pool._persist()
             JOBS.update(job_id, status="succeeded", url=url, progress=1.0,
                         credits_spent=float(r.get("credits_spent") or 0.0),
-                        finished=time.time())
+                        attempts=attempts, finished=time.time())
             return
         except SessionExpired as e:
             s.dead, s.last_error = True, "session_expired"
@@ -204,7 +205,14 @@ def _video_worker(job_id: str, messages: list, host: str = None) -> None:
             last_err = f"{s.host}: {e}"
         except Exception as e:
             last_err = f"{s.host}: {type(e).__name__}: {e}"
-    JOBS.update(job_id, status="failed", error=last_err[:300], finished=time.time())
+        # Record EVERY attempt's failure reason on the durable ledger (worklog #1137). The old
+        # code overwrote `error` on each failover, so the akool/digen failure reasons in the
+        # #1136 E2E were destroyed and undiagnosable. attempts[] keeps them all.
+        attempts.append({"host": s.host, "session": s.key, "at": time.time(),
+                         "error": last_err[:200]})
+        JOBS.update(job_id, attempts=list(attempts))
+    JOBS.update(job_id, status="failed", error=last_err[:300],
+                attempts=attempts, finished=time.time())
 
 
 class ShimHandler(BaseHTTPRequestHandler):

@@ -283,6 +283,16 @@ class PooledSession:
         self.logged_in = ctx.get("loggedIn")
         self.account_present = bool(ctx.get("userName"))
         self.client_cls = _client_for(self.host, raw)
+        # Stateless-first routing (worklog #1137): a seat is "stateless" when its client has
+        # NO browser in the request path (API contract, replayed blueprint, or a dedicated
+        # stateless client). Chrome-bound seats (ChromeReplayClient / ChromeVideoClient) are
+        # fragile -- 420s DOM-driven renders that die on login walls / rate limits -- and must
+        # only be used as a FALLBACK once every stateless candidate is on cooldown. The #1136
+        # E2E failover chain (akool->digen->gemini->qwen) burned four Chrome seats while ~121
+        # clips of healthy stateless supply (flow/rtst/digen) sat idle, because pick() sorted
+        # purely by LRU and treated both classes identically.
+        self.stateless: bool = self.client_cls is not None and self.client_cls not in (
+            ChromeReplayClient, ChromeVideoClient)
         self._client = None
         self.last_used: float = 0.0
         self.cooldown_until: float = 0.0
@@ -398,7 +408,10 @@ class SessionPool:
         cands = [s for s in self.live(modality, host) if s.cooldown_until <= now]
         if not cands:
             return None
-        cands.sort(key=lambda s: s.last_used)                  # least-recently-used first
+        # Stateless-first (worklog #1137): healthy browser-free seats before fragile Chrome
+        # seats; LRU within each class. Chrome seats only get traffic once every stateless
+        # candidate is on cooldown -- the fallback, never the first choice.
+        cands.sort(key=lambda s: (not s.stateless, s.last_used))
         return cands[0]
 
     def reserve(self, modality: Optional[str] = None,
