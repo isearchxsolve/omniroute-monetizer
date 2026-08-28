@@ -7514,3 +7514,31 @@ GEMINI 401:
 **6. FILES MODIFIED.** scripts/automation/session_pool_shim.py (JSON-intent + video receipt + job store + dedup guard), scripts/automation/session_pool.py (strict_json param), scripts/automation/video_job_store.py (NEW — durable job ledger), scripts/automation/omni_supervisor.py (shim hands-off), scripts/automation/session_pool_shim_task.bat (curl probe + start /b), scripts/automation/video_router_task.bat (start /b), scripts/automation/supervisor_task.bat (start /b), scripts/automation/video_router.py (generator emits start /b).
 **FILES ADDED.** scripts/automation/session_pool_shim_task.vbs, scripts/automation/video_router_task.vbs, scripts/automation/supervisor_task.vbs.
 **Verdict:** All four OiiOii provider fixes deployed and serving. Dedup complete: single-owner shim, no resident cmd, no console pop. Next: E2E-verify the JSON-intent + video receipt paths on :8190, then resume P3-P7.
+
+### [2026-08-28 18:15] #1135 — Documentation cleanup: PORTING.md + TECHNOLOGY_TRANSFER.md reconciled with the #1134 evolution.
+
+**Why:** Operator directive — "the porting.md and technology transfer do they need an update.. please clean the mess the two docs have turned due to constant evolution and new findings." Both docs predated the #1134 work (OiiOii fixes, dedup, .vbs wrappers, single-owner shim) and carried stale/contradictory statements.
+
+**1. TECHNOLOGY_TRANSFER.md edits (all verified against live code + live tasks before writing).**
+  - §1 (product surfaces): added the `:8190` session pool shim row and marked it **the designated consumer endpoint** the film kit actually calls; documented its OpenAI shape (`session-pool/auto`, `video/auto`, `<host>/auto`, `video/<host>/auto`, `GET /v1/models`) and clarified the `:20130` face is Anthropic-shaped `/v1/messages` — the two faces must not be conflated.
+  - §9a (video): the "only gap is a face" paragraph was stale — the async video face now lives on the shim itself (`POST /v1/video/jobs` → `GET /v1/video/jobs/{id}` → `?job_key=` → `DELETE`, backed by VideoJobStore, 202 immediate receipt, worker-thread render). Marked the gap CLOSED with a pointer to §25.
+  - §11 (file reference): added `video_job_store.py` row; updated the `session_pool.py`/`session_pool_shim.py` row to name :8190 the designated consumer endpoint.
+  - §13 (task ledger): the stale open item "wire the pool into oioi's config at :20130/v1/messages" was a direct contradiction — oioi is wired to :8190 now. Rewrote: wired + 4 contract fixes deployed (#1134), remaining step = full E2E re-verification of JSON-intent + video-receipt paths.
+  - §20 (endpoint today): stale "50 models" → live count measured this session: **53 models (28 chat + 25 video)** via `GET /v1/models`, with an explicit note that the count is a snapshot (hot-add moves it, §24), not a spec.
+  - §21 (Windows services registry — MANDATORY section): rebuilt. Task-action column now shows the verified live actions (`wscript.exe <task>.vbs` for supervisor/shim/video-router; OAuth keepalive still direct .bat — verified via `schtasks /Query /XML`). Added the #1134 launch-mechanics block: curl.exe health probe (not python), `start "" /b` detached launch (no resident cmd.exe), one-healthy-service = two-python.exe-rows (venv launcher + base interpreter, NORMAL on Py3.11/Windows), duplicate-bind guard (ExclusiveThreadingHTTPServer + EADDRINUSE no-op). Ownership rules now include the shim: `owned=False, required=False`, bat task is sole owner, with the #1134 double-ownership race documented.
+  - §22 (recovery chain — MANDATORY section): the chain diagram wrongly said the supervisor restarts the shim. Fixed: supervisor restarts only the chat pool it owns; shim and video router are restarted by their OWN bat tasks; supervisor probes-and-reports them. Added the single-owner rule callout. Persistence table row fixed to name each service's single owner.
+  - §25 (NEW section): "Consumer-contract hardening — the OiiOii live E2E fixes (worklog #1134)" — documents all four fixes (JSON-intent failover, immediate 202 video receipts, idempotent job lookup/reconciliation, cancellation), the `OMNI_VIDEO_CONFIRM_SPEND=1` spend gate, and the data-vs-code hot-reload distinction (seat files hot-reload per request; shim/pool .py changes need a relaunch).
+  - Footer updated with a #1135 change summary.
+
+**2. PORTING.md edits.**
+  - Header date bumped to 2026-08-28; scope now names the :8190 shim.
+  - Step 10: port table gained the `:8190` row (designated consumer endpoint, owned by its keepalive bat task); verify command now curls `:8190/v1/models` too.
+  - "Done when": four checks → five, adding `:8190/v1/models` returns the model list.
+  - Services inventory (2026-08-27 → 2026-08-28): task-action column shows the .vbs wrappers; bundle note says it carries `.bat` AND `.vbs` files; added the launch-mechanics paragraph (hidden .vbs, start /b, curl probe, two-python-rows-is-normal); added the single-owner rule + double-bind guard; reboot recovery chain rewritten so each service is restarted by its OWN owner, not "the supervisor restarts any dead service".
+
+**3. INTEGRITY GUARANTEES (AGENTS.md rule 0a).** §2 (Five Laws incl. the #1130 override block) and §23/§24 were NOT touched — only §1, §9a, §11, §13, §20, §21, §22 updated and §25 appended. The mandatory disaster-recovery content is intact.
+
+**4. VERIFICATION.** Live facts checked before writing: `schtasks /Query /XML` on all four tasks (3 → wscript.exe .vbs, OAuth → direct .bat); `GET /v1/models` on :8190 → 53 models (28 chat + 25 video); `omni_supervisor.py` services() table → shim `owned=False, required=False`; all three .vbs wrappers present with the hidden-window pattern; `session_pool_shim_task.bat` confirmed `start "" /b` + curl probe. No secrets logged; no seat files touched.
+
+**FILES MODIFIED.** TECHNOLOGY_TRANSFER.md, PORTING.md (docs only — no code this entry).
+**Verdict:** Both docs now match the live system. Next: E2E-verify JSON-intent + video receipt paths on :8190, then resume P3-P7 per override #1130.

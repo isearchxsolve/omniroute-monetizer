@@ -1,8 +1,8 @@
 # PORTING — move this rig to a new machine
 
 Step-wise. Run the steps in order; each one has a check you can see the result of. Written
-2026-08-26, **updated 2026-08-27** against `omni_portable.py`, `omni_supervisor.py`,
-`install_autostart.py`, `cookie_porter.py` as they exist.
+2026-08-26, **updated 2026-08-28** against `omni_portable.py`, `omni_supervisor.py`,
+`install_autostart.py`, `cookie_porter.py`, and the `:8190` session-pool shim as they exist.
 
 ## Read this first, or step 6 will waste an hour
 
@@ -199,13 +199,14 @@ python D:\omniroute-monetizer\scripts\automation\omni_supervisor.py --up
 Then verify each port answers — do not infer this from the supervisor's own output:
 
 ```bash
-curl -s http://127.0.0.1:20130/health && curl -s http://127.0.0.1:8189/v1/video/capacity
+curl -s http://127.0.0.1:20130/health && curl -s http://127.0.0.1:8190/v1/models && curl -s http://127.0.0.1:8189/v1/video/capacity
 ```
 
 | port | what | rule |
 |---|---|---|
 | `20130` | chat superset gateway (free pool, forwards to `:20128`) | mine; restart freely |
 | `8189` | video router, async `/v1/video/jobs` | mine; restart freely |
+| `8190` | **session pool shim — the designated consumer endpoint** (chat + video, OpenAI-shaped; the film kit calls this) | mine; owned by its keepalive bat task — let the task restart it, don't hand-launch a second |
 | `20128` | OmniRoute chat | **not mine. Never restart, never kill.** Idempotent `/api` calls only. |
 
 `/v1/video/capacity` reporting `totalClipsAvailable: 0` after step 8 means the seats are signed
@@ -225,24 +226,35 @@ running; this is what starts it at logon. It deliberately does not launch Chrome
 
 ## Done when
 
-All four hold at once:
+All five hold at once:
 
 - `omni_portable.py --doctor` shows no blocking problems
 - `:20130/health` reports available sessions > 0
+- `:8190/v1/models` returns the model list (the designated consumer endpoint the film kit calls)
 - `:8189/v1/video/capacity` reports the seats you signed in at step 8
 - `install_autostart.py --status` reports armed
 
-## Windows services registered on this rig (2026-08-27 inventory)
+## Windows services registered on this rig (2026-08-28 inventory)
 
 These are the scheduled tasks that keep the rig alive. On a new machine they must be re-armed
-(the bundle carries the `.bat` files; `schtasks /Create` or the installers recreate the tasks):
+(the bundle carries the `.bat` **and `.vbs`** files; `schtasks /Create` or the installers recreate
+the tasks).
 
-| Task name | Runs | Schedule | Purpose |
-|---|---|---|---|
-| `OmniRoute Rig Supervisor (keepalive)` | `supervisor_task.bat` → `omni_supervisor.py --watch` | every 5 min | Crash recovery for all owned services; reports Chrome state |
-| `OmniRoute Session Pool Shim (keepalive)` | `session_pool_shim_task.bat` → `session_pool_shim.py 8190` | every 5 min | Keeps the :8190 consumer endpoint alive |
-| `OmniRoute Video Router (keepalive)` | `video_router_task.bat` → `video_router.py` | every 5 min | Video router + Chrome seat self-heal (relaunches dead seat Chromes) |
-| `OmniRoute OAuth KeepAlive` | `oauth_keepalive_task.bat` → `oauth_keepalive.py` | hourly | Refreshes OmniRoute's own OAuth provider tokens |
+**How they launch (worklog #1134).** Three tasks run their `.bat` through a hidden `.vbs` wrapper
+(`wscript.exe <task>.vbs`, `WshShell.Run cmd, 0, False`). Running a `.bat` directly with
+`LogonType=Interactive` pops a visible console every cycle — the `.vbs` suppresses it. **Point the
+task action at the `.vbs`, not the `.bat`.** Inside each bat the service is launched with
+`start "" /b <exe> >> log 2>&1` (detached — no resident `cmd.exe` parent) and health-probed with
+`curl.exe`, not python (a python probe spawns a transient venv launcher+interpreter pair each cycle).
+Note one healthy service shows as **two** `python.exe` rows (venv launcher parent + base-interpreter
+child that holds the port) — that is normal on Python 3.11/Windows, not a duplicate.
+
+| Task name | Task action | Runs | Schedule | Purpose |
+|---|---|---|---|---|
+| `OmniRoute Rig Supervisor (keepalive)` | `wscript.exe supervisor_task.vbs` → `supervisor_task.bat` → `omni_supervisor.py --watch` | every 5 min | Crash recovery for owned services; reports Chrome state; never touches OmniRoute, video router, or the shim |
+| `OmniRoute Session Pool Shim (keepalive)` | `wscript.exe session_pool_shim_task.vbs` → `session_pool_shim_task.bat` → `session_pool_shim.py 8190` | every 5 min | Keeps the :8190 consumer endpoint alive; sets `OMNI_VIDEO_CONFIRM_SPEND=1` |
+| `OmniRoute Video Router (keepalive)` | `wscript.exe video_router_task.vbs` → `video_router_task.bat` → `video_router.py` | every 5 min | Video router + Chrome seat self-heal (relaunches dead seat Chromes) |
+| `OmniRoute OAuth KeepAlive` | `oauth_keepalive_task.bat` (direct, no `.vbs`) → `oauth_keepalive.py` | hourly | Refreshes OmniRoute's own OAuth provider tokens |
 
 Plus the Startup-folder launcher (no elevation needed):
 
@@ -250,11 +262,18 @@ Plus the Startup-folder launcher (no elevation needed):
 |---|---|---|
 | `omniroute_rig_supervisor.vbs` | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` | Starts the supervisor `--watch` loop at logon |
 
-**Reboot recovery chain:** logon → `.vbs` starts supervisor → supervisor's 5-min task restarts
-any dead service (shim, chat pool) → video router task relaunches dead seat Chromes and re-opens
-their tabs. Provider sessions persist in the Chrome profile directories on disk (they survive
-reboot natively — Chrome re-opens with the same cookies). The only thing that does NOT survive
-a reboot without help is the Chrome *process* itself — the video router task handles that.
+**Single-owner rule (worklog #1134):** each service has exactly ONE owner that restarts it. The
+shim (:8190) is owned by its bat task; the supervisor only probes it (`owned=False`). Double
+ownership is how duplicate shim instances raced onto :8190 — never reintroduce it. The shim also
+guards against double-bind: `ExclusiveThreadingHTTPServer` with `allow_reuse_address=False` plus an
+`EADDRINUSE` no-op in `run()`, so a second launch while it's up exits harmlessly.
+
+**Reboot recovery chain:** logon → `.vbs` starts supervisor → each service's OWN 5-min task
+restarts it if dead (shim via its bat task, video router via its bat task; supervisor restarts only
+the chat pool it owns) → video router task relaunches dead seat Chromes and re-opens their tabs.
+Provider sessions persist in the Chrome profile directories on disk (they survive reboot natively —
+Chrome re-opens with the same cookies). The only thing that does NOT survive a reboot without help
+is the Chrome *process* itself — the video router task handles that.
 
 ## Two failure modes that look like success
 

@@ -34,17 +34,27 @@ Three consequences fall straight out of that, and they explain nearly every desi
 3. **Lifetime promises on borrowed supply is the standing business risk.** A session harvested today
    is not guaranteed tomorrow. Every layer therefore has to degrade honestly rather than pretend.
 
-Two independent product surfaces consume the technology, and they are **never merged**:
+The product surfaces that consume the technology, and they are **never merged**:
 
 | Port | Service | Consumes |
 |------|---------|----------|
 | `:20128` | OmniRoute (chat) | paid/OAuth provider connections |
 | `:8189` | Video router | video seats over CDP |
-| `:20130` | Chat pool server (new) | harvested browser chat sessions |
+| `:20130` | Chat pool server (superset gateway) | harvested browser chat sessions + forwards to `:20128` |
+| `:8190` | **Session pool shim — the designated consumer endpoint** | every grabbed session (chat + video) via `session_pool.py` |
 
-oioi calls **`POST /v1/messages`** (Anthropic-shaped) — *not* `/v1/chat/completions`. This cost real
-time: an entire earlier round of route certification probed the wrong endpoint, so its results were
-meaningless. A route can time out on `/v1/chat/completions` and answer in 10s on `/v1/messages`.
+**`:8190` is the one the film kit (OiiOii/Codex) actually calls.** Base URL
+`http://127.0.0.1:8190/v1` (use `127.0.0.1`, never `localhost` — the system proxy intercepts
+loopback). OpenAI-compatible. Chat: `POST /v1/chat/completions` with `{"model": "session-pool/auto"}`.
+Video: `{"model": "video/auto"}` (or pin a host with `"<host>/auto"` / `"video/<host>/auto"`).
+Discover everything via `GET /v1/models`. The async video contract (`POST /v1/video/jobs` →
+`GET /v1/video/jobs/{id}` → `?job_key=` reconciliation → `DELETE`) is served here too — see §25.
+
+The older `:20130` chat pool server speaks **`POST /v1/messages`** (Anthropic-shaped) — *not*
+`/v1/chat/completions`. This cost real time: an entire earlier round of route certification probed
+the wrong endpoint, so its results were meaningless. A route can time out on
+`/v1/chat/completions` and answer in 10s on `/v1/messages`. The `:8190` shim is OpenAI-shaped,
+so do not conflate the two faces.
 
 ---
 
@@ -525,12 +535,13 @@ The greps proved it, flat out — video is **the same one-liner as chat** (Law 4
   `recorded_exchange`; `session_pool_shim.py` already serves it over HTTP on `:8190` as model
   `video/{host}/auto`. So the engine is complete end-to-end.
 
-**The only gap** is a face, not an engine: oioi's film kit calls the frozen ASYNC contract on **`:8189`**
-(POST `/v1/video/jobs` → GET `/v1/video/jobs/{id}` → `/v1/video/capacity` → DELETE), but the existing
-face is synchronous `/v1/chat/completions` on `:8190`. Remaining work = a thin `:8189 /v1/video/jobs`
-face over the existing pool video path (reuse `video_router.py`'s JobStore + daemon-thread for the
-202→poll shape; keep `job_key` idempotency). **`video_provider.py`'s normalise/estimate/confirm/submit
-stack is the WRONG engine — it is not on the replay supply path.**
+**The gap is closed (worklog #1134, 2026-08-28).** The async video face now lives on the shim
+itself: `:8190` serves `POST /v1/video/jobs` → `GET /v1/video/jobs/{id}` → `?job_key=`
+reconciliation → `DELETE`, backed by the durable `VideoJobStore` ledger
+(`state/video_jobs_8190.json`, idempotent by the consumer's `job_key`, atomic writes). The submit
+answers **202 with an immediate receipt** and renders in a worker thread — the HTTP connection is
+never blocked on the render. `video_provider.py`'s normalise/estimate/confirm/submit stack is the
+WRONG engine — it is not on the replay supply path. Full contract detail in §25.
 
 ### 9b. The live-CDP router half `[INVENTORY]`
 
@@ -582,7 +593,8 @@ The single most valuable habit in this repo: **probe, never trust recorded statu
 | `video_universal_replay.py` | — | video replay swap: `VideoUniversalSessionClient`, prompt→body, job-id + URL extraction, async poll (§9a) `[VERIFIED]` |
 | `record_video_job.py` | — | read-only capture of the async submit→poll→result exchange into the secret (§9a) `[VERIFIED]` |
 | `digen_session_replay.py` / `veo_session_replay.py` | — | per-provider video replay clients `[VERIFIED]` |
-| `session_pool.py` / `session_pool_shim.py` | — | LRU router over every grabbed session (chat + video via `modality`); HTTP face on `:8190` `[VERIFIED]` |
+| `session_pool.py` / `session_pool_shim.py` | — | LRU router over every grabbed session (chat + video via `modality`); HTTP face on `:8190` — the designated consumer endpoint (§1, §25) `[VERIFIED]` |
+| `video_job_store.py` | — | thread-safe durable video-job ledger at `state/video_jobs_8190.json`; idempotent by `job_key`, atomic writes; backs the shim's async `/v1/video/jobs` contract (§25) `[VERIFIED 2026-08-28]` |
 | `selenium_browser_replay.py` | ~430 | **in-browser** replay: attaches to the live signed-in Chrome, fires the recorded exchange via `fetch()` from the request's own origin, with send-time reconstruction + live-bearer harvest (§18) `[VERIFIED 2026-08-27]` |
 | `launch_and_harvest_chats.py` | — | multi-tab sweep orchestrator `[INVENTORY]` |
 | `drive_capture.py` / `drive.py` | 1,198 | the working Google-path harvester `[INVENTORY]` |
@@ -616,15 +628,19 @@ harvesters. They are history, not architecture. Do not extend them.
 
 End goal: *"total 4 tasks end of story film making app ready."*
 
-**Open items on Task 3:** wire the pool into oioi's config at
-`http://127.0.0.1:20130/v1/messages` and verify end-to-end; rebuild the oioi config
-(`state/oioi_inference_config_final.json` is **INVALID** — it names the credit-drained
-`agentrouter/claude-opus-5` as `isFamilyDefault`; `ainative` credentials are dead, returning HTTP 404
-"no active credentials"); fix and run `probe_route_truth.py`; give `you.com` a prompt it fits
-(it is served-eligible but scored `NO_ANSWER` on arithmetic — it answered `58` *plus* an aurora
-borealis explanation, i.e. it is a search product and prefers natural-language prompts); re-capture
-Gemini and the three auth-dead seats (`cerebras`, `groq`, `chatgpt` — CDP recorded only 6 headers for
-Cerebras and no auth header; consider merging `Network.requestWillBeSentExtraInfo`).
+**Open items on Task 3:** oioi is wired to the **`:8190` session pool shim** (the designated
+consumer endpoint, §1/§25) — chat via `{"model": "session-pool/auto"}`, video via the async
+`/v1/video/jobs` contract. The four live-E2E contract fixes (JSON-intent failover, immediate
+202 video receipts, idempotent job lookup, cancellation) are deployed (worklog #1134); the
+remaining step is a full end-to-end re-verification of the JSON-intent + video-receipt paths.
+Still open: rebuild the oioi config (`state/oioi_inference_config_final.json` is **INVALID** —
+it names the credit-drained `agentrouter/claude-opus-5` as `isFamilyDefault`; `ainative`
+credentials are dead, returning HTTP 404 "no active credentials"); fix and run
+`probe_route_truth.py`; give `you.com` a prompt it fits (it is served-eligible but scored
+`NO_ANSWER` on arithmetic — it answered `58` *plus* an aurora borealis explanation, i.e. it is
+a search product and prefers natural-language prompts); re-capture Gemini and the three
+auth-dead seats (`cerebras`, `groq`, `chatgpt` — CDP recorded only 6 headers for Cerebras and
+no auth header; consider merging `Network.requestWillBeSentExtraInfo`).
 
 ## 14. The superset gateway `[VERIFIED 2026-08-26]`
 
@@ -1012,36 +1028,63 @@ load-balanced endpoint serving 50 models (25 chat + 23 video + auto routes)**. T
    429+`Retry-After` on pool exhaustion. All four properties proven, not asserted.
 
 **The endpoint today:** `http://127.0.0.1:8190/v1` (use 127.0.0.1, never localhost — system
-proxy intercepts loopback). OpenAI-compatible. Currently in open single-operator mode
-(no `tenant_map.json`); drop one into `state/secrets/` to enable Bearer-key tenancy without
-restart.
+proxy intercepts loopback). OpenAI-compatible. Live count as of 2026-08-28: **53 models
+(28 chat + 25 video, incl. the `session-pool/auto` and `video/auto` routes)** — the number
+moves as seats are hot-added/removed (§24), so treat any fixed count as a snapshot, not a
+spec. Currently in open single-operator mode (no `tenant_map.json`); drop one into
+`state/secrets/` to enable Bearer-key tenancy without restart.
 
 ---
 
-## 21. Windows services registry — everything that keeps this rig alive `[VERIFIED 2026-08-27]`
+## 21. Windows services registry — everything that keeps this rig alive `[VERIFIED 2026-08-28]`
 
-Four scheduled tasks + one Startup-folder launcher. All verified present and running:
+Four scheduled tasks + one Startup-folder launcher. All verified present and running.
 
-| Task name | Runs | Schedule | Status | Purpose |
+**How the tasks launch (worklog #1134, 2026-08-28 — the console-pop fix).** Three of the four
+tasks run their `.bat` through a hidden `.vbs` wrapper (`wscript.exe <task>.vbs`,
+`WshShell.Run cmd, 0, False`). Task Scheduler running a `.bat` directly with
+`LogonType=Interactive` opens a visible console window every cycle — that was the 5-minute
+"pop" the operator saw. The `.vbs` wrapper suppresses it. **Do not re-point these tasks back
+at the `.bat` directly.**
+
+| Task name | Task action (verified) | Runs | Schedule | Purpose |
 |---|---|---|---|---|
-| `OmniRoute Rig Supervisor (keepalive)` | `supervisor_task.bat` → `omni_supervisor.py --watch` | every 5 min | Ready | Crash recovery for all owned services; reports Chrome state; never touches OmniRoute or video router |
-| `OmniRoute Session Pool Shim (keepalive)` | `session_pool_shim_task.bat` → `session_pool_shim.py 8190` | every 5 min | Running | Keeps the :8190 consumer endpoint alive |
-| `OmniRoute Video Router (keepalive)` | `video_router_task.bat` → `video_router.py` | every 5 min | Running | Video router + **Chrome seat self-heal** (relaunches dead seat Chromes, re-opens tabs) |
-| `OmniRoute OAuth KeepAlive` | `oauth_keepalive_task.bat` → `oauth_keepalive.py` | hourly | Ready | Refreshes OmniRoute's own OAuth provider tokens via `POST /api/providers/{id}/refresh` |
+| `OmniRoute Rig Supervisor (keepalive)` | `wscript.exe supervisor_task.vbs` → `supervisor_task.bat` → `omni_supervisor.py --watch` | every 5 min | Crash recovery for owned services; reports Chrome state; never touches OmniRoute, video router, or the shim |
+| `OmniRoute Session Pool Shim (keepalive)` | `wscript.exe session_pool_shim_task.vbs` → `session_pool_shim_task.bat` → `session_pool_shim.py 8190` | every 5 min | Keeps the :8190 consumer endpoint alive. Sets `OMNI_VIDEO_CONFIRM_SPEND=1` (credit-spending video submit gate) |
+| `OmniRoute Video Router (keepalive)` | `wscript.exe video_router_task.vbs` → `video_router_task.bat` → `video_router.py` | every 5 min | Video router + **Chrome seat self-heal** (relaunches dead seat Chromes, re-opens tabs) |
+| `OmniRoute OAuth KeepAlive` | `oauth_keepalive_task.bat` (direct, no `.vbs`) → `oauth_keepalive.py` | hourly | Refreshes OmniRoute's own OAuth provider tokens via `POST /api/providers/{id}/refresh` |
 
 | Launcher | Location | Purpose |
 |---|---|---|
 | `omniroute_rig_supervisor.vbs` | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` | Starts the supervisor `--watch` loop at logon (no elevation needed) |
 
+**Inside each service bat (worklog #1134 — the detached-launch + dedup pattern):**
+- **Health probe uses `curl.exe`, not python.** `curl.exe -s -o nul --max-time 3 http://127.0.0.1:8190/v1/models`.
+  A python probe spawns a transient venv launcher+interpreter pair every cycle — visible churn.
+- **Launch uses `start "" /b <exe> >> log 2>&1`.** This runs the service in the background and lets
+  the bat exit immediately — **no resident `cmd.exe` parent** holding the console open for the
+  service's lifetime. The child survives the bat's console closing; stdout still lands in the log.
+- **One healthy service = TWO `python.exe` rows.** On Python 3.11/Windows the venv's `python.exe`
+  is a *venvlauncher* that spawns the base interpreter as a persistent child ~33ms later. The
+  interpreter child holds the port LISTEN. This is NORMAL, not a duplicate. Do not "dedup" it.
+- **Duplicate-bind guard.** The shim binds via `ExclusiveThreadingHTTPServer` with
+  `allow_reuse_address=False`, and `run()` wraps the bind in `try/except OSError(EADDRINUSE/10048)`
+  → a clean "already serving, exiting (dedup)" no-op. So a second task firing while the shim is up
+  exits harmlessly instead of racing onto the port (§24).
+
 **Ownership rules (encoded in `omni_supervisor.py`, not just docs):**
 - OmniRoute (:20128) is **never restarted, stopped, or killed**. Probe and report only.
 - Video router (:8189) belongs to its own scheduled task. Supervisor marks it `owned=False`.
+- **Session pool shim (:8190) belongs to its own scheduled task. Supervisor marks it
+  `owned=False, required=False` and probes `/v1/models` only.** Worklog #1134: it was
+  `owned=True` here AND owned by the bat task — that double ownership is exactly how duplicate
+  shim instances raced onto :8190. **Single owner now: the bat task.**
 - Restarts match on command line, not port. Foreign process on our port = `PORT_TAKEN_BY_OTHER`,
   left alone. Backoff `[5, 15, 60, 180]` then gives up and reports.
 
 ---
 
-## 22. Crash / reboot / reset recovery — what comes back by itself `[VERIFIED 2026-08-27]`
+## 22. Crash / reboot / reset recovery — what comes back by itself `[VERIFIED 2026-08-28]`
 
 ### The recovery chain
 
@@ -1049,15 +1092,24 @@ Four scheduled tasks + one Startup-folder launcher. All verified present and run
 reboot/reset
   → Windows logon
     → omniroute_rig_supervisor.vbs starts supervisor --watch
-      → supervisor task (every 5 min) restarts any dead owned service:
-          • chat pool (:20130)
-          • session pool shim (:8190)
-      → video router task (every 5 min) self-heals Chrome seats:
+      → supervisor task (every 5 min, via supervisor_task.vbs) restarts dead OWNED services:
+          • chat pool (:20130)   [owned=True]
+        and probes-and-reports (never restarts):
+          • session pool shim (:8190)  [owned by its own bat task]
+          • video router (:8189)       [owned by its own bat task]
+          • OmniRoute (:20128)         [never touched]
+      → session pool shim task (every 5 min, via session_pool_shim_task.vbs) restarts the
+        shim if :8190 is not answering (curl.exe probe; start "" /b detached launch)
+      → video router task (every 5 min, via video_router_task.vbs) self-heals Chrome seats:
           • detects dead seat Chrome (port not answering)
           • relaunches with correct profile + CDP flags + NO_DISCARD_FLAGS
           • re-opens the remembered tab URLs (from state/video_accounts.json)
       → OAuth keepalive task (hourly) refreshes OmniRoute provider tokens
 ```
+
+**Single-owner rule (worklog #1134):** each service has exactly ONE owner that restarts it.
+The shim is owned by its bat task; the supervisor only probes it. Double ownership is how
+duplicate instances raced onto :8190 — never reintroduce it.
 
 ### What persists across reboot (no human needed)
 
@@ -1067,7 +1119,7 @@ reboot/reset
 | Provider sign-in sessions in Chrome profiles | ✅ | Cookies persist in profile's `Cookies` DB on disk; Chrome re-opens with them intact |
 | Chrome seat processes | ✅ (≤5 min) | Video router task relaunches dead seats automatically |
 | Tab URLs | ✅ | Remembered in `state/video_accounts.json`, re-opened on seat relaunch |
-| Shim / chat pool / video router processes | ✅ (≤5 min) | Supervisor + scheduled tasks restart them |
+| Shim / chat pool / video router processes | ✅ (≤5 min) | Each restarted by its single owner: shim + video router by their own bat tasks, chat pool by the supervisor |
 | OmniRoute OAuth tokens | ✅ | Hourly keepalive refreshes them |
 | Pool cooldown state | ✅ | `state/session_pool_state.json` (atomic writes) |
 
@@ -1202,5 +1254,51 @@ the keepalive task's "is it answering?" guard stays honest.
 
 ---
 
-*Living document — appended as work proceeds. Last updated 2026-08-28.*
+## 25. Consumer-contract hardening — the OiiOii live E2E fixes (worklog #1134, 2026-08-28)
+
+The film kit (OiiOii/Codex) consumes `:8190` for real. Its first live E2E run exposed four
+contract violations that a synthetic probe would never have caught. All four are fixed in the
+shim + pool and deployed. The lesson: **the consumer's exact call shape is the spec — test
+against it, not against a convenient approximation.**
+
+### Fix 1 — JSON-intent requests must never be polluted
+OiiOii asks the chat pool for structured output (JSON). A seat that wraps the answer in prose
+or markdown fences breaks the consumer's parser. The shim now detects JSON intent
+(`_wants_strict_json(req)` via `_JSON_INTENT_RE`) and passes `strict_json=True` into
+`session_pool.chat()`. The pool then **fails over any seat that violates the JSON contract**
+(`is_strict_json(text)` check) instead of returning prose where JSON was promised.
+
+### Fix 2 — Video submit answers 202 with an immediate durable receipt
+The old path blocked the HTTP connection for the whole render. Now the shim creates the
+durable job record **first** (idempotent by the consumer's `job_key`), answers **202 with the
+receipt immediately**, and renders in a worker thread. The connection is never held by the
+render. `VIDEO_EST_SECONDS = 300` sets the ETA in the receipt.
+
+### Fix 3 — Idempotent job lookup & reconciliation
+A replayed `job_key` returns the **same** record with 200 and never spends twice. Lookup
+surface: `GET /v1/video/jobs/{job_id}` (status by durable id), `GET /v1/video/jobs?job_key=<key>`
+(reconciliation by the consumer's durable key), `GET /v1/video/jobs` (full ledger, operator).
+Backed by `VideoJobStore` (`video_job_store.py`) — thread-safe, atomic writes, persisted at
+`state/video_jobs_8190.json`.
+
+### Fix 4 — Cancellation
+`DELETE /v1/video/jobs/{job_id}` cancels a pending job and records it in the ledger.
+
+### The spend gate
+`OMNI_VIDEO_CONFIRM_SPEND=1` is set in `session_pool_shim_task.bat` before any credit-spending
+video submit. This is the explicit operator consent for spending free-tier credits — it lives
+in the bat (the shim's single owner), not scattered across callers.
+
+### Deployment mechanics (why no restart was needed for seat flips, but was for these)
+Seat add/remove hot-reloads per request (§24) with NO restart. These four fixes are **code**
+changes to the shim/pool, so they required a shim restart to take effect — done by letting the
+owning bat task relaunch it. Do not confuse the two: data (seat files) hot-reloads; code
+(shim/pool `.py`) needs a relaunch.
+
+---
+
+*Living document — appended as work proceeds. Last updated 2026-08-28 (worklog #1134: §1
+consumer endpoint, §9a video face closed, §11 video_job_store, §20 live model count, §21
+.vbs wrappers + single-owner + detached launch, §22 recovery chain ownership, §25
+consumer-contract hardening).*
 
