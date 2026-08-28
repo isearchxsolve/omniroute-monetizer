@@ -1,6 +1,13 @@
 
 
 
+### [2026-08-29 02:55] #1152 - OIOI INFERENCE CONFIG REBUILT
+
+- **Action**: Rebuilt state/oioi_inference_config_final.json to correctly point to the :8190 session pool shim and utilize the canonical models (session-pool/auto, rontier, codex/gpt-5.6-sol, ideo/auto).
+- **Gap Fixed**: Removed invalid defaults pointing to dead credentials (gentrouter/claude-opus-5 and inative).
+- **Validation**: Configuration syntax verified and correctly wired to the designated consumer endpoint.
+- **Status**: Complete.
+
 ### [2026-08-29 01:25] #1151 - FOUR-PORT CHROME VIDEO SEAT DRY-RUN SWEEP & VERIFICATION
 
 - **Operator Directive**: Execute diagnostic dry-run sweep across all 4 Chrome profile instances (:9222, :9223, :9224, :9225) to verify video generation UI readiness.
