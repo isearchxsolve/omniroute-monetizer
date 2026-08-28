@@ -1,5 +1,7 @@
 # 🚨 TOP PRIORITY AGENT RULES 🚨
 
+0a. **MANDATORY ON EVERY AGENT LOAD / RELOAD / CONTEXT RESTORE: READ [`TECHNOLOGY_TRANSFER.md`](TECHNOLOGY_TRANSFER.md) BEFORE ANY ACTION.** This document is the ecosystem's fail-proofing and disaster-recovery manual: the Five Laws (§2), the Windows services registry and ownership rules (§21), the crash/reboot recovery chain (§22), Chrome-dependency supply tiers (§23), and zero-restart hot-add of providers (§24). Skipping it is exactly how agents re-learn invariants the expensive way — e.g. the 2026-08-28 incident where an agent killed the task-owned :8190 shim and hand-launched a replacement, not knowing the bat already set the spend gate and seat files hot-reload per request with NO restart. If context budget is limited, the minimum is §2 (Five Laws) + §21–§24. This read happens BEFORE reading MASTER_WORKLOG.md, before touching any service, port, seat file, or Chrome.
+
 0. **BEFORE TOUCHING ANYTHING CHROME-RELATED, READ [`CHROME_RULES_FOR_AGENTS.md`](CHROME_RULES_FOR_AGENTS.md).** On 2026-08-22 this project's own automation silently revoked the operator's Google sessions on all four profiles, repeatedly, for days — then a first "fix" patched one file out of nine and was reported as complete. That document is short, and it is not optional. Summary of the one rule: **automation never opens the operator's Chrome profile, for any reason.** A login wall in automation's own profile is a correct result — report it, do not route around it.
 1. **DETAILED WORKLOG SUMMARIES:** The `MASTER_WORKLOG.md` entry MUST NEVER be a simple one-line summary. Each and every action, observation, and step must be detailed extensively in the worklog. Make it a habit. This is the absolute top priority.
 2. **INCREMENTAL COMMITS:** Incremental commits should be done continuously. This is the second highest priority. Make it a habit.
@@ -82,7 +84,7 @@ Build and maintain the master end-to-end OmniRoute Monetizer.
 1. **Every action, finding, fix, decision, and verification MUST be appended** to
    `MASTER_WORKLOG.md` in the Session Log as a numbered entry (`### [YYYY-MM-DD HH:MM] #N — TITLE`)
    using the template in that file. Log on the go, incrementally — never batch at the end.
-2. **When resuming work**, read `MASTER_WORKLOG.md` first to restore context before doing anything else.
+2. **When resuming work**, read `TECHNOLOGY_TRANSFER.md` (mandatory on every agent load/reload — see rule 0a) and then `MASTER_WORKLOG.md` to restore context before doing anything else.
 3. **Secrets rule:** never log tokens, passwords, or API keys — redact everything (matches T11).
 4. **Failure honesty:** log failures with the actual error output; never mark broken work as done.
 5. When the todo list changes, reflect it in the entry.
