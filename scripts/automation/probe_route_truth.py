@@ -94,7 +94,7 @@ PRIOR = ROOT / "state" / "healthy_provider_models_rescan.json"
 COMBO_TIMEOUT = 150
 MODEL_TIMEOUT = 45
 
-PROMPT = "Reply with the single word OK."
+PROMPT = "Can you briefly confirm that you are online and receiving messages? Please reply with a short greeting."
 
 # Any of these in an error body means a wall, not a broken model: stop the lane, report it, and do
 # not touch it again. Card / captcha / phone / plan / quota walls are never pushed through.

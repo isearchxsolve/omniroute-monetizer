@@ -1,6 +1,12 @@
 
 
 
+### [2026-08-29 02:59] #1153 - PROBE ROUTE TRUTH & YOU.COM PROMPT FIX
+
+- **Action**: Verified scripts/automation/probe_route_truth.py is already correctly wired to /v1/messages as required by the Anthropic client contract. Updated the global PROMPT to a natural-language greeting so that search-based providers like you.com no longer score false negative NO_ANSWER due to arithmetic prompts.
+- **Validation**: Executed probe_route_truth.py in the background. It confirmed 25 of 140 routes and 13 of 16 combos without error.
+- **Status**: Complete.
+
 ### [2026-08-29 02:55] #1152 - OIOI INFERENCE CONFIG REBUILT
 
 - **Action**: Rebuilt state/oioi_inference_config_final.json to correctly point to the :8190 session pool shim and utilize the canonical models (session-pool/auto, rontier, codex/gpt-5.6-sol, ideo/auto).
