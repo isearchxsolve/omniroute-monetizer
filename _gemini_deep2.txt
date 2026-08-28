@@ -1,0 +1,5 @@
+url: https://gemini.google.com/app/0c5b1ae2e238e5a8
+videos: []
+dlButtons: ['Open sidebar /', 'Open menu for conversation actions. /', 'Open notebook actions menu /', 'Download full size image /', 'Open mode picker, currently Pro Extended / Pro Extended']
+busyMatches: ['BODY.enable-lm-loading-animation lr26 enable-lm-fast-follows chrome-context', 'DIV.loading-content-spinner-container ng-star-inserted', 'MAT-PROGRESS-SPINNER.mat-mdc-progress-spinner mdc-circular-progress mat-primary mdc-circula', 'DIV.mdc-circular-progress__determinate-container', 'svg.[object SVGAnimatedString]', 'circle.[object SVGAnimatedString]']
+tail: ' | Omni. | You said Omni sentinel shot: a lone lighthouse beam sweeping across dark ocean waves at midnight | Omni sentinel shot: a lone lighthouse beam sweeping across dark ocean waves at midnight | Gemini said | You said Reply with exactly one word: ready | Reply with exactly one word: ready | Gemini said | ready | You said Reply with exactly one word: pong. | Reply with exactly one word: pong. | Gemini said | pong | Pro | Extended | Gemini is AI and can make mistakes. | Defining the Objective'

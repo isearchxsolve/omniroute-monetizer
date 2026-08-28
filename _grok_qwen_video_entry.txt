@@ -1,0 +1,12 @@
+== grok.com :9222
+   url: https://grok.com/c/e70a95f2-d16f-4d02-9c4e-fcf1f0ae5f82?rid=44880534-1d99-471b-8f3e-855f5bda2292
+   composer: DIV val="a red ball rolling slowly across a bright white studio floor"
+   videoish: [{'tag': 'A', 'role': '', 'lbl': 'Imagine', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Regenerate', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Create share link', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Regenerate', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Create share link', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Regenerate', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Create share link', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Regenerate', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Create share link', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Regenerate', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Create share link', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Regenerate', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Create share link', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Regenerate', 'checked': None}, {'tag': 'BUTTON', 'role': '', 'lbl': 'Create share link', 'checked': None}]
+   videos: []
+   tail: 'e word: Omni. | Omni | Reply exactly one word: Omni. | Omni | Reply exactly one word: Omni. | Omni | Reply with exactly one word: pong. | pong | Reply with exactly one word: pong. | pong | a red ball rolling slowly across a bright white studio floor, smooth camera tracking shot, soft lighting | Fast'
+== chat.qwen.ai :9222
+   url: https://chat.qwen.ai/c/930b4619-aeb4-4033-83c2-b90bc8923630
+   composer: TEXTAREA val=""
+   videoish: [{'tag': 'BUTTON', 'role': '', 'lbl': 'Regenerate', 'checked': None}]
+   videos: []
+   tail: 'mni sentinel," its powerful beam cutting through the pitch-black midnight ocean waves with misty spray and deep, atmospheric lighting. | Let me know if you would like to adjust any details, explore a different style, or generate another scene! | 3/3 | Auto | AI-generated content may not be accurate.'

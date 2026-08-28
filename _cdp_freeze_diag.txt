@@ -1,0 +1,12 @@
+heygen.com     :9223 url=https://app.heygen.com/home title='HeyGen - HeyGen'
+   pre-wake evaluate 1+1 HUNG >8s  (frozen/discarded suspected)
+   bringToFront -> ok
+   post-wake evaluate 1+1 -> 2 in 0.4s
+magichour.ai   :9223 url=https://magichour.ai/create?mh-attr=none title='Magic Hour | New Project'
+   pre-wake evaluate 1+1 HUNG >8s  (frozen/discarded suspected)
+   bringToFront -> ok
+   post-wake evaluate 1+1 -> 2 in 1.8s
+giz.ai         :9223 url=https://www.giz.ai/assistant/0u31pga3bPAZeqtk_D2Rc?mode=chat&baseModel title='Lighthouse Beam Over Midnight Waves | Gi'
+   pre-wake evaluate 1+1 HUNG >8s  (frozen/discarded suspected)
+   bringToFront -> ok
+   post-wake evaluate 1+1 -> 2 in 0.0s

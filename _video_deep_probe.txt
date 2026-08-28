@@ -1,0 +1,18 @@
+== gemini.google.com :9222
+   url: https://gemini.google.com/app/0c5b1ae2e238e5a8
+   busy: BODY.enable-lm-loading-animation lr26 enable-lm-fast-follows chrome-context-v39 hide- | 'Gemini\nChat\nSpark\nBETA\nNew chat\nSearch chats\nImages\nVideos\nLibrary\nNotebooks\nNew notebook\nUntitled n'
+   promptSeen: True
+   buttons: ['Open menu for conversation actions. /', 'Close sidebar /', '/ Chat', '/ Spark BETA', 'Toggle Notebooks / Notebooks', 'Open notebook actions menu /', 'Toggle Recents / Recents', 'More options for Reply exactly one word: Omni. /', 'More options for One-Word Verification Confirmatio', 'More options for Single Word Reply Test /', 'More options for OmniRoute Provider Credential Wir', 'More options for Branch • From Lost to First Rupee']
+   tail: 'y | Reply with exactly one word: ready | Gemini said | ready | You said Reply with exactly one word: pong. | Reply with exactly one word: pong. | Gemini said | pong | Branch in new chat | Listen | Export to Docs | Draft in Gmail | Report legal issue | Show thinking steps | a red ball rolling slowly across a white floor | Pro | Extended | Gemini is AI and can make mistakes. | Defining the Objective'
+== grok.com :9222
+   url: https://grok.com/c/e70a95f2-d16f-4d02-9c4e-fcf1f0ae5f82?rid=44880534-1d99-471b-8f3e-855f5bda2292
+   busy: None | None
+   promptSeen: True
+   buttons: ['/ Toggle Sidebar', 'Search /', 'History /', '/', 'More /', 'Update share link /', 'Toggle Right Panel /', 'Go to response 1 of 22 /', 'Go to response 2 of 22 /', 'Go to response 3 of 22 /', 'Go to response 4 of 22 /', 'Go to response 5 of 22 /']
+   tail: "tly one word: Omni. | Omni | Reply with exactly one word: Omni. | Omni | Reply exactly one word: Omni. | Omni | Reply exactly one word: Omni. | Omni | Reply exactly one word: Omni. | Omni | Reply with exactly one word: pong. | pong | Reply with exactly one word: pong. | pong | a red ball rolling slowly across a white floor | Fast | Failed to execute 'write' on 'Clipboard': Document is not focused."
+== chat.qwen.ai :9222
+   url: https://chat.qwen.ai/c/930b4619-aeb4-4033-83c2-b90bc8923630
+   busy: None | None
+   promptSeen: False
+   buttons: ['Expand sidebar /', 'New Chat /', 'Chat Menu /', '/', 'Select Model / Qwen3.7-Plus', 'Copy /', 'Edit /', 'Select Mode /', 'Voice Input /']
+   tail: "Qwen3.7-Plus | Omni sentinel shot: a lone lighthouse beam sweeping across dark ocean waves at midnight | Thinking completed | The image has been successfully generated based on your description of a lone lighthouse beam sweeping across dark ocean waves at midnight. Let me know if you'd like any adjustments or have another scene in mind! | Auto | AI-generated content may not be accurate."

@@ -1,0 +1,19 @@
+menu items (17):
+   [menuitem] 'Upload files'  cls=mat-mdc-list-item mdc-list-item mat-mdc-tooltip-trigger mat-
+   [] 'Upload files'  cls=menu-text gem-menu-item-label
+   [menuitem] 'Add from Drive'  cls=mat-mdc-list-item mdc-list-item mat-mdc-tooltip-trigger mat-
+   [] 'Add from Drive'  cls=menu-text gem-menu-item-label menu-entry-with-badge
+   [] 'More uploads'  cls=mat-mdc-list-item mdc-list-item mat-mdc-list-item-interactiv
+   [] 'More uploads'  cls=label gds-label-l gem-menu-item-label
+   [] 'Create image'  cls=mat-mdc-tooltip-trigger toolbox-drawer-menu-item ng-tns-c266
+   [menuitemcheckbox] 'Create image'  cls=mat-mdc-list-item mdc-list-item mat-mdc-tooltip-trigger mat-
+   [] 'Create image'  cls=label gem-menu-item-label
+   [] 'Create video'  cls=mat-mdc-tooltip-trigger toolbox-drawer-menu-item ng-tns-c266
+   [menuitemcheckbox] 'Create video'  cls=mat-mdc-list-item mdc-list-item mat-mdc-tooltip-trigger mat-
+   [] 'Create video'  cls=label gem-menu-item-label
+   [] 'Create music'  cls=mat-mdc-tooltip-trigger toolbox-drawer-menu-item ng-tns-c266
+   [menuitemcheckbox] 'Create music'  cls=mat-mdc-list-item mdc-list-item mat-mdc-tooltip-trigger mat-
+   [] 'Create music'  cls=label gem-menu-item-label
+   [] 'More tools'  cls=mat-mdc-list-item mdc-list-item mat-mdc-list-item-interactiv
+   [] 'More tools'  cls=label gem-menu-item-label ng-tns-c266380429-26 gds-label-l
+overlays: ['Gemini', 'New chat', 'Search chats', 'Images', 'Videos', 'Library']

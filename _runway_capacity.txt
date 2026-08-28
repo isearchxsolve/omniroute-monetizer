@@ -1,0 +1,33 @@
+=== RTST API SEATS (free reads) ===
+  session_rtst_ai.json               credits=1.0     clips_affordable=0   cheapest={'model': 'vidu', 'credits': 6.0, 'duration': 3, 'resolution': 540}
+  session_rtst_ai_niloy.json         credits=20.0    clips_affordable=3   cheapest={'model': 'vidu', 'credits': 6.0, 'duration': 3, 'resolution': 540}
+  session_rtst_ai_seat2.json         credits=20.0    clips_affordable=3   cheapest={'model': 'vidu', 'credits': 6.0, 'duration': 3, 'resolution': 540}
+  session_rtst_ai_seat3.json         credits=20.0    clips_affordable=3   cheapest={'model': 'vidu', 'credits': 6.0, 'duration': 3, 'resolution': 540}
+  RTST TOTAL CLIPS AFFORDABLE: 9
+
+=== ALL VIDEO SEATS (dispatch map) ===
+video seats: 23  dispatchable: 23
+
+  akool.com                  disp=True  path=vchrome reason=no_recording
+  app.heygen.com             disp=True  path=vchrome reason=no_recording
+  chat.qwen.ai               disp=True  path=vchrome reason=no_recording
+  chatglm.cn                 disp=True  path=vchrome reason=no_recording
+  digen.ai                   disp=True  path=replay  reason=ok
+  digen.ai                   disp=True  path=vchrome reason=no_recording
+  gemini.google.com          disp=True  path=vchrome reason=no_recording
+  grok.com                   disp=True  path=vchrome reason=no_recording
+  labs.google                disp=True  path=replay  reason=ok
+  labs.google                disp=True  path=vchrome reason=no_recording
+  labs.google                disp=True  path=vchrome reason=no_recording
+  magichour.ai               disp=True  path=vchrome reason=no_recording
+  rtst.ai                    disp=True  path=api     reason=no_recording
+  rtst.ai                    disp=True  path=api     reason=no_recording
+  rtst.ai                    disp=True  path=api     reason=no_recording
+  rtst.ai                    disp=True  path=api     reason=no_recording
+  veoaifree.com              disp=True  path=vchrome reason=no_recording
+  veoaifree.com              disp=True  path=vchrome reason=no_recording
+  veoaifree.com              disp=True  path=vchrome reason=no_recording
+  www.creen.ai               disp=True  path=vchrome reason=no_recording
+  www.giz.ai                 disp=True  path=vchrome reason=no_recording
+  www.meta.ai                disp=True  path=vchrome reason=no_recording
+  www.nemovideo.com          disp=True  path=vchrome reason=no_recording

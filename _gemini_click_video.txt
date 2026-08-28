@@ -1,0 +1,4 @@
+click Create video: {'ok': True, 'before': None, 'label': 'Create video'}
+videoChecked: false
+stopPresent: False
+tail: ': pong. | Reply with exactly one word: pong. | Gemini said | pong | Pro | Extended | Gemini is AI and can make mistakes. | Defining the Objective | Upload files | Add from Drive | More uploads | Create image | Create video | Create music | More tools'

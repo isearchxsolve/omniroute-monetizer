@@ -1,0 +1,5 @@
+grok.com             SKIP modality=chat (chat seat, not video)
+grok.com             SKIP modality=chat (chat seat, not video)
+chat.qwen.ai         SKIP modality=chat (chat seat, not video)
+grok.com             FAIL   442.8s  ChatError: NO_VIDEO: no video URL appeared within 420s
+chat.qwen.ai         FAIL   480.0s  ChatError: NO_VIDEO: no video URL appeared within 420s

@@ -1,0 +1,12 @@
+== GEMINI ==
+   url: https://gemini.google.com/app/044e35b06ab18ac7
+   videos: []
+   links: ['https://gemini.google.com/videos', 'https://gemini.google.com/videos']
+   dlButtons: ['Videos Videos', 'Free AI Image & Video Generator Comparison Free AI', 'More options for Free AI Image & Video Generator C', 'Deselect Videos Videos']
+   composer: "\n"
+   stopBtns: ['Stop response']
+   modeLabels: ['Videos', 'Free AI Image & Video Generator Comparison', 'More options for Free AI Image & Video Generator Comparison', 'Deselect Videos', 'Open mode picker, currently Pro Extended']
+   tail: "amera tracking shot, soft ligh… | a red ball rolling slowly across a bright white studio floor, smooth camera tracking shot, soft lighting | Gemini said | I'm generating your video. This could take a few minutes, so check back to see when your video is ready. | Generating your video… | This could take a few minutes. | Videos | Pro | Extended | Landscape (16:9) | Gemini is AI and can make mistakes."
+== QWEN FULL URL ==
+   videos: ['https://cdn.qwenlm.ai/output/cb69a0e9-dfb0-4753-b7b8-29756cd00310/t2v/254b66de-fb7b-45cd-9cbb-8313d7bc589f/d260aa4e-c060-47c3-9b56-02e2e60e1cb3.mp4?key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyZXNvdXJjZV91c2VyX2lkIjoiY2I2OWEwZTktZGZiMC00NzUzLWI3YjgtMjk3NTZjZDAwMzEwIiwicmVzb3VyY2VfaWQiOiJkMjYwYWE0ZS1jMDYwLTQ3YzMtOWI1Ni0wMmUyZTYwZTFjYjMiLCJyZXNvdXJjZV9jaGF0X2lkIjpudWxsfQ.88_HsIVS5gFfKQa181KaB8XRKRTZdwV-K8m9pzGzkr4', 'https://cdn.qwenlm.ai/output/cb69a0e9-dfb0-4753-b7b8-29756cd00310/t2v/254b66de-fb7b-45cd-9cbb-8313d7bc589f/d260aa4e-c060-47c3-9b56-02e2e60e1cb3.mp4?key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyZXNvdXJjZV91c2VyX2lkIjoiY2I2OWEwZTktZGZiMC00NzUzLWI3YjgtMjk3NTZjZDAwMzEwIiwicmVzb3VyY2VfaWQiOiJkMjYwYWE0ZS1jMDYwLTQ3YzMtOWI1Ni0wMmUyZTYwZTFjYjMiLCJyZXNvdXJjZV9jaGF0X2lkIjpudWxsfQ.88_HsIVS5gFfKQa181KaB8XRKRTZdwV-K8m9pzGzkr4']
+   links: []

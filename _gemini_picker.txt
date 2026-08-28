@@ -1,0 +1,7 @@
+open picker: {'ok': True, 'label': 'Open mode picker, currently Pro Extended'}
+menu items (4):
+   [menuitem] '3.5 Flash-Lite Fastest answers'  cls=ng-star-inserted active
+   [menuitem] '3.7 Flash All-around help New'  cls=ng-star-inserted
+   [menuitem] '3.1 Pro Advanced reasoning'  cls=selected ng-star-inserted
+   [menuitem] 'Extended thinking Complex problem solving'  cls=selected ng-star-inserted
+overlayText: ['Gemini', 'New chat', 'Search chats', 'Images']

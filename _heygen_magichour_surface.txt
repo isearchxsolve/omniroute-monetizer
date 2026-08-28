@@ -1,0 +1,10 @@
+== heygen.com :9223
+   url: https://app.heygen.com/home
+   inputs: []
+   editables: []
+   buttons: ['/', 'Collapse navigation /', 'Home / Home', 'Video agent / Video agent', 'Scene by scene / Scene by scene', 'Single scene / Single scene', 'Translate / Translate', 'Ask Rhys / Ask Rhys 2', '/ Start Recording', '/ Personalization: Something else', '/ Ads & Promo Create Now', '/ Educational Video Create Now', '/ Expert Explainer Create Now', '/ Tips & How-To Create Now', '/ News Brief Video Create Now']
+== magichour.ai :9223
+   url: https://magichour.ai/create?mh-attr=none
+   inputs: [{'tag': 'INPUT', 'type': 'text', 'ph': 'Search', 'cls': 'file:text-foreground placeholder:text-muted-foreground selec', 'id': ''}, {'tag': 'INPUT', 'type': 'text', 'ph': 'Search', 'cls': 'file:text-foreground placeholder:text-muted-foreground selec', 'id': ''}, {'tag': 'INPUT', 'type': 'text', 'ph': 'Search templates', 'cls': 'file:text-foreground placeholder:text-muted-foreground selec', 'id': ''}, {'tag': 'INPUT', 'type': 'text', 'ph': 'Search', 'cls': 'file:text-foreground placeholder:text-muted-foreground selec', 'id': ''}]
+   editables: []
+   buttons: ['/ Search ⌘ K', '/ Upgrade', '/ Feed', '/ 500', '/', 'Slide 1 of 13 /', 'Slide 2 of 13 /', 'Slide 3 of 13 /', 'Slide 4 of 13 /', 'Slide 5 of 13 /', 'Slide 6 of 13 /', 'Slide 7 of 13 /', 'Slide 8 of 13 /', 'Slide 9 of 13 /', 'Slide 10 of 13 /']

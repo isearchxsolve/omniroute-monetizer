@@ -1,0 +1,3 @@
+gemini.google.com    :9222 STILL_BUSY     videos=[] links=[] busy=True
+grok.com             :9222 ERROR(failed)  videos=[] links=[] busy=False
+chat.qwen.ai         :9222 NOTHING        videos=[] links=[] busy=False

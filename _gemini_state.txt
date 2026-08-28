@@ -1,0 +1,6 @@
+composerVisible: True
+composerKind: 'contenteditable'
+composerText: '\n'
+stopBtns: []
+spinner: True
+tail: "'s music video | Moon | Analyze me | Indie pastel | Science concept | 360 photo booth | Doodle effects | Comic book | Decades fashion | Step into history | Montage | Meme me | Noir | Videos | Pro | Extended | Landscape (16:9) | Defining the Objective"
