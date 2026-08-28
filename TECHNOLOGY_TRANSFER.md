@@ -78,6 +78,19 @@ recorded exchange is replayed byte-for-byte with **one** string substitution. Th
 per-provider request adapters** — one sentinel prompt, all providers.
 *Response*-shape handlers (e.g. unwrapping Google's envelope) are not adapters and are legitimate.
 
+> **⚠️ OPERATOR OVERRIDE — 2026-08-28 (worklog #1130).** For the explicit purpose of achieving
+> **full Chrome independence**, the operator has authorized **hand-rolling send-time fields in
+> Python** where the situation demands: recomputing PoW (e.g. DeepSeek `x-ds-pow-response`),
+> signatures (e.g. chatglm `X-Sign`/`X-Nonce`/`X-Timestamp`), nonces, and multi-step / websocket
+> protocols. Law 4's "never reconstruct" and Doctrine 3a's "never hand-replay" are **LIFTED** for
+> this purpose. **Laws 1, 2, 3, 5 remain fully in force:** a hand-rolled seat is graduated only
+> after it passes Law-3 *computed* verification (arithmetic probe → `58`, never echoable), and
+> walls (captcha / card / quota) are still reported, never solved. Chrome (V8) stays the
+> capture / onboard / re-auth instrument; the goal is that **runtime serving no longer requires it**.
+> The V8 cost that drove this decision is lock-serialization (`_DRIVER_LOCK`, one browser one
+> typist) + UI latency + resident RAM — not per-execution forking (Selenium/CDP merely attach to
+> long-lived seat Chromes).
+
 ### Law 5 — Report the wall, never solve it.
 Card / captcha / phone / plan / quota walls are a **correct, reportable outcome**. Stop; do not
 hammer, solve, or pay. Passwords are never recorded and never typed. Secrets never reach stdout —

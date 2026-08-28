@@ -83,6 +83,12 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
     # contract; we are only the environment. So recorded_ws seats deliberately fall through
     # to the Chrome-blueprint dispatch below (ChromeReplayClient), where the provider's own
     # JS opens its own websocket and runs its own protocol by itself. No hand-replay client.
+    #
+    # OPERATOR OVERRIDE 2026-08-28 (worklog #1130): the "no hand-replay" prohibition above is
+    # LIFTED for the full-Chrome-independence push. Hand-rolled stateless clients (PoW/signature
+    # recompute, websocket/multi-step replay) are now authorized per-seat; each must pass Law-3
+    # computed verification before graduation. Dispatch behavior here changes per-seat as seats
+    # graduate (via "runtime": "replay" / api.kind / a dedicated client), not wholesale.
 
     # GRADUATION LEVER (worklog #1113 — runtime-Chrome is an anti-pattern).
     # Driving a live Chrome tab per request serializes every call through ONE
