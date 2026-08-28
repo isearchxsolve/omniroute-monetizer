@@ -1,4 +1,27 @@
 
+
+
+### [2026-08-29 01:25] #1151 - FOUR-PORT CHROME VIDEO SEAT DRY-RUN SWEEP & VERIFICATION
+
+- **Operator Directive**: Execute diagnostic dry-run sweep across all 4 Chrome profile instances (:9222, :9223, :9224, :9225) to verify video generation UI readiness.
+- **Diagnostic Execution Results**:
+  1. **Port 9222 (providers)**:
+     - 
+tst.ai (/ai-video-generation) -> **DRY_RUN_OK** (Textarea composer located, prompt landed).
+     - labs.google (/fx/tools/flow) -> **DRY_RUN_OK** (ProseMirror contenteditable div located, prompt landed).
+  2. **Port 9223 (niloy)**:
+     - kool.com (/apps/image-to-video/edit) -> **DRY_RUN_OK** (Div composer located, prompt landed).
+     - labs.google (/fx/tools/flow) -> **DRY_RUN_OK** (ProseMirror contenteditable div located, prompt landed).
+  3. **Port 9224 (seat2)**:
+     - labs.google (/fx/tools/flow) -> **DRY_RUN_OK** (Composer located, prompt landed).
+     - 
+tst.ai -> Served via API-credential seat (RtstApiClient / pi.kind=rtst with JWT token eyJhbGci...), bypasses CDP UI driving by design.
+  4. **Port 9225 (seat3)**:
+     - labs.google (/fx/tools/flow) -> **DRY_RUN_OK** (Composer located, prompt landed).
+- **Validation**:
+  - python scripts/automation/session_pool.py list: Verified 55 session files loaded, **50 dispatchable sessions** active across chat and video modalities.
+  - Zero-restart hot-reload on :8190 verified intact.
+- **Status**: Operational and verified.
 ### [2026-08-29 00:30] #1138 - FOUR-PROFILE CHROME AUDIT, STATELESS ROUTING & GRADUATION AUDIT
 
 - **Operator Request**: Audit all four Chrome profiles (`:9222`, `:9223`, `:9224`, `:9225`), verify active page targets, and audit seat graduation across state/secrets.
