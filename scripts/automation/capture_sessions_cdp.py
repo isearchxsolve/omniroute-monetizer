@@ -77,7 +77,9 @@ SENTINEL_FORMS = (
 # A POST carrying the sentinel to one of these is instrumentation, not the chat call.
 NOISE = ("telemetry", "analytics", "tracking", "/track", "beacon", "segment", "sentry",
          "metrics", "/log", "logging", "clarity.ms", "doubleclick", "google-analytics",
-         "browser.events.data.microsoft.com", "datadog", "amplitude", "mixpanel", "posthog")
+         "browser.events.data.microsoft.com", "datadog", "amplitude", "mixpanel", "posthog",
+         "/title", "/prepare", "/updates", "/translatehtml")
+
 
 WALL_TEXT = ("verify you are human", "i'm not a robot", "im not a robot", "recaptcha", "hcaptcha",
              "cloudflare", "complete the captcha", "add a payment method", "add payment method",
@@ -103,7 +105,11 @@ CHAT_URL_OVERRIDES = {
     "StepFun Web": "https://yuewen.cn/chat",              # StepFun ships chat as Yuewen
     "Baichuan Web": "https://ying.baichuan-ai.com/chat",  # yi.* is the model page, ying.* is chat
     "Together AI Chat": "https://api.together.ai/playground/v2/chat",
+    "ChatGPT Free Web": "https://chatgpt.com/",
+    "Claude Official Web": "https://claude.ai/new",
+    "Zhipu GLM Chat": "https://chatglm.cn/",
 }
+
 
 # Video generators. They have no chat composer, so a chat sweep can only ever report NO_COMPOSER for
 # them -- which reads as a failure when it is a category error. They are Task 2's targets and are
@@ -149,7 +155,7 @@ JS_FOCUS_COMPOSER = r"""
   const r = el.getBoundingClientRect();
   return { ok: true, tag: el.tagName.toLowerCase(),
            editable: el.isContentEditable === true,
-           candidates: cands.length,
+           candidates: cands.length, score: cands[0].score,
            x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
 })()
 """
@@ -457,7 +463,11 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
             if state == "complete":
                 focus = c.evaluate(JS_FOCUS_COMPOSER) or {}
                 if focus.get("ok"):
-                    break
+                    # Wait for high-scoring composers (textarea/contenteditable) instead of locking onto a search bar immediately
+                    if focus.get("score", 0) >= 100000 or (time.monotonic() > deadline_ready - 10.0):
+                        break
+                    else:
+                        focus = {} # Reset to keep polling
             time.sleep(1.5)
         row["readyState"] = c.evaluate("document.readyState")
         if not focus.get("ok"):
