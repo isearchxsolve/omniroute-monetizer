@@ -72,10 +72,14 @@ field records what a seat was PROBED for, not what it can do. See probe_video_en
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
+import os
 import pathlib
+import re
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 
@@ -100,6 +104,70 @@ WORKLOG = ROOT / "MASTER_WORKLOG.md"
 
 POOL_HEALTH = "http://127.0.0.1:20130/health"
 POOL_PORT = 20130
+
+# --- D1 hardening (2026-08-29, worklog #1157/#1158) --------------------------
+# Run 3 completed every capture and rebuilt the canonical gate, then died after
+# the pool restart and BEFORE save_ledger()/append_worklog(): 31 seats of
+# verdicts existed only in a stdout buffer that was lost on kill, and the ledger
+# kept run 1 forever. Four independent defences, all load-bearing:
+#   * INSTANCE_LOCK  -- one --apply at a time. (The run-3 "two processes" were
+#     one venv-launcher pair -- see worklog #1157 -- so the real hazard is a
+#     second concurrent run, which WOULD double-spend free seats.)
+#   * restart_pool_bounded -- step 3 gets a hard wall-clock ceiling so a wedged
+#     /health or Start-Process can never park the run again.
+#   * finally: save_ledger + append_worklog -- the ledger and the worklog are
+#     written no matter how the run dies, and every run's verdict table is also
+#     copied into ledger["runs"] so the data survives even a lost log.
+#   * line-buffered stdout under --apply -- a killed run leaves an honest log
+#     tail instead of silently losing the last buffered block.
+INSTANCE_LOCK = ROOT / "state" / "graduate_all_seats.lock"
+RESTART_DEADLINE_S = 180      # hard ceiling on the whole step-3 restart
+# The system proxy intercepts loopback on this machine (TECHNOLOGY_TRANSFER §1);
+# the /health probe must never route through it.
+_HEALTH_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def _pid_alive(pid: int) -> bool:
+    """Windows liveness probe. os.kill(pid, 0) is NOT safe here: on Windows any
+    signal other than the CTRL_* events terminates the target process."""
+    if pid <= 0:
+        return False
+    try:
+        k32 = ctypes.windll.kernel32
+        handle = k32.OpenProcess(0x1000, False, int(pid))  # PROCESS_QUERY_LIMITED_INFORMATION
+    except Exception:
+        return True  # cannot tell -- assume alive and refuse a second run (fail closed)
+    if not handle:
+        return False
+    k32.CloseHandle(handle)
+    return True
+
+
+def acquire_instance_lock() -> tuple[bool, str]:
+    """Single-instance guard for --apply. A stale lock (owner dead) is taken over."""
+    if INSTANCE_LOCK.exists():
+        try:
+            stale_pid = int(INSTANCE_LOCK.read_text(encoding="utf-8").strip() or "0")
+        except ValueError:
+            stale_pid = 0
+        if _pid_alive(stale_pid):
+            return False, (f"another graduate_all_seats.py --apply appears to be running "
+                           f"(pid {stale_pid}, lock {INSTANCE_LOCK.name}); if that is wrong, "
+                           f"delete the lock file")
+        print(f"  stale instance lock (pid {stale_pid} is gone) -- taking over", flush=True)
+    INSTANCE_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    INSTANCE_LOCK.write_text(str(os.getpid()), encoding="utf-8")
+    return True, "acquired"
+
+
+def release_instance_lock() -> None:
+    try:
+        if INSTANCE_LOCK.exists() and \
+                INSTANCE_LOCK.read_text(encoding="utf-8").strip() == str(os.getpid()):
+            INSTANCE_LOCK.unlink()
+    except OSError:
+        pass
+
 
 CAPTURE_TIMEOUT_S = 240
 REPLAY_TIMEOUT_S = 180
@@ -236,10 +304,18 @@ def regenerate_gate() -> tuple[bool, dict]:
 
 def restart_pool() -> dict:
     """Restart :20130 so it reloads the gate. NEVER touches :20128 -- that is OmniRoute's, not ours."""
+    # Kill the port-owning interpreter AND any lingering chat_pool_server.py python
+    # process (e.g. the venv-launcher parent of a previous pair, which would otherwise
+    # survive its child and linger until the next reboot). The filter matches only the
+    # pool script's own name -- this orchestrator's command line never contains it, and
+    # powershell.exe is excluded by the Name filter itself.
     rc, out = run(["powershell", "-NoProfile", "-Command",
                    f"Get-NetTCPConnection -LocalPort {POOL_PORT} -State Listen "
                    f"-ErrorAction SilentlyContinue | ForEach-Object "
-                   f"{{ Stop-Process -Id $_.OwningProcess -Force }}"], 45)
+                   f"{{ Stop-Process -Id $_.OwningProcess -Force }}; "
+                   f"Get-CimInstance Win32_Process -Filter \"Name like '%python%'\" "
+                   f"| Where-Object {{ $_.CommandLine -match 'chat_pool_server\\.py' }} "
+                   f"| ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}"], 45)
     time.sleep(1.5)
     run(["powershell", "-NoProfile", "-Command",
          f"Start-Process -FilePath '{PY}' -ArgumentList '{POOL_SERVER.relative_to(ROOT)}' "
@@ -249,23 +325,80 @@ def restart_pool() -> dict:
     for _ in range(12):
         time.sleep(2)
         try:
-            with urllib.request.urlopen(POOL_HEALTH, timeout=8) as resp:
+            with _HEALTH_OPENER.open(POOL_HEALTH, timeout=8) as resp:
                 return json.loads(resp.read().decode("utf-8", "replace"))
         except Exception:
             continue
     return {}
 
 
-def append_worklog(lines: list[str]) -> None:
-    if not lines:
+def restart_pool_bounded(deadline_s: int = RESTART_DEADLINE_S) -> dict:
+    """restart_pool() with a hard wall-clock ceiling (D1).
+
+    The worker is a daemon thread: if the restart wedges, the run moves on without
+    health data instead of parking forever, and the supervisor task reloads :20130
+    from the gate within 5 minutes regardless (TECHNOLOGY_TRANSFER §22).
+    """
+    result: dict = {}
+    done = threading.Event()
+
+    def _worker() -> None:
+        nonlocal result
+        try:
+            result = restart_pool()
+        except Exception as exc:  # never let step 3 raise past the ledger write
+            result = {"error": f"restart_pool raised: {exc!r}"}
+        finally:
+            done.set()
+
+    thread = threading.Thread(target=_worker, name="restart-20130", daemon=True)
+    thread.start()
+    if not done.wait(deadline_s):
+        print(f"    WARNING :20130 restart did not finish within {deadline_s}s -- continuing "
+              f"without health data (the supervisor task will reload the pool)", flush=True)
+    return result
+
+
+def next_worklog_number() -> int:
+    """The active numbering stream's next number: the LAST numbered entry in file
+    order, + 1. NOT the global max -- the file carries three stray 4xxx-numbered
+    entries from an older merged log (#4552/#4876/#4877 sit near its beginning),
+    and max() would jump the live sequence (#1157) to #4878."""
+    try:
+        text = WORKLOG.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return 1
+    matches = list(re.finditer(r"^### \[[^\]]*\] #(\d+)", text, re.MULTILINE))
+    return (int(matches[-1].group(1)) + 1) if matches else 1
+
+
+def append_worklog(lines: list[str], *, summary: str = "") -> None:
+    """Append this run's verdict table as a numbered MASTER_WORKLOG.md entry.
+
+    The old '### Graduation pass <ts>' heading broke the worklog's house rule
+    ('### [YYYY-MM-DD HH:MM] #N — title') and made run tables un-greppable. Never
+    raises (D1): if the append fails, the verdict table is still in ledger['runs'].
+    """
+    if not (lines or summary):
         return
-    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
-    body = [f"\n### Graduation pass {stamp}\n",
+    n = next_worklog_number()
+    stamp = time.strftime("%Y-%m-%d %H:%M")
+    body = [f"\n### [{stamp}] #{n} — graduate_all_seats run: {summary or 'verdict table'}\n",
             "| seat | host | verdict | detail | graduated |",
-            "|---|---|---|---|---|"] + lines + [""]
-    with WORKLOG.open("a", encoding="utf-8") as fh:
-        fh.write("\n".join(body) + "\n")
-    print(f"  worklog: {WORKLOG.name} (+{len(lines)} seats)")
+            "|---|---|---|---|---|"] + list(lines) + [""]
+    try:
+        with WORKLOG.open("a", encoding="utf-8") as fh:
+            fh.write("\n".join(body) + "\n")
+        print(f"  worklog: entry #{n} appended to {WORKLOG.name}", flush=True)
+    except OSError as exc:
+        fallback = ROOT / "state" / f"grad_worklog_fallback_{time.strftime('%Y%m%d_%H%M%S')}.md"
+        try:
+            fallback.write_text("\n".join(body) + "\n", encoding="utf-8")
+            print(f"  WARNING worklog append failed ({exc}); table saved to {fallback.name}",
+                  flush=True)
+        except OSError:
+            print(f"  WARNING worklog append failed ({exc}); the table is preserved in "
+                  f"ledger['runs']", flush=True)
 
 
 def main() -> int:
@@ -352,58 +485,91 @@ def main() -> int:
         print("\nnothing to do.")
         return 0
 
+    if args.apply:
+        locked, lock_msg = acquire_instance_lock()
+        if not locked:
+            print(f"\nREFUSING to run: {lock_msg}", flush=True)
+            return 1
+        # Line-buffered stdout: run 3 was killed with its last 8 KB of transcript still
+        # in the buffer, which is exactly why its log appears to stop mid-step. Flush
+        # every line so a killed run leaves an honest tail behind.
+        try:
+            sys.stdout.reconfigure(line_buffering=True)
+        except (AttributeError, ValueError):
+            pass
+
     rows, graduated = [], []
-    for index, t in enumerate(plan, 1):
-        site = t.get("knownSite") or t.get("host")
-        host = t.get("host") or ""
-        print(f"\n[{index}/{len(plan)}] {site}  ({host})", flush=True)
-        entry = ledger["seats"].setdefault(site, {"host": host, "attempts": 0})
-        entry["attempts"] = int(entry.get("attempts", 0)) + 1
-        entry["lastAttemptAt"] = int(time.time())
+    summary = ""
+    try:
+        for index, t in enumerate(plan, 1):
+            site = t.get("knownSite") or t.get("host")
+            host = t.get("host") or ""
+            print(f"\n[{index}/{len(plan)}] {site}  ({host})", flush=True)
+            entry = ledger["seats"].setdefault(site, {"host": host, "attempts": 0})
+            entry["attempts"] = int(entry.get("attempts", 0)) + 1
+            entry["lastAttemptAt"] = int(time.time())
 
-        verdict, detail = capture_and_verify(site, host, args.port, args.wait)
-        entry["verdict"] = verdict
-        entry["step"] = "verdict" if verdict.startswith("REPLAY") else "capture"
-        entry["detail"] = detail[-300:]
-        passed = verdict == "REPLAY_OK"
-        print(f"    steps 1-2  {verdict}  {detail[:90]}")
-        if verdict == "WALL":
-            print("           wall -- recorded once, never knocked on again")
-        if passed:
-            graduated.append(site)
-            entry["attempts"] = 0
-        rows.append(f"| {site} | {host} | {verdict} | {detail[:70].replace('|', '/')} | "
-                    f"{'yes' if passed else 'no'} |")
-        save_ledger(ledger)
-        time.sleep(SEAT_DELAY_S)
+            verdict, detail = capture_and_verify(site, host, args.port, args.wait)
+            entry["verdict"] = verdict
+            entry["step"] = "verdict" if verdict.startswith("REPLAY") else "capture"
+            entry["detail"] = detail[-300:]
+            passed = verdict == "REPLAY_OK"
+            print(f"    steps 1-2  {verdict}  {detail[:90]}", flush=True)
+            if verdict == "WALL":
+                print("           wall -- recorded once, never knocked on again", flush=True)
+            if passed:
+                graduated.append(site)
+                entry["attempts"] = 0
+            rows.append(f"| {site} | {host} | {verdict} | {detail[:70].replace('|', '/')} | "
+                        f"{'yes' if passed else 'no'} |")
+            save_ledger(ledger)
+            time.sleep(SEAT_DELAY_S)
 
-    print(f"\nstep 3 graduate -- {len(graduated)} seat(s) replayed clean: {', '.join(graduated) or '-'}")
-    if graduated:
-        ok, counts = regenerate_gate()
-        print(f"    canonical gate rebuilt: {ok}  {counts}")
-        if ok and not args.no_restart:
-            health = restart_pool()
-            served = health.get("served", "?")
-            ready = health.get("readyNow", "?")
-            hosts = [p.get("host") for p in health.get("providers", [])]
-            print(f"    :20130 reloaded -- served {served}, ready {ready}")
-            for h in hosts:
-                print(f"      {h}")
-            for site in graduated:
-                entry = ledger["seats"][site]
-                entry["servedByPool"] = any(
-                    (entry.get("host") or "") in str(h) for h in hosts)
-                if not entry["servedByPool"]:
-                    print(f"    WARNING {site} replayed clean but the pool is not serving it -- "
-                          f"its verdict is not REPLAY_OK in the canonical gate")
-        elif args.no_restart:
-            print("    --no-restart: the pool has NOT reloaded, so these seats are still invisible")
+        print(f"\nstep 3 graduate -- {len(graduated)} seat(s) replayed clean: "
+              f"{', '.join(graduated) or '-'}", flush=True)
+        if graduated:
+            ok, counts = regenerate_gate()
+            print(f"    canonical gate rebuilt: {ok}  {counts}", flush=True)
+            if ok and not args.no_restart:
+                # Bounded (D1): a hung restart must never park the run. Worst case it
+                # degrades to missing health data; the supervisor task reloads :20130
+                # from the gate within 5 minutes regardless (TECHNOLOGY_TRANSFER §22).
+                health = restart_pool_bounded()
+                served = health.get("served", "?")
+                ready = health.get("readyNow", "?")
+                hosts = [p.get("host") for p in health.get("providers", [])]
+                print(f"    :20130 reloaded -- served {served}, ready {ready}", flush=True)
+                for h in hosts:
+                    print(f"      {h}", flush=True)
+                for site in graduated:
+                    entry = ledger["seats"][site]
+                    entry["servedByPool"] = any(
+                        (entry.get("host") or "") in str(h) for h in hosts)
+                    if not entry["servedByPool"]:
+                        print(f"    WARNING {site} replayed clean but the pool is not serving "
+                              f"it -- its verdict is not REPLAY_OK in the canonical gate",
+                              flush=True)
+            elif args.no_restart:
+                print("    --no-restart: the pool has NOT reloaded, so these seats are still "
+                      "invisible", flush=True)
 
-    ledger["runs"].append({"at": int(time.time()), "planned": len(plan),
-                           "graduated": graduated})
-    save_ledger(ledger)
-    append_worklog(rows)
-    print(f"\nledger: {LEDGER.relative_to(ROOT)}")
+        summary = f"{len(graduated)}/{len(plan)} graduated"
+        ledger["runs"].append({"at": int(time.time()), "planned": len(plan),
+                               "graduated": graduated, "rows": rows})
+    finally:
+        # D1: the ledger and the worklog are written NO MATTER HOW the run dies.
+        if not summary:
+            summary = ("no seats executed" if not rows else
+                       f"{len(rows)}/{len(plan)} seats attempted (run did not finish; "
+                       f"partial table)")
+        try:
+            save_ledger(ledger)
+        except OSError as exc:
+            print(f"    WARNING ledger write failed: {exc}", flush=True)
+        append_worklog(rows, summary=summary)
+        if args.apply:
+            release_instance_lock()
+    print(f"\nledger: {LEDGER.relative_to(ROOT)}", flush=True)
     return 0
 
 

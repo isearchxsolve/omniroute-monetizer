@@ -7939,3 +7939,71 @@ gated on tools present).
 **Operator flag:** Gemini CookieMismatch — `accounts.google.com` is blocked by UNSUITABLE_HOSTS
 and the harness NAVIGATE landed back on the CookieMismatch wall; needs a manual Google session
 repair on the automation seat (not automated, per Chrome rules).
+
+### [2026-08-29 22:09] #1157 — Session start: handover absorbed, D1-dupe VOID (venvlauncher pairs), D2 root cause found, D1 hang narrowed
+
+**Startup chain (rule 0a):** read `TECHNOLOGY_TRANSFER.md` in full (§1–§26, incl. mandatory §2 Five
+Laws + §21–§24), `HANDOVER_8190_SHIM_2026-08-29.md`, `HANDOVER_GRADUATION_GAPS_2026-08-29.md`
+(= this session's briefing), worklog tail (#1155–#1156), `graduate_all_seats.py` (all 411 lines),
+`tab_graduation_sweep.py`, `replay_check.py` (full), `chat_pool_server.py` `Pool._load()`,
+`state/graduation_ledger.json`, `state/replay_check.json` (all 21 rows), `state/grad_apply_run3.log`
+(all 172 lines).
+
+**Live state verified:** `:8190`→PID 19016 (shim, healthy), `:20130`→PID 34888 (chat pool, 12
+providers), `:20128`→PID 22364 (OmniRoute — untouched), CDP `:9222`→PID 19460. Timezone of this
+box confirmed UTC+5:30 by epoch math (gate `generatedAt` 15:33:13Z = 21:03:13 local, 8 s before the
+pool restart 21:03:21 — so run 3 hung strictly AFTER `regenerate_gate()`, inside/after
+`restart_pool()`).
+
+**FINDING 1 — handover todo "D1-dupe / clean the non-owner twins" is VOID.** §21 of
+TECHNOLOGY_TRANSFER (worklog #1134) states it verbatim: *"One healthy service = TWO python.exe
+rows. On Python 3.11/Windows the venv's python.exe is a venvlauncher that spawns the base
+interpreter as a persistent child … This is NORMAL, not a duplicate. Do not 'dedup' it."*
+Process-tree evidence agrees: 12596→19016 (shim), 34088→34888 (pool), 2936→8936 (supervisor),
+2088→6348 (video router) — all four services show the identical launcher-pair shape, and the
+PARENT is the port-owner's launcher, not a second instance. Nothing will be killed. Same
+correction applies to run 3's "two graduate_all_seats processes" (33600 venv + 30748 Python311
+= ONE invocation), so the "double-spawn bug" hypothesis is withdrawn; a single-instance lockfile
+is still being added because two concurrent `--apply` runs WOULD double-spend seats.
+
+**FINDING 2 — D2 root cause (exact).** `tab_graduation_sweep.execute_one()` builds
+`--only` as `site.lower().replace(" ", "_")`, but `capture_sessions_cdp.slug()` (line 349) is
+`name.replace(" ","_").replace("/","_").replace(".","_").lower()`. Dots differ: `1min.AI` →
+`--only 1min.ai` vs file `session_1min_ai.json` → **0 matches** → `replay_check.py` returns 1
+("no session_*.json") and **writes no verdict**. Same for `V0 by Vercel (v0.app)` → `(v0.app)`
+vs `(v0_app)`, and `DuckDuckGo AI Chat (duck.ai)` → `(duck.ai)` vs `(duck_ai)`. Qwen has a
+verdict because its name has no dot (`qwen_chat_(alibaba)` matches both sides) — the handover's
+"7 missing" is really: 1min, chatx, duck, v0, veoaifree, veoaifree_chat_web truly missing
+scratch verdicts; qwen's exists as `replay_qwen_chat_alibaba.json`. SECOND bug in the same
+line: a loose `--only` substring can match TWO session files (`veoaifree` matches
+`session_veoaifree.json` AND `session_veoaifree_chat_web.json`) → one seat unit would spend two
+live replays. Fix: derive `--only` from the actual session filename (exact-stem match).
+
+**FINDING 3 — D1 hang narrowed + a buffering trap.** Run-3's log ends at the gate-rebuild print;
+the next expected prints (`:20130 reloaded …`, worklog ack) never landed, ledger `runs[]` was
+never appended. Because the run was NOT launched with `python -u` and stdout went to a file
+(block-buffered), everything after the last 8 KB flush was **lost on kill** — so "the print is
+missing" does not prove where it hung; the hang is anywhere between `restart_pool()` entry and
+`append_worklog()`. Fixes being applied: `sys.stdout.reconfigure(line_buffering=True)` under
+`--apply`, `restart_pool()` wrapped in a daemon thread with a hard 180 s ceiling, no-proxy
+opener for the `/health` poll (system proxy intercepts loopback, §1), lingering
+`chat_pool_server.py` processes killed alongside the port owner, and `save_ledger()` +
+numbered `append_worklog()` hoisted into a `finally` with the run's verdict table also copied
+into `ledger["runs"]` so the data survives any death.
+
+**FINDING 4 — gate phantom dupes are two-layered.** `state/replay_check.json` has 21 rows for 19
+hosts (`session_chatx.json` is a SECOND chatgpt.com capture, both REPLAY_OK; veoaifree.com has a
+WALL row + a REPLAY_OK row). `chat_pool_server._verdict_map()` already dedupes verdicts per host,
+but `Pool._load()` (lines 239–251) appends one Provider PER SESSION FILE — that is where the
+phantom providers come from. Fix: dedupe `results[]` by host at gate-write time
+(`replay_check.py`), dedupe providers per host in `Pool._load()`, repair the current gate file
+in place with a no-network script, then restart :20130 and verify `/health`.
+
+**Plan (each step logged + committed incrementally):** (1) commit prior session's uncommitted
+shim/pool/test/universal_replay changes as their own commit; (2) D1 hardening in
+`graduate_all_seats.py`; (3) D2 slug fix in `tab_graduation_sweep.py`; (4) gate dedupe
+(`replay_check.py` + `chat_pool_server.py` + in-place file repair + pool restart); (5) D3
+backfill of run-3 (ledger `runs[]` + worklog table from `state/grad_apply_run3.log`); (6) verify
+(plan-only orchestrator run, py_compile, lock/pid unit checks, `/health` counts); (7) update the
+handover doc with resolution status. WebSocket capture/replay client (iFlytek/Meta/Grok/Copilot)
+remains the high-ROI next engineering item — not started this session.
