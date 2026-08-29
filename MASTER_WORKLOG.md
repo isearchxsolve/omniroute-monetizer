@@ -8155,3 +8155,59 @@ canonical when that file is next touched (documented in the canonical docstring)
 **Next:** graduation pass run 4 (`--apply`) for the four resumable seats — Cohere is the seat this
 fix was for; then the websocket capture+replay build (iFlytek first).
 
+### [2026-08-29 23:02] #1161 — graduate_all_seats run 4 (BACKFILLED): 2/4 graduated
+
+**Backfill note:** transcript `grad_apply_run4.log` parsed; no request was re-sent. The ledger's per-seat entries were already current (save_ledger ran per seat) -- only the end-of-run sinks were lost. **The transcript ends before step 3:** the orchestrator died (run 4: the agent console's stdout transcoder stopped draining, so the next print() blocked forever, and the console later killed the process) after the per-seat writes; the graduated list is derived from the rows' REPLAY_OK verdicts, and the gate regen / pool restart never ran.
+Graduated: Qwen Chat (Alibaba), Cohere Coral Web
+Skipped before start (27): Together AI Chat — 2 attempts already, same failure; 1min.AI — 2 attempts already, same failure; ChatHub Web — 2 attempts already, same failure; Inner AI Web — 2 attempts already, same failure; Aymo AI — 2 attempts already, same failure; Cerebras Inference Chat — 2 attempts already, same failure; DeepSeek Chat — already REPLAY_OK; Mistral Le Chat — already REPLAY_OK; Zhipu GLM Chat — 2 attempts already, same failure; ChatGPT Free Web — 2 attempts already, same failure; Claude Official Web — already REPLAY_OK; SambaNova Cloud Chat — walled -- never re-knocked without --retry-walls; Groq Chat — 2 attempts already, same failure; Microsoft Copilot Web — 2 attempts already, same failure; Grok on X / Grok Web — 2 attempts already, same failure; HuggingChat — walled -- never re-knocked without --retry-walls; Monica AI — 2 attempts already, same failure; Pollinations AI Web — 2 attempts already, same failure; V0 by Vercel (v0.app) — 2 attempts already, same failure; Coze Web — 2 attempts already, same failure; Doubao Web (ByteDance) — 2 attempts already, same failure; Genspark AI — already REPLAY_OK; Meta AI Web — 2 attempts already, same failure; iFlytek SparkDesk — 2 attempts already, same failure; Baichuan Web — 2 attempts already, same failure; You.com Chat — walled -- never re-knocked without --retry-walls; Yuewen Chat — 2 attempts already, same failure
+
+| seat | host | verdict | detail | graduated |
+|---|---|---|---|---|
+| Qwen Chat (Alibaba) | chat.qwen.ai | REPLAY_OK | 58 | yes |
+| Cohere Coral Web | dashboard.cohere.com | REPLAY_OK | [matched the report's only row, 'api.cohere.com'] 58 | yes |
+| Felo AI Web | felo.ai | NO_ANSWER | 200 but the extracted reply is not only '58': http_error: http error 4 | no |
+| Perplexity Free Web | www.perplexity.ai | NO_ANSWER | 200 but the extracted reply is not only '58': 58what is 58 minus 17is  | no |
+
+### [2026-08-29 23:30] #1162 — Run 4 narrative: Qwen + Cohere graduated (6 total), stall diagnosed (stdout transcoder), detached-launch lesson
+
+**Run 4 outcome (the supply result):** `planned 4 → graduated 2`. **Qwen Chat (chat.qwen.ai)
+REPLAY_OK `58`** — the seat recovered from run 3's `internal_error` body. **Cohere Coral Web
+REPLAY_OK `58`** — the no-tool envelope unwrap (#1160) converted its wire-format failure into a
+pass IN PRODUCTION, exactly as designed. Fully graduated seats are now **6**: DeepSeek, Mistral,
+Claude Official, Genspark, **Qwen**, **Cohere**. Both new seats were already REPLAY_OK in the
+canonical gate, so the pool served them with NO restart — verified live on `/health`:
+served 10 / readyNow 10, `chat.qwen.ai` and `api.cohere.com` present, heartbeat warming qwen
+(5 beats, 0 failures). Felo (HTTP 423 Locked) and Perplexity (model answered 58 but the UI's
+follow-up suggestion chips are concatenated onto the same reply text, so the strict
+exactly-`58` check fails) are now attempts-exhausted (2/2) and will be skipped by future runs;
+both remain pool-served via the loose gate.
+
+**The stall (diagnosed, not guessed):** the transcript freezes exactly between [4/4]'s
+per-seat `save_ledger` and the "step 3 graduate" print — code with nothing between them but
+`time.sleep(4)`. The instance lock held PID 29972; no worklog `finally` entry ever appeared;
+the process later died HARD (my kill pass found no live python matching graduate_all_seats.py;
+lock left stale). Reconstruction: the agent console's PSReadLine was crash-looping all session
+("topActual value was -14/-15" ArgumentOutOfRangeException repeatedly), and its stdout
+transcoder stopped draining the child's output pipe — so the orchestrator's next `print()`
+blocked forever on a full pipe, and the wedged console eventually terminated the process
+without running `finally`. **The D1 design did its job**: the per-seat ledger writes preserved
+every verdict, so the hard death cost only the end-of-run sinks (runs[] + worklog), which the
+upgraded backfill tool reconstructed from the transcript.
+
+**Operational lesson (binding for future runs):** never launch a long `--apply` through the
+agent console's `*>` redirection — a wedged console stalls the child at its next print. Launch
+DETACHED instead (PowerShell `Start-Process -FilePath <python> -ArgumentList
+'...graduate_all_seats.py --apply --port 9222' -WorkingDirectory <root> -WindowStyle Hidden
+-RedirectStandardOutput <log> -RedirectStandardError <err>`, then poll the log file), same
+pattern as the shim relaunch rule in HANDOVER_8190_SHIM §5.
+
+**Tooling:** `backfill_run3_records.py` generalized — `--log`/`--label` args, per-log
+idempotency via `runs[].sourceLog`, graduated list derived from rows' REPLAY_OK verdicts when
+the step-3 line is missing, and BOM-based transcript decoding (run 4's log was UTF-16LE from
+PowerShell `*>`; the first backfill attempt parsed it as utf-8 and produced an empty stub —
+caught by reading the appended entry, stub removed via `state/redo_backfill4.py`, re-run
+clean: ledger runs[] = 3 entries, worklog #1161 carries the real 4-row table).
+
+**Next:** the websocket capture+replay build (iFlytek first — `websocket-client` is already in
+the venv via the CDP transport; `scan()` already flags ws-sentinel frames).
+

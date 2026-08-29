@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
-"""One-shot backfill of graduation run 3 (handover defect D3). No request is sent.
+"""Backfill a graduation run's ledger/worklog records from its transcript. No request is sent.
 
-Run 3 (2026-08-29 evening) completed all 31 planned seats, rebuilt the canonical gate
-(`{'REPLAY_OK': 11, 'NO_ANSWER': 6, 'AUTH': 2, 'WALL': 2}`) and restarted :20130 --
-then the orchestrator died (defect D1, since fixed) before ledger['runs'] and the
-worklog were written. The complete transcript survives at state/grad_apply_run3.log;
+Run 3 (2026-08-29 evening) completed all 31 planned seats, rebuilt the canonical gate and
+restarted :20130 -- then the orchestrator died (defect D1, since fixed) before ledger['runs']
+and the worklog were written. Run 4 died the same way for a different reason: the agent
+console's stdout transcoder stopped draining, so the orchestrator's next print() blocked
+forever and the console later killed the process hard -- while the per-seat ledger writes
+had again preserved every verdict. The complete transcript survives in each run's log;
 this script replays THAT FILE into the two missing sinks:
 
-  * state/graduation_ledger.json -> runs[] gains the run-3 record, with the verdict
+  * state/graduation_ledger.json -> runs[] gains the run record, with the verdict
     table inline (the same shape future runs write, including 'rows');
   * MASTER_WORKLOG.md            -> a numbered entry (#N = active stream + 1) carrying
-    the 31-seat verdict table.
+    the per-seat verdict table.
 
-The ledger's per-seat entries were already current (save_ledger ran after every seat);
-only the two end-of-run sinks were lost. Idempotent: a 'backfilled' marker in runs[]
-makes re-runs exit without touching anything.
+The ledger's per-seat entries are already current (save_ledger runs after every seat); only
+the two end-of-run sinks are ever lost. Idempotent PER LOG: a 'sourceLog' marker in runs[]
+makes re-runs for the same transcript exit without touching anything. When the step-3 line
+is missing from the transcript (the run died before it), the graduated list is derived from
+the parsed rows' REPLAY_OK verdicts and the record says so.
+
+Usage:
+    python scripts/automation/backfill_run3_records.py \
+        [--log state/grad_apply_run4.log --label "run 4"]
 """
+import argparse
 import json
 import os
 import pathlib
@@ -29,13 +38,26 @@ sys.path.insert(0, str(HERE))
 
 from graduate_all_seats import LEDGER, WORKLOG, next_worklog_number  # noqa: E402
 
-LOG = ROOT / "state" / "grad_apply_run3.log"
+
+def _read_text(path: pathlib.Path) -> str:
+    """Transcript encoding is whatever launched the run: a PowerShell '*>' redirect writes
+    UTF-16LE, a shell '>' or python-side redirect writes UTF-8. Decode by BOM, then guess."""
+    raw = path.read_bytes()
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return raw.decode("utf-16")
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return raw.decode("utf-8-sig")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("utf-16", errors="replace")
+
+LOG = ROOT / "state" / "grad_apply_run3.log"   # default; --log overrides
 
 
-def parse_log():
+def parse_log(text: str):
     rows, skips, graduated, meta = [], [], [], {}
     current = None
-    text = LOG.read_text(encoding="utf-8", errors="replace")
     for line in text.splitlines():
         m = re.match(r"^tabs (\d+)\s+eligible sites (\d+)\s+planned (\d+)\s+"
                      r"skipped (\d+)\s+video lane (\d+)", line)
@@ -68,17 +90,30 @@ def parse_log():
 
 
 def main() -> int:
-    if not LOG.exists():
-        print(f"transcript missing: {LOG}")
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--log", default="state/grad_apply_run3.log",
+                    help="run transcript to backfill from, relative to the repo root")
+    ap.add_argument("--label", default="",
+                    help="run label for the worklog title (e.g. 'run 4')")
+    a = ap.parse_args()
+
+    log_path = (ROOT / a.log).resolve()
+    if not log_path.exists():
+        print(f"transcript missing: {log_path}")
         return 1
-    rows, skips, graduated, meta = parse_log()
-    at = int(os.path.getmtime(LOG))
+    rows, skips, graduated, meta = parse_log(_read_text(log_path))
+    at = int(os.path.getmtime(log_path))
     stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(at))
+    planned = meta.get("planned", len(rows))
+    step3_reached = bool(graduated)
+    if not graduated:
+        # A transcript that ends before step 3 still tells us who graduated: the rows do.
+        graduated = [r["site"] for r in rows if r.get("verdict") == "REPLAY_OK"]
 
     ledger = json.loads(LEDGER.read_text(encoding="utf-8"))
     runs = ledger.get("runs", [])
-    if any(r.get("backfilled") for r in runs):
-        print("run-3 record already present in ledger -- nothing to do")
+    if any(r.get("sourceLog") == log_path.name for r in runs):
+        print(f"{log_path.name} already backfilled into ledger runs[] -- nothing to do")
         return 0
 
     table = [f"| {r['site']} | {r['host']} | {r['verdict']} | "
@@ -88,31 +123,37 @@ def main() -> int:
 
     ledger.setdefault("runs", []).append({
         "at": at,
-        "planned": meta.get("planned", len(rows)),
+        "planned": planned,
         "graduated": graduated,
         "rows": table,
-        "backfilled": ("2026-08-29: run 3 died after the :20130 restart (defect D1, since "
-                       "fixed in graduate_all_seats.py) before its ledger/worklog writes; "
-                       "reconstructed from state/grad_apply_run3.log by "
-                       "scripts/automation/backfill_run3_records.py -- no request re-sent"),
+        "sourceLog": log_path.name,
+        "backfilled": ("2026-08-29: the orchestrator died before its end-of-run writes; "
+                       "reconstructed from " + log_path.name + " by "
+                       "scripts/automation/backfill_run3_records.py -- no request re-sent"
+                       + ("" if step3_reached else
+                          "; step 3 (gate regen/restart) never ran, graduated list derived "
+                          "from the rows' REPLAY_OK verdicts")),
     })
     temporary = LEDGER.with_suffix(LEDGER.suffix + ".tmp")
     temporary.write_text(json.dumps(ledger, indent=2) + "\n", encoding="utf-8")
     temporary.replace(LEDGER)
-    print(f"ledger: runs[] now {len(ledger['runs'])} entries (run 3 backfilled)")
+    print(f"ledger: runs[] now {len(ledger['runs'])} entries "
+          f"({a.label or log_path.name} backfilled)")
 
     n = next_worklog_number()
-    planned = meta.get("planned", len(rows))
     body = [
-        f"\n### [{stamp}] #{n} — graduate_all_seats run 3 (BACKFILLED): "
+        f"\n### [{stamp}] #{n} — graduate_all_seats {a.label or 'run'} (BACKFILLED): "
         f"{len(graduated)}/{planned} graduated\n",
-        f"**Backfill note:** run 3 completed all {planned} planned seats and rebuilt the "
-        f"canonical gate (`{{'REPLAY_OK': 11, 'NO_ANSWER': 6, 'AUTH': 2, 'WALL': 2}}`), then "
-        f"died after the :20130 restart (defect D1, fixed this session) before its "
-        f"ledger/worklog writes. Table reconstructed verbatim from `state/grad_apply_run3.log`; "
-        f"no request was re-sent. Ledger per-seat entries were already current "
-        f"(save_ledger ran per seat).",
-        f"Graduated: {', '.join(graduated)}",
+        f"**Backfill note:** transcript `{log_path.name}` parsed; no request was re-sent. "
+        f"The ledger's per-seat entries were already current (save_ledger ran per seat) -- "
+        f"only the end-of-run sinks were lost."
+        + ("" if step3_reached else
+           " **The transcript ends before step 3:** the orchestrator died (run 4: the agent "
+           "console's stdout transcoder stopped draining, so the next print() blocked "
+           "forever, and the console later killed the process) after the per-seat writes; "
+           "the graduated list is derived from the rows' REPLAY_OK verdicts, and the gate "
+           "regen / pool restart never ran."),
+        f"Graduated: {', '.join(graduated) or '-'}",
         f"Skipped before start ({len(skips)}): "
         + "; ".join(f"{s} — {why}" for s, why in skips),
         "",
