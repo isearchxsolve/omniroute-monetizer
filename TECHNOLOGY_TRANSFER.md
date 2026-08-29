@@ -1295,10 +1295,338 @@ changes to the shim/pool, so they required a shim restart to take effect — don
 owning bat task relaunch it. Do not confuse the two: data (seat files) hot-reloads; code
 (shim/pool `.py`) needs a relaunch.
 
+*Living document — appended as work proceeds. Last updated 2026-08-29 (worklog #1135: §26
+DeepSeek PoW native solver — full Chrome independence blueprint).*
+
+
 ---
 
-*Living document — appended as work proceeds. Last updated 2026-08-28 (worklog #1134: §1
-consumer endpoint, §9a video face closed, §11 video_job_store, §20 live model count, §21
-.vbs wrappers + single-owner + detached launch, §22 recovery chain ownership, §25
-consumer-contract hardening).*
+## §26 — DeepSeek PoW: Full Chrome-Independence Blueprint `[VERIFIED 2026-08-29]`
 
+**Status:** `REPLAY_OK` — `chat.deepseek.com` passes `replay_check.py` in ~15 s with zero Chrome
+involvement. Committed `edbb4ea`.
+
+---
+
+### 26.1 The Problem: What Makes DeepSeek Hard
+
+Every completion request to `https://chat.deepseek.com/api/v0/chat/completion` requires a
+**Proof-of-Work header** (`x-ds-pow-response`) that is freshly computed for each request. The header
+value is a base64-encoded JSON containing a cryptographic hash answer. If the header is absent or
+stale the server returns HTTP 200 with body `{"code":40301,"msg":"INVALID_POW_RESPONSE","data":null}`.
+
+The naive replay approach (record the header once and replay it) **cannot work** because:
+1. The PoW challenge is unique per request (contains a fresh salt + challenge hash).
+2. The PoW hash answer is expensive to brute-force (~144,000 iterations of SHA-256).
+3. DeepSeek's solver runs as a Web Worker inside the browser — it is C++ WebAssembly, not JS math.
+
+This made DeepSeek appear as `SINGLE_USE` in all early replay attempts.
+
+---
+
+### 26.2 The Mandate: Static vs. Dynamic Variables
+
+The operator's directive, stated before any implementation work began:
+
+> **"Static Variables (Constants):** things like `navigator.userAgent`, Canvas hashes, and window
+> properties. Record these once from the live Chrome, lock them in a JSON file, and replay them
+> blindly.
+> **Dynamic Variables (Inputs):** the salt, the challenge, and timing functions like
+> `performance.now()`. Pass these in dynamically from Python on every request.
+> If we can perfectly separate those two lists, we completely extract the algorithm from Chrome."**
+
+This mandate became the architectural north star for the entire exercise.
+
+---
+
+### 26.3 Phase 1 — CDP Proxy Tracer: Separating Static from Dynamic
+
+**Tool created:** `scratch/proxy_tracer.js` — an ES6 Proxy that wraps `window`, `navigator`,
+`document`, `performance`, `XMLHttpRequest`, and `fetch` and logs every property **read** with
+its value and whether it varied between calls.
+
+**Injection method:** via Chrome DevTools Protocol (`Runtime.evaluate`) into the live
+`chat.deepseek.com` tab — no new browser opened, no profile touched.
+
+**Finding:** The PoW algorithm (`76608.js`, the Web Worker script) reads **zero** browser
+fingerprint properties during its hash computation. It does not touch `navigator.userAgent`,
+Canvas, screen size, or any other fingerprint variable. It only reads:
+- `salt` (from the challenge object) — **dynamic**
+- `challenge` (from the challenge object) — **dynamic**
+- `expireAt` (from the challenge object) — **dynamic**
+- `difficulty` (from the challenge object) — **dynamic**
+- Internal loop counter (CPU math) — **pure computation**
+
+**Conclusion:** The algorithm is 100% extractable. There are NO static environment dependencies.
+The algorithm is pure math operating on the challenge payload.
+
+---
+
+### 26.4 Phase 2 — Network Flow Discovery via CDP Trace
+
+**Finding via `scripts/automation/trace_deepseek_pow.py`:**
+
+The browser does NOT get the PoW challenge from the response headers of the rejected completion
+request. Instead, the browser proactively fetches a fresh challenge from a **dedicated endpoint**
+before sending the completion:
+
+```
+POST https://chat.deepseek.com/api/v0/chat/create_pow_challenge
+Content-Type: application/json
+
+{"target_path": "/api/v0/chat/completion"}
+```
+
+Response:
+```json
+{
+  "code": 0,
+  "data": {
+    "biz_data": {
+      "challenge": {
+        "algorithm": "DeepSeekHashV1",
+        "challenge": "<64-char hex hash>",
+        "salt": "<20-char hex>",
+        "signature": "<64-char hex>",
+        "difficulty": 144000,
+        "expire_at": 1787992738789,
+        "expire_after": 300000,
+        "target_path": "/api/v0/chat/completion"
+      }
+    }
+  }
+}
+```
+
+The Proxy Tracer intercepted `XMLHttpRequest.prototype.open` and logged this exact URL, revealing
+the network recipe that Chrome was following. This was the **key discovery** — without the Proxy
+Tracer, we would have had to guess the endpoint.
+
+**Critical note on key naming:** The API returns `expire_at` and `expire_after` in snake_case.
+DeepSeek's own Web Worker code (which we re-use as our solver) expects `expireAt` and `expireAfter`
+in camelCase — because the worker was written against the in-browser JS object, not the API response.
+The normalization step is mandatory:
+
+```python
+if "expire_at" in challenge_obj and "expireAt" not in challenge_obj:
+    challenge_obj["expireAt"] = challenge_obj.pop("expire_at")
+if "expire_after" in challenge_obj and "expireAfter" not in challenge_obj:
+    challenge_obj["expireAfter"] = challenge_obj.pop("expire_after")
+```
+
+---
+
+### 26.5 Phase 3 — Extracting the Solver from Chrome (Node.js Headless Worker)
+
+**The solver architecture:**
+
+DeepSeek's PoW runs as a Web Worker (`76608.js`) that imports a WASM helper (`8138.js`).
+The worker listens for a `{type:"pow-challenge", challenge:{...}}` message and posts back
+`{type:"pow-answer", answer:{answer:<nonce>}}`.
+
+**Extraction approach (`scripts/automation/adapters/ds_pow_solver.js`):**
+
+```javascript
+// 1. Read both JS chunks from disk
+const c8138 = fs.readFileSync('.../8138.js', 'utf8');
+let c76608 = fs.readFileSync('.../76608.js', 'utf8');
+
+// 2. Patch the worker's onmessage assignment to reach global scope
+c76608 = c76608.replace('onmessage=t=>{', 'global.onmessage=t=>{');
+
+// 3. Mock Web Worker globals
+global.self = global;
+global.importScripts = function(url) { if (url.includes('8138')) eval(c8138); };
+global.postMessage = function(msg) {
+    if (msg.type === 'pow-answer') { console.log(JSON.stringify(msg)); process.exit(0); }
+    if (msg.type === 'pow-error')  { console.error(msg.error);         process.exit(1); }
+};
+
+// 4. Execute the worker and fire the challenge
+eval(c76608);
+setTimeout(() => {
+    global.onmessage({ data: { type: "pow-challenge", challenge: payload } });
+}, 100);
+```
+
+**Why Node.js, not Python:** The solver is WASM (`8138.js` contains a compiled C++ hash loop).
+Python cannot run WASM natively. The C++ binary (`pow_solver`) on this machine threw
+`0xC000001D` (illegal instruction — AVX2 not supported). Node.js runs the WASM perfectly
+via its built-in V8 engine. Subprocess cost is ~4-6 seconds per solve.
+
+**Python wrapper (`scripts/automation/adapters/deepseek_adapter.py`):**
+
+```python
+def solve_deepseek_pow(pow_challenge_json_str) -> str:
+    challenge_data = json.loads(pow_challenge_json_str)
+    res = subprocess.run([NODE_EXE, SOLVER_JS, json.dumps(challenge_data)],
+                         capture_output=True, text=True)
+    solved = json.loads(res.stdout.strip())
+    answer = solved["answer"]["answer"]
+    response_obj = {
+        "algorithm": "DeepSeekHashV1",
+        "challenge": challenge_data["challenge"],
+        "salt": challenge_data["salt"],
+        "answer": answer,
+        "signature": challenge_data["signature"],
+        "target_path": challenge_data.get("target_path", "/api/v0/chat/completion")
+    }
+    return base64.b64encode(json.dumps(response_obj, separators=(',',':')).encode()).decode()
+```
+
+The returned string is set as the `x-ds-pow-response` request header on the retried completion.
+
+---
+
+### 26.6 Phase 4 — Integration into Universal Replay (`universal_replay.py`)
+
+The full PoW negotiation is embedded in the `chat()` method's request loop:
+
+```
+1. Fire original completion request → receive 200 {"code":40301,"msg":"INVALID_POW_RESPONSE"}
+2. POST /api/v0/chat/create_pow_challenge with {"target_path":"/api/v0/chat/completion"}
+   using the same session auth headers/cookies
+3. Parse response → extract challenge object → normalize snake_case → camelCase keys
+4. Subprocess call: node ds_pow_solver.js <challenge_json> → base64 response string
+5. Set self.headers['x-ds-pow-response'] = pow_response
+6. Re-fire original completion with PoW header → receive 200 SSE stream
+```
+
+**Key code location:** `universal_replay.py` lines 683–722 (inside `chat()`, after first fire).
+
+**Session auth reuse:** The challenge fetch uses `self.headers.copy()` — the exact same
+Authorization Bearer token and cookies as the completion request. No separate credential needed.
+
+---
+
+### 26.7 Phase 5 — DeepSeek SSE Stream Assembler
+
+DeepSeek's response is an SSE event stream using a **JSON patch protocol**, not standard
+OpenAI `choices[0].delta.content` SSE. The stream shape:
+
+```
+event: ready
+data: {"request_message_id":7,"response_message_id":8,...}
+
+data: {"v":{"response":{"fragments":[{"content":"the","type":"RESPONSE",...}],...}}}
+
+data: {"p":"response/fragments/-1/content","o":"APPEND","v":" holy"}
+
+data: {"v":" cow"}
+
+data: {"v":" jumps"}
+...
+data: {"p":"response/status","o":"SET","v":"FINISHED"}
+
+event: close
+data: {"click_behavior":"none"}
+```
+
+Three object forms must be assembled:
+1. **First big object** — `{"v": {"response": {"fragments": [{"content": "the", ...}]}}}`:
+   dig into `v.response.fragments[0].content` for the first token.
+2. **Explicit APPEND** — `{"p":"...content","o":"APPEND","v":" holy"}`:
+   take `v` directly.
+3. **Bare patch** — `{"v":" cow"}` (no `"o"` key, no `"p"` key or path contains "content"/"fragment"):
+   take `v` directly.
+
+**Assembler code in `_extract_response` (universal_replay.py):**
+
+```python
+ds_pieces = []
+for o in objs:
+    op = o.get("o")
+    v = o.get("v")
+    p = o.get("p", "")
+    if op == "APPEND" and isinstance(v, str):
+        ds_pieces.append(v)
+    elif not op and isinstance(v, str) and not isinstance(v, (dict, list)):
+        if p == "" or "content" in p or "fragment" in p:
+            ds_pieces.append(v)
+    elif isinstance(v, dict):
+        try:
+            frags = v.get("response", {}).get("fragments", [])
+            for fr in frags:
+                c = fr.get("content", "")
+                if c:
+                    ds_pieces.insert(0, c)
+        except Exception:
+            pass
+ds_assembled = "".join(ds_pieces).strip()
+if ds_assembled:
+    return ds_assembled, None
+```
+
+**Why `_is_echo` is NOT applied to `ds_assembled`:** The APPEND patches are purely the model's
+generated output tokens. DeepSeek never embeds the user prompt in its patch events. The generic
+echo filter (designed for providers that embed the full conversation history in each delta object)
+would incorrectly reject answers that happen to repeat a phrase from the prompt.
+
+---
+
+### 26.8 Verification
+
+**Command:** `python scripts/automation/replay_check.py --only deepseek_chat`
+
+**Result:**
+```
+replay check: 1 captured sessions, direct to provider, 1 request each
+
+RESPONSE STATUS: 200 BODY START: {"code":40301,"msg":"INVALID_POW_RESPONSE","data":null}
+GOT INVALID_POW_RESPONSE. Fetching challenge from endpoint...
+  OK chat.deepseek.com    REPLAY_OK    15215ms    the holy cow jumps over the stricks
+
+replayable      (1): chat.deepseek.com
+single-use bound(0): none
+```
+
+DeepSeek is now `REPLAY_OK` — fully Chrome-independent. The scored text is the model's own generated
+output (`"the holy cow jumps over the stricks"`) which it produced in response to the injected probe
+prompt. This is a Law-3 computed verification: the phrase is not an echo and not in any markup.
+
+---
+
+### 26.9 File Index for This Feature
+
+| File | Role |
+|------|------|
+| `scripts/automation/trace_deepseek_pow.py` | CDP Proxy Tracer injection — discovery tool only, not used at runtime |
+| `scratch/proxy_tracer.js` | ES6 Proxy source injected via CDP to log all env property reads |
+| `scratch/ds_pow_extract/76608.js` | DeepSeek's PoW Web Worker script (extracted from browser) |
+| `scratch/ds_pow_extract/8138.js` | DeepSeek's WASM helper (SHA-256 WASM, imported by worker) |
+| `scripts/automation/adapters/ds_pow_solver.js` | Headless Node.js runner — mocks Worker env, solves, prints JSON |
+| `scripts/automation/adapters/deepseek_adapter.py` | Python wrapper — calls solver subprocess, builds base64 header |
+| `scripts/automation/universal_replay.py` | Integration point — PoW fetch+solve+retry loop + SSE assembler |
+| `state/secrets/session_deepseek_chat.json` | Captured session (auth cookies + recorded completion body) |
+
+---
+
+### 26.10 Operational Rules for Future Agents
+
+1. **Never open a Chrome tab to serve DeepSeek at runtime.** The entire PoW lifecycle runs in Python
+   + Node.js subprocess. Chrome is only needed for the initial session capture (one-time) or
+   re-authentication when the cookie expires.
+
+2. **The session cookie IS the auth.** The `Authorization: Bearer <token>` in the recorded headers
+   is the session JWT. When it expires, `replay_check.py` will return `AUTH` verdict, not
+   `SINGLE_USE`. Re-authenticate via the browser (log in manually, re-run capture) — not by
+   solving a PoW.
+
+3. **PoW difficulty is currently 144,000 iterations.** The Node.js solver takes 4–10 seconds
+   depending on the nonce found. This is normal. Do not time out below 30 seconds.
+
+4. **Do not replay PoW response headers from a recorded session.** They are single-use. The
+   recorded `x-ds-pow-response` in older session files must be stripped or ignored; the live
+   fetch+solve path in `universal_replay.py` always generates a fresh one.
+
+5. **The chat_session_id in the recorded body is reused across replays.** DeepSeek appends to the
+   existing conversation rather than creating a new one. This is harmless for supply purposes
+   but means the conversation in the operator's browser will accumulate test messages. This is a
+   known and accepted side-effect of the replay architecture.
+
+6. **The C++ binary (`pow_solver`) at `scratch/ds_pow_extract/` throws `0xC000001D` on this
+   machine** (AVX2 instruction not supported by the CPU). Always use the Node.js solver path.
+   Do not attempt to compile or substitute a new binary without verifying AVX2 support first
+   (`python -c "import cpuinfo; print(cpuinfo.get_cpu_info()['flags'])"`).
+
+---
