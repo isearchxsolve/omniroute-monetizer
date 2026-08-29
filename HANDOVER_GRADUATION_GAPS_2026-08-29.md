@@ -199,3 +199,34 @@ twins are leftover double-spawns. Todo: identify and clean the non-listening dup
 
 *End of handover. Next agent: start with `TECHNOLOGY_TRANSFER.md` §2 + §21–§24, read `MASTER_WORKLOG.md`,
 then pick up todo 1 (D1 hang fix) — it's the blocker for every future graduation run.*
+
+---
+
+## 9. RESOLUTION STATUS — 2026-08-29 23:00 (READ THIS FIRST — SUPERSEDES §6)
+
+Worklog #1157–#1159. **D1, D2, D3, D1-dupe and the phantom-duplicate todo are RESOLVED and
+committed**; the todo list in §6 is out of date as follows:
+
+| §6 todo | Status |
+|---|---|
+| 1. [D1] post-restart hang | **FIXED** — instance lock (ctypes liveness probe), 180 s daemon-thread-bound `restart_pool_bounded`, no-proxy `/health` opener, pool process-tree kill, `finally`-guaranteed ledger + numbered worklog, verdict table copied into `ledger["runs"]`, line-buffered stdout under `--apply` |
+| 2. [D3] run-3 worklog + ledger | **DONE** — `scripts/automation/backfill_run3_records.py` parsed `state/grad_apply_run3.log` (no request re-sent); ledger `runs[]` = 2 entries; worklog #1158 carries the full 31-row table |
+| 3. [D2] slug mismatch | **FIXED** — `session_slug()` mirrors `capture_sessions_cdp.slug()`; `--only` is the exact session filename (also stops the loose-substring double-spend on `veoaifree*`); verified by `state/check_d2.py`, 0 missing |
+| 4. [D1-dupe] "non-owner twins" | **VOID — DO NOT KILL.** §21 of TECHNOLOGY_TRANSFER: the venv `python.exe` is a venvlauncher whose base-interpreter child owns the port; "This is NORMAL, not a duplicate." Run 3's "two processes" were one invocation. Replaced by a single-instance lockfile |
+| 5. [Phantom dupe] gate dedupe | **DONE, three layers** — `replay_check.py` writes one row per host; `chat_pool_server.Pool._load()` builds one provider per host; `scripts/automation/dedupe_replay_gate.py` repaired the existing gate in place with zero requests. `:20130` restarted via the bounded path: **served 10 / readyNow 10, chatgpt.com and veoaifree.com each listed once** |
+| 6. [High ROI] websocket capture+replay | **OPEN — next session's first engineering item** (iFlytek 143 ws frames, Meta 39, Grok, Copilot) |
+| 7. [Zero-auth] duck.ai adapter | OPEN |
+| 8/9. deferred (seat ordering; `chat_pool_server.py:1046` envelope unwrap) | OPEN (unchanged) |
+| 10. [Operator] Gemini CookieMismatch | OPEN (operator action, not automatable per Chrome rules) |
+
+**Resumable state for the next graduation run:** `graduate_all_seats.py` (plan-only verified,
+`PLAN_RC=0`) now plans exactly **4 seats** — Qwen, Cohere, Felo, Perplexity (all NO_ANSWER, 1
+attempt each) — skips the 4 graduated (per-seat D4 guard), the 3 walls (never re-knocked) and the
+21 exhausted-attempt seats. Run `--apply` when Chrome seat :9222 is up. Gate prompt note: the
+canonical gate is written with the loose `holy cow` prompt; per-seat graduation verifies with the
+strict `58` sentinel (Law 3), as before.
+
+**New files this session:** `scripts/automation/dedupe_replay_gate.py`,
+`scripts/automation/backfill_run3_records.py` (both one-shot, idempotent); self-checks kept at
+`state/check_d1.py`, `state/check_d2.py`, `state/restart_pool_now.py`. Commits: `151b985` (prior
+session's shim/pool defect batch), then D1, then D2+dedupe+backfill (see worklog #1159 for hashes).

@@ -79,6 +79,19 @@ def scratch_report(site: str) -> pathlib.Path:
     slug = re.sub(r"[^a-z0-9]+", "_", site.lower()).strip("_")
     return SCRATCH_REPLAYS / f"replay_{slug}.json"
 
+
+def session_slug(site: str) -> str:
+    """The session-file slug convention of capture_sessions_cdp.slug(): spaces, slashes
+    and dots become underscores, everything else (parentheses included) is kept.
+
+    execute_one MUST build its replay filter from THIS convention: '1min.AI' lives in
+    session_1min_ai.json and 'DuckDuckGo AI Chat (duck.ai)' in
+    session_duckduckgo_ai_chat_(duck_ai).json. The old site.lower().replace(' ', '_')
+    left dots in place, so --only '1min.ai' / '(v0.app)' / '(duck.ai)' matched zero
+    session files, replay_check.py wrote no verdict, and the seat's scratch report
+    never existed (handover defect D2)."""
+    return site.replace(" ", "_").replace("/", "_").replace(".", "_").lower()
+
 # Law 3: computed and non-echoable.  These are explicitly passed to replay_check
 # rather than relying on whatever default that script happened to have at a given
 # point in the project's history.
@@ -617,16 +630,38 @@ def execute_one(port: int, site: str, wait: float) -> int:
 
     # `--only` scopes both traffic and state/reporting to this one host/site. `--out` is MANDATORY here:
     # without it replay_check writes this single-row report over the canonical gate. See SCRATCH_REPLAYS.
+    #
+    # The filter is the EXACT session filename this unit's capture just wrote, not a loose
+    # substring of it. Two defects lived in the old `site.lower().replace(" ", "_")`:
+    #   * a dot in the site name ('1min.AI', '(v0.app)', '(duck.ai)') never matched the
+    #     session file (dots are underscores there) -> zero sessions -> no verdict at all (D2);
+    #   * a loose substring could match TWO files ('veoaifree' matches session_veoaifree.json
+    #     AND session_veoaifree_chat_web.json) -> one seat unit spending two live replays.
+    exact = f"session_{session_slug(site)}.json"
+    matches = sorted(SECRETS.glob(f"session_{session_slug(site)}*.json")) if SECRETS.exists() else []
+    if (SECRETS / exact).exists():
+        only = exact
+    elif len(matches) == 1:
+        only = matches[0].name
+    elif not matches:
+        # The capture wrote nothing. Keep the (dot-corrected) slug so replay_check answers
+        # 'no session_*.json' into OUR transcript instead of silently verifying nothing.
+        only = session_slug(site)
+    else:
+        # Prefix collision without an exact file: newest wins (closest to what this unit
+        # just captured). Same host, so it is still one request against the right seat.
+        only = max(matches, key=lambda p: p.stat().st_mtime).name
     report = scratch_report(site)
     report.parent.mkdir(parents=True, exist_ok=True)
     replay = [
         python, str(ROOT / "scripts" / "automation" / "replay_check.py"),
-        "--only", site.lower().replace(" ", "_"),
+        "--only", only,
         "--prompt", VERIFY_PROMPT, "--expect", VERIFY_EXPECT,
         "--out", str(report),
     ]
     rc = subprocess.run(replay, cwd=ROOT, check=False).returncode
     print(f"per-seat verdict     : {report}   (canonical gate untouched: {REPLAY_CHECK_PATH.name})")
+    print(f"replay scope         : --only {only}  ({len(matches)} session file(s) matching prefix)")
     return rc
 
 

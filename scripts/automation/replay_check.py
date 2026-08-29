@@ -246,6 +246,22 @@ def main() -> int:
 
     ok = [r["host"] for r in rows if r["verdict"] == "REPLAY_OK"]
     single = [r["host"] for r in rows if r["verdict"] == "SINGLE_USE"]
+
+    # ONE ROW PER HOST. Two session files can carry the same host -- chatgpt.com arrived via
+    # BOTH session_chatgpt_free_web.json and session_chatx.json, and veoaifree.com has a WALL
+    # row plus a REPLAY_OK row. results[] is consumed per-host (chat_pool_server keys off it),
+    # so duplicates became phantom duplicate providers in the pool. Keep the best verdict per
+    # host: REPLAY_OK outranks everything (proven supply must not be hidden by its sibling's
+    # wall/auth row); among equal verdicts the first file wins, which keeps runs deterministic.
+    _rank = {"REPLAY_OK": 0, "SINGLE_USE": 1, "RATE": 2, "AUTH": 3, "WALL": 4}
+    best: dict[str, dict] = {}
+    for row in rows:
+        host = str(row.get("host") or "")
+        prior = best.get(host)
+        if prior is None or _rank.get(row.get("verdict"), 9) < _rank.get(prior.get("verdict"), 9):
+            best[host] = row
+    rows = list(best.values())
+
     report = {
         "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "question": "does a captured browser request survive being re-sent from python?",

@@ -236,6 +236,7 @@ class Pool:
         if not verdicts and not self.serve_all:
             log(f"WARNING no {VERDICTS.name} -- nothing can be verdicted, so nothing is served. "
                 f"Run replay_check.py, or start with --all to override the gate.")
+        seen_hosts: set = set()
         for p in sorted(SECRETS.glob("session_*.json")):
             try:
                 host = str(json.loads(p.read_text(encoding="utf-8")).get("host") or "")
@@ -248,6 +249,13 @@ class Pool:
                 or any(a in host.lower() for a in self.allow)
             if not keep:
                 continue
+            if host in seen_hosts:
+                # ONE PROVIDER PER HOST. Two session files can share a host
+                # (session_chatgpt_free_web.json and session_chatx.json are both
+                # chatgpt.com); a second Provider row is a phantom that inflates
+                # /health and re-queues the same upstream quota for no extra supply.
+                continue
+            seen_hosts.add(host)
             self.providers.append(Provider(p, host, verdict))
 
     def healthy(self) -> list:

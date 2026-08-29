@@ -8007,3 +8007,115 @@ backfill of run-3 (ledger `runs[]` + worklog table from `state/grad_apply_run3.l
 (plan-only orchestrator run, py_compile, lock/pid unit checks, `/health` counts); (7) update the
 handover doc with resolution status. WebSocket capture/replay client (iFlytek/Meta/Grok/Copilot)
 remains the high-ROI next engineering item — not started this session.
+
+### [2026-08-29 21:03] #1158 — graduate_all_seats run 3 (BACKFILLED): 4/31 graduated
+
+**Backfill note:** run 3 completed all 31 planned seats and rebuilt the canonical gate (`{'REPLAY_OK': 11, 'NO_ANSWER': 6, 'AUTH': 2, 'WALL': 2}`), then died after the :20130 restart (defect D1, fixed this session) before its ledger/worklog writes. Table reconstructed verbatim from `state/grad_apply_run3.log`; no request was re-sent. Ledger per-seat entries were already current (save_ledger ran per seat).
+Graduated: DeepSeek Chat, Mistral Le Chat, Claude Official Web, Genspark AI
+Skipped before start (1): Together AI Chat — 2 attempts already, same failure
+
+| seat | host | verdict | detail | graduated |
+|---|---|---|---|---|
+| 1min.AI | app.1min.ai | FAIL | fied-chat  502B body  via enter | no |
+| ChatHub Web | app.chathub.gg | AUTH | auth refused (in body) -- cookie alone is not enough | no |
+| Inner AI Web | app.innerai.com | NO_ANSWER | [matched the report's only row, 'chat-api-v3.innerai.com'] 200 but the | no |
+| Aymo AI | aymo.ai | NO_ANSWER | 200 but the extracted reply is not only '58': http_error: http error 4 | no |
+| Cerebras Inference Chat | chat.cerebras.ai | FAIL | o visible composer | no |
+| DeepSeek Chat | chat.deepseek.com | REPLAY_OK | 58 | yes |
+| Mistral Le Chat | chat.mistral.ai | REPLAY_OK | 58 | yes |
+| Qwen Chat (Alibaba) | chat.qwen.ai | NO_ANSWER | 200 but the extracted reply is not only '58': {"success":false,"reques | no |
+| Zhipu GLM Chat | chatglm.cn | FAIL | / 0 posts / 0 ws frames se | no |
+| ChatGPT Free Web | chatgpt.com | UNPARSEABLE | 200 but no recognised response shape -- not scored as an answer | no |
+| Claude Official Web | claude.ai | REPLAY_OK | 58 | yes |
+| SambaNova Cloud Chat | cloud.sambanova.ai | WALL | hat  <- left untouched, operator decision | no |
+| Groq Chat | console.groq.com | AUTH | [matched the report's only row, 'api.groq.com'] auth refused (in body) | no |
+| Microsoft Copilot Web | copilot.microsoft.com | FAIL | t Copilot Web  <- not replayable as HTTP | no |
+| Cohere Coral Web | dashboard.cohere.com | NO_ANSWER | [matched the report's only row, 'api.cohere.com'] 200 but the extracte | no |
+| DuckDuckGo AI Chat (duck.ai) | duck.ai | FAIL | isible composer | no |
+| Felo AI Web | felo.ai | NO_ANSWER | 200 but the extracted reply is not only '58': http_error: http error 4 | no |
+| Grok on X / Grok Web | grok.com | FAIL | on X / Grok Web  <- not replayable as HTTP | no |
+| HuggingChat | huggingface.co | WALL | wall text in reply -- left alone, not retried | no |
+| Monica AI | monica.im | NO_ANSWER | 200 but the extracted reply is not only '58': omni. | no |
+| Pollinations AI Web | pollinations.ai | FAIL | no visible composer | no |
+| V0 by Vercel (v0.app) | v0.app | FAIL | _send | no |
+| Coze Web | www.coze.com | FAIL | O_COMPOSER    no visible composer | no |
+| Doubao Web (ByteDance) | www.doubao.com | FAIL | no visible composer | no |
+| Genspark AI | www.genspark.ai | REPLAY_OK | 58 | yes |
+| Meta AI Web | www.meta.ai | FAIL | sts / 11 posts / 39 ws frames | no |
+| Perplexity Free Web | www.perplexity.ai | NO_ANSWER | 200 but the extracted reply is not only '58': 58what is 58 multiplied  | no |
+| iFlytek SparkDesk | xinghuo.xfyun.cn | FAIL | 0 posts / 143 ws frames | no |
+| Baichuan Web | yi.baichuan-ai.com | FAIL | ts / 10 posts / 0 ws frames s | no |
+| You.com Chat | you.com | WALL | ou.com Chat  <- left untouched, operator decision | no |
+| Yuewen Chat | yuewen.cn | FAIL | Yuewen Chat  <- left untouched, operator decision | no |
+
+### [2026-08-29 22:55] #1159 — D1/D2/D3 + gate dedupe: all four handover defects FIXED, verified, committed
+
+**Committed as `151b985` first:** the PRIOR session's uncommitted shim/pool work
+(`session_pool.py` +208, `session_pool_shim.py` +211, `universal_replay.py`, `test_capture_staging.py`,
+agent client config) — the :8190/:20130 defect batch documented in `HANDOVER_8190_SHIM_2026-08-29.md`
+(exception-safe failover, unusable-reply + wall filters, 1800 s broken-adapter cooldown, bounded tool
+failover, tool-contract attach/flatten, no-tool unwrap, quarantine loader). Rule 2 backlog cleared
+before new work.
+
+**D1 — `graduate_all_seats.py` can no longer lose a run (commit 2).** Four defences, per finding 3 of
+#1157: (1) single-instance lock `state/graduate_all_seats.lock` with a ctypes
+`OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` liveness probe — `os.kill(pid, 0)` is NOT usable on
+Windows (it terminates the target), and a stale lock is taken over; (2) `restart_pool_bounded(180)` —
+the whole step-3 restart runs in a daemon thread with a hard wall-clock deadline; (3) `restart_pool()`
+itself hardened: the `/health` poll uses a no-proxy opener (system proxy intercepts loopback, §1) and
+the kill step now also stops lingering `chat_pool_server.py` pythons (the venv-launcher parent of the
+old pair), not just the port owner; (4) the capture loop + step 3 are wrapped in `try/finally` with
+`save_ledger()` + numbered `append_worklog()` guaranteed, the run's verdict table is copied into
+`ledger["runs"][...]["rows"]`, and `sys.stdout` is reconfigured line-buffered under `--apply`.
+`append_worklog()` now writes the house format `### [ts] #N — …` via `next_worklog_number()`, which
+follows the LAST entry in file order — NOT the global max, because the file carries stray 4xxx-numbered
+entries (#4552/#4876/#4877) from an older merged log (max() would have jumped 1157→4878; caught by the
+D1 self-check before it could ship).
+**Verified:** `py_compile` RC=0; self-check (`state/check_d1.py`): liveness True for self / False for
+0 and dead pid; lock acquire→refuse-second-acquire→release all correct; `next_worklog_number()` = 1158.
+End-to-end: plan-only run `tabs 82 → eligible 32 → planned 4, skipped 28, video lane 7`, `PLAN_RC=0`,
+nothing sent — and the skip list shows every policy guard working (`already REPLAY_OK` ×4 = the D4
+per-seat guard; `walled -- never re-knocked` ×3; `2 attempts already, same failure` ×21). A live
+restart of :20130 through the bounded path succeeded (see below).
+
+**D2 — `tab_graduation_sweep.execute_one()` replay scope (commit 3).** Root cause per finding 2 of
+#1157. Fix: new `session_slug()` mirrors `capture_sessions_cdp.slug()` exactly
+(`" "`, `"/"`, `"."` → `_`, lowercased), and `--only` is now the EXACT session filename this unit's
+capture wrote (`session_<slug>.json`), falling back to: single prefix match → that file; no match →
+dot-corrected slug (so replay_check's "no session_*.json" answers into OUR transcript); prefix
+collision without an exact file → newest sibling. This also kills the double-spend where a loose
+`--only veoaifree` matched both `session_veoaifree.json` and `session_veoaifree_chat_web.json`.
+**Verified:** `state/check_d2.py` — all 9 probe sites (incl. `1min.AI`, `V0 by Vercel (v0.app)`,
+`DuckDuckGo AI Chat (duck.ai)`, `Qwen Chat (Alibaba)`) resolve to their real session files, 0 missing.
+
+**Gate phantom dupes — three layers (commit 3).** (a) `replay_check.py` now writes ONE ROW PER HOST:
+REPLAY_OK outranks everything, first-wins among equals (21 rows → 19 hosts on the current data:
+chatgpt.com had two REPLAY_OK rows — `session_chatgpt_free_web.json` AND `session_chatx.json`, which
+is itself a second chatgpt.com capture; veoaifree.com had WALL + REPLAY_OK). (b)
+`chat_pool_server.Pool._load()` now appends ONE PROVIDER PER HOST (`seen_hosts` guard) — the verdict
+map already deduped per host, but providers were per session file, which is what produced the phantom
+12. (c) `scripts/automation/dedupe_replay_gate.py` repaired the existing `state/replay_check.json` IN
+PLACE with zero requests (a full replay re-run would have spent one live request per session file):
+21 rows → 19, replayable hosts = the handover's exact 10, `summary` rebuilt, atomic tmp+replace,
+idempotent.
+**Verified live:** `:20130` restarted through the D1-hardened path; `/health` now reports
+**served 10 / readyNow 10 / availableNow 10**, `chatgpt.com` listed ONCE, `veoaifree.com` ONCE,
+upstream (:20128) block untouched. `logs/chat_pool.err` clean. :20128 was never touched.
+NOTE logged for honesty: my restart runner's stdout file came back EMPTY because the agent terminal
+was killed mid-run — the identical buffer-loss failure mode that ate run 3's log tail. The pool
+nonetheless restarted with the deduped gate (proven by /health), and the line-buffering defence in
+D1 exists precisely for this.
+
+**D3 — run 3 backfilled (commit 3).** `scripts/automation/backfill_run3_records.py` parses
+`state/grad_apply_run3.log` (no request re-sent) and wrote: ledger `runs[]` = 2 entries (run-3 record
+with the 31-row table inline + a `backfilled` provenance note; per-seat entries were already current
+because `save_ledger` ran per seat), and worklog entry #1158 with the full table. First pass produced
+4 mangled rows (parenthesised site names split at the wrong `(`); the parser now takes the LAST
+parenthesised group as host, the mangled artifacts were removed (`state/redo_backfill.py`) and the
+backfill re-run clean — table verified row-by-row.
+
+**Not done / unchanged:** websocket capture+replay client (iFlytek/Meta/Grok/Copilot — the high-ROI
+unlock, next session's item); duck.ai zero-auth capture adapter; deferred items 8/9 of the handover;
+Gemini CookieMismatch (operator action). :20128 untouched throughout. No walls were re-knocked; no
+provider received any request this session (all verification was offline or against our own :20130).
+
