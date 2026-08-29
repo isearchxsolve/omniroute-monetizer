@@ -54,6 +54,7 @@
       "isFamilyDefault": false
     }
   ],
+  "inferenceModelPricingEnabled": true,
   "inferenceProvider": "gateway",
   "inferenceCredentialKind": "static"
 }

@@ -16,19 +16,39 @@ import logging
 import os
 import pathlib
 import re
+import sys
 import threading
 import time
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Optional
 
 from session_pool import SessionPool, ChatError
 from veo_session_replay import SessionExpired
 from video_job_store import VideoJobStore
+# The tool->prompt shim is IMPORTED, not copied. It is the piece that makes a free chat seat usable
+# by an agentic client, and resolve_tool_name() inside it is the load-bearing line; a second copy on
+# this port would drift from :20130's and only one of them would ever get fixed.
+from chat_pool_server import (tool_instruction, parse_tool_call, looks_like_overflow,
+                              TOOL_RESULT_CAP)
 
 # Initialize global pool
 pool = SessionPool()
 
 # Durable video-job ledger (worklog #1134): the receipt/idempotency/reconciliation contract.
 JOBS = VideoJobStore()
+
+# How many seats one tools request may try before giving up. Bounded because each attempt is a real
+# request to a free account: unbounded failover across 18 seats exceeded a 300s client timeout, and
+# hammering seats is how they get burned. Rejected seats are cooled, so the pool converges.
+TOOL_FAILOVER_TRIES = 6
+# Plain chat needs a bound for the same reason tools did. Unbounded, `tries` defaults to the whole
+# live list, and a request that lands on Chrome-bound seats (420s DOM renders) walks them one real
+# round trip at a time -- measured after quarantining api.monica.im: plain chat went from 9.7s (a
+# garbage constant) to >90s (walking the slow tail). A consumer wired to :8190 needs a bounded answer
+# or a bounded error, never an open-ended hang; cooled seats mean consecutive requests converge on
+# the fast ones. Raise this only alongside evidence that the tail is actually worth waiting for.
+CHAT_FAILOVER_TRIES = 5
 
 # Rough render budget advertised in receipts (estimate only; the status URL is authoritative).
 VIDEO_EST_SECONDS = 300
@@ -66,6 +86,99 @@ TENANT_MAP_PATH = pathlib.Path(r"D:\omniroute-monetizer\state\secrets\tenant_map
 # a spurious trigger costs one glob + one stat per seat -- microseconds, zero disruption.
 _RESCAN_LOCK = threading.Lock()
 _dir_sig = [None]                                    # [last-seen directory signature]
+
+
+def _tools_from_request(req: dict) -> list:
+    """Normalise an OpenAI tools array into the Anthropic shape the shared shim helpers read.
+
+    :8190 is the OpenAI-compatible face, so consumers send
+        {"type": "function", "function": {"name", "description", "parameters"}}
+    while render_tools()/resolve_tool_name() -- shared with :20130 -- read
+        {"name", "description", "input_schema"}
+    Converting here keeps ONE tool contract behind both ports.
+    """
+    out = []
+    for t in req.get("tools") or []:
+        if not isinstance(t, dict):
+            continue
+        fn = t.get("function") if isinstance(t.get("function"), dict) else t
+        name = fn.get("name")
+        if not name:
+            continue
+        out.append({"name": name,
+                    "description": fn.get("description") or "",
+                    "input_schema": fn.get("parameters") or fn.get("input_schema") or {}})
+    return out
+
+
+def _flatten_tool_history(messages: list) -> list:
+    """Render OpenAI tool traffic into plain text turns.
+
+    A replayed chat UI has no native tool transcript. If the assistant's `tool_calls` and the
+    `role: "tool"` results are dropped, the seat's next turn arrives with its own call and the
+    output both missing -- it sees itself having said nothing and repeats the same call forever.
+    Same reasoning as flatten() on :20130, applied to the OpenAI message shape.
+    """
+    out = []
+    for m in messages or []:
+        if not isinstance(m, dict):
+            continue
+        role = m.get("role")
+        if role == "tool":
+            body = str(m.get("content") or "")[:TOOL_RESULT_CAP]
+            label = m.get("name") or m.get("tool_call_id") or "tool"
+            out.append({"role": "user", "content": f"[result of {label}]\n{body}"})
+            continue
+        if role == "assistant" and m.get("tool_calls"):
+            parts = [str(m.get("content") or "").strip()]
+            for call in m["tool_calls"]:
+                fn = (call or {}).get("function") or {}
+                parts.append(f"[called {fn.get('name')} with {fn.get('arguments')}]")
+            out.append({"role": "assistant", "content": "\n".join(p for p in parts if p)})
+            continue
+        out.append(m)
+    return out
+
+
+def _attach_tool_contract(messages: list, tools: list) -> tuple[list, int]:
+    """Append the tool contract to the last user turn. Returns (messages, n_tools_rendered)."""
+    instruction, included = tool_instruction(tools)
+    if not instruction:
+        return messages, 0
+    out = list(messages)
+    for i in range(len(out) - 1, -1, -1):
+        if isinstance(out[i], dict) and out[i].get("role") == "user":
+            turn = dict(out[i])
+            turn["content"] = str(turn.get("content") or "") + instruction
+            out[i] = turn
+            return out, included
+    out.append({"role": "user", "content": instruction.strip()})
+    return out, included
+
+
+def _unwrap_no_tool_text(text: str) -> Optional[str]:
+    """`{"tool": null, "text": "..."}` -> the text. Anything else -> None (leave the reply alone).
+
+    The no-tool envelope is the shim's own protocol for "I read the tools and none applies". Shipping
+    it verbatim hands the consumer our wire format as the model's words. Deliberately strict: only an
+    object whose `tool` is EXACTLY null and whose `text` is a string is unwrapped, so a genuine JSON
+    answer that happens to contain a "tool" key is never rewritten into something else.
+    """
+    if not text:
+        return None
+    blob = text.strip()
+    if blob.startswith("```"):
+        blob = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", blob).strip()
+    if not blob.startswith("{"):
+        return None
+    try:
+        obj = json.loads(blob)
+    except ValueError:
+        return None
+    if not isinstance(obj, dict) or "tool" not in obj or obj.get("tool") is not None:
+        return None
+    body = obj.get("text")
+    return body if isinstance(body, str) and body.strip() else None
 
 
 def _maybe_rescan() -> None:
@@ -386,11 +499,31 @@ class ShimHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(_job_receipt(rec, tenant)).encode())
             return
 
+        # ------------------------------------------------------------- tools (worklog: :8190) ----
+        # Consumers wired to this port were getting prose where they asked for a tool call, because
+        # the tool shim existed only on :20130. Same contract now serves both faces.
+        tools = _tools_from_request(req)
+        send_messages = _flatten_tool_history(messages)
+        tools_rendered = 0
+        if tools:
+            send_messages, tools_rendered = _attach_tool_contract(send_messages, tools)
+
         try:
             # Route based on detected modality. strict_json (worklog #1134, fix 1): JSON-intent
             # requests fail over any seat that answers prose/empty/fenced-JSON.
-            result = pool.chat(messages, model=model, modality=modality, host=host_target,
-                               strict_json=_wants_strict_json(req))
+            result = pool.chat(send_messages, model=model, modality=modality, host=host_target,
+                               # A tools request IS a strict-JSON request: the contract asks for one
+                               # JSON object and nothing else. Enforcing it fails over any seat that
+                               # answers prose (measured: api.monica.im replies "Omni." to a 44-tool
+                               # contract) until a compliant seat answers. Shipping prose to a client
+                               # that asked for a tool is the bug that cost weeks.
+                               strict_json=_wants_strict_json(req) or bool(tools),
+                               # ...but bounded. Unbounded, a tool request walks all 18 seats at a
+                               # real round trip each and blew a 300s client timeout. Every rejected
+                               # seat is also cooled down, so consecutive tool requests converge onto
+                               # the seats that honour the contract instead of re-paying for the ones
+                               # that do not.
+                               tries=TOOL_FAILOVER_TRIES if tools else CHAT_FAILOVER_TRIES)
         except ChatError as e:
             # Pool exhausted (every session dead/cooling) is a RATE condition, not a server fault:
             # answer like OpenAI does so consumers can back off with Retry-After instead of
@@ -406,12 +539,74 @@ class ShimHandler(BaseHTTPRequestHandler):
                                                    "tenant": tenant}}).encode())
             return
         except Exception as e:
+            # Reaching here means the pool raised something that is NOT a ChatError, i.e. one of our
+            # own adapters is broken rather than a provider refusing. Naming the type in the payload
+            # matters: `ChatError.__init__() missing 1 required positional argument` reads like a
+            # provider problem, and consumers spent a day treating a TypeError as an outage. The
+            # traceback goes to stderr because str(e) alone gives no file or line.
+            print(f"[shim] UNEXPECTED {type(e).__name__} on {self.path} -- returning 500:",
+                  file=sys.stderr)
+            traceback.print_exc()
             self.send_response(500)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": {"message": str(e), "tenant": tenant}}).encode())
+            self.wfile.write(json.dumps({"error": {
+                "message": f"{type(e).__name__}: {e}",
+                "type": "internal_adapter_error",
+                "hint": "a pool adapter raised a non-ChatError; see the shim's stderr for the "
+                        "traceback. This is our bug, not the provider's.",
+                "tenant": tenant}}).encode())
             return
             
+        # ----------------------------------------------- render the reply, tool call or text ----
+        text = result.get("text", "") or ""
+        message = {"role": "assistant", "content": text}
+        finish = "stop"
+        if tools:
+            if looks_like_overflow(text):
+                # The seat answered with page markup instead of the contract. Failing closed is
+                # deliberate: a client handed prose where it expected a tool call retries forever,
+                # and that silent loop is exactly what made this class of bug cost weeks.
+                self.send_response(502)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": {
+                    "message": f"{result.get('provider')} returned {len(text)} bytes of page markup "
+                               f"instead of the tool contract",
+                    "type": "tool_contract_overflow", "tenant": tenant}}).encode())
+                return
+            name, tool_args, unresolved = parse_tool_call(text, tools)
+            if unresolved and not name:
+                # The seat invented a tool name that resolve_tool_name could not map to anything the
+                # client registered. Reporting the invented string is the point -- guessing a name
+                # here is how `No such tool available` became unfindable.
+                self.send_response(502)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": {
+                    "message": f"{result.get('provider')} named a tool that was never registered: "
+                               f"{unresolved!r}",
+                    "type": "tool_name_unresolved", "tenant": tenant}}).encode())
+                return
+            if name:
+                message = {"role": "assistant", "content": None,
+                           "tool_calls": [{"id": f"call_{int(time.time() * 1000)}",
+                                           "type": "function",
+                                           "function": {"name": name,
+                                                        "arguments": json.dumps(tool_args or {})}}]}
+                finish = "tool_calls"
+            else:
+                # The seat complied with the contract and declined to call a tool:
+                # {"tool": null, "text": "..."}. parse_tool_call() correctly reports "no tool call",
+                # but it discards the text, so without this the consumer receives the JSON ENVELOPE as
+                # the assistant's message -- measured: chat.mistral.ai's refusal shipped verbatim as
+                # `{"tool": null, "text": "I cannot execute shell commands..."}`. The envelope is OUR
+                # protocol, not content; unwrap it. Gated on `tools` being present, so a plain request
+                # that legitimately asks for JSON is never rewritten.
+                unwrapped = _unwrap_no_tool_text(text)
+                if unwrapped is not None:
+                    message = {"role": "assistant", "content": unwrapped}
+
         # Format response as OpenAI chat completion
         resp = {
             "id": f"chatcmpl-{int(time.time()*1000)}",
@@ -423,14 +618,14 @@ class ShimHandler(BaseHTTPRequestHandler):
             "provider": result.get("provider"),
             "session": result.get("session"),
             "tenant": tenant,
+            # How many of the requested tools actually fitted under the prompt ceiling. Reported
+            # because silent truncation reads as "all tools offered" when it was not.
+            "x_pool_tools_rendered": f"{tools_rendered}/{len(tools)}" if tools else None,
             "choices": [
                 {
                     "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": result.get("text", "")
-                    },
-                    "finish_reason": "stop"
+                    "message": message,
+                    "finish_reason": finish
                 }
             ],
             "usage": {

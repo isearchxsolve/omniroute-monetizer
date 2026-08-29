@@ -27,8 +27,11 @@ import glob
 import json
 import os
 import pathlib
+import re
+import sys
 import threading
 import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Type
 
@@ -38,9 +41,115 @@ from veo_session_replay import VeoSessionClient, SessionExpired
 from chrome_replay_client import ChromeReplayClient, CHROME_CLIENTS
 from chrome_video_client import ChromeVideoClient, VIDEO_HOSTS
 
+# A replayed web UI answers HTTP 200 with the wall RENDERED IN THE BODY far more often than it
+# answers 402 or 429, so a wall arrives looking exactly like a successful answer. Measured on
+# :8190, where veoaifree.com replied to a *chat* request with
+#     <div class='rate-limit-exceed rate-3'>Limit Reached: ... maximum allowance of 2 videos</div>
+# and the shim shipped it to the consumer as content with finish_reason "stop". A consumer cannot
+# tell that from a real answer, which makes it the worst failure shape available: silent.
+REPLY_WALL_MARKS = ("limit reached", "rate-limit-exceed", "maximum allowance", "out of credits",
+                    "insufficient credit", "quota exceeded", "upgrade to continue",
+                    "subscribe to continue", "please log in", "please sign in",
+                    "session expired", "too many requests", "you have reached",
+                    "daily limit", "trial has ended")
+REPLY_WALL_MAX_LEN = 600
+
+# A garbage reply or an adapter exception is OUR defect, not a provider refusal, so it is not
+# transient: the same seat will fail identically on the next request and every one after it until
+# somebody edits the client. A 30s cooldown treats it as a blip, and the seat re-enters rotation a
+# minute later to burn another attempt -- measured on :8190, where veoaifree.com and huggingface.co
+# spent 2 of a 6-try tool request's attempts on every call. Quarantine them for the run instead:
+# breadth costs nothing, and a repaired adapter is picked up on the next restart.
+BROKEN_ADAPTER_COOLDOWN_S = 1800.0
+
+# A wall that arrives as an HTTP STATUS is still a wall. 402 payment required, 403 forbidden, 429 too
+# many requests: none of these become false again in 30 seconds. Cooling them like a transport blip
+# puts the seat straight back at the head of the queue to burn the next request's attempt -- measured
+# on :8190, where one 402 seat ate tool-failover attempts on every call until all 6 were spent and the
+# request returned HTTP 500 with a healthy pool behind it. Walls get the wall cooldown, wherever they
+# appear: in the body (wall_in_reply) or in the status line (wall_in_error).
+#
+# The status codes are matched only in `HTTP <code>` / `HTTP Error <code>` position, never as bare
+# digits -- "6403 bytes" in an error string must not quarantine a working seat for an hour.
+WALL_STATUS_RE = re.compile(r"\bhttp(?:\s+error)?[\s:]+(402|403|429)\b", re.I)
+WALL_ERROR_PHRASES = (
+    "payment required", "too many requests", "quota exceeded", "quota exhausted",
+    "insufficient credit", "insufficient balance", "insufficient quota",
+    "rate limit", "rate-limit", "forbidden", "subscription required", "upgrade required",
+)
+
+
+def wall_in_error(exc: Any) -> Optional[str]:
+    """Name the wall in a ChatError, or None if it reads like a transport failure."""
+    low = f"{exc}".lower()
+    hit = WALL_STATUS_RE.search(low)
+    if hit:
+        return f"HTTP {hit.group(1)}"
+    for phrase in WALL_ERROR_PHRASES:
+        if phrase in low:
+            return phrase
+    return None
+
+# Markers of a reply that is not an answer at all. Anchored to the START of the text on purpose: a
+# legitimate answer may *contain* "<html" because the user asked about HTML, but only a page shell or
+# an unparsed stream *begins* that way. Anchoring keeps a real answer from being thrown away.
+PAGE_SHELL_STARTS = ("<!doctype", "<html", "<?xml")
+STREAM_FRAME_STARTS = ('{"type":"status"', '{"type": "status"', "data:", "event:", 'data: {"')
+
+
+def unusable_reply(text: Any) -> Optional[str]:
+    """Return a reason if this reply is not an answer, else None.
+
+    Three adapter defects measured on :8190, all of which returned HTTP 200 and were shipped to the
+    consumer as content:
+        veoaifree.com  -> a full HTML landing page
+        huggingface.co -> raw SSE frames, the stream never parsed
+        (any seat)     -> an empty string
+
+    None of these is a provider refusing; each is our adapter handing back its raw input. Treated as
+    an answer, they make a broken seat read as live supply -- `live()` says 18 dispatchable while
+    several cannot answer at all. Failing them over is what makes the seat count mean something.
+    """
+    if not isinstance(text, str):
+        return "reply was not text"
+    low = text.strip().lower()
+    if not low:
+        return "empty reply"
+    head = low[:200]
+    for mark in PAGE_SHELL_STARTS:
+        if head.startswith(mark):
+            return f"page markup, not an answer (starts {mark!r}, {len(text)} bytes)"
+    for mark in STREAM_FRAME_STARTS:
+        if head.startswith(mark):
+            return f"unparsed stream frames, not an answer (starts {mark!r})"
+    if "width=device-width" in head:
+        return "page markup, not an answer (viewport meta in the first 200 bytes)"
+    return None
+
+
+def wall_in_reply(text: Any) -> Optional[str]:
+    """Return the matched wall phrase if this reply *is* a wall, else None.
+
+    Deliberately length-bounded. A seat asked *about* rate limiting can legitimately write the words
+    "rate limit" in a long answer, and cooling a healthy seat over that would be a false wall -- the
+    mirror of the bug this fixes. A real wall is a short refusal, usually carrying markup. Bounded
+    heuristic over a clever one, because a wrong verdict here costs a working seat.
+    """
+    if not isinstance(text, str):
+        return None
+    low = text.strip().lower()
+    if not low or len(low) > REPLY_WALL_MAX_LEN:
+        return None
+    for mark in REPLY_WALL_MARKS:
+        if mark in low:
+            return mark
+    return None
+
 SECRETS = pathlib.Path(r"D:\omniroute-monetizer\state\secrets")
 # last-used timestamps ONLY (no cookie, no header) so the cooldown spreads load across CLI runs too.
 POOL_STATE = pathlib.Path(r"D:\omniroute-monetizer\state\session_pool_state.json")
+# Hosts withheld from dispatch because OUR adapter is broken -- see _load_quarantine().
+POOL_QUARANTINE = pathlib.Path(r"D:\omniroute-monetizer\state\pool_quarantine.json")
 
 # host substring -> proven replay client. One line per provider whose genuine shape is captured AND
 # verified end-to-end. Dirty-and-easy: add a line when a new provider (chat OR video) proves out.
@@ -202,6 +311,39 @@ def _load_pool_state() -> Dict[str, float]:
         return {}
 
 
+def _load_quarantine() -> set:
+    """Hosts whose ADAPTER is proven broken, so the pool must not offer them as supply.
+
+    This is not `flagged_dead`. `flagged_dead` means the SEAT is gone (keepalive found the cookie
+    dead), and it is written by keepalive -- putting an adapter defect there would make a live,
+    logged-in account read as a dead one and set keepalive fighting the entry. This file records the
+    other layer: the account is fine, OUR client for it returns something that is not an answer.
+
+    Why a file and not a constant: un-quarantining must not require a code edit. Delete the entry,
+    restart the face, and the seat is supply again -- which is what happens the moment somebody fixes
+    the adapter. Env var `OMNI_POOL_QUARANTINE` (comma-separated) adds to it for one process.
+
+    Shape: {"hosts": {"<host>": "why it is quarantined"}}  (a bare list is accepted too)
+
+    A quarantined seat still counts as a harvested account and still keeps its cookie warm through
+    other paths; it is only withheld from dispatch. Nothing here is a claim about the provider.
+    """
+    hosts = set()
+    try:
+        raw = json.loads(POOL_QUARANTINE.read_text(encoding="utf-8"))
+        entries = raw.get("hosts", raw) if isinstance(raw, dict) else raw
+        hosts |= {str(h).strip() for h in (entries or {}) if str(h).strip()}
+    except FileNotFoundError:
+        pass
+    except Exception as exc:
+        # Never fail open silently: an unreadable quarantine file means broken seats would go back
+        # into rotation, which is the bug this file exists to stop.
+        print(f"[pool] WARNING quarantine file unreadable ({exc.__class__.__name__}): "
+              f"{POOL_QUARANTINE} -- no host is being withheld", file=sys.stderr)
+    hosts |= {h.strip() for h in (os.environ.get("OMNI_POOL_QUARANTINE") or "").split(",") if h.strip()}
+    return hosts
+
+
 # Serializes state-file writes: the shim is a ThreadingHTTPServer, so concurrent successes used to
 # call write_text() at the same moment -- last-writer-wins at best, a torn half-written file at
 # worst (which would read back as {} and silently zero every cooldown). One lock + write-to-temp
@@ -331,6 +473,12 @@ class SessionPool:
         st = _load_pool_state()
         for s in self.sessions:
             s.last_used = float(st.get(s.key, 0.0))
+        self.quarantined = _load_quarantine()
+        if self.quarantined:
+            held = sorted(h for h in self.quarantined
+                          if any(s.host == h for s in self.sessions))
+            print(f"[pool] quarantined (adapter defect, not the seat): {', '.join(held) or '-'}",
+                  file=sys.stderr)
 
     def rescan(self) -> Dict[str, Any]:
         """Hot-reload the seat directory WITHOUT a restart (worklog #1112).
@@ -398,6 +546,7 @@ class SessionPool:
 
     def live(self, modality: Optional[str] = None, host: Optional[str] = None) -> List[PooledSession]:
         return [s for s in self.sessions if s.dispatchable
+                and s.host not in self.quarantined
                 and (modality is None or s.modality == modality)
                 and (host is None or s.host == host)]
 
@@ -458,6 +607,30 @@ class SessionPool:
             with self._host_lock(s.host):
                 try:
                     r = s.chat(messages, model=model, **kw)
+                    junk = unusable_reply(r.get("text"))
+                    if junk:
+                        # Our adapter handed back its raw input rather than an answer. Cool the seat
+                        # on the short (ours-not-theirs) cooldown and fail over -- shipping this as
+                        # content is what let three broken adapters count as live supply.
+                        base = max(time.time(), res_at)
+                        s.last_used = base
+                        s.cooldown_until = base + max(self.cooldown, BROKEN_ADAPTER_COOLDOWN_S)
+                        s.last_error = f"unusable:{junk[:40]}"
+                        last_exc = ChatError("UNUSABLE_REPLY", f"{s.host}: {junk}")
+                        print(f"[pool] {s.host} returned {junk} -- failing over", file=sys.stderr)
+                        continue
+                    wall = wall_in_reply(r.get("text"))
+                    if wall:
+                        # The seat answered 200 with a wall in the body. Shipping this as content is
+                        # how a dead seat reads as live supply, so it is failed over like any other
+                        # wall and stood down for a long cooldown -- a wall is never retried.
+                        base = max(time.time(), res_at)
+                        s.last_used = base
+                        s.cooldown_until = base + max(self.cooldown, 3600.0)
+                        s.last_error = f"wall:{wall}"
+                        last_exc = ChatError(
+                            "wall", f"{s.host} answered with a wall, not a reply ({wall!r})")
+                        continue
                     if strict_json and not is_strict_json(r.get("text")):
                         # The seat answered, but not in the contract's language. Cool it down
                         # (it just burned a real request) and fail over — never ship prose to
@@ -482,8 +655,39 @@ class SessionPool:
                 except ChatError as e:
                     base = max(time.time(), res_at)
                     s.last_used = base
-                    s.cooldown_until = base + max(self.cooldown, 30.0)
-                    s.last_error, last_exc = str(e)[:60], e
+                    wall = wall_in_error(e)
+                    if wall:
+                        # Not a blip -- somebody else's boundary, restated as a status code. Stand the
+                        # seat down for the full wall cooldown so it stops consuming this request's
+                        # remaining attempts (and the next request's, and the next).
+                        s.cooldown_until = base + max(self.cooldown, 3600.0)
+                        s.last_error = f"wall:{wall}"
+                        print(f"[pool] {s.host} is walled ({wall}) -- standing it down, failing over",
+                              file=sys.stderr)
+                    else:
+                        s.cooldown_until = base + max(self.cooldown, 30.0)
+                        s.last_error = str(e)[:60]
+                    last_exc = e
+                    continue
+                except Exception as e:
+                    # An adapter raised something the failover contract does not name -- that is a
+                    # BUG IN OUR CLIENT, not a refusal by the provider. It must still be treated like
+                    # one, because letting it escape aborts the whole call: one broken adapter then
+                    # takes down all 18 seats. Measured on :8190, where a TypeError while building a
+                    # ChatError produced HTTP 500 on every request while every seat was healthy.
+                    #
+                    # The traceback goes to stderr because the caller only ever sees str(e), and a
+                    # bug with no file/line is a bug nobody can find -- this one hid behind an
+                    # opaque 500 until it was reproduced by hand.
+                    base = max(time.time(), res_at)
+                    s.last_used = base
+                    s.cooldown_until = base + max(self.cooldown, BROKEN_ADAPTER_COOLDOWN_S)
+                    s.last_error = f"adapter_bug:{type(e).__name__}"
+                    last_exc = ChatError("ADAPTER_ERROR",
+                                         f"{s.host} adapter raised {type(e).__name__}: {e}")
+                    print(f"[pool] ADAPTER BUG in {s.host} ({s.key}) -- failing over:",
+                          file=sys.stderr)
+                    traceback.print_exc()
                     continue
         if last_exc:
             raise last_exc

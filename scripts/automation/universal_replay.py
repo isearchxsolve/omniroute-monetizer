@@ -700,14 +700,22 @@ class UniversalSessionClient:
 
         # 1b. The sentinel must actually have been replaced, or we would send the recorded
         # probe prompt and log the model's answer to *that* as if it answered the caller.
-        if new_body_str == self.base_body and new_prompt not in new_body_str:
+        import urllib.parse
+        import json
+        prompt_found = (
+            new_prompt in new_body_str or
+            urllib.parse.quote_plus(new_prompt) in new_body_str or
+            urllib.parse.quote(new_prompt) in new_body_str or
+            json.dumps(new_prompt)[1:-1] in new_body_str
+        )
+        
+        if new_body_str == self.base_body and not prompt_found:
             raise ChatError(
                 "SENTINEL_NOT_FOUND",
                 f"could not inject the prompt into the recorded body for "
                 f"{self.raw.get('host')} -- no known sentinel matched, so the replay would "
                 f"re-send the captured probe prompt instead of the caller's."
             )
-        
         # 2. Fire request through the browser-impersonation transport.
         try:
             target_url = self.url
