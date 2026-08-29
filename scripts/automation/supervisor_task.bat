@@ -9,7 +9,10 @@ rem and session_pool_shim (:8190), restarting owned services that die.
 
 cd /d D:\omniroute-monetizer
 
-wmic process where "CommandLine like '%%omni_supervisor%%'" get ProcessId /format:list 2>nul | findstr "ProcessId" >nul
+rem The [_] char class keeps the guard from matching ITS OWN query text: the literal
+rem 'omni_supervisor' inside this wmic command line self-matched every time, so the guard
+rem always saw "already running" and the bat never started anything (found 2026-08-30).
+wmic process where "CommandLine like '%%omni[_]supervisor%%'" get ProcessId /format:list 2>nul | findstr "ProcessId" >nul
 
 if not errorlevel 1 exit /b 0
 

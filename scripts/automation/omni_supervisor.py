@@ -64,6 +64,13 @@ RESTART_BACKOFF_S = [5, 15, 60, 180]      # then give up and report
 SETTLE_AFTER_START_S = 6.0
 WATCH_INTERVAL_S = 60.0
 
+# The watch loop runs under pythonw (Startup-folder VBS) or a hidden task console, and every
+# subprocess.run below spawns a CONSOLE executable. A console child of a console-less parent makes
+# Windows allocate a NEW visible console window -- that is the PowerShell pop the operator saw on
+# every pass. CREATE_NO_WINDOW suppresses the allocation for probe children only; the service
+# launcher in start() keeps its own flags (DETACHED_PROCESS already hides those).
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
@@ -140,7 +147,8 @@ def port_listening(port: int) -> Optional[int]:
     """PID listening on the port, or None. Uses netstat because it needs no extra dependency and its
     output is stable across the Windows versions this runs on."""
     try:
-        out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True, timeout=30)
+        out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True, timeout=30,
+                             creationflags=NO_WINDOW)
     except (OSError, subprocess.SubprocessError):
         return None
     for line in (out.stdout or "").splitlines():
@@ -182,7 +190,8 @@ def our_process(match: str) -> Optional[int]:
           "ForEach-Object { \"$($_.ProcessId)|$($_.CommandLine)\" }")
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
-                             capture_output=True, text=True, timeout=60)
+                             capture_output=True, text=True, timeout=60,
+                             creationflags=NO_WINDOW)
     except (OSError, subprocess.SubprocessError):
         return None
     for line in (out.stdout or "").splitlines():
@@ -203,7 +212,8 @@ def chrome_state() -> dict[str, Any]:
     dirs, debug_ports = [], []
     try:
         out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
-                             capture_output=True, text=True, timeout=60)
+                             capture_output=True, text=True, timeout=60,
+                             creationflags=NO_WINDOW)
         for line in (out.stdout or "").splitlines():
             m = re.search(r'--user-data-dir=(?:"([^"]+)"|(\S+))', line)
             if m:

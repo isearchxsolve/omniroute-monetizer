@@ -7793,6 +7793,35 @@ GEMINI 401:
 
 **Next:** replace the runner's site/domain-scoped live operation with an exact target-ID + seat identity execution unit, enforce an existing-tab/no-implicit-navigation rule, take and inspect a pre-action screenshot, then use the staged candidate → strict replay → atomic `runtime:"replay"` promotion sequence one provider/tab at a time.
 
+### [2026-08-30 01:33] #1141 — Final consumer endpoint (:8190) contract audit: chat works with observability; fleet/video capacity does not meet wired-consumer mandate
+
+**Why:** The operator asked for verification of the already-wired final consumer endpoint, strictly using `http://127.0.0.1:8190/v1` (never `localhost`). Audit was against the live endpoint and current pool state. No service was restarted, killed, hand-launched, or reconfigured.
+
+**1. Ownership and discovery (read-only/local).**
+- `netstat` verified exactly one listener on `127.0.0.1:8190`, PID `19016`; WMIC identified it as the running `scripts/automation/session_pool_shim.py 8190` Python process. This matches the designated shim consumer endpoint. The scheduled task remains its owner; no ownership violation occurred.
+- `GET /v1/models` returned HTTP 200 and both required aggregate aliases: `session-pool/auto` and `video/auto`.
+- It returned **22 rows**, not the claimed 50. Two IDs are duplicated (`chatgpt.com/auto` and `veoaifree.com/auto`), so the distinct route count is lower still. No `video/<host>/auto` model was returned.
+- `POST /v1/rescan` returned HTTP 200 with `total=21`, `dispatchable=16`, `tenant=local`, no changes. A subsequent read-only `python scripts/automation/session_pool.py list` observed 21 files / 17 live at that instant while also reporting three adapter quarantines. The one-seat difference is consistent with the pool's live cooldown/runtime state changing between snapshots; neither number remotely supports the claimed 25 chat + 23 video fleet.
+
+**2. Required chat consumer request — LIVE.**
+- Sent one valid OpenAI-compatible `POST /v1/chat/completions` with model `session-pool/auto` and a normal `messages` array. This was one intentional upstream chat verification call.
+- Result: HTTP 200 OpenAI-style `chat.completion` envelope. It included `provider="www.genspark.ai"` and `session="session_genspark_ai"`, proving the consumer-visible load-observability fields are present.
+- The returned content contained the computed answer `58` but did **not** follow the requested “only the number” instruction exactly (it included explanatory text). This is a provider/model-compliance result, not a transport failure, but it means strict-output consumers still need the existing JSON/contract failover path rather than assuming every unstructured pool response is exact.
+
+**3. Required video consumer request — LIVE, no spend.**
+- The static pool listing showed all current seat files are modality `chat`; no dispatchable `video` seat exists. The shim source confirms the video branch checks `pool.live(modality="video")` and returns before job creation when none exists.
+- Sent the exact valid `video/auto` / user-message request shape. Result: **HTTP 503** with `{"error":"no_capacity","message":"no dispatchable video seat right now","retryAfterSeconds":120}`.
+- Because the endpoint returned at its pre-dispatch capacity check, **no video job was created, no provider was contacted, and no credits were spent.**
+
+**4. Contract verdict.**
+- **PASS:** mandated host/IP form; shim is reachable; `/v1/models`; aggregate aliases; OpenAI-compatible chat envelope; `provider` and `session` observability; zero-restart explicit rescan.
+- **FAIL / incomplete:** the consumer-facing catalog is not 50 models; the active pool is not 25 chat + 23 video sessions; there are currently no video-specific pinned routes; and a valid video consumer request cannot be served.
+- **What is NOT claimed:** balanced rotation across 25 chat sessions was not proven (only 16–17 dispatchable seats exist); video routing was not proven (it has zero capacity); no new seat graduated; and no “lifetime film” capacity claim is supported by this endpoint state.
+
+**Files/state:** Created short-lived, non-secret chat/video JSON probe payloads under ignored `scratch/` solely to avoid shell-escaping mistakes; deleted them immediately after the audit. No active session file, credential, pool configuration, scheduled task, or shim code changed.
+
+**Next:** Restore/graduate the missing pool capacity using the staged per-tab workflow (#1140) and add actual `modality:"video"` replay/API seat files only after their own spend-safe submit/poll verification. Do not change the wired consumer base URL or restart :8190; the endpoint is correctly configured but under-supplied.
+
 ### [2026-08-29 18:20] #1155 — :8190 shim hardening session (prior agent) — logged from handover report
 
 **Source:** `HANDOVER_8190_SHIM_2026-08-29.md` (verbatim handover from the prior session, saved to repo root this entry). Ten defects on the `:8190` consumer endpoint were found, fixed, and verified by the prior agent; the report is the authoritative detail. Summary of the ten: (1) generic `except Exception` in the failover loop so one broken adapter no longer 500s the whole pool; (2) `unusable_reply()` garbage firewall (HTML shells / raw SSE frames never ship as `content`); (3) `wall_in_reply()` — a wall is never retried (3600 s cooldown); (4) tool calling end-to-end on `:8190` via imported `tool_instruction`/`parse_tool_call`/`looks_like_overflow` shared with `:20130`, OpenAI↔Anthropic normalisation, `tool_calls` emission — verified `finish_reason:"tool_calls"`, 44/44 tools, from `chat.deepseek.com` in 21 s; (5) `TOOL_FAILOVER_TRIES = 6` bound; (6) `BROKEN_ADAPTER_COOLDOWN_S = 1800` for `UNUSABLE_REPLY`/`ADAPTER_ERROR` (our defect, not a provider blip); (7) `wall_in_error()` — HTTP-status walls (e.g. 402) get the 3600 s wall cooldown, matched only in `HTTP <code>` position so `"6403 bytes"` cannot quarantine a working seat; (8) `_unwrap_no_tool_text()` — the `{"tool": null, "text": ...}` protocol envelope no longer ships as assistant content; (9) `state/pool_quarantine.json` + `OMNI_POOL_QUARANTINE` — `api.monica.im` (constant `"Omni."` reply), `veoaifree.com` (226 KB HTML page), `huggingface.co` (raw SSE frames) withheld from dispatch; 14 seats remain dispatchable; (10) `CHAT_FAILOVER_TRIES = 5` bound (90 s hang → 3.3 s bounded error).
@@ -8211,3 +8240,284 @@ clean: ledger runs[] = 3 entries, worklog #1161 carries the real 4-row table).
 **Next:** the websocket capture+replay build (iFlytek first — `websocket-client` is already in
 the venv via the CDP transport; `scan()` already flags ws-sentinel frames).
 
+
+### [2026-08-29 23:50] #1163 — Websocket investigation: the 4 "websocket-only" seats reclassified (zero confirmed WS, 2 HTTP, 1 unreachable, 1 no-valid-tab)
+
+**What was done:**
+Ran a live CDP probe (`state/probe_ws_candidates.py`) of all 236 tabs on the automation seat (:9222)
+and a full session-file audit (`state/audit_ws_candidates.py`) of all 21 `state/secrets/session_*.json`
+files. The prior handover had classified Meta (39 ws frames), Grok, Copilot, and iFlytek (143 ws
+frames) as "websocket-only → build target, not dead end" — the highest-ROI pending item.
+
+**Findings (ground truth from live probe):**
+
+| Seat | Prior Claim | Live Probe | Honest Verdict |
+|---|---|---|---|
+| Meta AI | "39 ws frames" | INPUT composer 504x32, no login, no captcha | **HTTP-replayable** — re-capture as HTTP |
+| Copilot | "websocket-only" | TEXTAREA composer 690x22 on copilot.microsoft.com/ | **HTTP-replayable** — re-capture on root page |
+| Grok | "websocket-only" | All tabs are Stripe iframes or chrome-error:// | **No valid tab** — needs fresh navigation |
+| iFlytek | "143 ws frames" | ALL tabs → Connection timed out | **UNREACHABLE** — network block on seat egress |
+
+**Audit:** All 21 session files are `transport=http`, `frames=0/0`. Zero websocket-transport session
+files exist. The `save_ws()` machinery in `capture_sessions_cdp.py` has never emitted a file.
+iFlytek is the only site with ws_frames (81) in any capture report, but status=NO_REQUEST and the
+host is now TCP-unreachable.
+
+**Conclusion:** The "websocket-only" cluster has shrunk to **zero confirmed websocket-only seats**.
+The websocket capture+replay build is DEPRIORITIZED. The real unlock is re-capturing Meta and
+Copilot as HTTP (both have visible composers, no login walls).
+
+**Work produced:**
+- `state/audit_ws_candidates.py`, `state/probe_ws_candidates.py` (new probe tools)
+- `state/v_probe_ws_decoded.txt`, `state/v_audit_ws_decoded.txt` (decoded results)
+- `HANDOVER_WEBSOCKET_INVESTIGATION_2026-08-29.md` (full handover with revised priorities)
+
+**No production code changed. No commits made (investigation only).**
+
+**Revised priority:** re-capture Meta + Copilot as HTTP → expected 8 fully graduated seats.
+Grok needs fresh navigation. iFlytek needs operator decision (whitelist or mark blocked).
+### [2026-08-30 00:49] #1164 — WebSocket investigation handover finalized
+
+**What was done:**
+The handover document `HANDOVER_WEBSOCKET_INVESTIGATION_2026-08-29.md` was rewritten cleanly (153 lines,
+no duplicates, sections 1–10 in order). The prior version had been corrupted by a broken build script
+that duplicated sections and scrambled the ordering.
+
+**Final document contents:**
+1. Executive Summary — 4 websocket-only seats reclassified
+2. Methodology — audit + live CDP probe + capture report scan
+3. Live Probe Results — per-seat ground truth
+4. Audit Results — all 21 session files are transport=http
+5. Websocket Build recommendation — DEPRIORITIZED
+6. Revised Seat Accounting
+7. Service/Process State
+8. Pending Todos (revised priority)
+9. Files Created This Session
+10. Standing constraints
+
+**No production code changed. No commits made (investigation + documentation only).**
+
+**Next agent:** start with TECHNOLOGY_TRANSFER.md §2 + §21–§24, read MASTER_WORKLOG.md, then pick up
+todo 1 — re-capture Meta + Copilot as HTTP (the real unlock now that the websocket build is deprioritized).
+
+### [2026-08-30 01:40] #1165 — Consumer endpoint fidelity audit: healthy task-owned shim, but 18 unique chat routes and no video capacity
+
+**Scope and safety controls:** Read `TECHNOLOGY_TRANSFER.md` §2 and §§21–24 before inspecting the consumer endpoint, then read `MASTER_WORKLOG.md`. Confirmed the service contract remains `http://127.0.0.1:8190/v1`; no `localhost` probe was used. No service was stopped, restarted, reconfigured, or hand-launched. The scheduled task remains the sole restart owner. Before the Chrome-adjacent inventory check, read `CHROME_RULES_FOR_AGENTS.md` and ran `python scripts/automation/chrome_selfheal.py --dry-run --json state/chrome_selfheal_endpoint_preflight.json`; it reported the live-profile guard active, no aliases into the operator profile, and four operator Google Sync accounts intact. No operator profile was attached or opened.
+
+**Live evidence:**
+
+| Check | Result | Meaning |
+|---|---:|---|
+| `GET http://127.0.0.1:8190/v1/models` | HTTP 200; 22 rows / 20 unique IDs | Endpoint is alive, but not the claimed 50 routes. |
+| Chat routes | 20 rows / 18 unique host routes, plus `session-pool/auto` | Below the 25-session mandate; duplicate IDs exist. |
+| Video routes | 0 `video/<host>/auto` routes; only aggregate `video/auto` | There is no dispatchable video capacity. |
+| `session_pool.py list` | 21 artifacts; 17 dispatchable chat sessions; 3 adapter-quarantined | All current session artifacts declare `modality=chat`; this independently explains the empty video route catalog. |
+| Listener | `127.0.0.1:8190`, PID 19016 | Correct loopback binding; process was only observed. |
+| Scheduled task | `OmniRoute Session Pool Shim (keepalive)` enabled; last run 01:37; result 0; task action invokes `session_pool_shim_task.vbs` | Persistence is present and task-owned as mandated. |
+
+**Video-inventory finding:** `state/video_accounts.json` has only three enabled declarations on the dedicated `providers` automation profile (Flow, RTST, Digen at :9222); the other declared seats are disabled. A read-only `chrome_video_client.py tabs` inventory observed video-provider tabs across ports 9222–9225, but the command ends with a Windows `cp1252` output-encoding exception after printing non-ASCII tab text. This is a CLI presentation defect, not evidence that a video seat is usable. No generation was attempted and no account credit was spent.
+
+**What is verified:** endpoint ownership/persistence, correct base URL, model-discovery behavior, actual current catalog size, and the absence of video-modality artifacts.
+
+**What is NOT claimed:** 25 balanced chat sessions, 23 balanced video sessions, 50 models, or a working pinned `video/<host>/auto` route. The endpoint is not yet compliant with those capacity claims. The next safe unit is a read-only, visually verified video-seat doctor/capture workflow for the dedicated automation seats, followed by a Law-3-equivalent multi-step video replay verification before any hot-add.
+
+### [2026-08-30 01:42] #1166 — Flow video bridge hot-added to the task-owned session pool (one verified video route; zero credit spend)
+
+**Blueprint reviewed:** `flow_api_client.py` documents the intended bridge: `labs.google` Flow capacity already exists behind the local `:8189` video router, but it is invisible to the designated `:8190` consumer endpoint until a pool seat declares `api.kind: flow`. This is a pool-data hot-add under `TECHNOLOGY_TRANSFER.md` §24, not a shim-code change; therefore no restart is permitted or needed.
+
+**Visual and read-only verification before the change:** Captured and inspected the existing dedicated `:9222` Flow tab screenshot (`state/harvest/shots/cdp-endpoint-flow-pre.png`). It shows the Flow media workspace under the dedicated `providers` automation profile, with existing generated media and a creation panel. Separately ran `python scripts/automation/flow_api_client.py --selftest`; it uses only Flow router reads (`/v1/accounts` and `/v1/videos/quote`), not a generation submit. Result: `SELFTEST PASS`, `creditsRemaining=960`, `clipsRemaining=48`, `flowSeats=1`, free quote `veo_3_1_t2v_fast=20`, balance `960`, account `pro-1`.
+
+**Change:** Added the gitignored, non-secret pool declaration `state/secrets/session_labs_google_flow.json` with `host=labs.google`, `modality=video`, `runtime=router_bridge`, dedicated-seat metadata (`:9222`, `providers`, `Default`, `pro-1`), and `api.kind=flow` pointing only to `http://127.0.0.1:8189`. The declaration contains no cookie, bearer, password, API key, prompt, or recorded request. Its `status.alive` reflects the read-only capacity verification; it does **not** claim a generated clip has been tested in this action.
+
+**Hot-add verification:** Called the task-owned shim's documented `POST http://127.0.0.1:8190/v1/rescan`, then `GET /v1/models`. The pool now reports 22 session files / 18 dispatchable entries in the local pool inventory. Model discovery changed from 22 to **23 rows** (21 unique IDs) and now contains both aggregate `video/auto` and pinned **`video/labs.google/auto`**. The pool list renders `labs.google  video  adapter=yes  no-rec  reason=read_only_capacity_verified`. No service was restarted, stopped, or launched manually; no video generation, credit debit, or provider-side submit occurred.
+
+**What is verified:** the designated consumer endpoint can discover and reserve a Flow-backed video seat through both `video/auto` and `video/labs.google/auto`; the source account has current, computed, read-only capacity.
+
+**What is NOT claimed:** a video generation result, a full 23-seat video balance, 25 chat seats, 50 models, or current capacity of RTST/Digen/disabled seat profiles. Generation remains spend-gated by the task environment and requires an explicit consumer job; this change did not open the gate or submit one.
+
+### [2026-08-30 01:48] #1167 — Exact-tab chat graduation stopped at the mandatory screenshot gate (Meta and Copilot untouched)
+
+**Why this was attempted:** The live `:8190` audit is still short of the required 25 chat routes. The current dedicated-seat manifest (`state/tab_graduation_manifest_endpoint_preflight.json`) identifies two on-surface, signed-in-probable candidates on the verified `:9222` automation seat: `www.meta.ai` target `E5314C3EC1DEF7C7C1686628501A5DC3` and `copilot.microsoft.com` target `4A40878730DBD25A3158165CECF146F9`. Both are classified `ELIGIBLE_CAPTURE`; this is not a claim that either is replayable.
+
+**Safety gate and result:** Per the browser visual/DOM protocol, capture must begin with a screenshot of the exact current tab. The automation seat had already passed the manifest's strict process/profile attestation (`chrome.exe`, exact `state/automation_profiles/providers` user-data directory, `Default` sub-profile, port 9222) before either attempt. Ran read-only screenshot commands for the exact existing pages via `cdp.py`:
+
+* Meta: `--match www.meta.ai shot endpoint-meta-pre`
+* Copilot: `--match copilot.microsoft.com shot endpoint-copilot-pre`
+
+Both CDP invocations ended after the bounded wait without producing their expected `state/harvest/shots/cdp-endpoint-*.png` artifact or a page result. This is an observation/diagnostic failure of the helper on these background-heavy tabs, not proof of an authentication, quota, transport, or provider failure.
+
+**Action deliberately NOT taken:** No DOM text probe, focus, input, click, Enter key event, navigation, capture, cookie read, replay, or endpoint request was issued for either candidate. In particular, no session artifact was written and neither seat is graduated. This preserves the screenshot-first rule and avoids mistaking a frozen/CDP-unresponsive page for usable supply.
+
+**Next technical unit:** Repair or replace the exact-target screenshot path with a bounded raw `Page.captureScreenshot` helper that preserves the same automation-seat attestation and does not use `Page.bringToFront`; then inspect the image before any staged capture. Do not broaden this into an operator-profile attachment or a navigation-based sweep.
+
+### [2026-08-30 02:03] #1168 — Seat-Chrome shutdown preflight (operator-requested)
+
+**Request and scope:** The operator requested that all four task-owned Chrome seat instances be stopped while their existing provider and seat login state remains on disk. This entry records the preflight before any process or scheduled-task mutation. It does not authorize touching the operator's live Chrome profiles.
+
+**Safety controls reviewed:** Read `TECHNOLOGY_TRANSFER.md`, including the Five Laws and sections 21–24, and read `CHROME_RULES_FOR_AGENTS.md` before Chrome-adjacent work. Ran `python scripts/automation/chrome_selfheal.py --dry-run`. The guard was present and actively refused the live Chrome profile; no alias targets the live profile. The operator profiles remain `GOOGLE_SYNC_AUTHENTICATED` for all four recorded accounts. No operator profile was opened, attached, copied, or modified.
+
+**Exact seat ownership observed:** The four listeners are task-owned automation Chromes only: `127.0.0.1:9222` PID 19460, profile `state/automation_profiles/providers`; `:9223` PID 21188, profile `state/automation_profiles/niloy`; `:9224` PID 40672, profile `state/automation_profiles/seat2`; and `:9225` PID 41580, profile `state/automation_profiles/seat3`. All four parent browser command lines name their corresponding dedicated profile under the repository and a matching remote-debugging port. They are not the operator Chrome root under `%LOCALAPPDATA%\Google\Chrome\User Data`.
+
+**Persistence and recovery implications:** Per the verified recovery design, Chrome writes provider cookies and seat state to each dedicated profile's on-disk SQLite/session files during a normal exit; nothing needs to be extracted or copied. The enabled `OmniRoute Video Router (keepalive)` scheduled task was last successful at 02:00 and is configured to run every five minutes, next at 02:05; if left enabled it will intentionally relaunch dead seats. Therefore the shutdown will first disable that one task, then request graceful close of only the four listener root processes, and finally verify ports are closed and profile data remains present. No service endpoint, video job, credential, cookie, or operator Chrome process will be killed.
+
+**What is NOT claimed yet:** The four seats have not yet been stopped at the time of this preflight, and no claim is made that every external provider session remains currently authenticated; on-disk persistence is the only requested and verifiable outcome of a shutdown.
+
+### [2026-08-30 02:05] #1169 — Four task-owned seat Chromes gracefully closed; self-healer paused
+
+**Action:** The first combined shutdown invocation was rejected by PowerShell before evaluation because `$p:` in a status string is invalid variable syntax. Consequently it made no task or process change. The corrected invocation then disabled only `OmniRoute Video Router (keepalive)` and sent the Chrome DevTools Protocol `Browser.close` command to each of the four verified dedicated automation-seat browser endpoints. Each endpoint acknowledged with `{"id":1,"result":{}}`, which is Chrome's success response for the graceful browser-close request.
+
+**Immediate verification:** After a five-second bounded wait, listeners `:9223`, `:9224`, and `:9225` were closed. The task is verified `Disabled`, with `Next Run Time: N/A`; this prevents the documented video-router self-healer from relaunching the seats behind the requested shutdown. `:9222` was still listening under its same verified dedicated-profile root PID 19460 despite acknowledging `Browser.close`; it remains the sole shutdown target for the next bounded close/verification action. No operator Chrome PID or `%LOCALAPPDATA%\Google\Chrome\User Data` profile was targeted.
+
+**Persistence statement:** The action used Chrome's own close protocol rather than deleting profiles, cookies, `Local State`, session files, or credential databases. The provider/seat state remains in the four dedicated on-disk profile roots and will be available to Chrome when the video-router task is enabled again. No attempt was made to export, display, read, copy, or verify secret cookie contents.
+
+**What is NOT claimed:** Provider-side login validity was not tested and cannot be inferred merely from persisted files. Seat `:9222` had not yet completed its shutdown at this checkpoint.
+
+### [2026-08-30 02:06] #1170 — All four dedicated seat Chromes stopped; login-state files retained
+
+**Recovery interaction resolved:** The initial `Browser.close` for `:9222` did close its original PID 19460, but the still-running task-owned `video_router.py serve` parent immediately self-healed the seat and created replacement PID 21980. This was proven by the changed listener PID, not guessed. Future scheduled starts were already disabled, but disabling a Windows scheduled task does not terminate an already-running detached service.
+
+**Final action:** Stopped only the two verified `video_router.py serve` process rows (venv launcher PID 2088 and its base-interpreter child PID 6348) so they could no longer relaunch the seat. Sent Chrome's successful DevTools `Browser.close` request to the replacement browser on `:9222`; the endpoint replied `{"id":1,"result":{}}`. This was followed by a bounded six-second verification. No other router, shim, OmniRoute service, task, operator Chrome process, profile, or credential store was altered.
+
+**Final verification:** All four automation-seat remote-debug listeners are closed: `:9222 CLOSED`, `:9223 CLOSED`, `:9224 CLOSED`, `:9225 CLOSED`. The four dedicated profile roots remain present and each has an on-disk Cookies database: `state/automation_profiles/providers`, `state/automation_profiles/niloy`, `state/automation_profiles/seat2`, and `state/automation_profiles/seat3`. `OmniRoute Video Router (keepalive)` is verified `Disabled` with `Next Run Time: N/A`, so it cannot revive the processes during the requested offline period. A post-action `chrome_selfheal.py --dry-run` earlier in this unit also confirmed the live-profile guard remains armed, no alias points at the operator Chrome root, and all four operator Google Sync accounts remain authenticated.
+
+**Persistence statement:** No profile, `Cookies` database, `Local State`, seat declaration, or session artifact was deleted, moved, copied, exported, or edited. Chrome's normal close protocol was used for all seat browser instances before the final listener check; their same-machine login/session state remains in their dedicated profiles for a later restart.
+
+**What is NOT claimed:** The shutdown does not prove that any external provider will accept a stored session when the seats are later relaunched; it only proves the requested local state was retained and all four active seat processes are down. Video capacity is intentionally unavailable while its task and router are stopped. No incremental commit was made because the repository already contained unrelated modified and untracked work before this unit (`capture_sessions_cdp.py`, `replay_check.py`, `tab_graduation_sweep.py`, `universal_replay.py`, and several handover/seat helper artifacts), so staging a commit would risk including another worker's changes.
+
+### [2026-08-30 02:08] #1171 — Kilo CLI: selected b.ai GLM-5.3 Flash custom provider
+
+**Scope:** Configured the installed Kilo CLI (`kilo` 7.5.6) to select the existing b.ai OpenAI-compatible provider model as its default. This is a local client configuration change only; it does not alter OmniRoute, Chrome, provider accounts, or seat state.
+
+**Discovery and source validation:** The active config is `C:\Users\Admin\.config\kilo\kilo.jsonc`. Kilo's current official OpenAI-compatible-provider documentation was consulted: a provider using `@ai-sdk/openai-compatible` takes an `options.baseURL` and model map, with the active model selected using `provider-id/model-id`. The config already defined provider ID `api_b_ai`, package `@ai-sdk/openai-compatible`, base URL `https://api.b.ai/v1` (the correct provider root for the requested `https://api.b.ai/v1/chat/completions` endpoint), and model ID `glm-5.3-flash`.
+
+**Change:** Added the top-level default selector `"model": "api_b_ai/glm-5.3-flash"`. Existing provider fields and any credential handling were preserved; no key, token, password, cookie, or Authorization header was displayed, logged, or changed.
+
+**Verification:** `kilo config check` returned `No config warnings.` `kilo models api_b_ai` lists `api_b_ai/glm-5.3-flash`. A direct config assertion confirmed both the selected default model and b.ai base URL are present.
+
+**What is NOT claimed:** No live inference request was sent, so this does not claim the remote endpoint is reachable or authenticated. The existing provider has no API-key setting in the visible config; if b.ai requires credentials, the operator must provide them through Kilo's supported environment/config credential mechanism before an inference can succeed. No repository commit was made because this client config is outside the repository and the repository has pre-existing unrelated dirty/untracked work; staging would risk including another worker's files.
+
+### [2026-08-30 02:10] #1172 — Kilo CLI b.ai provider wired to the user-scoped API-key environment variable
+
+**Scope:** The operator confirmed they had created `B_AI_API_KEY` following the secret-safe guidance. Verified only its presence using Windows User-scope metadata; the value was never read, printed, logged, copied, or added to any file.
+
+**Change:** Updated `C:\Users\Admin\.config\kilo\kilo.jsonc` under provider `api_b_ai` to include `"env": ["B_AI_API_KEY"]`. The existing default model remains `api_b_ai/glm-5.3-flash`; provider package remains `@ai-sdk/openai-compatible`; base URL remains `https://api.b.ai/v1`, which generates the requested chat-completions target. The key itself remains stored only in the Windows user environment.
+
+**Verification:** User-scope `B_AI_API_KEY` is present. The current inherited process scope is absent, which is expected because this agent terminal started before the user created the variable; a new terminal is required for Kilo to inherit it. `kilo config check` returned `No config warnings.` A local assertion passed for selected model, `B_AI_API_KEY` environment binding, and b.ai base URL. `kilo models api_b_ai` returns `api_b_ai/glm-5.3-flash`.
+
+**What is NOT claimed:** No inference request was sent and remote authentication was not tested, so this does not claim b.ai accepted the key or returned a completion. No repository commit was made: the changed Kilo config is outside the repository and the repository contains unrelated existing dirty/untracked work that must not be staged incidentally.
+
+### [2026-08-30 02:46] #1173 — Live monetizer status snapshot: chat core online, video intentionally offline
+
+**Scope:** Read-only live-status report requested by the operator. Read `TECHNOLOGY_TRANSFER.md`, `CHROME_RULES_FOR_AGENTS.md`, and the current worklog before inspection. No service, task, Chrome profile, seat, route, provider configuration, secret, or job was changed in this report.
+
+**Service evidence:** OmniRoute `:20128`, chat pool `:20130`, and designated OpenAI-compatible session-pool shim `:8190` are listening. The `:8189` video router is closed. All four dedicated Chrome seat ports `:9222`â€“`:9225` are closed. This matches the deliberate shutdown in #1170 rather than an unexplained outage. The Rig Supervisor and Session Pool Shim scheduled tasks are enabled and most recently completed with result 0. The Video Router task remains disabled (`Next Run Time: N/A`) so it cannot relaunch seats until deliberately re-enabled.
+
+**Consumer endpoint evidence:** `GET http://127.0.0.1:8190/v1/models` returned HTTP success with 23 rows / 21 unique IDs: 21 chat-facing rows including the aggregate `session-pool/auto`, and two video-facing rows (`video/auto`, `video/labs.google/auto`). The two-row difference is duplicate IDs in discovery, so the unique figure is the honest catalog size. Pool inventory has 22 seat files, 18 dispatchable declarations, and three adapter-quarantined chat artifacts (`api.monica.im`, `huggingface.co`, `veoaifree.com`). The one declared video seat is the Flow router bridge; it is discoverable but cannot complete a video job while `:8189` and all seat Chromes are intentionally down.
+
+**OAuth evidence:** The hourly OAuth task remains enabled but its latest run returned code 1 because 12 of 14 active OAuth connections refreshed while `github` and `kilocode` returned `provider returned no new token`. This is a partial refresh failure, not proof that all OAuth-backed chat routing is unavailable. No retry or credential action was taken in this report.
+
+**What is verified:** local listener state, scheduled-task state, current discovery catalog, local pool-declaration accounting, and the immediate OAuth refresh result.
+
+**What is NOT claimed:** The system is not presently certified for the historical 50-model / 25-chat / 23-video capacity claims; it has no currently runnable video capacity by operator request. Model discovery does not prove each chat route will answer a live computed probe. The two OAuth refresh failures have not been root-caused in this read-only status pass.
+
+### [2026-08-30 02:47] #1174 — Operator-authorized full dedicated-seat graduation preflight (serial, resource-bounded)
+
+**Scope interpretation:** The operator requested an attempt to graduate all seats across the four Chrome profiles before closing them again, with machine stability prioritized. Under `CHROME_RULES_FOR_AGENTS.md`, “four Chrome profiles” is interpreted strictly as the dedicated automation profiles under `state/automation_profiles` (`providers`, `niloy`, `seat2`, `seat3`), never the four live operator profiles under `%LOCALAPPDATA%\Google\Chrome\User Data`. The requested final state remains: dedicated seats closed with on-disk login state retained.
+
+**Safety and resource preflight:** Read `TECHNOLOGY_TRANSFER.md` and `CHROME_RULES_FOR_AGENTS.md`; ran `chrome_selfheal.py --dry-run`. The live-profile guard is present and actively refusing unsafe automation, no alias targets the operator Chrome root, and all four operator Chrome Sync accounts remain authenticated. Before adding Chrome load, free RAM measured 8,173 MiB of 16,082 MiB and three one-second CPU samples were 32.2%, 35.3%, and 29.0%: sufficient for the planned one-seat/one-provider serial workflow, but not for parallel browser/capture work.
+
+**Execution design:** `tab_graduation_sweep.py` is explicitly single-target: it requires an exact `--site`, performs a pre-action screenshot as its separate step, then captures and Law-3 verifies only that named seat using `41 + 17 â†’ 58`. It does not support bulk execution, and that limitation is retained to protect accounts and this machine. The run will therefore: (1) re-enable/start only the task-owned video router; (2) wait for its own launcher to restore the four dedicated seats; (3) build manifests; (4) process only visually inspected eligible targets, serially, with a resource recheck/cooldown between components; (5) record every verdict; then (6) disable the task and gracefully close the four dedicated seats again. CAPTCHA, payment, quota, login, or transport walls remain reportable outcomes, never bypass targets.
+
+**Current starting state:** Video Router scheduled task is disabled; `:8189` and `:9222`â€“`:9225` are closed. No provider request, capture, replay, video generation, login action, or Chrome profile mutation occurred during this preflight.
+
+### [2026-08-30 02:52] #1175 — Task-owned seat recovery restarted; only configured :9222 seat is presently alive
+
+**Action:** Re-enabled and invoked only the registered `OmniRoute Video Router (keepalive)` scheduled task; no browser or video-router process was hand-launched. The task accepted the start request and reports `Last Result: 0`, `Status: Ready`, and `Scheduled Task State: Enabled`.
+
+**Bounded verification after 20 seconds:** Dedicated automation Chrome listener `:9222` is listening (new task-owned PID 44136). `:9223`, `:9224`, and `:9225` remain closed. The video router listener `:8189` is also not yet listening. This is an observation, not an assumption that the remaining profiles are dead or invalid: the next read-only unit is the task-owned router log/registry review to establish whether those profiles are currently registered for recovery. No tab attachment, screenshot, DOM action, capture, replay, credential read, or provider request has occurred.
+
+**What is NOT claimed:** Four-seat recovery is not complete; no graduation work has begun. The task's zero return confirms the scheduler accepted its invocation, not that all router/Chrome endpoints are healthy.
+
+### [2026-08-30 02:53] #1176 — Active dedicated seat :9222 has no eligible chat target to graduate
+
+**Action:** Ran the graduation tool's default read-only manifest mode against the attested dedicated `:9222` `providers/Default` automation seat and wrote the sanitised result to `state/tab_graduation_manifest_9222_current.json`. The manifest attaches only to Chrome's browser target to enumerate page metadata; it does not attach to a page, focus a tab, type, submit, navigate, read cookies, or call a provider.
+
+**Result:** The current browser has three page tabs: one blank/internal tab and two `VIDEO_SEPARATE_GRADUATION` tabs. The targeted chat-capture queue is empty. Thus no chat provider can legally be captured/graduated from this profile in its currently reopened state. The two video pages are not routed through the chat capture flow because video requires its own submitâ†’pollâ†’result contract and can spend credits.
+
+**Implication:** The previously seen broad chat-tab inventory was not restored by the present task-owned recovery; the current Video Router launcher reopens only its registered Flow/RTST video tabs. This is not evidence the historical chat profiles are invalid. The next user-authorized, machine-safe unit is to temporarily enable one currently disabled dedicated profile, let the task-owned router open it, inventory only that profile, then close it before considering the next profile.
+
+**What is NOT claimed:** No chat or video seat was graduated, no video job was submitted, and no provider login state was tested or changed by this manifest.
+
+### [2026-08-30 02:56] #1177 — Single-seat `niloy` activation requires task-owned router reload
+
+**Action:** Temporarily changed only the existing `niloy-1` dedicated automation-profile declaration (`:9223`, `state/automation_profiles/niloy`, `Profile 17`) from disabled to enabled. `flow-seat2` and `flow-seat3` remain disabled. This is a temporary recovery/inspection change authorized by the operator's four-profile graduation request; no profile data, cookies, tokens, tabs, or provider settings were edited.
+
+**Result and diagnosis:** After two bounded waits, `:9223` remained closed and the task-owned router log did not acquire a new `niloy-1` line. Reading the router start path shows that `video_router.py serve` loads the account registry at process initialization; it does not rescan this declaration file while its existing server process is healthy. This is a configuration-reload limitation, not a login/session verdict. The current router is healthy on `:8189`, so rerunning its task alone correctly no-ops at the health guard.
+
+**Next action:** To apply the already-authorized, one-profile-only declaration safely, stop the verified task-owned `video_router.py serve` launcher/interpreter pair and immediately invoke the already-enabled `OmniRoute Video Router (keepalive)` task to perform the sole legitimate relaunch. This preserves the documented single-owner rule and avoids any manual Chrome launch. No capture/replay/video request was sent in this unit.
+
+### [2026-08-30 02:55] #1178 — Task-owned router reload launched the `niloy` seat; Flow reached an authentication callback wall
+
+**Action:** Stopped only the two verified running `video_router.py serve` processes (old venv launcher PID 33192 and its interpreter child PID 10432), then immediately invoked the enabled `OmniRoute Video Router (keepalive)` scheduled task. The task-owned bat performed the relaunch; the replacement router is listening on `:8189` and its new venv/interpreter pair is PIDs 20144/53984. No Chrome executable was invoked manually.
+
+**Recovery result:** The router restored `:9222` and launched the temporarily enabled `niloy` dedicated automation profile on `:9223`. The router log identifies the exact dedicated profile (`state/automation_profiles/niloy`, `Profile 17`) and records that after reopening the registered Google Flow URL Chrome had no matching Flow workspace target; the available page targets were `https://labs.google/fx/api/auth/signin?error=OAuthCallback` and `about:blank`.
+
+**Classification:** This is an authentication callback/login wall in the dedicated automation profile, not evidence that Flow is dead or that the operator's Google account is signed out. Per Law 5 and Chrome Rules, no password will be typed, no OAuth flow will be bypassed, and no request/capture/replay/video submit will be attempted from this profile. Screenshot-first visual confirmation remains the next read-only diagnostic action.
+
+**Machine-safety state:** Only two dedicated automation Chrome instances are now live (`:9222` and `:9223`); `:9224` and `:9225` remain disabled and closed. This stays within the serial/no-parallel-load plan.
+
+### [2026-08-30 02:56] #1179 — `niloy` graduation guard refused profile-directory mismatch; no bypass used
+
+**Read-only attempted action:** Ran the graduation manifest command for the newly launched dedicated `:9223` seat. It refused before enumerating or attaching to any tab: `Chrome PID 24920 profile-directory does not match configured seat; refusing CDP enumeration`. Therefore no manifest was written and no screenshot/capture/replay/provider request occurred.
+
+**Meaning:** The process is under the safe dedicated `niloy` user-data root, but its command-line `--profile-directory` does not equal the registry's declared `Profile 17`. This could be an outdated launcher/registry mapping; it is not safe to silently change the expected mapping to make automation proceed. The refusal is working exactly as designed to prevent cross-account/profile mixing.
+
+**Decision:** The profile is not eligible for graduation in this condition. The temporary enablement will be undone, its dedicated Chrome closed, and its router registry configuration restored before moving to another profile. No login/OAuth action, password entry, cookie access, navigation, or other workaround is authorized or performed.
+
+### [2026-08-30 03:00] #1180 — Seat-inventory correction: the four dedicated profiles record 85 site mappings, not six
+
+**Correction:** The prior six-entry count came from `state/video_accounts.json`, which is only the video-router launcher registry. It is not the full chat-seat inventory. Treating it as a fleet census was incorrect.
+
+**Read-only evidence:** `state/seat_readiness.json` contains four dedicated profile groups: the `:9222` group records 51 site mappings, `:9223` records 11, `:9224` records 11, and `:9225` records 12 â€” **85 profile-to-site mappings before deduplication**. The persisted session-artifact directory currently has 22 `session_*.json` files. The gap between those numbers is expected: many signed-in/known browser sites have not yet been captured into independent replay artifacts.
+
+**Current-state explanation:** The current Video Router deliberately restores only registered video destinations (Flow/RTST/Digen), not the historical breadth of chat tabs. Consequently, a current Chrome tab count of three on `:9222` is a statement about what the router reopened after the requested shutdown, not evidence that the other ~40+ saved seats are absent, invalid, or lost. The four-profile readiness ledger is the correct starting inventory for graduation planning; each candidate must still be re-opened/visually assessed and pass its own Law-3 computed replay verification before it may be called graduated.
+
+**Safety:** This correction used only local metadata and process-state observation. No operator profile was opened, and no cookie, credential, provider request, capture, replay, video job, or login action occurred.
+
+
+### [2026-08-30 03:05] #1181 — PowerShell pop every minute killed at the source: supervisor probe children were allocating visible consoles
+
+**Complaint:** operator reported "PowerShell popping every 5 mins" (actual cadence: every 60s).
+
+**Root cause (caught live with a 100s Win32_Process spawn watcher):**
+- The Startup-folder VBS runs omni_supervisor.py --watch under **pythonw.exe** (no console).
+- omni_supervisor.py spawns console executables via subprocess.run with no window flags:
+  chrome_state() -> powershell.exe (every pass, every 60s), our_process() -> powershell.exe,
+  port_listening() -> 
+etstat.exe. A console child of a console-less parent makes Windows
+  allocate a NEW visible console window -> the pop.
+
+**Fixes:**
+1. omni_supervisor.py: added module constant NO_WINDOW = CREATE_NO_WINDOW and applied
+   creationflags=NO_WINDOW to all three probe spawns (netstat x1, powershell x2). Service
+   launcher in start() untouched (already DETACHED_PROCESS).
+2. supervisor_task.bat: the wmic bring-up guard was provably broken — its own query text
+   contains the literal omni_supervisor, so wmic self-matched, the guard always concluded
+   "already running", and the bat NEVER started the supervisor (all guarded relaunch paths dead;
+   the pythonw instance only ever came from the logon VBS). Changed pattern to
+   '%%omni[_]supervisor%%' (WQL char class) so the guard can no longer match its own command line.
+
+**Restart path (task-owned chain, no hand-rolled launcher):** killed the old pythonw pair
+(taskkill /T on the VBS-launched tree), then schtasks /run /tn "OmniRoute Rig Supervisor (keepalive)".
+Guard now works: venv python.exe 52492 -> base python.exe 39816 --watch, stdout logging restored to
+logs/supervisor_stdout.log.
+
+**Verification:**
+- Two consecutive passes at 02:57:01 and 02:58:02; state/supervisor_status.json fresh.
+- chrome_state() output populated in the log ("3 automation profile(s) alive, CDP ports
+  ['9222','9224']") — the powershell probe executes correctly under CREATE_NO_WINDOW (headless,
+  no window allocation).
+- All four services UP (video router back UP at :8189 as well).
+- Note: an unrelated PowerShell event-log Add-Type IsProcessorFeaturePresent(40) pattern
+  (~4-5 min clusters) was observed from an unidentified parent; it did not reproduce during a
+  100s watch and is not the confirmed pop source. Left alone.
