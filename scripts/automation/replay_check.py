@@ -79,6 +79,19 @@ def keyword_in_body(raw: str, expect: str) -> bool:
     """
     if not raw or not expect:
         return False
+    # A raw-body fallback is intentionally unavailable for numeric answers.  The
+    # earlier normalisation removed every digit from ``"58"``, producing an empty
+    # expected string; in Python, ``"" in any_nonempty_string`` is true.  That
+    # could promote any non-empty unparsed provider response to REPLAY_OK.  A
+    # numeric Law-3 probe still passes normally when UniversalSessionClient has
+    # structurally extracted the answer, but a parser-blind raw response must be
+    # fixed rather than certified from an ID, timestamp, byte count, or error body.
+    #
+    # The alphabetical exact-phrase probe remains available for carefully
+    # scoped parser diagnostics.  It has at least one meaningful letter after
+    # normalisation and therefore cannot collapse into a vacuous match.
+    if not re.search(r"[a-z]", expect, flags=re.IGNORECASE):
+        return False
     # Flatten both to just letters and spaces -- strips SSE framing, JSON structure, escapes,
     # chunk boundaries, punctuation. The phrase "the holy cow jumps over the stricks" becomes
     # "the holy cow jumps over the stricks" regardless of how it was chunked or encoded.
@@ -127,7 +140,16 @@ def classify(text: str, status: int | None, err: str | None, expect: str = "58")
     # a live provider scored as failing) while chat.mistral.ai's server generated a chat *title*
     # containing the asked word, so a bootstrap response with no answer in it scored as passing.
     # An arithmetic result appears in neither an echo nor a title.
-    if expect not in low:
+    # A numeric computed probe has a deliberately narrow success surface: the
+    # extracted model text must be the requested number (with at most harmless
+    # trailing terminal punctuation).  Matching a standalone 58 inside an
+    # arbitrary error/metadata string would recreate the false-supply bug this
+    # check exists to prevent.
+    if expect.isdigit():
+        numeric_answer = re.fullmatch(rf"\s*{re.escape(expect)}\s*[.!]?\s*", text or "")
+        if not numeric_answer:
+            return "NO_ANSWER", f"200 but the extracted reply is not only {expect!r}: {low[:90]}"
+    elif expect not in low:
         return "NO_ANSWER", f"200 but the reply never contains {expect!r}: {low[:90]}"
     return "REPLAY_OK", low[:140]
 
@@ -199,14 +221,18 @@ def main() -> int:
                     help="exact phrase the reply must contain; a pure character string that cannot "
                          "collide with any id, hash, timestamp, or title")
     ap.add_argument("--only", default="", help="comma-separated host substrings")
+    ap.add_argument("--secrets-dir", type=pathlib.Path, default=SECRETS,
+                    help="directory containing candidate session_*.json files (default: active state/secrets)")
+    ap.add_argument("--out", type=pathlib.Path, default=OUT,
+                    help="non-secret replay report path (default: state/replay_check.json)")
     a = ap.parse_args()
 
-    files = sorted(SECRETS.glob("session_*.json"))
+    files = sorted(a.secrets_dir.glob("session_*.json"))
     if a.only:
         want = [s.strip().lower() for s in a.only.split(",") if s.strip()]
         files = [f for f in files if any(w in f.name.lower() for w in want)]
     if not files:
-        print(f"no session_*.json in {SECRETS}")
+        print(f"no session_*.json in {a.secrets_dir}")
         return 1
 
     print(f"replay check: {len(files)} captured sessions, direct to provider, 1 request each\n")
@@ -231,11 +257,14 @@ def main() -> int:
                              if r["verdict"] not in ("REPLAY_OK", "SINGLE_USE")}),
         },
     }
-    OUT.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    a.out.parent.mkdir(parents=True, exist_ok=True)
+    temporary = a.out.with_suffix(a.out.suffix + ".tmp")
+    temporary.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    temporary.replace(a.out)
 
     print(f"\nreplayable      ({len(set(ok))}): {', '.join(sorted(set(ok))) or 'none'}")
     print(f"single-use bound({len(set(single))}): {', '.join(sorted(set(single))) or 'none'}")
-    print(f"wrote {OUT}")
+    print(f"wrote {a.out}")
     return 0
 
 

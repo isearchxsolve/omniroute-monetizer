@@ -42,6 +42,7 @@ Usage
 -----
     python capture_sessions_cdp.py --list                       # what is capturable right now
     python capture_sessions_cdp.py --sites "Puter Chat,DeepSeek Chat"
+    python capture_sessions_cdp.py --output-dir state/candidates/example --sites "Aymo AI"
     python capture_sessions_cdp.py --volatile-first --limit 3   # session_only sites first
     python capture_sessions_cdp.py --all --limit 10
 """
@@ -234,6 +235,25 @@ class CDPError(RuntimeError):
     pass
 
 
+def assert_safe_cdp_port(port: int) -> None:
+    """Fail closed before raw HTTP/WebSocket CDP access.
+
+    The Playwright guard cannot intercept direct urllib and websocket-client use.
+    This local gate refuses any endpoint advertised by the operator's live Chrome
+    tree.  Callers that need stronger process/profile attestation use
+    tab_graduation_sweep.py first; this is the non-bypassable minimum for direct
+    invocation of this script.
+    """
+    try:
+        from chrome_live_guard import assert_cdp_safe
+    except Exception as exc:
+        raise CDPError(f"chrome live-profile guard unavailable: {type(exc).__name__}") from exc
+    try:
+        assert_cdp_safe(f"http://127.0.0.1:{port}")
+    except Exception as exc:
+        raise CDPError(f"refusing raw CDP access on :{port}: {type(exc).__name__}") from exc
+
+
 class CDP:
     """One websocket to ONE page target. Flat session: no sessionId plumbing needed.
 
@@ -304,6 +324,7 @@ def has_sentinel(body: str) -> bool:
 
 
 def targets(port: int) -> list[dict]:
+    assert_safe_cdp_port(port)
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=10) as r:
         data = json.loads(r.read().decode("utf-8", "replace"))
     return [t for t in data if t.get("type") == "page" and t.get("webSocketDebuggerUrl")]
@@ -326,6 +347,14 @@ def slug(name: str) -> str:
     """Site display name -> secrets filename stem. One definition, used by both the writer and the
     already-done check; they were spelled differently before, so every captured site was retried."""
     return name.replace(" ", "_").replace("/", "_").replace(".", "_").lower()
+
+
+def atomic_json_write(path: pathlib.Path, payload: dict[str, Any]) -> None:
+    """Write a capture atomically so a hot-scanning pool never sees a partial file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    temporary.replace(path)
 
 
 def open_tab(port: int, url: str) -> dict | None:
@@ -418,7 +447,8 @@ def plan(a: argparse.Namespace) -> list[tuple[str, str, str]]:
     return [r for r in rows if f"session_{slug(r[0])}" not in done]
 
 
-def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 25.0) -> dict[str, Any]:
+def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 25.0,
+            output_dir: pathlib.Path = SECRETS) -> dict[str, Any]:
     """Submit the sentinel in this tab and record the genuine request it produces."""
     row: dict[str, Any] = {"site": name, "tabUrl": t.get("url", "")[:120],
                            "readinessVerdict": verdict}
@@ -551,9 +581,8 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
                            "harvested_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                            "reason": "capture_sessions_cdp"},
             }
-            SECRETS.mkdir(parents=True, exist_ok=True)
-            out = SECRETS / f"session_{slug(name)}.json"
-            out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            out = output_dir / f"session_{slug(name)}.json"
+            atomic_json_write(out, payload)
             return {"status": "CAPTURED", "endpointHost": host,
                     "endpointPath": urllib.parse.urlsplit(url).path[:80],
                     "bodyBytes": len(body), "headerCount": len(rh), "cookieCount": len(jar),
@@ -705,6 +734,9 @@ def main() -> int:
     ap.add_argument("--wait", type=float, default=25.0, help="seconds to wait for the request")
     ap.add_argument("--open", action="store_true",
                     help="open a tab for sites that have none (a full sweep needs this)")
+    ap.add_argument("--output-dir", type=pathlib.Path, default=SECRETS,
+                    help="capture destination (default: active state/secrets); use a staged directory "
+                    "until independent replay approves promotion")
     ap.add_argument("--list", action="store_true", help="show the plan and the matching tabs, then stop")
     a = ap.parse_args()
 
@@ -715,7 +747,12 @@ def main() -> int:
     # Per-port file: a multi-seat sweep is four runs, and one shared path would leave only the last.
     report_path = REPORT.with_name(f"capture_report_{a.port}.json")
     print(f"port {a.port}: {len(tabs)} page targets   plan: {len(rows)} sites")
-    print(f"sentinel: {SENTINEL!r}   secrets -> {SECRETS.relative_to(ROOT)}\n")
+    assert_safe_cdp_port(port)
+    try:
+        output_label = a.output_dir.relative_to(ROOT)
+    except ValueError:
+        output_label = a.output_dir
+    print(f"sentinel: {SENTINEL!r}   capture destination -> {output_label}\n")
 
     by_dom: dict[str, dict] = {}
     for t in tabs:
@@ -755,7 +792,7 @@ def main() -> int:
             print(f"  --  {name:32s} {hint} on {d}")
             report["results"].append({"site": name, "status": "NO_TAB", "domain": d})
             continue
-        row = capture(t, name, verdict, a.wait)
+        row = capture(t, name, verdict, a.wait, output_dir=a.output_dir)
         report["results"].append(row)
         mark = {"CAPTURED": "OK ", "WALL": "WALL", "NO_COMPOSER": "    ", "WEBSOCKET": "WS  ",
                 "TEXT_REJECTED": "TXT ", "NO_REQUEST": "    "}.get(row["status"], "    ")
