@@ -69,8 +69,8 @@ def sanitize_host(url: str, override_name: str | None = None) -> str:
     return hostname.replace("www.", "").replace("-", "_").replace(".", "_")
 
 
-JS_INJECT_SENTINEL = """
-(promptText) => {
+JS_LOCATE_AND_FOCUS = """
+() => {
     const getShadows = (root) => {
         let shadows = [];
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null, false);
@@ -84,35 +84,38 @@ JS_INJECT_SENTINEL = """
         return shadows;
     };
 
+    const isVisible = (el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return false;
+        const st = window.getComputedStyle(el);
+        return st.display !== 'none' && st.visibility !== 'hidden';
+    };
+    
+    const isRecaptcha = (el) => {
+        const s = ((el.id||'')+' '+(el.className||'')+' '+(el.name||'')).toLowerCase();
+        return s.includes('recaptcha');
+    };
+
     const roots = [document].concat(getShadows(document));
     let inputEl = null;
-    let submitBtn = null;
 
+    // 1. Prioritize textareas (actual chat composers)
     for (const root of roots) {
-        if (!inputEl) {
-            const tas = root.querySelectorAll('textarea, [contenteditable="true"], input[type="text"]');
-            for (const el of tas) {
-                const rect = el.getBoundingClientRect();
-                if (rect.width > 40 && rect.height > 15) {
-                    inputEl = el;
-                    break;
-                }
-            }
+        const tas = Array.from(root.querySelectorAll('textarea')).filter(el => isVisible(el) && !isRecaptcha(el));
+        if (tas.length > 0) {
+            inputEl = tas[0];
+            break;
         }
-        if (!submitBtn) {
-            const btns = root.querySelectorAll('button, [role="button"], input[type="submit"]');
-            for (const b of btns) {
-                const label = (b.getAttribute('aria-label') || '').toLowerCase();
-                const text = (b.innerText || b.textContent || '').toLowerCase();
-                const rect = b.getBoundingClientRect();
-                if (rect.width > 10 && rect.height > 10) {
-                    if (label.includes('send') || label.includes('submit') || label.includes('generate') ||
-                        text.includes('send') || text.includes('submit') || text.includes('generate') ||
-                        b.classList.contains('send') || b.querySelector('svg')) {
-                        submitBtn = b;
-                        break;
-                    }
-                }
+    }
+
+    // 2. Fallback to contenteditable (used by Lexical, ProseMirror, etc.)
+    if (!inputEl) {
+        for (const root of roots) {
+            const ces = Array.from(root.querySelectorAll('[contenteditable="true"], [contenteditable="plaintext-only"], [contenteditable=""]'))
+                            .filter(el => isVisible(el));
+            if (ces.length > 0) {
+                inputEl = ces[0];
+                break;
             }
         }
     }
@@ -121,24 +124,23 @@ JS_INJECT_SENTINEL = """
         return { success: false, error: "Input element not found" };
     }
 
-    if (inputEl.tagName.toLowerCase() === 'textarea' || inputEl.tagName.toLowerCase() === 'input') {
-        inputEl.focus();
-        inputEl.value = promptText;
-        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-    } else {
-        inputEl.focus();
-        inputEl.innerText = promptText;
-        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-
-    if (submitBtn) {
-        submitBtn.click();
-    } else {
-        inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-        inputEl.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-        inputEl.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-    }
+    inputEl.scrollIntoView({block: 'center'});
+    inputEl.focus();
+    
+    // Select all existing text so typing overwrites it
+    try {
+        if (inputEl.tagName === 'TEXTAREA' || inputEl.tagName === 'INPUT') {
+            if (inputEl.select) inputEl.select();
+        } else {
+            const sel = window.getSelection();
+            if (sel) {
+                const r = document.createRange();
+                r.selectNodeContents(inputEl);
+                sel.removeAllRanges();
+                sel.addRange(r);
+            }
+        }
+    } catch(e) {}
 
     return { success: true };
 }
@@ -226,15 +228,57 @@ async def harvest_page(page, idx: int) -> dict | None:
 
     page.on("request", on_request)
 
-    print(f"[*] Injecting sentinel prompt: '{SENTINEL_PROMPT}'...")
-    res = await page.evaluate(JS_INJECT_SENTINEL, SENTINEL_PROMPT)
+    print(f"[*] Focusing chat input...")
+    res = await page.evaluate(JS_LOCATE_AND_FOCUS)
     if not res.get("success"):
-        print(f"[-] DOM inject notice: {res.get('error')}. Using keyboard typing fallback...")
-        try:
-            await page.keyboard.type(SENTINEL_PROMPT, delay=15)
-            await page.keyboard.press("Enter")
-        except Exception as e:
-            print(f"[-] Keyboard fallback error: {e}")
+        print(f"[-] Focus failed: {res.get('error')}. Skipping this tab.")
+        return None
+
+    print(f"[*] Typing sentinel prompt via keyboard: '{SENTINEL_PROMPT}'...")
+    try:
+        await page.keyboard.insert_text(SENTINEL_PROMPT)
+        await asyncio.sleep(0.5)
+        
+        # We also need a reliable way to click the submit button, mirroring CLICK_JS
+        click_success = await page.evaluate("""() => {
+            const isVisible = (el) => {
+                const r = el.getBoundingClientRect();
+                if (r.width <= 0 || r.height <= 0) return false;
+                const st = window.getComputedStyle(el);
+                return st.display !== 'none' && st.visibility !== 'hidden';
+            };
+            const cands = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'))
+                .filter(el => isVisible(el) && !el.disabled && 
+                        !/cky-|cookie|consent/i.test((el.className||'')+' '+(el.getAttribute('aria-label')||'')));
+            if (!cands.length) return false;
+            
+            let pick = cands.find(el=>el.getAttribute('type')==='submit')
+                    || cands.find(el=>/send|submit/i.test((el.getAttribute('aria-label')||'')+(el.getAttribute('data-testid')||'')))
+                    || null;
+            
+            if(!pick) {
+                // Find nearest to input if we can't find by label
+                const input = Array.from(document.querySelectorAll('textarea, [contenteditable="true"]')).find(e=>isVisible(e));
+                if(input) {
+                    const ir = input.getBoundingClientRect();
+                    const cx = ir.x+ir.width/2, cy = ir.y+ir.height/2;
+                    pick = cands.map(el=>{
+                        const r = el.getBoundingClientRect();
+                        return {el, d: Math.hypot(r.x+r.width/2-cx, r.y+r.height/2-cy)};
+                    }).sort((a,b)=>a.d-b.d)[0].el;
+                }
+            }
+            if(!pick) pick = cands[cands.length-1];
+            pick.click();
+            return true;
+        }""")
+        
+        # Press enter regardless, as many apps accept it
+        await page.keyboard.press("Enter")
+        
+    except Exception as e:
+        print(f"[-] Keyboard typing error: {e}")
+        return None
 
     try:
         await asyncio.wait_for(capture_event.wait(), timeout=12)

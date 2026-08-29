@@ -1,4 +1,24 @@
+### [2026-08-29 03:15] #1154 — Re-capture Auth-Dead Seats (Gemini, Cerebras, Groq, ChatGPT)
 
+1. **Context & Motivation:**
+   - The user noted that 14 seats are currently running on the four Chrome profiles.
+   - Task 3 requires re-capturing auth-dead seats for `gemini`, `cerebras`, `groq`, and `chatgpt` using `capture_sessions_cdp.py`.
+   
+2. **Investigation:**
+   - Inspected `capture_sessions_cdp.py` and `free_llm_chat_sites.json` to map the exact provider names expected by the script.
+   - Identified the correct names: `"Google Gemini Web"`, `"Cerebras Inference Chat"`, `"Groq Chat"`, `"ChatGPT Free Web"`.
+   - Verified that port `9222` is active and running the Robot profile.
+
+3. **Execution & Results:**
+   - Ran `python -u scripts/automation/capture_sessions_cdp.py --sites "Google Gemini Web,Cerebras Inference Chat,Groq Chat,ChatGPT Free Web" --open`.
+   - **Outcomes:**
+     - `Google Gemini Web`: **WALL** (`credit card`) -> Left untouched, adhering strictly to Law 5 / Chrome Gap Doctrine.
+     - `Cerebras Inference Chat`: **NO_COMPOSER** -> Landing page lacks visible chat input.
+     - `Groq Chat`: **CAPTURED** -> Valid capture (api.groq.com/openai/v1/chat/completions) via JS click send.
+     - `ChatGPT Free Web`: **CAPTURED** -> Valid capture (chatgpt.com/unauth-mweb/conversation/updates) via Enter key.
+
+4. **Next Steps:**
+   - Proceed to E2E verification of the session pool shim (`:8190`).
 
 
 ### [2026-08-29 02:59] #1153 - PROBE ROUTE TRUTH & YOU.COM PROMPT FIX

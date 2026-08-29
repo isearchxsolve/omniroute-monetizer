@@ -1,0 +1,7 @@
+allengeUrl:"/api/v0/users/create_guest_challenge",solveChallenge:e=>(0,G.gx)(e,ea.tracker),showErrorToast:(e,t)=>{ea.withToast(e=>{let n=eo.getTranslate().completio
+engeApi:e.getChallengeApi,getTracker:e.getTracker,solveChallenge:e.solveChallenge})),r)),ed=e=>async t=>{let n=t.url;if(!n||!el.some(e=>n.includes(e)))return;let{ge
+r,getTracker:s,showErrorToast:a,getChallengeUrl:o,solveChallenge:l,encoder:i}=e,d=ei({getChallengeApi:async e=>{let{url:t}=e,n=r(),s=(await n.http({method:"POST",ur
+ge not found:\n"+JSON.stringify(s))},getTracker:s,solveChallenge:l});try{let{challengeResponse:e}=await d.getChallengeAndSolve({url:n});t.headers=t.headers||{};let[
+ry{let{challengeResponse:e,duration:r}=await this.solveChallenge(n);return this.tracker.info({name:"guestPowSolved",message:"guest pow 计算完成",payload:{url:t,duration
+rror(e,{url:t})}),e}}constructor(e){(0,r._)(this,"solveChallenge",void 0),(0,r._)(this,"getTracker",void 0),(0,r._)(this,"getChallengeWrapped",void 0),this.solveCha
+llenge=e.solveChallenge,this.getTracker=e.getTracker,this.getChallengeWrapped=l(e.getChallengeApi,(e,t)=>{let{url:n}=t;this
