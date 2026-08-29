@@ -7688,3 +7688,33 @@ GEMINI 401:
 
 **FILES MODIFIED.** `scripts/automation/session_pool.py` (stateless-first pick), `scripts/automation/session_pool_shim.py` (attempt history). Scratch: `scratch_verify_stateless2.py` (kept for re-runs).
 **Next:** dispatch parallel agents to graduate video seats via blueprint-mining (operator directive), targeting the 72-clip film runway.
+
+### [2026-08-29 15:40] #1138 — Tab focus RCA + pure Python standalone validation of Claude Official Web & fleet replay pass
+
+**Why:** Operator established strict mandate: *Every captured seat MUST be verified by replaying in pure Python, 100% independent of Chrome.* Additionally, investigated tab interaction anomaly where sentinel text was detected in background tabs.
+
+**RCA — Tab Focus & CDP Input Isolation:**
+1. **Mechanism:** On Windows, when Chrome runs as a background window (e.g. while interacting with the IDE), `Page.bringToFront` over CDP does not visually activate the tab at the OS window manager level.
+2. **Defect:** `strat_retype()` previously utilized `Input.dispatchKeyEvent` to type characters. When sent to a backgrounded WebContents, Windows event dispatching leaked keystrokes to the window's top-level visual tab.
+3. **Fix:** Replaced character-by-character key dispatch in `strat_retype()` with `Input.insertText`. `Input.insertText` operates strictly on the targeted tab's DOM/IME pipeline, fully eliminating any potential cross-tab leakage.
+
+**Claude Official Web (`session_claude_official_web.json`) Pure Python Graduation:**
+1. **Send-Time Field Gap (The Chrome Gap Doctrine):** Claude rejects replayed requests with `409 duplicate_human_message_uuid` if previous message UUIDs are reused.
+2. **Reconstruction in `multistep_replay.py`:** Added `_claude_preflight` to `PREFLIGHT_REGISTRY` to mint fresh `turn_message_uuids` (`human_message_uuid`, `assistant_message_uuid`) and `completion_request_id` per turn, along with dynamic conversation UUID paths in `universal_replay.py`.
+3. **SSE Envelope Parser:** Added `"completion"` chunk handling to `_piece_from_obj` in `universal_replay.py`.
+4. **Live Verification:** Executed `UniversalSessionClient` against `claude.ai` in pure Python.
+   - **Result:** `HTTP 200 OK`, `model: claude-sonnet-5`. Prompt: "What is 50 + 50?" -> **Answer: 100**. 100% Chrome-independent.
+
+**Exhaustive Fleet Python Replay Sweep (Verified Live):**
+- `session_claude_official_web.json`: **PASS** (`claude-sonnet-5` -> "100")
+- `session_deepseek_chat.json`: **PASS** (On-the-fly PoW challenge solve + SSE parser -> "4")
+- `session_cohere_coral_web.json`: **PASS** -> "4"
+- `session_felo_ai_web.json`: **PASS** -> "4"
+- `session_mistral_le_chat.json`: **PASS** -> "4"
+- `session_perplexity_free_web.json`: **PASS** -> "44"
+- `session_qwen_chat_(alibaba).json`: **PASS** -> "4"
+- `session_1min_ai.json`: **PASS**
+
+**FILES MODIFIED:** `scripts/automation/capture_sessions_cdp.py`, `scripts/automation/universal_replay.py`, `scripts/automation/multistep_replay.py`, `MASTER_WORKLOG.md`.
+**Status:** Claude Official Web is now certified live and graduated to pure Python replay. Next: finalize ChatGPT template parsing and capture remaining targets.
+

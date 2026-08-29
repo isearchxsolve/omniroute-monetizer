@@ -78,7 +78,8 @@ SENTINEL_FORMS = (
 NOISE = ("telemetry", "analytics", "tracking", "/track", "beacon", "segment", "sentry",
          "metrics", "/log", "logging", "clarity.ms", "doubleclick", "google-analytics",
          "browser.events.data.microsoft.com", "datadog", "amplitude", "mixpanel", "posthog",
-         "/title", "/prepare", "/updates", "/translatehtml")
+         "/title", "/translatehtml")
+
 
 
 WALL_TEXT = ("verify you are human", "i'm not a robot", "im not a robot", "recaptcha", "hcaptcha",
@@ -105,10 +106,9 @@ CHAT_URL_OVERRIDES = {
     "StepFun Web": "https://yuewen.cn/chat",              # StepFun ships chat as Yuewen
     "Baichuan Web": "https://ying.baichuan-ai.com/chat",  # yi.* is the model page, ying.* is chat
     "Together AI Chat": "https://api.together.ai/playground/v2/chat",
-    "ChatGPT Free Web": "https://chatgpt.com/",
     "Claude Official Web": "https://claude.ai/new",
-    "Zhipu GLM Chat": "https://chatglm.cn/",
 }
+
 
 
 # Video generators. They have no chat composer, so a chat sweep can only ever report NO_COMPOSER for
@@ -143,7 +143,11 @@ JS_FOCUS_COMPOSER = r"""
       // composer, so give them a decisive bonus over plain inputs.
       let bonus = 0;
       if (el.tagName === 'TEXTAREA') bonus = 1000000;
-      else if (el.isContentEditable || (el.getAttribute && el.getAttribute('role') === 'textbox')) bonus = 500000;
+      else if (el.isContentEditable || (el.getAttribute && el.getAttribute('role') === 'textbox')) bonus = 1000000;
+      if (el.id && el.id.toLowerCase().includes('prompt')) bonus += 5000000;
+      if (el.placeholder && el.placeholder.toLowerCase().includes('message')) bonus += 5000000;
+      if ((el.placeholder && el.placeholder.toLowerCase().includes('search')) ||
+          (el.getAttribute && (el.getAttribute('aria-label') || '').toLowerCase().includes('search'))) bonus -= 5000000;
       cands.push({ el, score: rect.width * rect.height + rect.top * 2 + bonus });
     }
   }
@@ -635,21 +639,17 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
                                                     "button": "left", "clickCount": clicks})
 
         def strat_retype() -> None:
-            # The one that reaches a model-backed editor: every character arrives through the real
-            # keyboard pipeline. Clearing is done with Ctrl+A/Backspace for the same reason -- wiping
-            # textContent from JS leaves the editor's own document untouched.
+            # Re-focus and use Input.insertText directly into the target WebContents without dispatching raw OS keys
             f2 = c.evaluate(JS_FOCUS_COMPOSER) or {}
             if not f2.get("ok"):
                 raise CDPError("composer vanished before retype")
             time.sleep(0.2)
-            _key("a", "KeyA", 65, modifiers=2)
-            _key("Backspace", "Backspace", 8)
-            for ch in SENTINEL:
-                _key(ch, "", 0, text=ch)
+            c.call("Input.insertText", {"text": SENTINEL})
             back2 = c.evaluate(JS_READ_ACTIVE) or {}
             row["retypeLanded"] = SENTINEL.split(":")[0] in (back2.get("text") or "")
             time.sleep(0.3)
             press_enter()
+
 
         per = max(6.0, wait / 4.0)
         row["strategiesTried"] = []

@@ -221,11 +221,12 @@ class UniversalSessionClient:
             parts = [b.get("text", "") for b in cont if isinstance(b, dict)]
             if any(parts):
                 return "".join(parts)
-        for k in ("content", "text", "answer", "token", "value", "output", "response"):
+        for k in ("content", "text", "answer", "token", "value", "output", "response", "completion"):
             v = o.get(k)
             if isinstance(v, str) and v:
                 return v
         return ""
+
 
     @staticmethod
     def _error_from_obj(o) -> Optional[str]:
@@ -709,8 +710,13 @@ class UniversalSessionClient:
         
         # 2. Fire request through the browser-impersonation transport.
         try:
+            target_url = self.url
+            if "claude.ai" in target_url and "/chat_conversations/" in target_url:
+                import re as _re, uuid as _uuid
+                target_url = _re.sub(r"/chat_conversations/[^/]+/completion", f"/chat_conversations/{_uuid.uuid4()}/completion", target_url)
             body_bytes = new_body_str.encode("utf-8") if self.base_body else None
-            r = self._fire(self.method, self.url, self.headers, body_bytes, timeout=60)
+            r = self._fire(self.method, target_url, self.headers, body_bytes, timeout=60)
+
 
             # Only from a non-error reply: a 401/403 body can carry a logged-OUT jar, and storing
             # that would convert a recoverable session into a dead one.
@@ -795,7 +801,7 @@ class UniversalSessionClient:
         # 3. Extract final answer
         final_text, err = self._extract_response(r.text)
         if not final_text and err:
-            e = ChatError("UPSTREAM_ERROR: " + err)
+            e = ChatError("UPSTREAM_ERROR", err)
             # The keyword-search unlock needs the body even when no parser assembled it: a
             # computed answer sitting in an unrecognised envelope is still a live replay.
             e.raw = r.text

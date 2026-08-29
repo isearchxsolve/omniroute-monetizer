@@ -85,9 +85,27 @@ def _mistral_preflight(body_str: str) -> str:
         return body_str
 
 
+def _claude_preflight(body_str: str) -> str:
+    """Claude Official Web: turn_message_uuids and completion_request_id are
+    client-generated UUIDs that must be unique per turn. Reusing the recorded ones
+    gives 409 'duplicate_human_message_uuid'. Mint fresh UUIDs."""
+    try:
+        body = json.loads(body_str)
+        if "turn_message_uuids" in body and isinstance(body["turn_message_uuids"], dict):
+            body["turn_message_uuids"]["human_message_uuid"] = str(uuid.uuid4())
+            body["turn_message_uuids"]["assistant_message_uuid"] = str(uuid.uuid4())
+        if "completion_request_id" in body:
+            body["completion_request_id"] = str(uuid.uuid4())
+        return json.dumps(body)
+    except Exception:
+        return body_str
+
+
 PREFLIGHT_REGISTRY: Dict[str, Callable[[str], str]] = {
     "chat.mistral.ai": _mistral_preflight,
+    "claude.ai": _claude_preflight,
 }
+
 
 
 def apply_preflight(host: str, body_str: str) -> str:
