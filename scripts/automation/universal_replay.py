@@ -444,7 +444,7 @@ class UniversalSessionClient:
             return self._accumulate(pieces).strip(), err
 
         # 1) SSE stream: one JSON per `data:` line
-        if text.startswith("data:") or "\ndata:" in text:
+        if text.startswith(("data:", "event:")) or "\ndata:" in text:
             objs = []
             for line in text.splitlines():
                 line = line.strip()
@@ -457,11 +457,45 @@ class UniversalSessionClient:
                     objs.append(json.loads(frag))
                 except Exception:
                     continue
+
+            # DeepSeek JSON-patch stream: first object carries the initial fragment inside a
+            # deeply nested structure; subsequent objects are {"o":"APPEND","v":" token"} patches.
+            # The generic _piece_from_obj only extracts from the first match, so concatenate
+            # all "v" values from APPEND ops to reconstruct the full response text.
+            ds_pieces = []
+            for o in objs:
+                op = o.get("o")
+                v = o.get("v")
+                p = o.get("p", "")
+                if op == "APPEND" and isinstance(v, str):
+                    # Explicit APPEND patch: {"p":"...content","o":"APPEND","v":" token"}
+                    ds_pieces.append(v)
+                elif not op and isinstance(v, str) and not isinstance(v, (dict, list)):
+                    # Bare patch with no "o" key: {"v":" cow"} -- DeepSeek drops the op key
+                    # after the first APPEND when the target path is implicit.
+                    # Skip session/status metadata objects that also have "v" as a list/dict.
+                    if p == "" or "content" in p or "fragment" in p:
+                        ds_pieces.append(v)
+                elif isinstance(v, dict):
+                    # First big object: dig for the initial content fragment
+                    try:
+                        frags = v.get("response", {}).get("fragments", [])
+                        for fr in frags:
+                            c = fr.get("content", "")
+                            if c:
+                                ds_pieces.insert(0, c)
+                    except Exception:
+                        pass
+            ds_assembled = "".join(ds_pieces).strip()
+            if ds_assembled:
+                return ds_assembled, None
+
             assembled, err = scan(objs)
             if assembled:
                 return assembled, None
             if err:
                 return "", err
+
 
         # 2) whole-body JSON
         try:
@@ -680,9 +714,51 @@ class UniversalSessionClient:
 
             # Only from a non-error reply: a 401/403 body can carry a logged-OUT jar, and storing
             # that would convert a recoverable session into a dead one.
+            print("RESPONSE STATUS:", r.status_code, "BODY START:", r.text[:200])
+            if r.status_code == 200 and 'INVALID_POW_RESPONSE' in r.text:
+                print("GOT INVALID_POW_RESPONSE. Fetching challenge from endpoint...")
+                try:
+                    import json
+                    # 1. Fetch the challenge payload
+                    chal_url = "https://chat.deepseek.com/api/v0/chat/create_pow_challenge"
+                    chal_payload = json.dumps({"target_path": "/api/v0/chat/completion"}).encode("utf-8")
+                    
+                    # We must use the same headers (especially Authorization and cookies)
+                    chal_headers = self.headers.copy()
+                    chal_headers["content-type"] = "application/json"
+                    
+                    chal_r = self._fire("POST", chal_url, chal_headers, chal_payload, timeout=30)
+                    chal_r.raise_for_status()
+                    
+                    chal_data = chal_r.json()
+                    challenge_obj = chal_data.get("data", {}).get("biz_data", {}).get("challenge", {})
+                    if not challenge_obj:
+                        raise ChatError("POW_FAILED", "Could not parse challenge object from response")
+                    
+                    # Normalize snake_case keys from the API to camelCase for the solver
+                    # /create_pow_challenge returns expire_at / expire_after but the worker
+                    # script (DeepSeek's own code) expects expireAt / expireAfter
+                    if "expire_at" in challenge_obj and "expireAt" not in challenge_obj:
+                        challenge_obj["expireAt"] = challenge_obj.pop("expire_at")
+                    if "expire_after" in challenge_obj and "expireAfter" not in challenge_obj:
+                        challenge_obj["expireAfter"] = challenge_obj.pop("expire_after")
+                    
+                    # 2. Solve the challenge using our standalone Node.js solver
+                    import sys, pathlib
+                    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent / "adapters"))
+                    from deepseek_adapter import solve_deepseek_pow
+                    
+                    pow_response = solve_deepseek_pow(json.dumps(challenge_obj))
+                    self.headers['x-ds-pow-response'] = pow_response
+                    
+                    # 3. Re-fire the original completion request with the PoW header attached
+                    r = self._fire(self.method, self.url, self.headers, body_bytes, timeout=60)
+                except Exception as e:
+                    raise ChatError("POW_FAILED", f"DeepSeek PoW failed: {e}")
+
             if r.ok:
                 self._absorb_cookies(r)
-
+            
             if r.status_code in (401, 403):
                 raise SessionExpired("AUTH", "Auth rejected: " + r.text[:100])
 
