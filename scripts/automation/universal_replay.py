@@ -34,6 +34,14 @@ _IMPERSONATE = "chrome"
 from veoaifree_chat_client import ChatError          # noqa: E402
 from veo_session_replay import SessionExpired        # noqa: E402  (subclass of ChatError)
 
+# The tool-contract no-tool envelope ({"tool": null, "text": ...}) is defined by
+# chat_pool_server.tool_instruction and legitimately arrives AS the model's reply whenever a
+# seat's recorded request carries the contract (e.g. Cohere's captured exchange answers every
+# probe inside this envelope, so the assembled reply is our wire format, not the answer).
+# One canonical implementation lives in chat_pool_server -- stdlib-only module, no import side
+# effects, so importing it here is safe. (The :8190 shim has a private copy predating this.)
+from chat_pool_server import unwrap_no_tool_text     # noqa: E402
+
 # A prompt shorter than this is never used to detect an echo by containment: aymo.ai's real answer
 # "Hi!" contains the prompt "hi", and dropping it as an echo emptied the extraction entirely.
 _ECHO_MIN_PROMPT = 24
@@ -797,6 +805,8 @@ class UniversalSessionClient:
                 provider_key, r.text, self.headers,
                 self.raw.get("cookie_header", ""), timeout=60.0)
             if follow_text:
+                # The no-tool envelope is never the model's words (see unwrap_no_tool_text).
+                follow_text = unwrap_no_tool_text(follow_text) or follow_text
                 return {
                     "text": follow_text,
                     "label": f"universal-adapter+multistep:{provider_key}",
@@ -815,6 +825,13 @@ class UniversalSessionClient:
             e.raw = r.text
             e.status = r.status_code
             raise e
+
+        # The tool contract's no-tool envelope ({"tool": null, "text": ...}) is OUR wire format,
+        # never the model's words. Seats whose recorded request carries the contract (Cohere's
+        # captured exchange does) answer EVERY probe inside it -- escaped inside their SSE
+        # stream -- and without this unwrap the strict numeric verify fails on wire format
+        # while the model's answer is sitting right there in .text.
+        final_text = unwrap_no_tool_text(final_text) or final_text
 
         return {
             "text": final_text,

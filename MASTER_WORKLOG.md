@@ -8119,3 +8119,39 @@ unlock, next session's item); duck.ai zero-auth capture adapter; deferred items 
 Gemini CookieMismatch (operator action). :20128 untouched throughout. No walls were re-knocked; no
 provider received any request this session (all verification was offline or against our own :20130).
 
+### [2026-08-29 23:59] #1160 — Deferred defect #8 fixed: no-tool envelope unwrap, canonical in chat_pool_server, wired into serving + replay
+
+**Root cause chain for Cohere's NO_ANSWER (established by reading the recorded exchange, not by
+guessing):** session files record only the REQUEST — `session_cohere_coral_web.json`'s recorded
+request permanently carries the tool contract (captured from a planner/tool-verification exchange:
+"Run 'ls -la'… Bash… Read… Tool0..Tool5") plus `accept: text/event-stream`. Every replay re-sends
+that contract (Law 4: recorded exchange, one sentinel substitution), so the model answers the
+strict 41+17 probe INSIDE the `{"tool": null, "text": "58"}` envelope, escaped inside its SSE
+stream. `_extract_response` branch 3's sweep un-escapes and assembles the envelope as "the reply";
+`classify`'s strict numeric fullmatch (`\s*58\s*[.!]?\s*`) fails on wire format. The raw-body
+keyword unlock deliberately cannot rescue numeric expects (`replay_check.py:93-94` — a bare number
+would match ids/timestamps) — correct, so the fix belongs in extraction.
+
+**Fix:** canonical `unwrap_no_tool_text` added to `chat_pool_server.py` next to `tool_instruction`
+— verbatim from the shim's proven `_unwrap_no_tool_text` (44/44 tool contract). `chat_pool_server`
+is stdlib-only with no module-level side effects (Pool built inside `main()`; `__main__` guard at
+EOF), so `universal_replay` imports it with no cycle and no side effects. Wired into:
+1. the :20130 serving path right after `_dispatch` — **this is deferred defect #8 itself**: an
+   envelope reply used to be relayed verbatim as the assistant message content;
+2. `universal_replay.chat()` at BOTH return points (multistep followup + final extraction).
+Semantics unchanged from the shim's proven version: only `tool`-EXACTLY-null + string `text`
+unwraps, markdown fences stripped, and a genuine JSON answer that merely contains a "tool" key is
+never rewritten.
+
+**Verified:** `py_compile` RC=0; `scripts/automation/test_envelope_unwrap.py` — 11/11 PASS including
+the full offline Cohere chain (synthetic SSE with escaped envelope → `_extract_response` assembles
+the envelope — documented behaviour → unwrap → `58` → `classify` → `REPLAY_OK`) and every safety
+case (real tool call, plain text, non-null tool-key JSON, empty, empty text all untouched). The
+scratch check was promoted to that committed pytest-style test.
+
+**Shim note:** `session_pool_shim` keeps its private copy (`_unwrap_no_tool_text`); unify on the
+canonical when that file is next touched (documented in the canonical docstring).
+
+**Next:** graduation pass run 4 (`--apply`) for the four resumable seats — Cohere is the seat this
+fix was for; then the websocket capture+replay build (iFlytek first).
+

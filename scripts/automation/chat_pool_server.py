@@ -759,6 +759,39 @@ def render_tools(tools: list, ceiling: int = TOOL_PROMPT_CEILING) -> tuple[str, 
     return "\n".join(lines), included
 
 
+def unwrap_no_tool_text(text: str) -> Optional[str]:
+    """`{"tool": null, "text": "..."}` -> the text. Anything else -> None (leave the reply alone).
+
+    The no-tool envelope is the tool contract's own protocol (tool_instruction, below) for
+    "I read the tools and none applies". Shipping it verbatim hands the consumer our wire
+    format as the model's words. Deliberately strict: only an object whose `tool` is EXACTLY
+    null and whose `text` is a string is unwrapped, so a genuine JSON answer that happens to
+    contain a "tool" key is never rewritten into something else.
+
+    Consumers: the :20130 serving path (below), universal_replay.chat() -- a seat whose
+    recorded request carries this contract (e.g. Cohere's captured exchange) answers EVERY
+    probe inside this envelope, so the replay extractor receives the envelope as "the reply"
+    and the strict numeric check would fail on wire format, not on the answer. The :8190
+    shim still carries its own private copy (session_pool_shim._unwrap_no_tool_text);
+    unify on this function when that file is next touched.
+    """
+    if not text:
+        return None
+    blob = text.strip()
+    if blob.startswith("```"):
+        blob = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", blob).strip()
+    if not blob.startswith("{"):
+        return None
+    try:
+        obj = json.loads(blob)
+    except ValueError:
+        return None
+    if not isinstance(obj, dict) or "tool" not in obj or obj.get("tool") is not None:
+        return None
+    body = obj.get("text")
+    return body if isinstance(body, str) and body.strip() else None
+
+
 def tool_instruction(tools: list) -> tuple[str, int]:
     """The contract appended to the prompt. Returns (text, n_tools_included)."""
     rendered, included = render_tools(tools)
@@ -1023,6 +1056,13 @@ class Handler(BaseHTTPRequestHandler):
                 detail = f"upstream fell back ({fb}) and the pool could not cover it: {detail}"
             self._err(503, "overloaded_error", detail)
             return
+
+        # Defect #8 (handover §6 item 9, fixed 2026-08-29): a seat answering the tool contract
+        # with the no-tool envelope must surface its text -- our wire format is never the
+        # model's words. Strict shape, so anything else passes through untouched.
+        unwrapped = unwrap_no_tool_text(text)
+        if unwrapped is not None:
+            text = unwrapped
 
         # Fail closed on seat overflow. Relaying page chrome as an assistant message is what made a
         # routing failure look like a model failure for an entire session.
