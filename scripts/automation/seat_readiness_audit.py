@@ -72,6 +72,13 @@ VIDEO_TARGETS = [
     {"name": "rtst.ai", "url": "https://rtst.ai/", "category": "Video generators"},
     {"name": "digen.ai", "url": "https://digen.ai/", "category": "Video generators"},
     {"name": "veoaifree", "url": "https://veoaifree.com/", "category": "Video generators"},
+    # Discovered as open tabs on 2026-08-29 (harness_all_tabs.py).  Chat providers
+    # increasingly carry video models too, so these are recorded as video-capable
+    # seats; graduation into the CHAT pool still requires a chat-surface capture.
+    {"name": "HeyGen Video", "url": "https://app.heygen.com", "category": "Video generators"},
+    {"name": "MagicHour Video", "url": "https://magichour.ai", "category": "Video generators"},
+    {"name": "Akool Video", "url": "https://www.akool.com", "category": "Video generators"},
+    {"name": "NemoVideo", "url": "https://www.nemovideo.com", "category": "Video generators"},
 ]
 
 # connect_over_cdp attaches to EVERY target before it returns, so the ceiling scales with tab count,

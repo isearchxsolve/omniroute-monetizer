@@ -357,6 +357,15 @@ def atomic_json_write(path: pathlib.Path, payload: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
+def validated_session_filename(name: str | None, site: str) -> str:
+    """Return one safe, pool-recognised filename for a captured artifact."""
+    candidate = name or f"session_{slug(site)}.json"
+    path = pathlib.PurePath(candidate)
+    if path.name != candidate or not candidate.startswith("session_") or not candidate.endswith(".json"):
+        raise ValueError("output filename must be a simple session_*.json basename")
+    return candidate
+
+
 def open_tab(port: int, url: str) -> dict | None:
     """Open a tab and return its target once it has a debugger url.
 
@@ -448,7 +457,8 @@ def plan(a: argparse.Namespace) -> list[tuple[str, str, str]]:
 
 
 def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 25.0,
-            output_dir: pathlib.Path = SECRETS) -> dict[str, Any]:
+            output_dir: pathlib.Path = SECRETS, output_name: str | None = None,
+            pending: bool = False) -> dict[str, Any]:
     """Submit the sentinel in this tab and record the genuine request it produces."""
     row: dict[str, Any] = {"site": name, "tabUrl": t.get("url", "")[:120],
                            "readinessVerdict": verdict}
@@ -577,11 +587,11 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
                 "recorded_exchange": {"url": url, "method": req.get("method"),
                                       "request_headers": rh, "cookie_header": cookie_header,
                                       "request_body": body, "host": host},
-                "status": {"alive": True,
+                "status": {"alive": not pending,
                            "harvested_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                           "reason": "capture_sessions_cdp"},
+                           "reason": "pending_replay_verification" if pending else "capture_sessions_cdp"},
             }
-            out = output_dir / f"session_{slug(name)}.json"
+            out = output_dir / validated_session_filename(output_name, name)
             atomic_json_write(out, payload)
             return {"status": "CAPTURED", "endpointHost": host,
                     "endpointPath": urllib.parse.urlsplit(url).path[:80],
@@ -737,17 +747,51 @@ def main() -> int:
     ap.add_argument("--output-dir", type=pathlib.Path, default=SECRETS,
                     help="capture destination (default: active state/secrets); use a staged directory "
                     "until independent replay approves promotion")
+    ap.add_argument("--output-name", default="",
+                    help="simple session_*.json basename; required for a unique per-tab staged artifact")
+    ap.add_argument("--pending", action="store_true",
+                    help="write status.alive=false for a quarantined candidate pending independent replay")
+    ap.add_argument("--target-id", default="",
+                    help="capture exactly this current CDP page target; never collapse tabs by domain")
+    ap.add_argument("--expected-pid", type=int, default=0,
+                    help="require the stronger manifest attestation to still resolve this listener PID")
+    ap.add_argument("--report-path", type=pathlib.Path, default=None,
+                    help="non-secret capture report destination (default: state/capture_report_<port>.json)")
     ap.add_argument("--list", action="store_true", help="show the plan and the matching tabs, then stop")
     a = ap.parse_args()
+
+    if a.target_id:
+        if not a.sites or len([s for s in a.sites.split(",") if s.strip()]) != 1:
+            ap.error("--target-id requires exactly one --sites value")
+        if a.open or a.all or a.volatile_first or a.any_seat:
+            ap.error("--target-id is existing-tab-only; do not combine it with --open, --all, --volatile-first, or --any-seat")
+    if a.output_name:
+        try:
+            validated_session_filename(a.output_name, "unused")
+        except ValueError as exc:
+            ap.error(str(exc))
+    if a.expected_pid:
+        # The outer orchestrator's process/profile proof is repeated immediately
+        # before stateful CDP work to close its time-of-check/time-of-use window.
+        try:
+            from tab_graduation_sweep import assert_automation_seat
+            current = assert_automation_seat(a.port)
+        except Exception as exc:
+            raise SystemExit(f"seat attestation failed before capture: {type(exc).__name__}: {str(exc)[:120]}")
+        if current.pid != a.expected_pid:
+            raise SystemExit(
+                f"seat listener changed before capture (expected PID {a.expected_pid}, found {current.pid}); refusing"
+            )
 
     rows = plan(a)
     if a.limit:
         rows = rows[:a.limit]
     tabs = targets(a.port)
     # Per-port file: a multi-seat sweep is four runs, and one shared path would leave only the last.
-    report_path = REPORT.with_name(f"capture_report_{a.port}.json")
+    report_path = a.report_path or REPORT.with_name(f"capture_report_{a.port}.json")
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"port {a.port}: {len(tabs)} page targets   plan: {len(rows)} sites")
-    assert_safe_cdp_port(port)
+    assert_safe_cdp_port(a.port)
     try:
         output_label = a.output_dir.relative_to(ROOT)
     except ValueError:
@@ -757,6 +801,11 @@ def main() -> int:
     by_dom: dict[str, dict] = {}
     for t in tabs:
         by_dom.setdefault(reg(host_of(t.get("url", ""))), t)
+    explicit_target = None
+    if a.target_id:
+        explicit_target = next((t for t in tabs if str(t.get("id") or "") == a.target_id), None)
+        if not explicit_target:
+            raise SystemExit(f"target {a.target_id} is no longer present on :{a.port}; nothing was submitted")
 
     report: dict[str, Any] = {"generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                               "port": a.port, "sentinel": SENTINEL, "results": []}
@@ -772,6 +821,13 @@ def main() -> int:
             report["results"].append({"site": name, "status": "VIDEO_PROVIDER_SKIPPED"})
             continue
         override = CHAT_URL_OVERRIDES.get(name)
+        if a.target_id and override:
+            # Overrides exist because a normal invocation should navigate to a
+            # different chat surface.  A strict existing-tab sweep must never
+            # let that legacy convenience silently create/navigate a new tab.
+            report["results"].append({"site": name, "targetId": a.target_id,
+                                      "status": "OVERRIDE_REQUIRES_NAVIGATION"})
+            continue
         if override:
             url = override
         if not url:
@@ -780,7 +836,7 @@ def main() -> int:
         d = reg(host_of(url))
         # An override exists precisely because the already-open tab is on the wrong page, so it is
         # never reused; every other site prefers the tab that is already signed in and warm.
-        t = None if override else by_dom.get(d)
+        t = explicit_target if a.target_id else (None if override else by_dom.get(d))
         if not t and (a.open or override):
             print(f"  ..  {name:32s} opening a tab on {d}")
             t = open_tab(a.port, url)
@@ -792,7 +848,8 @@ def main() -> int:
             print(f"  --  {name:32s} {hint} on {d}")
             report["results"].append({"site": name, "status": "NO_TAB", "domain": d})
             continue
-        row = capture(t, name, verdict, a.wait, output_dir=a.output_dir)
+        row = capture(t, name, verdict, a.wait, output_dir=a.output_dir,
+                      output_name=a.output_name or None, pending=a.pending)
         report["results"].append(row)
         mark = {"CAPTURED": "OK ", "WALL": "WALL", "NO_COMPOSER": "    ", "WEBSOCKET": "WS  ",
                 "TEXT_REJECTED": "TXT ", "NO_REQUEST": "    "}.get(row["status"], "    ")

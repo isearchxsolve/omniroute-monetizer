@@ -7718,3 +7718,224 @@ GEMINI 401:
 **FILES MODIFIED:** `scripts/automation/capture_sessions_cdp.py`, `scripts/automation/universal_replay.py`, `scripts/automation/multistep_replay.py`, `MASTER_WORKLOG.md`.
 **Status:** Claude Official Web is now certified live and graduated to pure Python replay. Next: finalize ChatGPT template parsing and capture remaining targets.
 
+
+
+### [2026-08-29 16:10] #N — Full Fleet 23-Site Sweep & Pure Python Replay Verification
+- **Action:** Executed master sweep across all 23 defined targets with --open flag. Captured sessions via CDP and ran bulk independent Python replay via universal_replay.py.
+- **Result (Capture Phase):** Captured sessions for Aymo AI, ChatX, Google Gemini Web, HuggingChat, Inner AI Web, Monica AI. Others failed due to NO_COMPOSER (video sites), NO_REQUEST, or TEXT_REJECTED.
+- **Result (Replay Phase):** Out of 17 accumulated session files, 10 achieved pure Python independence (monica_ai, huggingchat, claude_official_web, perplexity_free_web, mistral_le_chat, qwen_chat, elo_ai_web, deepseek_chat, cohere_coral_web, 1min_ai).
+- **Failures:** inner_ai_web (402 Quota Exceeded), chathub_web & groq_chat (Auth Expired), chatx & chatgpt_free_web & eoaifree (SENTINEL_NOT_FOUND template parsing error).
+- **Next Step:** Fix the SENTINEL_NOT_FOUND template parsing issue in universal_replay.py to unlock ChatGPT-based clones.
+
+### [2026-08-29 16:49] #1139 — Chrome-tab graduation manifest preflight: dedicated-seat proof, 72-tab inventory, and false-target guardrails
+
+**Why this entry exists.** The operator approved a capture → independent Python replay → graduation sweep of the open Chrome tabs. Before sending a single sentinel prompt, the task was constrained to a manifest-only preflight. This is necessary because a tab count is not a provider count, a page that happens to share a registrable domain is not necessarily the provider's chat surface, and no automation may ever touch the operator's Chrome profile.
+
+**1. Mandatory safety checks completed before CDP enumeration.**
+- Read `TECHNOLOGY_TRANSFER.md` (including the Five Laws and §§21–24) and `CHROME_RULES_FOR_AGENTS.md` before the Chrome-adjacent work.
+- Ran `python scripts/automation/chrome_selfheal.py --dry-run --json state/chrome_selfheal_sweep_preflight.json`. This was read-only with respect to Chrome. It proved: no alias points at the live Chrome folder; the automatic `chrome_live_guard` is installed and actively refuses the live profile; all four live operator Chrome profiles remain `GOOGLE_SYNC_AUTHENTICATED` with their expected account mappings. The only non-actionable diagnostic was that Chrome-running state could not be determined for a backup, so the script safely skipped backup creation. **No live Chrome profile was opened, attached, copied, or modified.**
+- Independently resolved the actual `:9222` listener with `netstat` and WMIC: PID `19460`, image `chrome.exe`, command line carries `--remote-debugging-port=9222` and `--user-data-dir=D:\omniroute-monetizer\state\automation_profiles\providers`. This is a dedicated automation-seat root, not `C:\Users\Admin\AppData\Local\Google\Chrome\User Data`. That evidence is the precondition for any permitted CDP operation.
+
+**2. New safe tooling (one component).**
+- Added `scripts/automation/tab_graduation_sweep.py`. Default mode is a sanitised, read-only manifest. It rejects a CDP listener unless all of the following are true: one loopback listener PID exists; it is `chrome.exe`; it declares the requested debugging port; and its resolved user-data directory is inside `state/automation_profiles` and outside the operator's live Chrome root.
+- It records only safe metadata: protocol/host/path with query strings removed, target IDs, readiness class, non-secret artifact flags, and the last replay verdict. It never writes cookie/header/body material into the manifest.
+- Live capture is intentionally blocked behind `--execute --site <exact readiness site>` so there is no accidental bulk spend or blind all-tab submission. It delegates to the already-proven `capture_sessions_cdp.py` and then calls `replay_check.py` with the Law-3 computed probe `Reply with only the number: 41 + 17` / expected `58`.
+- Verification completed: `python -m py_compile scripts/automation/tab_graduation_sweep.py` passed; `--help` passed. First manifest attempt used the documented `/json/list` discovery endpoint and stopped cleanly at a 10-second timeout; it had already passed the process/profile safety gate and had not attached to, focused, typed in, or submitted to any page. This was classified as a CDP discovery performance/transient issue, not a provider failure.
+
+**3. External-source triangulation for the discovery issue.**
+- Consulted the official Chrome DevTools Protocol documentation: it documents both `GET /json/list` as the legacy list of websocket targets and `Target.getTargets` as the browser-target protocol query. It also documents `/json/version` as the browser-target discovery surface. Source: `https://chromedevtools.github.io/devtools-protocol/` and its Target-domain reference. This supports a bounded browser-target/HTTP discovery fallback; it does not justify opening tabs, altering profiles, or claiming a site failure.
+- Consulted Chrome's official remote-debugging security guidance, which continues to recommend a custom user-data directory for debugging isolation. Source: `https://developer.chrome.com/blog/remote-debugging-port`. The measured `:9222` command line satisfies that isolation requirement.
+
+**4. Read-only manifest result.**
+- Second manifest run succeeded and wrote `state/tab_graduation_manifest.json`. It discovered **72 current page targets**, not the initially reported 42. The discrepancy is evidence that the sweep must deduplicate by provider/service rather than blindly execute one action per tab.
+- Manifest classification: `ALREADY_GRADUATED=7`, `ELIGIBLE_CAPTURE=38`, `EXISTING_ARTIFACT_NEEDS_REPLAY=10`, `SKIP_NOT_AUTHENTICATED=6`, `UNMANAGED_TAB=11`.
+- The seven already-replay-verified services are represented by existing independent-replay artifacts (1min.AI, DeepSeek, Mistral, Qwen, Cohere, Felo, and Perplexity). Their open Chrome tabs are not a reason to recapture or burn another prompt.
+- The 38 nominally eligible rows include many duplicate tabs and several unsuitable surfaces: a Google `CookieMismatch` page was incorrectly grouped under Gemini by a broad `google.com` readiness entry; Flow/rtst/digen are video providers and cannot be captured with the chat-composer flow; several provider tabs are dashboard, sign-in, region-ban, or marketing pages; and some capture-script URL overrides would open a new page, which is outside a strict “open tabs only” sweep. These are **manifest-classification gaps**, not provider-death verdicts.
+
+**5. What changed / what did not.**
+- Changed: added the manifest-first safety runner; wrote only two non-secret state reports (`chrome_selfheal_sweep_preflight.json` and `tab_graduation_manifest.json`); appended this worklog entry.
+- Did **not** change: no session artifact, cookie, header, bearer, request body, pool membership, routing configuration, scheduled task, service ownership, Chrome profile, browser tab state, or `:8190` process. No prompt was submitted and no provider quota/credits were intentionally consumed.
+- **What is NOT claimed:** no newly open tab has graduated; `ELIGIBLE_CAPTURE` is not a live/working verdict; the presence of a tab is not proof of authentication; and no service is labelled dead, rate-limited, or wall-blocked from this preflight.
+
+**6. Immediate next unit (before any capture).** Harden the manifest's exact service-host/page classifier, deduplicate it to a sequential per-provider queue, and require a pre-action screenshot for each candidate in accordance with the browser visual/DOM diagnosis protocol. Then process one eligible provider at a time: screenshot → capture → pure-Python `58` replay → hot-load only on `REPLAY_OK` → worklog result before proceeding. Preserve existing artifacts on all non-pass outcomes.
+
+### [2026-08-29 16:58] #1140 — Graduation safety hardening: staged artifacts, strict Law-3 numeric verification, and raw-CDP interlock
+
+**Why:** The #1139 manifest was deliberately not executed. Read-only code inspection of the capture/replay/pool path found two failure modes that would make a bulk sweep unsafe: (1) `capture_sessions_cdp.py` wrote a new capture directly into the hot-scanned live `state/secrets/` pool with `status.alive=true` before replay had proved it; and (2) `replay_check.py`'s raw-body fallback normalized numeric expected value `"58"` to an empty alphabetic string, for which Python's `"" in <nonempty raw>` is always true. That could falsely graduate an arbitrary non-empty raw response because an ID/timestamp/error body happened to exist.
+
+**1. Strict computed-answer gate fixed (`scripts/automation/replay_check.py`).**
+- `keyword_in_body()` now returns false for all-numeric expected values. Parser-blind raw bodies therefore have **zero authority** to certify the arithmetic answer; a response-shape gap is correctly held for RCA rather than promoted from metadata.
+- `classify()` now requires extracted text for an arithmetic probe to be only `58` with optional harmless terminal punctuation. `"The answer is 58"`, `"158"`, an ID, a title, a timestamp, an HTML page, or an unparsed body cannot pass the “only the number” contract.
+- Added `--secrets-dir` and `--out` flags. A staged one-seat replay now writes its evidence under the candidate directory instead of replacing the fleet-level `state/replay_check.json`. This matters because the legacy `:20130` pool treats the global report as an admission ledger and a scoped `--only` call previously replaced it with a one-row report.
+- Added `scripts/automation/test_replay_check_law3.py`. Offline result: **4 tests PASS**. It proves strict `58` success, prose rejection, raw ID/raw-message rejection, and preserves the meaningful alphabetic diagnostic fallback.
+
+**2. Capture quarantine fixed (`scripts/automation/capture_sessions_cdp.py`).**
+- Added `--output-dir <staging-dir>` and an `atomic_json_write()` helper (temporary sibling + replace). The graduation runner will capture to `state/graduation_candidates/<seat>/<target>/`, never the hot-scanned `state/secrets/` directory.
+- This preserves an existing active session untouched until the candidate has independently answered the computed probe. It also prevents the session pool from seeing a partial JSON file during any normal write.
+- Added `scripts/automation/test_capture_staging.py`; offline result: **1 test PASS**, confirming a complete staged JSON artifact and no leftover temporary file.
+
+**3. Raw-CDP inner guard added.**
+- `capture_sessions_cdp.py` now imports `chrome_live_guard.assert_cdp_safe()` immediately before raw `/json/list` and `/json/new` access. Direct urllib/websocket CDP calls are not protected by Playwright's global monkey patch, so the script must carry its own fail-closed guard.
+- The outer manifest runner was strengthened too: before CDP discovery it imports the guard, rejects live-profile DevTools ports, reads the current enabled and explicitly profile-pinned seat from `state/video_accounts.json`, verifies `Local State` and the selected profile `Preferences`, matches the listener PID to `chrome.exe`, matches its remote-debugging port, matches its resolved user-data directory exactly to the configured automation root, and matches `--profile-directory` exactly. On the live preflight, `:9222` remained verified as `state/automation_profiles/providers` / `Default`.
+
+**4. Pool contract confirmed by read-only inspection.**
+- `:8190` does **not** consume `state/replay_check.json` as its runtime gate. A live `session_*.json` with a recording and `status.alive != false` can be dispatchable before replay verification. This confirms staging is mandatory.
+- A promoted chat artifact must retain the captured canonical exchange and set `modality: "chat"`, `runtime: "replay"`, and `status.alive: true` plus audit metadata (`reason=replay_graduated`, verdict, timestamp). `runtime: "replay"` selects `UniversalSessionClient` before Chrome-backed routing.
+- The correct integration proof after a pass is local-only: `POST /v1/rescan`, then `GET /v1/models` and confirm `<host>/auto`. No shim restart and no second upstream prompt are needed. Video is deliberately excluded from this chat graduation path because submit/poll verification can consume credits and has its own spend gate.
+
+**5. Validation performed.**
+- `python scripts/automation/test_capture_staging.py` → **1 test, OK**.
+- `python scripts/automation/test_replay_check_law3.py` → **4 tests, OK**.
+- `python -m py_compile scripts/automation/capture_sessions_cdp.py scripts/automation/replay_check.py scripts/automation/tab_graduation_sweep.py` → **PASS**.
+- `capture_sessions_cdp.py --help` and `replay_check.py --help` → **PASS**, including the new staged-output/report flags.
+
+**What did not happen:** no provider replay, Chrome input, tab activation, capture, session promotion, pool rescan, or shim restart was performed in this unit. No credentials were printed or entered. **No new provider is claimed graduated.**
+
+**Next:** replace the runner's site/domain-scoped live operation with an exact target-ID + seat identity execution unit, enforce an existing-tab/no-implicit-navigation rule, take and inspect a pre-action screenshot, then use the staged candidate → strict replay → atomic `runtime:"replay"` promotion sequence one provider/tab at a time.
+
+### [2026-08-29 18:20] #1155 — :8190 shim hardening session (prior agent) — logged from handover report
+
+**Source:** `HANDOVER_8190_SHIM_2026-08-29.md` (verbatim handover from the prior session, saved to repo root this entry). Ten defects on the `:8190` consumer endpoint were found, fixed, and verified by the prior agent; the report is the authoritative detail. Summary of the ten: (1) generic `except Exception` in the failover loop so one broken adapter no longer 500s the whole pool; (2) `unusable_reply()` garbage firewall (HTML shells / raw SSE frames never ship as `content`); (3) `wall_in_reply()` — a wall is never retried (3600 s cooldown); (4) tool calling end-to-end on `:8190` via imported `tool_instruction`/`parse_tool_call`/`looks_like_overflow` shared with `:20130`, OpenAI↔Anthropic normalisation, `tool_calls` emission — verified `finish_reason:"tool_calls"`, 44/44 tools, from `chat.deepseek.com` in 21 s; (5) `TOOL_FAILOVER_TRIES = 6` bound; (6) `BROKEN_ADAPTER_COOLDOWN_S = 1800` for `UNUSABLE_REPLY`/`ADAPTER_ERROR` (our defect, not a provider blip); (7) `wall_in_error()` — HTTP-status walls (e.g. 402) get the 3600 s wall cooldown, matched only in `HTTP <code>` position so `"6403 bytes"` cannot quarantine a working seat; (8) `_unwrap_no_tool_text()` — the `{"tool": null, "text": ...}` protocol envelope no longer ships as assistant content; (9) `state/pool_quarantine.json` + `OMNI_POOL_QUARANTINE` — `api.monica.im` (constant `"Omni."` reply), `veoaifree.com` (226 KB HTML page), `huggingface.co` (raw SSE frames) withheld from dispatch; 14 seats remain dispatchable; (10) `CHAT_FAILOVER_TRIES = 5` bound (90 s hang → 3.3 s bounded error).
+
+**Key doctrine from the report:** the old HTTP 200s were not successes — one seat returned a constant string, one its landing page, one raw SSE frames, one a rate-limit wall, all as `content` with `finish_reason:"stop"`. Measure the *body*, not the status. Quarantine is deliberately NOT `flagged_dead`: those accounts are alive and logged in; our *adapter* for them is broken. Two layers, two files.
+
+**`graduate_all_seats.py` orchestrator (compiles, helpers unit-tested, never run — running it drives Chrome, reserved to the operator):** fixed the gate-truncation hazard (`replay_check.py --only <host>` atomically overwrote `state/replay_check.json`, the `:20130` admission gate — a one-seat verify would silently drop the pool from 7 seats to 1 on next restart; now writes to `state/scratch/` scratch reports, canonical gate written only by a full run); removed a redundant second live request (step 2 reads the sweep's scratch report via import, never re-sends); stale scratch report deleted before each unit; `www.`-prefix host matching hardened. Standing rules: walls recorded once and never re-knocked (`--retry-walls` to override); `MAX_ATTEMPTS = 2`; video seats listed and skipped (a video capture spends clips; video seats must never enter the chat pool).
+
+**Honest state left behind:** with garbage excluded, real serving capacity is thin — of 20 advertised routes, observed actually answering this session: `chat.deepseek.com` (21 s, tool call) and `chat.mistral.ai` (15 s, contract-compliant refusal). Plain chat exhausted all 5 tries in 3.3 s; a tools request exceeded 170 s. **Do not fix by raising try ceilings** — at 6 tries the tools path already exceeded 170 s. The ordering is the defect: `pick()` sorts stateless-first then LRU with no memory of which seats have ever actually answered. **The designated highest-value next change is success-weighted ordering** — prefer seats with a recent verified success so the two known-good seats are reached first instead of by chance.
+
+**Known, deliberately not fixed (from the report):** `chat_pool_server.py:1046` (`:20130` Anthropic face) has defect #8 verbatim — ships the raw envelope as `{"type":"text","text":text}`; helper exists, fix is one line, gated on `tools` being present so the strict-JSON planner path (60/60-verified, `6505a07`) cannot be disturbed. `session_pool_shim.py` can raise `ConnectionAbortedError` writing an error to a client that already gave up (noisy, not fatal). The three quarantined adapters are withheld, not repaired; they still count toward the advertised 20 routes — the operator's spec of 50 is wrong for this endpoint.
+
+**Traps recorded by the prior agent (do not re-learn):** Grep output mangles forward slashes here (`/v1/models` rendered as `\v1\models`) — Read is authoritative, never file a bug from Grep rendering alone; `start "" /b` from a `.bat` dies when the invoking `cmd` exits — use PowerShell `Start-Process -WindowStyle Hidden` with redirected stdout/stderr when relaunching manually; always redirect stdout/stderr on relaunch or you diagnose yesterday's log; `OMNI_VIDEO_CONFIRM_SPEND=1` must be set on launch (the task bat sets it; a manual relaunch without it silently refuses video work).
+
+**This session's verification so far:** `:8190` owned by PID 19016 (`python.exe -u D:\omniroute-monetizer\scripts\automation\session_pool_shim.py 8190`, started 18:33), healthy — `GET /v1/models` → 200. `logs/shim_run.err` tail shows only the known-noisy `ConnectionAbortedError` on client-gone writes. `state/session_pool_state.json` present. No restart performed; no Chrome touched; no provider requests sent.
+
+### Graduation pass 2026-08-29 20:30:58
+
+| seat | host | verdict | detail | graduated |
+|---|---|---|---|---|
+| Together AI Chat | api.together.ai | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| ChatHub Web | app.chathub.gg | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Inner AI Web | app.innerai.com | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Aymo AI | aymo.ai | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Cerebras Inference Chat | chat.cerebras.ai | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Zhipu GLM Chat | chatglm.cn | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| ChatGPT Free Web | chatgpt.com | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Claude Official Web | claude.ai | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| SambaNova Cloud Chat | cloud.sambanova.ai | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Groq Chat | console.groq.com | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Microsoft Copilot Web | copilot.microsoft.com | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| DuckDuckGo AI Chat (duck.ai) | duck.ai | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Grok on X / Grok Web | grok.com | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| HuggingChat | huggingface.co | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Monica AI | monica.im | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Pollinations AI Web | pollinations.ai | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| V0 by Vercel (v0.app) | v0.app | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Coze Web | www.coze.com | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Doubao Web (ByteDance) | www.doubao.com | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Genspark AI | www.genspark.ai | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Meta AI Web | www.meta.ai | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| iFlytek SparkDesk | xinghuo.xfyun.cn | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Baichuan Web | yi.baichuan-ai.com | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| You.com Chat | you.com | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+| Yuewen Chat | yuewen.cn | FAIL | on\capture_sessions_cdp.py", line 890, in <module>
+    raise SystemExi | no |
+
+
+
+### [2026-08-29 22:00] #1156 — Chat-seat graduation pass: 4 seats graduated, full gap taxonomy + technical handover
+
+**Context:** Continuation session. Absorbed :8190 shim handover (#1155), read `graduate_all_seats.py`
+in full, ran the plan-only pass (74-75 tabs -> 32 eligible chat sites, 7 video-lane untouched),
+built and applied the tab harness (`harness_all_tabs.py`) to convert non-eligible tabs, ran the
+final `--apply` graduation pass (run 3).
+
+**What graduated (REPLAY_OK, strict `58` verify): 4 seats.**
+- DeepSeek Chat (chat.deepseek.com), Mistral Le Chat (chat.mistral.ai),
+  Claude Official Web (claude.ai), Genspark AI (www.genspark.ai).
+
+**Canonical gate (`state/replay_check.json`):** 11 REPLAY_OK rows across 10 hosts
+(api.1min.ai, api.cohere.com, chat.deepseek.com, chat.mistral.ai, chat.qwen.ai, chatgpt.com,
+claude.ai, felo.ai, veoaifree.com, www.perplexity.ai). Pool `:20130` (PID 34888, restarted 21:03)
+serving 12 providers, readyNow 12. **PHANTOM DUPLICATES:** chatgpt.com and veoaifree.com each
+appear twice in results[] (two session files per host matched) — dedupe by host is a pending todo.
+
+**Why not all 77:** the 77-tab count is the wrong denominator. Funnel: ~75 tabs -> 32 eligible
+chat sites (rest are duplicates, walls, docs, non-chat) -> 7 video-lane deliberately separate ->
+4 fully graduated + 10 gate-replayable + 28 classified non-verifying.
+
+**Gap taxonomy (28 non-verifying, from `state/graduation_ledger.json`):**
+- FAIL (15): Together, Cerebras, Zhipu GLM, Copilot, Grok, Meta, iFlytek, Baichuan, Doubao, Coze,
+  Pollinations, V0, Yuewen, duck.ai, 1min.AI — no visible composer OR websocket-only OR nothing submitted.
+- NO_ANSWER (7): Qwen, Cohere, Felo, Perplexity, Monica, Aymo, Inner AI — HTTP 200 but reply is
+  not the sentinel `58` (real answers like "58what is 58 multiplied by 3..." or error bodies).
+- AUTH (2): ChatHub, Groq — cookie alone not enough.
+- WALL (3): SambaNova, HuggingChat, You.com — login wall, recorded once never re-knocked.
+- UNPARSEABLE (1): ChatGPT Free — 200 but no recognised response shape.
+- REPLAY_OK (4): DeepSeek, Mistral, Claude, Genspark.
+
+**Biggest unlockable cluster — websocket-only seats:** iFlytek (0 posts / 143 ws frames),
+Meta (11 posts / 39 ws frames), Grok, Copilot. Per Chrome-gap doctrine these are BUILD TARGETS
+(a websocket capture+replay client unlocks 4 seats in one shot), not dead ends.
+
+**Open defects:**
+- **D1 (CRITICAL):** `graduate_all_seats.py` hung after `restart_pool()` on run 3. Captures all
+  completed, gate rebuilt (True, 11 REPLAY_OK), pool restarted — but the process hung before the
+  final `save_ledger()`/`append_worklog()`. Two duplicate `graduate_all_seats.py` processes were
+  alive 40+ min with near-zero CPU; killed them. Ledger `runs[]` still holds only run 1; run-3
+  table was never appended to the worklog. Fix: bound `restart_pool()`, move ledger/worklog to a
+  `finally` block, guard double-spawn.
+- **D2:** 7 session files have no scratch replay verdict (duck.ai, qwen, v0, 1min, chatx, 2x
+  veoaifree). duck.ai captured fine (890B /duckchat/v1/chat) but `replay_duckduckgo_ai_chat_(duck_ai).json`
+  never wrote — slug mismatch (parentheses) vs the sweep's glob.
+- **D3:** Run-3 per-seat verdicts never written to worklog/ledger (consequence of D1). Full
+  transcript exists at `state/grad_apply_run3.log`.
+- **D4:** First-run guard changed to per-seat keying (compiled, applies to FUTURE runs only —
+  run 3 loaded old code).
+- **D5:** `capture_sessions_cdp.py:794` NameError `assert_safe_cdp_port(port)` ->
+  `assert_safe_cdp_port(a.port)` — FIXED, verified (duck.ai single-site capture works).
+
+**Process/port state (verified clean):** :8190 (PID 19016, healthy), :20130 (PID 34888, healthy,
+12 providers), :20128 OmniRoute (PID 22364, untouched). NOTE: duplicate non-owner twins exist for
+both shim (12596) and pool (34088) — leftover double-spawns to clean up.
+
+**Technical handover written:** `HANDOVER_GRADUATION_GAPS_2026-08-29.md` (repo root) — the
+authoritative state transfer covering what graduated, the 77->4 funnel, gap taxonomy, open
+defects D1-D5, pending todos, standing constraints, and files changed this session. Next agent:
+read that document, then fix D1 (hang) before any future graduation run.
+
+**Files changed this session:** `scripts/automation/harness_all_tabs.py` (NEW), `capture_sessions_cdp.py`
+(FIXED a.port), `graduate_all_seats.py` (per-seat guard), `seat_readiness_audit.py` (VIDEO_TARGETS +4),
+`tab_graduation_sweep.py` (CHAT_SURFACE_PREFIX/HARNESS_NAVIGATE/ZERO_AUTH_SITES/VIDEO_SITES +4),
+`state/free_llm_chat_sites.json` (+3 chat groups, +1 video group), `HANDOVER_GRADUATION_GAPS_2026-08-29.md` (NEW).
+
+**Deferred (unchanged from prior session):** success-weighted ordering in `session_pool.py` `pick()`
+(~556-563); `chat_pool_server.py:1046` defect #8 (unwrap `{"tool": null, "text": ...}` envelope,
+gated on tools present).
+
+**Operator flag:** Gemini CookieMismatch — `accounts.google.com` is blocked by UNSUITABLE_HOSTS
+and the harness NAVIGATE landed back on the CookieMismatch wall; needs a manual Google session
+repair on the automation seat (not automated, per Chrome rules).

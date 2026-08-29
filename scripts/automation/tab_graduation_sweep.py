@@ -7,10 +7,10 @@ This tool deliberately separates the two kinds of work that used to be conflated
   metadata only.  It never attaches to a tab, changes focus, types, submits, or
   reads a cookie.  The output is a sanitised manifest that says what each visible
   page is eligible for.
-* ``--execute --site <name>`` is a single-site operation.  It delegates capture
-  to ``capture_sessions_cdp.py`` and then delegates the independent proof to
-  ``replay_check.py``.  It is deliberately serial: one seat / one provider / one
-  request at a time.
+* The stateful workflow is split into explicit single-target units: an untouched
+  screenshot, a staged capture, a post-action screenshot, and a separate
+  standalone replay/promotion command.  It is deliberately serial: one seat /
+  one current CDP target / one provider request at a time.
 
 Safety properties
 -----------------
@@ -27,7 +27,9 @@ Examples
 --------
     python scripts/automation/tab_graduation_sweep.py
     python scripts/automation/tab_graduation_sweep.py --port 9222 --json state/tab_graduation_manifest.json
-    python scripts/automation/tab_graduation_sweep.py --execute --site "Aymo AI"
+    python scripts/automation/tab_graduation_sweep.py --screenshot-target <target-id>
+    python scripts/automation/tab_graduation_sweep.py --capture-target <target-id> --site "Aymo AI"
+    python scripts/automation/tab_graduation_sweep.py --verify-promote <candidate-directory>
 
 Graduation remains strict: capture is evidence only; ``REPLAY_OK`` from the
 standalone replay probe is the gate.  CAPTCHA, payment, phone, plan, and quota
@@ -37,6 +39,7 @@ walls are reported by the underlying capture/replay tools and never solved here.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import pathlib
@@ -60,13 +63,69 @@ LIVE_CHROME_ROOT = pathlib.Path(
 READINESS_PATH = STATE / "seat_readiness.json"
 REPLAY_CHECK_PATH = STATE / "replay_check.json"
 VIDEO_ACCOUNTS_PATH = STATE / "video_accounts.json"
+CANDIDATES = STATE / "graduation_candidates"
 DEFAULT_MANIFEST = STATE / "tab_graduation_manifest.json"
+
+# `replay_check.py --only <site>` filters the session list and then writes its report ATOMICALLY OVER
+# its --out path -- whose default is REPLAY_CHECK_PATH, the gate `chat_pool_server.py` reads at startup
+# to decide which seats to serve. So verifying one seat with the default path TRUNCATES THE GATE TO ONE
+# ROW, and the next pool restart silently drops from 7 served seats to 1. Per-seat verification here
+# therefore always lands in a scratch report; the canonical gate is only ever written by a FULL run.
+SCRATCH_REPLAYS = STATE / "scratch"
+
+
+def scratch_report(site: str) -> pathlib.Path:
+    """Where one seat's verdict lands. Deterministic, so a caller can read it back without parsing logs."""
+    slug = re.sub(r"[^a-z0-9]+", "_", site.lower()).strip("_")
+    return SCRATCH_REPLAYS / f"replay_{slug}.json"
 
 # Law 3: computed and non-echoable.  These are explicitly passed to replay_check
 # rather than relying on whatever default that script happened to have at a given
 # point in the project's history.
 VERIFY_PROMPT = "Reply with only the number: 41 + 17"
 VERIFY_EXPECT = "58"
+
+# These are deliberately excluded from the chat capture path.  Video graduation
+# is a submit → poll → result contract and can spend credits, while a legacy chat
+# URL override would navigate/open a different tab (forbidden in an open-tabs-only
+# sweep).  A classification is a build target, never a dead-provider verdict.
+VIDEO_SITES = {"Google Flow (labs.google)", "rtst.ai", "digen.ai", "veoaifree",
+               "HeyGen Video", "MagicHour Video", "Akool Video", "NemoVideo"}
+# Sites that historically needed navigation were blanket-deferred.  Since the
+# harness (harness_all_tabs.py) exists, a tab on these sites is judged by WHERE
+# IT SITS: on its chat surface -> eligible; off-surface -> HARNESS_NAVIGATE.
+# (2026-08-29: Groq /playground, Claude /chat/<id>, Together /playground tabs
+# were all already on their surfaces and were being thrown away.)
+LEGACY_NAVIGATION_SITES = {
+    "Groq Chat", "Coze Web", "Microsoft Copilot Web", "SambaNova Cloud Chat",
+    "iFlytek SparkDesk", "StepFun Web", "Baichuan Web", "Together AI Chat",
+    "Claude Official Web",
+}
+# Chat-surface URL prefixes per site.  A tab whose URL starts with one of these
+# is already where a capture needs it to be.  Sites not listed fall back to
+# "not on surface" (harness navigates them).
+CHAT_SURFACE_PREFIX = {
+    "Groq Chat": "https://console.groq.com",
+    "Coze Web": "https://www.coze.com/",
+    "Microsoft Copilot Web": "https://copilot.microsoft.com/",
+    "SambaNova Cloud Chat": "https://cloud.sambanova.ai/chat",
+    "iFlytek SparkDesk": "https://xinghuo.xfyun.cn/desk",
+    "StepFun Web": "https://chat.stepfun.com/",
+    "Baichuan Web": "https://yi.baichuan-ai.com/",
+    "Together AI Chat": "https://api.together.ai/playground",
+    "Claude Official Web": "https://claude.ai/chat/",
+}
+UNSUITABLE_HOSTS = {"accounts.google.com"}
+UNSUITABLE_PATH_MARKERS = ("/cookiemismatch", "/sign", "/region-ban", "/get-started")
+
+# Chat surfaces that work with NO cookies at all (verified 2026-08-29: duck.ai
+# renders its live chat UI with an empty jar; yuewen.cn likewise).  The cookie
+# audit structurally cannot see them; declared session_only so their tabs are
+# classified as capturable instead of UNMANAGED_TAB.
+ZERO_AUTH_SITES = [
+    ("DuckDuckGo AI Chat (duck.ai)", "duck.ai"),
+    ("Yuewen Chat", "yuewen.cn"),
+]
 
 
 class SafetyRefusal(RuntimeError):
@@ -353,6 +412,12 @@ def readiness_for_port(port: int) -> dict[str, dict[str, str]]:
             existing = entries.get(key)
             if existing is None or existing["readiness"] in {"visited", "expired", "unknown"}:
                 entries[key] = candidate
+    # Zero-auth chat surfaces (duck.ai, yuewen.cn) store no cookies at all, so the
+    # cookie-jar audit can never produce a row for them.  Their tabs are real,
+    # usable chat seats -- the page itself proves it -- so they are declared here
+    # as session_only, which classify_tab accepts as capturable.
+    for name, domain in ZERO_AUTH_SITES:
+        entries.setdefault(reg(domain), {"site": name, "readiness": "session_only"})
     return entries
 
 
@@ -379,6 +444,8 @@ def artifact_index() -> dict[str, dict[str, Any]]:
             "hasRecordedExchange": bool((data.get("recorded_exchange") or {}).get("request_body")),
             "hasRecordedWebSocket": bool(data.get("recorded_ws")),
             "runtime": str(data.get("runtime") or ""),
+            "targetId": str(((data.get("seat") or {}).get("targetId") or "")),
+            "replayVerdict": str(((data.get("status") or {}).get("replayVerdict") or "")),
         }
         # A replayable HTTP artifact is more useful than a Chrome-only one when
         # multiple session files share a registered domain.
@@ -431,6 +498,8 @@ def classify_tab(
             "hasRecordedExchange": artifact["hasRecordedExchange"],
             "hasRecordedWebSocket": artifact["hasRecordedWebSocket"],
             "runtime": artifact["runtime"],
+            "targetId": artifact["targetId"],
+            "replayVerdict": artifact["replayVerdict"],
         }
     if replay:
         base["latestReplayVerdict"] = replay
@@ -439,14 +508,33 @@ def classify_tab(
         base.update(classification="UNMANAGED_TAB", nextAction="manual_review_before_capture")
     elif known["readiness"] not in {"signed_in_probable", "session_only"}:
         base.update(classification="SKIP_NOT_AUTHENTICATED", nextAction="none")
-    elif replay == "REPLAY_OK":
+    elif known["site"] in VIDEO_SITES:
+        base.update(classification="VIDEO_SEPARATE_GRADUATION", nextAction="video_contract_and_spend_gate")
+    elif known["site"] in LEGACY_NAVIGATION_SITES:
+        prefix = CHAT_SURFACE_PREFIX.get(known["site"], "")
+        if prefix and url.startswith(prefix):
+            # Already sitting on the chat surface -- capture directly.  The old
+            # blanket defer threw away on-surface tabs like Groq /playground.
+            base.update(classification="ELIGIBLE_CAPTURE",
+                        nextAction="screenshot_then_targeted_staged_capture")
+        else:
+            base.update(classification="HARNESS_NAVIGATE",
+                        nextAction="harness_all_tabs_navigates_to_chat_surface")
+    elif host in UNSUITABLE_HOSTS or any(marker in urllib.parse.urlsplit(url).path.lower()
+                                         for marker in UNSUITABLE_PATH_MARKERS):
+        base.update(classification="UNSUITABLE_PAGE", nextAction="visual_review_or_correct_chat_surface")
+    elif artifact and artifact["runtime"] == "replay" and artifact["replayVerdict"] == "REPLAY_OK" \
+            and artifact["targetId"] == base["targetId"]:
+        # A host-level historical replay report is not enough.  A tab is only
+        # considered graduated when this exact current target has its own
+        # promoted stateless artifact.
         base.update(classification="ALREADY_GRADUATED", nextAction="none")
     elif artifact and artifact["hasRecordedWebSocket"] and not artifact["hasRecordedExchange"]:
         base.update(classification="TRANSPORT_WEBSOCKET", nextAction="build_or_use_websocket_adapter")
-    elif artifact and artifact["hasRecordedExchange"]:
-        base.update(classification="EXISTING_ARTIFACT_NEEDS_REPLAY", nextAction="replay_before_recapture")
     else:
-        base.update(classification="ELIGIBLE_CAPTURE", nextAction="capture_then_independent_replay")
+        # Existing host-level artifacts are retained as non-secret context but
+        # never collapse this current tab or suppress its own staged candidate.
+        base.update(classification="ELIGIBLE_CAPTURE", nextAction="screenshot_then_targeted_staged_capture")
     return base
 
 
@@ -460,6 +548,12 @@ def build_manifest(port: int) -> dict[str, Any]:
     counts: dict[str, int] = {}
     for row in rows:
         counts[row["classification"]] = counts.get(row["classification"], 0) + 1
+    queue = [
+        {"targetId": row["targetId"], "site": row["knownSite"], "url": row["url"],
+         "readiness": row["readiness"]}
+        for row in rows if row["classification"] == "ELIGIBLE_CAPTURE"
+    ]
+    queue.sort(key=lambda row: (0 if row["readiness"] == "session_only" else 1, row["site"], row["targetId"]))
     return {
         "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "mode": "read_only_manifest",
@@ -472,7 +566,8 @@ def build_manifest(port: int) -> dict[str, Any]:
             "reason": "listener is chrome.exe with a dedicated state/automation_profiles user-data-dir",
         },
         "verification": {"prompt": VERIFY_PROMPT, "expect": VERIFY_EXPECT},
-        "summary": {"pageTabs": len(rows), "byClassification": counts},
+        "summary": {"pageTabs": len(rows), "byClassification": counts,
+                    "targetedChatCaptureQueue": queue},
         "tabs": rows,
     }
 
@@ -520,13 +615,19 @@ def execute_one(port: int, site: str, wait: float) -> int:
         if completed.returncode != 0:
             return completed.returncode
 
-    # `--only` scopes both traffic and state/reporting to this one host/site.
+    # `--only` scopes both traffic and state/reporting to this one host/site. `--out` is MANDATORY here:
+    # without it replay_check writes this single-row report over the canonical gate. See SCRATCH_REPLAYS.
+    report = scratch_report(site)
+    report.parent.mkdir(parents=True, exist_ok=True)
     replay = [
         python, str(ROOT / "scripts" / "automation" / "replay_check.py"),
         "--only", site.lower().replace(" ", "_"),
         "--prompt", VERIFY_PROMPT, "--expect", VERIFY_EXPECT,
+        "--out", str(report),
     ]
-    return subprocess.run(replay, cwd=ROOT, check=False).returncode
+    rc = subprocess.run(replay, cwd=ROOT, check=False).returncode
+    print(f"per-seat verdict     : {report}   (canonical gate untouched: {REPLAY_CHECK_PATH.name})")
+    return rc
 
 
 def main() -> int:

@@ -53,3 +53,6 @@ nul
 # Local DB rollback backups that carry encrypted provider credentials — keep on disk, never push.
 # (The combos backup has no secrets and is intentionally not matched here.)
 _reactivation_backup_*.json
+
+# transient DOM captures from graduation sweep (chat content)
+scratch/*.html

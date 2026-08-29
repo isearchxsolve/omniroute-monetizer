@@ -84,9 +84,10 @@ Expect `"type":"tool_use"`, `"name":"Bash"`, `"stop_reason":"tool_use"`.
 
 | thing | state | checked by |
 |---|---|---|
-| `:20130` chat gateway | **[VERIFIED]** up, 5 seats served, 4 ready | `curl -s -m 20 http://127.0.0.1:20130/health` |
-| — cohere / huggingface / perplexity / you.com | ready | same |
-| — aymo | cooling ~2900s (wall or auth refusal) | same |
+| `:20130` chat gateway | **[VERIFIED]** up, **7 seats served, 7 ready** | `curl -s -m 20 http://127.0.0.1:20130/health` |
+| — cohere / perplexity / qwen / felo / deepseek | **[VERIFIED]** serve `tool_use` via the shim | see §2c |
+| — mistral | REPLAY_OK but returns prose, **shim-incompatible** | same |
+| — 1min.ai | REPLAY_OK but `400 REQUEST_BODY_VALIDATION_FAILED` on the pool's payload | same |
 | `:20130` planner path | **[VERIFIED]** 6/6 strict JSON, exit 0 | `python scripts/automation/preflight_planner.py --scenes 6` |
 | `:8189` video face | **[VERIFIED]** up | `curl -s -m 25 http://127.0.0.1:8189/v1/video/capacity` |
 | — digen.ai | 0 credits, 1 clip | same |
@@ -95,6 +96,35 @@ Expect `"type":"tool_use"`, `"name":"Bash"`, `"stop_reason":"tool_use"`.
 | Git | **[VERIFIED]** clean, HEAD `84aa6d2`, contains the entire shim | `git status --short` |
 
 **`:8189` needs `-m 25`. A cold call takes >8s and an 8s timeout makes a healthy port look dead.**
+
+### 2c. Per-seat shim verdict — [VERIFIED] 2026-08-27
+
+**5 of 7 seats serve tool calls.** Measured by repeating the §2a curl and reading `x_pool_provider`:
+
+| seat | tool call | note |
+|---|---|---|
+| api.cohere.com | ✅ `tool_use` `Bash` | 2.4s — fastest |
+| www.perplexity.ai | ✅ `tool_use` `Bash` | |
+| chat.qwen.ai | ✅ `tool_use` `Bash` | |
+| felo.ai | ✅ `tool_use` `Bash` | 8.4s |
+| chat.deepseek.com | ✅ `tool_use` `Bash` | 28s — correct but slow; §26 PoW work paid off |
+| chat.mistral.ai | ❌ prose, no JSON | ignores the contract, degrades to a text reply |
+| api.1min.ai | ❌ `400 REQUEST_BODY_VALIDATION_FAILED` | see the warning below |
+
+**GRADUATION GATE DEFECT — [OPEN].** `api.1min.ai` is verdicted `REPLAY_OK` in
+`state/replay_check.json` yet **400s on the payload the pool actually sends**. Its replay probe passed
+using a *different* payload shape than `chat_pool_server.py` uses. So `REPLAY_OK` is not proof a seat
+serves real pool traffic — this is [[wrong-layer-inference]] inside the graduation gate itself. Tighten
+the probe to send the pool's own payload shape before trusting new graduations.
+
+### 2d. Graduation does not take effect until `:20130` restarts — [VERIFIED] 2026-08-27
+
+`chat_pool_server.py` reads `state/replay_check.json` **once at startup and caches it**. Codex
+graduated 5 new seats and the pool kept serving the old roster; a restart took it from 5 served / 4
+ready to **7 served / 7 ready**, swapping aymo/huggingface/you.com out for
+1min.ai/deepseek/felo/mistral/qwen. **Any graduation workflow must end with: restart `:20130` (§6),
+then confirm `/health` lists the new host as `REPLAY_OK`.** Writing the seat into `session_pool.py` is
+not sufficient and is not the step that matters.
 
 ---
 
@@ -259,7 +289,28 @@ runs it. Fix:
 
 Verify: run it, then confirm the live config still has `pool/claude-sonnet-4-6` as default.
 
-### P1 — fix the probe so pool tool-safety is measurable (§4.5)
+### P1 — fix the graduation gate so REPLAY_OK means "serves pool traffic" (§2c)
+`api.1min.ai` proves `REPLAY_OK` can be true while the seat 400s on the pool's real payload. Make
+`replay_check.py` send the same payload shape `chat_pool_server.py` sends. Until then, every new
+graduation needs the §2a curl run against it by hand. Free to verify.
+
+### P2 — Chrome tab graduation sweep: use the tool that exists, do not write an orchestrator
+`scripts/automation/tab_graduation_sweep.py` (26.8KB, commit `4afee60`) already implements
+capture → independent Python replay → graduate. It is **deliberately serial** — one seat, one CDP
+target, one provider request at a time — and it refuses any CDP listener not owned by a
+`state/automation_profiles` profile. A master loop over the 42 open tabs would rebuild it and discard
+those safety properties. Correct usage:
+
+```bash
+python scripts/automation/tab_graduation_sweep.py                          # dry-run manifest, no attach
+python scripts/automation/tab_graduation_sweep.py --execute --site "<name>"  # one seat
+```
+
+With 42 tabs open most are **discarded** — run `chrome_no_discard.py` first, and **close Chrome before
+`--apply`**. A hanging `Runtime.evaluate` and reload-on-click are the same bug. The anti-bot / PoW
+blueprint is already written at `TECHNOLOGY_TRANSFER.md:1304` (§26, `[VERIFIED]`) — do not re-derive it.
+
+### P3 — fix the probe so pool tool-safety is measurable (§4.4)
 `probe_tool_fidelity.py`: `BASE` → `:20130`, add the 5 pool seats, probe at ~44 tools / ~98KB. Then
 `state/tool_fidelity.json` will finally cover the supply the project actually runs on. Free to run.
 
