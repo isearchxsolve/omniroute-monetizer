@@ -10252,3 +10252,12 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Decision.** Do not run `apply_master_healthy_combos.py` until a serialized, timeout-aware live catalog diff succeeds after the operator performs the elevated service restart. Do not claim acceptance certification from an interrupted run.
 
 **What is NOT claimed.** This does not prove the catalog, combos, or providers are unhealthy. It proves only that this concurrent verification attempt did not complete and that the current process should not be stressed with more parallel management calls.
+### [2026-08-30 23:25] #1346 — Post-restart serialized management probe still times out
+
+**Action.** After the operator reported the elevated restart complete, ran `audit_full_working_catalog.py` alone (not concurrently) with a bounded wait. It produced no audit output after approximately 110 seconds and was interrupted. A follow-up minimal authenticated probe using `requests.Session(trust_env=False)` to `POST http://127.0.0.1:20128/api/auth/login` with the vault-resolved password timed out after 15 seconds before returning a status.
+
+**Result.** The management plane is still not responsive to a fresh login request from this shell, despite the earlier unauthenticated `/v1/models` HTTP 200 observation. No provider or combo mutation was attempted. No browser, credential value, or credit-spending action occurred.
+
+**Classification.** This is a runtime/service-readiness failure, not evidence that providers or models are dead. The restart either did not replace the wedged Node process, the owning service relaunched stale/wedged state, or another local process is intercepting the port. Further management calls should pause until process ownership and listener state are checked from an elevated shell.
+
+**What is NOT claimed.** The catalog was not audited, acceptance was not certified, and combos were not applied. No provider reauthentication succeeded or failed in this unit.
