@@ -10405,3 +10405,17 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Current capacity statement.** Verified live serving capacity: OmniRoute 9,509 advertised model records; merged gateway 9,531 advertised records; independently dispatchable session-pool capacity 19 chat seats and 1 video seat; separate `:8189` video router advertises 21 provider aliases, not 21 separately proven video accounts/results.
 
 **What is NOT claimed.** No claim is made that every OmniRoute model is currently inferable, that any inventory alias has credits, or that the historic video capacity is present. No Chrome, provider, capture, video, or credential state was changed.
+
+### [2026-08-30 13:08] #1360 - Capacity matrix document written (CAPACITY_MATRIX.md) from live state
+
+**What.** Operator requested the current state of affairs documented. Wrote CAPACITY_MATRIX.md at repo root with evidence-backed claims for both chat and video capacity.
+
+**Sources (live, not memory).** state/replay_check.json, state/graduation_ledger.json, state/profile1_reconciliation.json, state/video_capability_matrix.json, state/video_route_inventory.json, state/video_dedicated_profile_preflight.json, plus live probes of OmniRoute :20128 (9,509 models) and consumer :8190 (9,531 models).
+
+**Claims documented.**
+- Chat: 11 jar-replayable hosts (REPLAY_OK) + 2 live-tab-graduated (Copilot, Puter) serving now through :8190. V0 adapter built + proven (58) but account 429-throttled. Gemini in progress (send works, response read TBD).
+- Video: 22 providers / 59 routes / 5 enabled dedicated accounts across 3 dedicated profiles (digen, flow, rtst). Video lane not currently routed through :8190 (404).
+- This session's 6 closures (Copilot, Aymo, Puter, Poe, Monica, V0) with commit hashes and evidence.
+- Honest three-cause classifications: Aymo 429 re-probed after decay and reclassified paywall (decay-retry disproven); Chrome-gated providers classified as live-tab build targets, not dead ends; no fabricated credentials.
+
+**Honesty notes carried in.** Every graduated host verified with computed Law-3 probe (41+17 -> 58), never echoable. V0 throttle is real and temporary, not site death.
