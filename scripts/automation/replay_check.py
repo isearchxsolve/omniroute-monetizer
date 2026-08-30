@@ -169,11 +169,13 @@ def replay(path: pathlib.Path, prompt: str, expect: str) -> dict[str, Any]:
 
     started = time.perf_counter()
     try:
-        from universal_replay import UniversalSessionClient
+        from universal_replay import make_session_client
         # The PATH, not the parsed dict: providers that rotate their session cookie on use expect the
         # new one next time, and the client can only write the rotation back if it knows the file.
         # Handing it the dict silently throws the rotation away and the next call arrives stale.
-        client = UniversalSessionClient(path)
+        # The factory routes on transport: HTTP sessions get UniversalSessionClient, a capture
+        # whose exchange left over a websocket gets the ws adapter (Chrome-gap doctrine).
+        client = make_session_client(path)
         res = client.chat([{"role": "user", "content": prompt}])
         text = str((res or {}).get("text") or "")
         status = (res or {}).get("status")
@@ -208,6 +210,15 @@ def replay(path: pathlib.Path, prompt: str, expect: str) -> dict[str, Any]:
 
 
 def main() -> int:
+    # Verdict details carry raw provider text (Chinese providers reply in CJK). Under a Windows
+    # cp1252 pipe a plain print() of such text raises UnicodeEncodeError and the whole check
+    # dies mid-run -- replace un-encodable characters instead of losing the report.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(errors="replace")
+            except (ValueError, OSError):
+                pass
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     # EXACT-RESPONSE SENTINEL: a pure character phrase, not a number. Numbers hide inside ids,
     # timestamps, hashes, and split across stream chunks (Mistral's "5"+"8" proved it). A nonsense

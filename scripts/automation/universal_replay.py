@@ -1,4 +1,5 @@
 import json
+import sys
 import time
 import requests
 from typing import Dict, Any, Optional
@@ -31,8 +32,22 @@ _IMPERSONATE = "chrome"
 # lookalike classes here -- so a 429 raised below escaped the pool's `except ChatError` and the
 # load balancer stopped after the FIRST session instead of rotating across the whole pool
 # (2026-08-27, worklog #1109). Import the canonical ones; never redefine them.
-from veoaifree_chat_client import ChatError          # noqa: E402
+from veoaifree_chat_client import ChatError          # noqa: E402  (canonical exception)
 from veo_session_replay import SessionExpired        # noqa: E402  (subclass of ChatError)
+
+
+def make_session_client(path):
+    """Route a session file to its transport. HTTP is the default; a capture whose exchange
+    left over a websocket (recorded_ws / transport marker) goes to the ws adapter."""
+    import pathlib
+    try:
+        payload = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    except Exception:
+        return UniversalSessionClient(path)
+    if payload.get("transport") == "websocket" or payload.get("recorded_ws"):
+        from ws_replay import WebSocketSessionClient
+        return WebSocketSessionClient(path)
+    return UniversalSessionClient(path)
 
 # The tool-contract no-tool envelope ({"tool": null, "text": ...}) is defined by
 # chat_pool_server.tool_instruction and legitimately arrives AS the model's reply whenever a
@@ -45,6 +60,18 @@ from chat_pool_server import unwrap_no_tool_text     # noqa: E402
 # A prompt shorter than this is never used to detect an echo by containment: aymo.ai's real answer
 # "Hi!" contains the prompt "hi", and dropping it as an echo emptied the extraction entirely.
 _ECHO_MIN_PROMPT = 24
+
+# Diagnostics below print raw provider bodies (line 753+). Under a Windows cp1252 pipe, a CJK
+# body raised UnicodeEncodeError out of print(), which propagated up through chat() and was
+# then misread by replay_check as the model's reply text -- corrupting the seat verdict for
+# every Chinese-language provider. Never let a diagnostic print decide a verdict: replace
+# un-encodable characters instead of raising.
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except (ValueError, OSError):
+        pass
+
 
 class UniversalSessionClient:
     """
