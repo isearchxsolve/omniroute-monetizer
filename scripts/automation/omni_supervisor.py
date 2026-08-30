@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -117,13 +118,13 @@ def services() -> list:
         ),
         Service(
             key="omniroute", label="OmniRoute chat", port=20128,
-            health="", owned=False, required=False,
+            health="/v1/models", owned=False, required=False,
             note="NEVER restarted from here. Holds live OAuth connections; bouncing it has cost real "
                  "credentials before. A red line here is a report, not an action.",
         ),
         Service(
             key="video_router", label="Video router", port=8189,
-            health="", owned=False, required=False,
+            health="/healthz", owned=False, required=False,
             note="Owned by the 'OmniRoute Video Router (keepalive)' scheduled task, which relaunches "
                  "it every 5 minutes. Do not fight the task -- it always wins.",
         ),
@@ -290,10 +291,11 @@ def probe(svc: Service) -> dict[str, Any]:
         row["state"] = "UP" if ok else "LISTENING_BUT_UNHEALTHY"
         row["health"] = payload if ok else {"reason": payload}
     else:
-        # TCP-only. Enough to say "something is there", and for a service we may not touch, that is
-        # all that can honestly be claimed.
+        # An unowned service is still safe to interrogate read-only.  TCP presence alone is not
+        # application readiness: a hung handler or duplicate instance can hold the port while every
+        # client request fails.  Never restart it here; report the application result instead.
         row["state"] = "UP"
-        row["health"] = {"probe": "tcp only -- not owned, so not interrogated further"}
+        row["health"] = {"probe": "tcp only -- no application path configured"}
     return row
 
 
@@ -351,12 +353,19 @@ def one_pass(svcs: list, fix: bool) -> dict[str, Any]:
 
     required_down = [r["service"] for r in rows
                      if r["required"] and r["state"] not in ("UP",)]
+    application_down = [r["service"] for r in rows
+                        if r["listening"] and r["state"] == "LISTENING_BUT_UNHEALTHY"]
     report = {
+        "schemaVersion": 2,
+        "writerPid": os.getpid(),
+        "writerPython": sys.executable,
         "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "services": rows,
         "startedThisPass": started,
         "requiredDown": required_down,
         "allRequiredUp": not required_down,
+        "applicationDown": application_down,
+        "allApplicationHealthy": not application_down,
         "chrome": chrome_state(),
         "capturedSupply": captured_supply(),
         "rules": [

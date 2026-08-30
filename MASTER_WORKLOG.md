@@ -8990,6 +8990,30 @@ logs/supervisor_stdout.log.
 
 **Safety/state:** Read-only endpoint/log inspection only; no task trigger, process kill, service restart, browser/profile action, login/SSO, credentials/cookies, payment, generation, provider mutation, or Niloy action occurred.
 
+### [2026-08-31 23:55] #1297 â€— Upgraded supervisor health checks from TCP-only to application-level paths
+
+**Implementation:** Updated `scripts/automation/omni_supervisor.py` so the unowned OmniRoute service is probed at `/v1/models` and the unowned video router at `/healthz`, while the session-pool shim continues using `/v1/models`. The supervisor remains hands-off for all unowned services; it now reports `LISTENING_BUT_UNHEALTHY` when a socket exists but the configured HTTP handler fails, rather than claiming unconditional TCP-only `UP`.
+
+**Verification:** Added a regression assertion for all three application paths to `tests/test_omniroute_capability_matrix.py`. Ran `python -m pytest -q tests/test_omniroute_capability_matrix.py`; result: `4 passed in 0.22s`.
+
+**Safety/state:** Code and local-test change only. No supervisor task was triggered, no service/process was restarted or killed, no endpoint was mutated, and no browser/profile, login/SSO, credentials/cookies, payment, generation, or Niloy action occurred.
+
+### [2026-09-01 00:20] #1298 â€— Verified supervisor application-level readiness behavior with local HTTP fixtures
+
+**Test action:** Extended `tests/test_omniroute_capability_matrix.py` with an isolated in-process HTTP server fixture. The test exercises `omni_supervisor.http_health` against a valid JSON `200` endpoint and a deliberate `503` endpoint, asserting that success returns parsed JSON while a live-but-unhealthy handler is reported as `HTTP 503`.
+
+**Verification:** Ran `python -m pytest -q tests/test_omniroute_capability_matrix.py`; result: `5 passed in 0.74s`. The fixture binds only to an ephemeral localhost port and shuts down in teardown; it never contacts OmniRoute or any provider.
+
+**Safety/state:** Local test-only activity; no seat-layer access, endpoint mutation, database access, browser/profile action, login/SSO, credentials/cookies, payment, generation, service restart, task trigger, or Niloy action occurred.
+
+### [2026-09-01 00:50] #1299 â€— Supervisor status now distinguishes required-up from application-healthy
+
+**Implementation:** Extended `scripts/automation/omni_supervisor.py` to emit `applicationDown` and `allApplicationHealthy` in every status report. A listening service with a failed configured HTTP probe is now represented explicitly even when it is optional/unowned and therefore excluded from `requiredDown`. This prevents the supervisor from reporting a globally healthy state while OmniRoute or the routers are TCP-present but application-unresponsive.
+
+**Verification:** Recompiled `omni_supervisor.py` and reran `python -m pytest -q tests/test_omniroute_capability_matrix.py`; result: `5 passed in 0.71s`. No owner-managed task was reloaded or triggered.
+
+**Safety/state:** Code and local-test change only; no seat-layer access, endpoint mutation, database access, browser/profile action, login/SSO, credentials/cookies, payment, generation, service restart, task trigger, or Niloy action occurred.
+
 ### [2026-08-30 16:18] #1235 — ChatX visual navigation attempt timed out before a post-navigation gate
 
 **Attempt:** Using the same attested profile-1 target on the dedicated `:9222` listener, invoked `seat_reconcile_one.py` for the registered `https://chatx.ai` URL. The bounded command timed out twice while waiting for the DevTools `Page.navigate` acknowledgement; no post-navigation screenshot or DOM interaction was produced. A read-only `/json/list` check confirmed the target remained on the previously reconciled `https://1min.ai/` page.
@@ -9581,3 +9605,35 @@ no session_*.json in D:\omniroute-moneti | no |
 **SSO tier:** Creen AI + Giz AI signed in via bounded Google SSO (harness). Video lane untouched by design (spend gate).
 
 **External reference:** operator shared video on Tempest (Elder Plinius) -- an AI vulnerability scanner for auditing OWN sites; not applicable to seat graduation blockers (no captcha solver, no auth mint); potential future use: security audit of OmniRoute endpoints.
+
+### [2026-08-30 10:55] #1300 â€” Read-only OmniRoute supervisor pass after application-health instrumentation
+
+**Scope:** Continued the OmniRoute-only gap closure requested by the operator. The seat layer and all Chrome profiles were explicitly left untouched. No service was started, stopped, killed, restarted, or reconfigured.
+
+**Action:** Ran `python scripts/automation/omni_supervisor.py --once --json` after adding application-level probes for OmniRoute (`/v1/models`), the video router (`/healthz`), and the session-pool shim (`/v1/models`). The command completed without a process error and wrote `state/supervisor_status.json`.
+
+**Observation:** The report was immediately overwritten/raced by the existing supervisor/owner loop: the persisted JSON showed `allRequiredUp: true`, but its service rows still contained the older TCP-only health descriptions for OmniRoute and video router and `allApplicationHealthy` was absent/null. A direct import of the working source confirmed the new service table is present (`omniroute=/v1/models`, `video_router=/healthz`, `session_pool_shim=/v1/models`). This is evidence of concurrent report-writer/version drift, not evidence that the application endpoints are healthy.
+
+**Interpretation:** Required-process liveness remains true, while application readiness is not yet a trustworthy persisted signal because another supervisor instance is writing the old schema. The capability matrix already recorded bounded timeout failures for the five OmniRoute paths; no claim of runtime health is made.
+
+**Verification:** The command exited normally; source import showed the intended health paths; no seat or Chrome state changed. Next OmniRoute-only action is to identify/report the competing supervisor writer and make the status artifact single-writer/version-consistent without touching owner-managed services.
+
+### [2026-08-30 10:57] #1301 â€— Duplicate live supervisor writers identified
+
+**Action:** Performed a read-only process and scheduled-task inventory to explain the status-file race. Queried Windows process command lines and OmniRoute-related scheduled tasks only; no process-control operation was issued.
+
+**Finding:** Two independent `omni_supervisor.py --watch` processes are live simultaneously: PID 52492 launched by the repository `.venv` Python, with child PID 39816 launched by system Python 3.11. Both target the same repository script and therefore can write `state/supervisor_status.json`. The task registry also contains `OmniRoute Rig Supervisor (keepalive)` plus the separate OAuth, Session Pool Shim, and Video Router tasks.
+
+**Gap:** The status artifact has no single-writer ownership/version guard. A source edit can be correct while an already-running older interpreter continues emitting the previous schema, making application readiness appear null or TCP-only. This is an observability/control-plane race, not proof of provider or seat failure.
+
+**Safety boundary:** I did not kill either supervisor, stop a scheduled task, restart OmniRoute, alter Chrome, or alter seat state. The remediation must be coordinated with the task owner; until then, treat the persisted supervisor JSON as potentially stale and use direct bounded probes plus source-version checks.
+
+### [2026-08-30 11:00] #1302 â€— Supervisor report provenance fields implemented and verified
+
+**Implementation:** Added `schemaVersion: 2`, `writerPid`, and `writerPython` to each report emitted by `scripts/automation/omni_supervisor.py`. These fields make stale/competing writers detectable from the artifact itself and do not alter service ownership or lifecycle behavior.
+
+**Test-first result:** The new provenance test initially failed with `NameError: name 'os' is not defined` when constructing a report. Added the missing standard-library `os` import immediately; no runtime service was involved in this failure.
+
+**Verification:** Re-ran `python -m pytest -q tests/test_omniroute_capability_matrix.py` — **6 passed**. Re-ran `python -m py_compile scripts/automation/omni_supervisor.py` — passed. The test exercises report construction with an empty service list and confirms schema/version, numeric writer PID, interpreter identity, and healthy-empty application aggregate.
+
+**Safety:** No seat files, Chrome profiles, provider credentials, databases, or owner-managed processes were touched. The existing duplicate live supervisor processes remain report-only findings; the new metadata will become authoritative after the task owner naturally reloads the updated source.
