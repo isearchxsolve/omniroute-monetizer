@@ -10372,3 +10372,12 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Video-specific minimum capture.** Of the eight video-relevant rows, only Google Flow has one active `modality=video` artifact. digen and rtst have runtime registry evidence at `:8189` but no active `:8190` video artifact; Akool, HeyGen, MagicHour, NemoVideo, and veoaifree have no active video artifact. Historical artifact files are provenance only and do not qualify as current capture/graduation.
 
 **Conclusion.** No: minimum capture of all Profile-1 seats has not been achieved. The honest baseline is 30/51 with recorded outcomes and 24/51 with any active artifact; for video the current active minimum capture is 1/8 relevant rows (Google Flow), not a complete fleet. No Chrome, provider, capture, or spend action occurred in this census.
+### [2026-08-31 01:22] #1357 — Live capacity baseline before Profile-1 graduation: OmniRoute is 93 active connections / 9,509 models
+
+**Read-only baseline.** After the merged `:8190` gateway verified OmniRoute responsive, authenticated to the management plane via the DPAPI vault with `trust_env=False` and queried only `/api/providers` and `/v1/models`.
+
+**OmniRoute capacity.** 117 configured connections, 93 active, 24 inactive; the 93 active connections span 86 provider/name kinds. `/v1/models` returned 9,509 total routes: 9,461 provider-owned models and 48 combo-owned routes. This is the paid/OAuth capacity already merged into `:8190`; it must not be conflated with independent browser-seat count or independently verified per-model health.
+
+**Profile-1 seat baseline.** The dedicated Profile-1 roster remains 51 seats, 30 recorded outcomes, 21 pending evidence, and only one currently active video artifact. The main missing capacity is therefore graduation of browser-backed sources, especially video, not absence of OmniRoute model aliases.
+
+**Safety.** No provider was modified, no Chrome target was opened, no capture ran, and no video credit was spent in this baseline unit.
