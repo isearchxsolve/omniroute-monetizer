@@ -9727,6 +9727,18 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** This E2E proves the working guarded Flow route and consumer idempotency, not rtst.ai or Digen recovery. The source fix is not claimed live until the shim owner reloads the process and a future no-duplicate verification observes the corrected receipt field.
 
+### [2026-08-30 16:38] #1330 — Shim reloaded through its task owner; locked legacy log path eliminated
+
+**Precondition:** Queried the durable `:8190` job ledger and confirmed **zero** queued or running video jobs before any reload. Verified the current port-8190 listener was the expected Python process whose command line targeted `session_pool_shim.py` on port 8190. OmniRoute itself was not restarted.
+
+**Action and recovery:** Performed one controlled reload of that exact verified shim process and invoked the documented `session_pool_shim_task.bat` owner wrapper to start the replacement with its existing `OMNI_VIDEO_CONFIRM_SPEND=1` gate. The first owner launch failed because another local process had an exclusive handle on the wrapper's historic `logs/shim_stdout.log`; the port was temporarily unavailable. Read-only process inspection confirmed no listener/replacement existed. Updated only the owner wrapper's redirection target to the fresh `logs/shim_stdout_current.log` path, preserving the command, interpreter, guard, and spend-gate semantics. Re-invoked the owner wrapper and verified the new listener command line is the expected shim process.
+
+**Verification:** `GET http://127.0.0.1:8190/v1/models` returned normally after recovery, with the dedicated Flow video route present. The source fix from #1329 is therefore now loaded by the restored shim process. The wrapper change avoids a known locked historical log file preventing future owner-managed recovery.
+
+**Safety:** The reload happened with no active video job, so no in-flight render was interrupted or ambiguously charged. No foreign process was stopped: target identity was verified by both the listener port and its documented shim command line. No Chrome, seat, provider credential, database, OmniRoute application process, or video-router process was modified.
+
+**What is not claimed:** The former job's immutable receipt is not rewritten. The corrected `creditsSpent` field needs a new completed consumer job to be observed live; no additional render has been submitted in this entry.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.

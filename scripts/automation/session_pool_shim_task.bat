@@ -35,4 +35,4 @@ rem "cmd.exe" the operator kept seeing. With /b the bat exits, leaving only the 
 rem Verified 2026-08-28: a /b child survives the bat's console closing, and its stdout still lands
 rem in the log. The 5-min scheduled task remains the supervisor (probe guard above prevents
 rem double-launch; the shim's EADDRINUSE no-op guard is the second line of defense).
-start "" /b "D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim.py" 8190 >> "D:\omniroute-monetizer\logs\shim_stdout.log" 2>&1
+start "" /b "D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim.py" 8190 >> "D:\omniroute-monetizer\logs\shim_stdout_current.log" 2>&1
