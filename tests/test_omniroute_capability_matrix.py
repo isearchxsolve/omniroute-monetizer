@@ -91,3 +91,10 @@ def test_supervisor_report_declares_schema_and_writer_identity() -> None:
     assert isinstance(report["writerPid"], int)
     assert report["writerPython"]
     assert report["allApplicationHealthy"] is True
+
+
+def test_supervisor_defines_process_owned_instance_lock() -> None:
+    import omni_supervisor
+
+    assert omni_supervisor.INSTANCE_LOCK_FILE.name == "supervisor.lock"
+    assert callable(omni_supervisor.acquire_instance_lock)

@@ -54,11 +54,18 @@ import sys
 import time
 from typing import Any, Optional
 
+try:
+    import msvcrt
+except ImportError:  # pragma: no cover - Linux/macOS development fallback
+    msvcrt = None
+
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 STATE = ROOT / "state"
 LOGS = ROOT / "logs"
 STATUS_FILE = STATE / "supervisor_status.json"
+INSTANCE_LOCK_FILE = STATE / "supervisor.lock"
+_INSTANCE_LOCK = None
 
 PROBE_TIMEOUT_S = 10.0
 RESTART_BACKOFF_S = [5, 15, 60, 180]      # then give up and report
@@ -75,6 +82,24 @@ NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def acquire_instance_lock() -> bool:
+    """Allow one supervisor writer without killing or restarting an incumbent."""
+    global _INSTANCE_LOCK
+    STATE.mkdir(parents=True, exist_ok=True)
+    handle = INSTANCE_LOCK_FILE.open("a+")
+    if msvcrt is None:
+        _INSTANCE_LOCK = handle
+        return True
+    try:
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+    except (OSError, IOError):
+        handle.close()
+        return False
+    _INSTANCE_LOCK = handle
+    return True
 
 
 # --------------------------------------------------------------------------------------------------
@@ -409,6 +434,10 @@ def main() -> int:
     ap.add_argument("--interval", type=float, default=WATCH_INTERVAL_S)
     ap.add_argument("--json", action="store_true", help="print the report as JSON only")
     a = ap.parse_args()
+
+    if not acquire_instance_lock():
+        log("another supervisor instance owns the report lock; exiting without writing")
+        return 0
 
     svcs = services()
     if a.watch:

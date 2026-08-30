@@ -9645,3 +9645,13 @@ no session_*.json in D:\omniroute-moneti | no |
 **Current handoff state:** The committed source is internally consistent and tested, but `state/supervisor_status.json` remains stale because the older live writer overwrites the new schema. The authoritative next action requires the existing supervisor task/process owner to perform its normal reload; this agent will not force that reload by killing or restarting services. Direct application capability probes remain the safe evidence source until the report writer converges.
 
 **Scope confirmation:** This entry and the preceding changes are OmniRoute/control-plane only. The four Chrome profiles, seat inventory, authentication state, and graduation artifacts were not opened or modified.
+
+### [2026-08-30 11:08] #1304 â€— Supervisor single-writer guard added and tested
+
+**Implementation:** Added a process-owned Windows lock at `state/supervisor.lock`, acquired before any supervisor one-shot or watch pass writes status. A second launch exits cleanly and does not probe, start, stop, kill, or overwrite the incumbent's report. The lock is released by the operating system when the owning interpreter exits or the machine reboots, avoiding stale-PID cleanup logic.
+
+**Verification:** Added a regression test asserting the lock artifact and acquisition entry point. Ran `python -m pytest -q tests/test_omniroute_capability_matrix.py` — **7 passed in 1.77s**. Ran `python -m py_compile scripts/automation/omni_supervisor.py` — passed. `git diff --check` reported no whitespace errors.
+
+**Operational limitation:** The two already-running interpreters loaded the prior source before this guard existed and therefore cannot retroactively acquire it. The guard prevents future duplicate launches; convergence of the currently resident pair still belongs to the existing task/process owner and was not forced.
+
+**Scope:** OmniRoute supervisor control-plane only. Seat files, Chrome profiles, provider credentials, databases, and all owner-managed service processes remain untouched.
