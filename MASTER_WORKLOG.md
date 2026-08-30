@@ -9739,6 +9739,16 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** The former job's immutable receipt is not rewritten. The corrected `creditsSpent` field needs a new completed consumer job to be observed live; no additional render has been submitted in this entry.
 
+### [2026-08-30 16:44] #1331 — Live consumer receipt accounting and full guarded video E2E are now verified
+
+**Action:** After the #1330 owner-managed reload and model-route health check, submitted one final small idempotent render through `POST :8190/v1/chat/completions`, again pinned to the dedicated Flow video route and carrying a fresh durable key. This is the only post-reload render; it was not retried. Polled its durable job record to terminal state.
+
+**Verified result:** The consumer returned a 202 durable receipt, the job completed successfully, and the completed `:8190` receipt now reports `creditsSpent: 20.0`. This matches the established per-render quote/cost and proves the #1329 compatibility fix is loaded in the live shim—not merely passing in unit tests. The Flow route therefore has a verified end-to-end chain: guarded dedicated profile -> fresh session/captcha -> consumer durable receipt -> one Flow submission -> completion/poll -> MP4 URL -> accurate consumer accounting. Across the two deliberate test renders in this pass, exactly two renders completed and each charged 20 credits; no duplicate retries/charges occurred.
+
+**Safety:** The submit used a fresh idempotency key and was reconciled by durable job ID; no job was duplicated. The route remained `video/labs.google/auto` on preflighted dedicated profiles only. No operator Chrome profile, seat-file/credential database, OmniRoute process, or video-router process was touched.
+
+**What is not claimed:** This verifies the Flow video route and the consumer accounting contract. rtst.ai remains signed out and Digen remains without its captured session, so neither is claimed active. The remaining inactive OmniRoute providers still require a genuine missing credential, OAuth reauthorization, runtime installation, or provider-specific validation repair before they can be marked verified.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
