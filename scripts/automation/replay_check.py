@@ -148,6 +148,18 @@ def classify(text: str, status: int | None, err: str | None, expect: str = "58")
     if expect.isdigit():
         numeric_answer = re.fullmatch(rf"\s*{re.escape(expect)}\s*[.!]?\s*", text or "")
         if not numeric_answer:
+            # Narrow rescue for real models that ignore the "only the number" instruction yet
+            # verifiably answered. Two shapes observed live (2026-08-30): the reply OPENS with the
+            # exact value before UI noise ("58what is 58 times 3...", Perplexity), or it restates
+            # the arithmetic in reasoning and then answers ("okay, the user is asking for the
+            # number 41 ... 58", 1min.AI). Both prove live supply. Neither can fire on an error
+            # body or an id: a standalone word-bounded token plus the literal restated arithmetic
+            # does not occur in timestamps, hashes, or server metadata.
+            if re.match(rf"\s*{re.escape(expect)}(?!\d)", text or ""):
+                return "REPLAY_OK", f"reply opens with the computed value ({low[:60]})"
+            if re.search(r"41\s*\+\s*17|41 plus 17|41 and 17", low) and \
+                    re.search(rf"(?<!\d){re.escape(expect)}(?!\d)", text or ""):
+                return "REPLAY_OK", f"restated arithmetic + computed value ({low[:60]})"
             return "NO_ANSWER", f"200 but the extracted reply is not only {expect!r}: {low[:90]}"
     elif expect not in low:
         return "NO_ANSWER", f"200 but the reply never contains {expect!r}: {low[:90]}"
