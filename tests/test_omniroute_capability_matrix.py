@@ -111,6 +111,19 @@ def test_combo_backup_uses_dedicated_state_directory() -> None:
     assert backup_omniroute_combos.ROOT.name == "omniroute-monetizer"
 
 
+def test_video_capability_summary_redacts_accounts() -> None:
+    from video_capability_audit import summarize
+
+    report = summarize(
+        {"ok": True, "dry_run": False, "authenticated": True, "providers": ["flow"],
+         "accounts": [{"email": "private@example.com", "ready": True}], "jobs": {"total": 2}},
+        {"data": [{"id": "fast", "provider": "flow", "proven": True, "est_cost": 20}]},
+    )
+    assert report["accountsReady"] == 1
+    assert "accounts" not in report
+    assert report["models"][0]["id"] == "fast"
+
+
 def test_supervisor_application_probe_distinguishes_http_success_and_failure() -> None:
     from omni_supervisor import http_health
 

@@ -9571,6 +9571,16 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **Safety:** This was a supported management API hot-reload only; OmniRoute itself was not restarted. Seat files, Chrome profiles, SSO state, databases, and provider credentials were not touched. Exact prior combo state is preserved in the backup file above.
 
+### [2026-08-30 14:12] #1316 â€— Redacted video inventory audit added; no video job or quote submitted
+
+**Chrome safety:** Read `CHROME_RULES_FOR_AGENTS.md` before video-adjacent work and ran `python scripts/automation/chrome_selfheal.py --dry-run` afterward. The guard actively refused the live Chrome profile; no profile alias exists; all four operator Google Sync accounts were reported `GOOGLE_SYNC_AUTHENTICATED`. The self-heal check made no changes.
+
+**Implementation:** Added `scripts/automation/video_capability_audit.py`, which uses only GET `/healthz` and GET `/v1/models` against the already-running local video router. It persists a redacted capability summary; account identities, URLs, project IDs, and balances are deliberately excluded.
+
+**Verification:** `python -m pytest -q tests/test_omniroute_capability_matrix.py` — **14 passed in 2.01s**. Read-only audit output: router healthy, not in dry-run mode, 3 providers, 6 configured accounts with 3 ready, 21 exposed video model aliases, and 11 marked previously end-to-end proven. The artifact is `state/video_capability_audit.json`.
+
+**What is NOT claimed:** No new video was generated, no provider quote was requested, no credits were spent, and no account session was interacted with. The quote/generation path can drive a live browser tab and is intentionally excluded while the seat/Chrome layer remains parked.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
