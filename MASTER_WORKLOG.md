@@ -9749,6 +9749,16 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** This verifies the Flow video route and the consumer accounting contract. rtst.ai remains signed out and Digen remains without its captured session, so neither is claimed active. The remaining inactive OmniRoute providers still require a genuine missing credential, OAuth reauthorization, runtime installation, or provider-specific validation repair before they can be marked verified.
 
+### [2026-08-30 16:46] #1332 — Post-video Chrome boundary check remains clean
+
+**Action:** Ran the mandatory post-Chrome-adjacent read-only command: `python scripts/automation/chrome_selfheal.py --dry-run`.
+
+**Result:** The live Chrome guard remains present and actively refuses the operator's live profile; no alias/junction targets the live Chrome root; the four operator Google Sync profiles remain in their previously verified authenticated state. The only informational item is that Chrome is open, so the tool correctly declined to take a file-level backup that could be inconsistent.
+
+**Safety:** Dry-run only. It did not open, attach to, alter, clone, sign in/out, back up, or otherwise mutate any Chrome profile. The result independently confirms that the guarded dedicated-video work did not disturb the operator's live Chrome boundary.
+
+**What is not claimed:** This confirms the Chrome guard and operator-profile safety state, not provider website sessions in any profile. No additional route, render, credit movement, or provider credential is claimed by this postcheck.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
