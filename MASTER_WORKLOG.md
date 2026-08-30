@@ -10354,3 +10354,12 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Residual capacity truth.** The endpoint is production-capable as one merged chat gateway, but current live capacity metadata remains 22 dispatchable chat seats and 1 dispatchable video seat. The historical 25-chat/23-video capacity promise is not now claimed. Video was not submitted (no credit spend) and requires separately verified seat onboarding/graduation to expand.
 
 **What is NOT claimed.** This does not repair the `Invalid conversation document affinity` seat authentication error, create missing video accounts, prove every merged OmniRoute model, or turn localhost single-operator mode into public multi-tenant authentication. It closes the final endpoint merge, fallback, request-validation, discovery-honesty, and computed-chat readiness gaps.
+### [2026-08-31 01:05] #1355 — Video gap classification: full seat graduation remains; Python replay is necessary but already exists
+
+**Question.** Operator asked whether video needs only the Python replay layer or a complete graduation pass.
+
+**Evidence reviewed (read-only).** `video_universal_replay.py`, `capture_video_job_cdp.py`, `video_router.py`, `state/profile1_video_runtime.json`, and the reconciliation ledger. The separate video router at `:8189` currently advertises 21 model aliases across Flow (12), rtst (7), and digen (2); several aliases are marked inferred/unexercised. That is a model/adapter registry and does not equal 23 independently graduated `:8190` session-pool video seats. The final `:8190` merged gateway currently reports one dispatchable video seat.
+
+**Conclusion.** Python replay is already built: `VideoUniversalSessionClient` can transform a recorded submit payload, preserve/replay the recorded multi-exchange job pipeline, poll, and extract a final URL. It cannot create the required artifact or prove a provider session still has credits/auth. Therefore the remaining work is a full, controlled video graduation pass per seat: visual/auth preflight, dry-run trigger proof, one explicitly approved real submit capture (submit -> poll -> result URL), replay verification, durable `session_video_*.json` admission, and zero-restart `:8190` rescan. A route counts only after its own completed video result is verified.
+
+**Safety.** No Chrome/tab action, job submit, provider request, or credit spend occurred in this assessment. The next spend-bearing step should be one best-candidate proof-of-concept seat, not a 23-seat batch.
