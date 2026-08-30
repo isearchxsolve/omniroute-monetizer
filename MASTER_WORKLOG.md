@@ -9566,6 +9566,16 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 **Examples of drift:** Most master cascades reference unavailable `kimi-coding/kimi-coding-default` and/or `nvidia/nemotron-3-super-120b-a12b`; `OPS-5` and `OPS-4.8` heads are also absent from the current catalog. This validates the decision not to run the hard-coded combo hot-reload script. The full sanitized artifact is `state/omniroute_combo_catalog_audit.json`.
 
 **Safety:** No combo or provider was updated. No restart, seat access, Chrome access, credential change, or database write occurred.
+
+### [2026-08-30 12:45] #1312 â€— Live eligible combo recommendations generated without hot-reload
+
+**Implementation:** Added `scripts/automation/omniroute_combo_recommendations.py`. It reads the live model catalog and the sanitized fleet audit, filters to models whose provider is active and currently passed OmniRoute's native test, ranks candidates by combo intent, and writes recommendations only. It explicitly records `applied: false` and performs no PUT/POST mutation.
+
+**Verification:** Test suite now reports **10 passed in 2.00s**. The live recommendation run authenticated successfully and produced `state/omniroute_combo_recommendations.json`: 9,450 catalog models, 5,351 eligible models from currently valid active providers, and candidate heads for all 16 combos.
+
+**Decision boundary:** Recommendations are evidence for the next controlled update, not an automatic write. The candidate set is materially different from the stale hard-coded cascade (for example, currently eligible heads include `agentrouter/claude-opus-4-8`, `ainative/qwen-coder-32b`, and `agy/claude-opus-4-6-thinking`). A future hot-reload must still be reviewed against fallback semantics and provider/model compatibility before applying.
+
+**Safety:** No combo, provider, credential, seat, Chrome, database, or running process state was changed.
 | Coze Web | www.coze.com | FAIL | etizer\state\capture_report_9222.json
 no session_*.json in D:\omnirout | no |
 | Doubao Web (ByteDance) | www.doubao.com | FAIL | t_9222.json

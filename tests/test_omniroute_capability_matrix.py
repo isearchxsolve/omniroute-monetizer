@@ -84,6 +84,13 @@ def test_combo_catalog_extract_rows_is_shape_safe() -> None:
     assert extract_rows([], "combos") == []
 
 
+def test_combo_recommendation_provider_and_scoring_are_deterministic() -> None:
+    from omniroute_combo_recommendations import provider_key, score
+
+    assert provider_key("openrouter/qwen/qwen3") == "openrouter"
+    assert score("mistral/codestral-2508", "auto/pro-coding") > score("mistral/large", "auto/pro-coding")
+
+
 def test_supervisor_application_probe_distinguishes_http_success_and_failure() -> None:
     from omni_supervisor import http_health
 
