@@ -198,8 +198,10 @@ JS_SEND = r"""
   let a = document.activeElement;
   while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
   const box = a ? a.getBoundingClientRect() : null;
+  const composerForm = a ? (a.closest ? a.closest('form') : null) : null;
   const roots = [document, ...shadows(document)];
-  const words = ['send', 'submit', 'ask', 'search', 'generate', 'run'];
+  const words = ['send', 'submit', 'ask', 'search', 'generate', 'run',
+                 '\u53d1\u9001', '\u63d0\u4ea4', '\u9001\u4fe1', '\uc804\uc1a1', '\ubcf4\ub0b4\uae30'];
   let best = null, bestScore = -1, disabledMatches = 0;
   for (const r of roots) {
     for (const b of r.querySelectorAll('button, [role="button"], input[type="submit"]')) {
@@ -207,12 +209,18 @@ JS_SEND = r"""
       if (rect.width < 12 || rect.height < 12) continue;
       const label = ((b.getAttribute('aria-label') || '') + ' ' + (b.getAttribute('title') || '') +
                      ' ' + (b.getAttribute('data-testid') || '') + ' ' +
-                     (b.innerText || b.textContent || '')).toLowerCase();
+                     (b.innerText || b.textContent || '')).toLowerCase().trim();
       let score = 0;
       if (words.some(w => label.includes(w))) score += 100;
       if (b.type === 'submit') score += 40;
       if (box && rect.left >= box.right - 90 && Math.abs(rect.top - box.top) < box.height + 60) score += 60;
       if (box && rect.top > box.top - 120 && rect.bottom < box.bottom + 120) score += 20;
+      // Suggestion chips masquerade as send controls: right of the composer, vertically level,
+      // no send word -- exactly +80 like a real icon-only send button, and on yi.baichuan-ai.com
+      // the chip ("Interpretation of medical orders") won the tie and the submit went nowhere.
+      // Two discriminators that never hurt a real send button:
+      if (label.length > 24 || label.split(/\s+/).length >= 4) score -= 60;   // sentence-like chip
+      if (composerForm && composerForm.contains(b)) score += 50;              // lives with the composer
       if (score <= 0) continue;
       // A MATCHING BUT DISABLED send button is the most valuable diagnostic on the page: it means
       // the app's own editor model still thinks the composer is empty, so Enter was never going to
@@ -571,6 +579,7 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
         seen = {"requests": 0, "posts": 0, "wsFrames": 0}
         handled: set[str] = set()
         ws_hit: dict[str, Any] = {}
+        ws_caps: dict[str, dict] = {}   # requestId -> buffered websocket exchange (Chrome-gap)
 
         def save(url: str, req: dict, body: str) -> dict[str, Any]:
             jar = c.call("Network.getCookies", {"urls": [url, t.get("url", "")]}).get("cookies", [])
@@ -598,17 +607,74 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
                     "bodyBytes": len(body), "headerCount": len(rh), "cookieCount": len(jar),
                     "file": str(out.relative_to(ROOT))}
 
+        def save_ws(rid: str) -> dict[str, Any] | None:
+            """Save a WEBSOCKET capture: handshake url + Chrome's headers + every frame, in
+            order. Chrome-gap doctrine -- the sentinel left over a websocket, so the seat's
+            transport IS a websocket and the exchange is re-sendable over one (ws_replay.py).
+            Same filename contract as the HTTP path, plus a transport marker."""
+            cap = ws_caps.get(rid) or {}
+            ws_url = cap.get("url") or ""
+            if not ws_url or not cap.get("sent"):
+                return None
+            jar = c.call("Network.getCookies",
+                         {"urls": ["https://" + host_of(ws_url), t.get("url", "")]}
+                         ).get("cookies", [])
+            cookie_header = "; ".join(f"{k['name']}={k['value']}" for k in jar)
+            skip = ("host", "upgrade", "connection", "content-length", "sec-websocket-key",
+                    "sec-websocket-version", "sec-websocket-extensions", "sec-websocket-protocol")
+            rh = {k: v for k, v in (cap.get("headers") or {}).items()
+                  if not k.startswith(":") and k.lower() not in skip}
+            payload = {
+                "host": host_of(ws_url), "modality": "chat", "site": name,
+                "sentinel": SENTINEL, "transport": "websocket",
+                "updated_at": int(time.time()), "cookie_header": cookie_header,
+                "recorded_ws": {"url": ws_url, "request_headers": rh,
+                                "sent_frames": cap.get("sent") or [],
+                                "received_frames": cap.get("recv") or [],
+                                "timeoutS": 45.0, "quietS": 6.0},
+                "status": {"alive": not pending,
+                           "harvested_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                           "reason": "capture_sessions_cdp_ws"},
+            }
+            out = output_dir / validated_session_filename(output_name, name)
+            atomic_json_write(out, payload)
+            return {"status": "CAPTURED_WS", "endpointHost": host_of(ws_url),
+                    "endpointPath": urllib.parse.urlsplit(ws_url).path[:80],
+                    "sentFrames": len(cap.get("sent") or []),
+                    "receivedFrames": len(cap.get("recv") or []),
+                    "file": str(out.relative_to(ROOT))}
+
         def scan() -> dict[str, Any] | None:
             """Drain buffered events once. requestIds are remembered so a request is never counted
             or re-fetched twice across strategies."""
             for ev in list(c.events):
                 m = ev.get("method")
                 p = ev.get("params") or {}
-                if m == "Network.webSocketFrameSent":
-                    seen["wsFrames"] += 1
+                wrid = str(p.get("requestId") or "")
+                if m == "Network.webSocketCreated":
+                    if wrid and wrid not in ws_caps:
+                        ws_caps[wrid] = {"url": p.get("url") or "", "sent": [],
+                                         "recv": [], "headers": {}}
+                    continue
+                if m == "Network.webSocketWillSendHandshakeRequest":
+                    if wrid in ws_caps:
+                        ws_caps[wrid]["headers"] = (p.get("request") or {}).get("headers") or {}
+                    continue
+                if m in ("Network.webSocketFrameSent", "Network.webSocketFrameReceived"):
+                    cap = ws_caps.get(wrid)
                     pl = str((p.get("response") or {}).get("payloadData") or "")
-                    if has_sentinel(pl) and not ws_hit:
-                        ws_hit.update(frameBytes=len(pl))
+                    if not cap or not pl:
+                        continue
+                    if len(pl) > 32768:
+                        pl = pl[:32768]
+                    sent = m.endswith("Sent")
+                    bucket = cap["sent"] if sent else cap["recv"]
+                    if len(bucket) < (200 if sent else 400):
+                        bucket.append(pl)
+                    if sent:
+                        seen["wsFrames"] += 1
+                        if has_sentinel(pl) and not ws_hit:
+                            ws_hit.update(frameBytes=len(pl), rid=wrid)
                     continue
                 if m != "Network.requestWillBeSent":
                     continue
@@ -709,11 +775,20 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
         row.update(requestsSeen=seen["requests"], postsSeen=seen["posts"],
                    wsFramesSeen=seen["wsFrames"])
         if ws_hit:
-            # Honest outcome, not a capture: the sentinel went out over a websocket, and
-            # universal_replay.py can only re-send an HTTP exchange. Recorded so the provider is
-            # classified rather than silently retried forever.
+            # The sentinel went out over a websocket: that is the seat's transport, and per
+            # the Chrome-gap doctrine it is a BUILD TARGET, not a dead end. A buffered ws
+            # exchange is saved as a first-class ws-transport capture (replayable by
+            # ws_replay.py); only a buffer that somehow failed to record falls back to the
+            # honest not-replayable-as-HTTP verdict.
+            saved = save_ws(str(ws_hit.get("rid") or ""))
+            if saved:
+                row.update(saved)
+                row["note"] = ("sentinel left over a websocket frame -- captured as a "
+                               "ws-transport session (transport: websocket)")
+                return row
             row.update(status="WEBSOCKET", frameBytes=ws_hit.get("frameBytes"),
-                       note="sentinel left over a websocket frame -- not replayable as HTTP")
+                       note="sentinel left over a websocket frame but no ws exchange was "
+                            "buffered -- not captured")
             return row
         row.update(status="NO_REQUEST",
                    note=f"all 4 submit strategies failed; {seen['requests']} requests / "
