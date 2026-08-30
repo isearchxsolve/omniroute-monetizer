@@ -9537,6 +9537,18 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 no session_*.json in D:\omniroute-monetizer\state\secr | no |
 | V0 by Vercel (v0.app) | v0.app | NO_ANSWER | 200 but the extracted reply is not only '58': ok | no |
 
+### [2026-08-30 13:18] #1313 â€— Dry-run combo inference validation proves current cascade heads unusable
+
+**Action:** Ran `scripts/automation/combo_optimizer.py --dry-run --probe-timeout 20`. This performs valid chat probes for each unique model currently present in combos, reorders only in memory, and skips all PUT operations in dry-run mode.
+
+**Result:** Management login succeeded; 117 connections were observed, 69 active+healthy by the optimizer metadata, and 16 combos were examined. All 23 unique current combo models failed live inference validation (`0/23` verified), so the optimizer made `0` changes. The report is `state/combo_optimization.json` with `dry_run: true`.
+
+**Failure classes observed (redacted):** quota exhaustion, upstream timeout/reset, invalid authentication, absent provider credentials, retired/unavailable models, payment-required responses, malformed provider requests, and non-JSON 200 responses. No key material is recorded in this entry or the report summary.
+
+**Decision:** Do not apply the existing combo definitions or promote their heads. This dry run confirms the hard-coded cascades are not runtime-verified and supports the live-catalog recommendation path instead. Any future write must use candidates that pass a valid inference probe and a cost/health gate.
+
+**Safety:** No combo, provider, credential, database, process, seat, or Chrome state was changed.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
