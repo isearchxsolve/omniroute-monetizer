@@ -71,6 +71,17 @@ def probe(url: str, timeout: float) -> dict[str, Any]:
     return result
 
 
+def summarize(results: list[dict[str, Any]]) -> dict[str, int]:
+    statuses = [item.get("status") if isinstance(item.get("status"), int) else 0 for item in results]
+    return {
+        "ok2xx": sum(1 for item in results if item.get("ok")),
+        "auth4xx": sum(1 for item in results if item.get("status") in (401, 403)),
+        "other4xx": sum(1 for status in statuses if 400 <= status < 500 and status not in (401, 403)),
+        "server5xx": sum(1 for status in statuses if status >= 500),
+        "timeouts": sum(1 for item in results if item.get("error") == "TimeoutError"),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base", default=DEFAULT_BASE, help="read-only OmniRoute base URL")
@@ -84,6 +95,8 @@ def main() -> int:
         "readOnly": True,
         "paths": {name: probe(base + path, args.timeout) for name, path in PATHS.items()},
     }
+    results = list(report["paths"].values())
+    report["summary"] = summarize(results)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({

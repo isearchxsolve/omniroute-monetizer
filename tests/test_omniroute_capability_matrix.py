@@ -64,6 +64,18 @@ def test_shape_handles_non_json_without_body() -> None:
     assert shaped == {"bytes": 8, "json": False}
 
 
+def test_capability_summary_separates_auth_from_transport_failure() -> None:
+    from omniroute_capability_matrix import summarize
+
+    summary = summarize([
+        {"ok": True, "status": 200},
+        {"ok": False, "status": 401, "error": "http_error"},
+        {"ok": False, "status": 404, "error": "http_error"},
+        {"ok": False, "status": None, "error": "TimeoutError"},
+    ])
+    assert summary == {"ok2xx": 1, "auth4xx": 1, "other4xx": 1, "server5xx": 0, "timeouts": 1}
+
+
 def test_supervisor_application_probe_distinguishes_http_success_and_failure() -> None:
     from omni_supervisor import http_health
 
@@ -99,3 +111,4 @@ def test_supervisor_defines_process_owned_instance_lock() -> None:
     assert omni_supervisor.INSTANCE_LOCK_FILE.name == "supervisor.lock"
     assert callable(omni_supervisor.acquire_instance_lock)
     assert omni_supervisor.AUTHORITATIVE_STATUS_FILE.name == "supervisor_status_v2.json"
+    assert omni_supervisor.MEMORY_WARNING_BYTES == 2 * 1024 * 1024 * 1024

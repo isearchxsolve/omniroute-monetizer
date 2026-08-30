@@ -9675,3 +9675,13 @@ no session_*.json in D:\omniroute-moneti | no |
 **Current runtime evidence from the v2 report:** `chat_pool` is `UP`; `video_router` is `UP` with its `/healthz` response reporting authenticated; `session_pool_shim` is `UP`; OmniRoute is listening but `LISTENING_BUT_UNHEALTHY` because `/v1/models` timed out. This narrows the live application gap from “all routes unverified” to the OmniRoute management/chat endpoint specifically.
 
 **Safety:** No incumbent process was killed or restarted. No seat or Chrome state was opened or changed. Commit follows after this log entry.
+
+### [2026-08-30 11:36] #1307 â€— OmniRoute recovered; capability audit now separates auth from transport failures
+
+**Runtime evidence:** A read-only supervisor pass observed OmniRoute `/v1/models` returning 200 and classified the service `UP`; chat pool, video router, and session-pool shim were also `UP`. The authoritative v2 report showed `allApplicationHealthy: true`, no application-down services, and no resource warning. OmniRoute working set was approximately 1.85 GB, below the 2 GB diagnostic threshold.
+
+**Capability audit:** A fresh five-path matrix found `/v1/models` = 200, `/health` = 404, and management paths `/api/combos`, `/api/compression/status`, and `/api/relay-proxies` = 401. These are now recorded as endpoint/auth semantics rather than timeouts: model serving is live; management surfaces require authentication; `/health` is not implemented at that path.
+
+**Implementation:** Added a durable `summary` to `omniroute_capability_matrix.json` with separate counts for successful 2xx, authentication 401/403, other 4xx, 5xx, and timeouts. The first test run exposed a `None >= 400` classification bug for timeout results; normalized non-integer statuses to zero and reran successfully.
+
+**Verification:** `python -m pytest -q tests/test_omniroute_capability_matrix.py` — **8 passed in 3.27s**. Module compilation passed. No restart was required; no seat, Chrome, credential, database, or provider state was touched.
