@@ -9546,6 +9546,16 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 **Failure classification (sanitized type counts):** `upstream_unavailable` 11, `unsupported` 9, `upstream_error` 8, `reauth_required` 7, `upstream_auth_error` 4, `auth_missing` 4, and `runtime_error` 3. No secrets or raw credentials were logged. These are provider-level gaps behind a healthy OmniRoute management plane, not seat-layer findings.
 
 **Safety and verification:** The command exited 0 and used only native REST endpoints. No provider was reactivated, no key was changed, and no process was restarted. Seat files, Chrome profiles, and their login state remained untouched.
+
+### [2026-08-30 12:04] #1310 â€— Native combo audit attempted without mutation
+
+**Action:** Used the authenticated OmniRoute management client to read `/api/combos` and `/v1/models` for a current routing-catalog comparison. The request path was read-only and included explicit HTTP timeouts; no combo update script was run.
+
+**Observed:** Management login is available, and a prior bounded read returned `/api/combos` HTTP 200 with 16 combos (13 documented master combos plus `auto/qual-noplus`, `OPS-5`, and `OPS-4.8`). A subsequent combined catalog comparison exceeded the command observation window before producing a complete model-set diff, so no claim of model availability parity is made.
+
+**Decision:** Do not run `apply_master_healthy_combos.py` blindly. Its payload contains hard-coded model/provider IDs, while the fleet audit currently shows 46 invalid connections; applying it without a completed live-catalog diff could install unavailable heads and reduce routing quality. The safe next step is a bounded, timeout-aware combo/model diff artifact before any hot-reload.
+
+**Safety:** No combo, provider, credential, seat, Chrome, or process state was changed.
 | Coze Web | www.coze.com | FAIL | etizer\state\capture_report_9222.json
 no session_*.json in D:\omnirout | no |
 | Doubao Web (ByteDance) | www.doubao.com | FAIL | t_9222.json
