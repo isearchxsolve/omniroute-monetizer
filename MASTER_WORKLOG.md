@@ -10785,6 +10785,16 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Verification boundary.** This was a read-only code and route-graph inspection. No consumer files, Chrome profiles, credentials, services, or live inference/video jobs were changed or invoked. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
 
+### [2026-08-31 02:45] #1389 - Created standalone consumer execution-lineage audit document
+
+**Operator request.** The operator requested a separate document containing the per-application execution-lineage map, main-lineage designation, authentication status, one-and-only `http://127.0.0.1:8190/v1` contract status, and frank disagreement with any current implementation or prior audit conclusion.
+
+**Artifact created.** Added [`CONSUMER_EXECUTION_LINEAGE_AUDIT.md`](CONSUMER_EXECUTION_LINEAGE_AUDIT.md). It documents five relevant OiiOii lineages (durable `/films`, current frontend `/projects/.../pipeline/*`, unattended legacy pipeline, utility/direct provider routes, and old Studio/CLI) and three EmergentSH stacks (FastAPI durable pipeline, desktop single-agent, and desktop multi-agent). It explicitly distinguishes intended main paths from currently reachable paths, separates customer authentication from supply transport, records the login/health/root/static-media exceptions, and defines the target architecture and certification gates.
+
+**Key conclusion preserved in the document.** OiiOii's durable `/api/v1/films` path is the only currently aligned production candidate, but the frontend's visible seven-stage path and legacy utilities still bypass the canonical supply endpoint. EmergentSH's FastAPI client has the correct `:8190/v1` default but `auto` can select direct NIM and non-strict mode can select a mock; its desktop worker stacks directly use NVIDIA/OpenRouter. Neither repository therefore yet satisfies the universal “auth-gated plus `:8190/v1` only” invariant.
+
+**Verification.** The standalone document was added without modifying either consumer repository, browser state, provider credentials, service state, or live inference/video capacity. `git diff --check` passed before commit. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
+
 ### [2026-08-30 22:40] #1370 - FIRST RESULT-VERIFIED VIDEO CAPACITY ROW: rtst.ai seat2 (kunal.colab) wan22 5s MP4 through durable :8190 contract; Profiles 2-4 rtst expansion
 
 **Operator instruction applied.** Finish the current atomic unit (rtst Profiles 2-4 expansion), tests + worklog + commit, then switch to the corrected broader task (Profile expansion parameterization, narrowed SSO premise, dual video workstreams). Profile 1 is the reference; no redo.
