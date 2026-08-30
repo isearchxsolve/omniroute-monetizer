@@ -9984,3 +9984,21 @@ no session_*.json in D:\omniroute-monetizer\state\ | no |
 - Cerebras/iFlytek graduation units ran: ELIGIBLE per manifest but capture wrote no jar (same no-session class as the other UI-gated seats; per-site send diagnosis queued).
 - Copilot Bearer keepalive verified live: correctly skips when fresh (23h57m), refreshes near expiry; refresh token rotation persisted.
 - Gate steady: 24 hosts / 10 REPLAY_OK / 4 AUTH / 8 NO_ANSWER / 2 WALL.
+
+### [2026-08-30 12:06] #1312 — graduate_all_seats run: 0/1 graduated
+
+| seat | host | verdict | detail | graduated |
+|---|---|---|---|---|
+| Aymo AI | aymo.ai | NO_ANSWER | 200 but the extracted reply is not only '58': http_error: http error 4 | no |
+
+
+### [2026-08-30 06:55] #1313 — Queue execution results; DeepInfra readiness-rule gap identified
+
+- Aymo retry: still 429 (genuine transient; re-attempt next pass).
+- Groq: ledger/gate split-brain found -- ledger REPLAY_OK (attempts=0) while gate AUTH; sanctioned fix is --redo-passed (queued, not yet run).
+- DeepInfra: live page PROVES signed-in (Dashboard + composer + GLM 5.3 Flash) and a capture unit CAPTURED a real exchange (api.deepinfra.com/v1/openai/chat/completions via enter); BUT seat_readiness registry holds readiness='visited' -> sweep classifies SKIP_NOT_AUTHENTICATED -> orchestrator consistently refuses. GAP: audit's cookie-NAME auth evidence list lacks DeepInfra's session cookie; extend per-site readiness rule next session. Captured jar sits ready in state/secrets for replay once eligible.
+- Puter: signed in (beige_door_457496); chat app is websocket-driven composer (9 ws frames, 0 posts) -- needs the ws capture path (capture_websocket_cdp) like iFlytek/Meta.
+- Evidence captures: Akool DNS NXDOMAIN (network-dead); Phind www URL 404 DEPLOYMENT_NOT_FOUND (product moved); Doubao region-ban page. Poe anonymous-catalog only (login behind modal; sso_v2 modal-opening step still queued).
+- sso_v2.py committed: login-modal pre-click + Google affordance search + account picker (shadow-piercing, JS-exception surfaced).
+- GATE FINAL: 24 hosts / 10 REPLAY_OK (claude, qwen, deepseek, mistral, cohere, chatgpt-via-chatx, 1min, felo, perplexity, veoaifree-chat) / 4 AUTH / 8 NO_ANSWER / 2 WALL. Pool :20130 serving 10.
+- NEXT SESSION QUEUE: (1) DeepInfra readiness rule -> replay its captured jar; (2) Groq --redo-passed; (3) Copilot socket-mint sniff during send -> negotiate wiring; (4) sso_v2 modal step for Poe/Puter/Phind-class; (5) Monica conversation-state, V0 pipeline, Gemini/ChatHub auth; (6) Aymo 429 decay retry.
