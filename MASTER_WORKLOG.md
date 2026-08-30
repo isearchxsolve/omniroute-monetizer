@@ -9655,3 +9655,13 @@ no session_*.json in D:\omniroute-moneti | no |
 **Operational limitation:** The two already-running interpreters loaded the prior source before this guard existed and therefore cannot retroactively acquire it. The guard prevents future duplicate launches; convergence of the currently resident pair still belongs to the existing task/process owner and was not forced.
 
 **Scope:** OmniRoute supervisor control-plane only. Seat files, Chrome profiles, provider credentials, databases, and all owner-managed service processes remain untouched.
+
+### [2026-08-30 11:14] #1305 â€— Live lock/capability verification confirms incumbent stale writer and runtime outage
+
+**Action:** Ran the new supervisor one-shot and the bounded capability matrix with a two-second timeout. This was read-only and did not use `--up`; no service lifecycle operation was requested.
+
+**Result:** The one-shot completed and its report was subsequently overwritten by the incumbent older watch process. The final artifact again had `schemaVersion`, `writerPid`, `writerPython`, and `allApplicationHealthy` absent/null, proving the stale writer is still active. Two resident watch interpreters remain visible: the repository virtualenv Python and a system Python child.
+
+**Capability evidence:** `omniroute_capability_matrix.py --timeout 2` wrote a fresh report with `allHealthy: false`; all five tested paths (`/health`, `/v1/models`, `/api/combos`, `/api/compression/status`, `/api/relay-proxies`) returned `TimeoutError` with no HTTP status. This is stronger current evidence that OmniRoute application readiness and management surfaces are unavailable, while TCP/process liveness alone remains insufficient.
+
+**Interpretation:** The instance lock prevents future new-source launches from racing, but cannot bind older interpreters that predate the lock. The remaining fix requires the existing task owner to naturally recycle the duplicate supervisor processes; forcing that would violate the no-restart/no-kill boundary. Seat and Chrome layers remain untouched.
