@@ -10123,3 +10123,19 @@ no session_*.json in D:\omniroute-monetizer\state\ | no |
 **Gate arithmetic.** Canonical jar gate was 11 hosts (#1315/#1316). Now +Poe = 12 jar-replayable hosts. Puter (#1338) serves through the SDK live-tab adapter lane rather than a jar - supply, but not a gate row. Total serving supply: 13.
 
 **Queue state.** Remaining: Monica task-uid rotation, V0 submit-poll client, Gemini/ChatHub send-time auth. The sso_v2 modal-opening build target is now fully retired: Puter solved via SDK adapter, Poe needed no modal (session pre-existed).
+
+### [2026-08-30 10:12] #1340 - Monica REPLAY_OK: root-caused and fixed the prompt-injection masking; deterministic send-time surgery
+
+**Symptom.** Post-rotation replay returned the ORIGINAL capture's answer ("Omni." streamed as Om|ni|.) for a holy-cow probe. The task_uid/item_id rotation (#1316 design) was live, yet the server answered the recorded prompt.
+
+**Root cause (two defects stacked).**
+1. The fast-LLM prompt injector silently failed on Monica's payload shape, leaving the recorded sentinel ("Reply exactly one word: Omni.") in data.items[1].summary AND data.items[1].data.content. The question lives in BOTH fields; anything less than both is not an injection.
+2. The failure was MASKED: pply_preflight modified the body before the sentinel check, so 
+ew_body_str != base_body passed check 1b even with zero prompt replacement - the request fired with the old prompt and the check never raised SENTINEL_NOT_FOUND.
+3. (Latent third defect) The old regex rotation "item_id":"msg:..." also matched INSIDE parent_item_id/pre_parent_item_id, minting a different fresh uuid per occurrence and severing the item tree (items[1].parent_item_id no longer pointed at items[0].item_id).
+
+**Fix (universal_replay.py, deterministic - no LLM in the path).** Monica branch moved BEFORE the sentinel check and rewritten as parsed-JSON surgery: every question item's summary+data.content get the caller's prompt; every task:/msg: uuid rotates through a coherent map (one fresh uuid per old value, so all linkage fields stay consistent); non-JSON bodies fall through to the generic path unchanged.
+
+**Proof.** eplay_check --only monica -> HTTP 200, **REPLAY_OK**, the expected phrase present in the reply (2.9s). Monica graduates - jar-replayable host #13. Total serving supply now 14 with Puter's SDK-adapter lane (#1338).
+
+**Queue state.** Remaining: V0 submit-poll client, Gemini/ChatHub send-time auth.

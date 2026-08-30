@@ -723,6 +723,48 @@ class UniversalSessionClient:
         import urllib.parse as _up
         new_body_str = apply_preflight(_up.urlsplit(self.url).netloc, new_body_str)
 
+        # Monica: deterministic send-time surgery, BEFORE the sentinel check. The LLM
+        # injector cannot be trusted for this shape and apply_preflight's unrelated body
+        # change masks its failure (the check below passes while the recorded prompt is
+        # still in the payload -- the server then answers the ORIGINAL prompt, which is
+        # exactly how "Omni." came back for a holy-cow probe). Parsed-JSON surgery:
+        #   - every question item's summary AND data.content get the caller's prompt;
+        #   - every task:/msg: uuid is rotated COHERENTLY (one fresh uuid per old value)
+        #     so item_id/parent_item_id/pre_parent_item_id links survive -- the old
+        #     regex minted a different uuid per occurrence and severed the tree.
+        if "api.monica.im" in (self.url or "") and self.base_body:
+            import json as _mjson
+            import re as _mre
+            import uuid as _muuid
+            _mid = _mre.compile(r"^(task|msg):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+            try:
+                _mb = _mjson.loads(new_body_str)
+                _idmap: Dict[str, str] = {}
+
+                def _rot(o):
+                    if isinstance(o, dict):
+                        return {k: _rot(v) for k, v in o.items()}
+                    if isinstance(o, list):
+                        return [_rot(v) for v in o]
+                    if isinstance(o, str) and _mid.match(o):
+                        if o not in _idmap:
+                            _idmap[o] = f"{o.split(':', 1)[0]}:{_muuid.uuid4()}"
+                        return _idmap[o]
+                    return o
+
+                _mb = _rot(_mb)
+                _items = (( _mb.get("data") or {} ).get("items") or []) if isinstance(_mb, dict) else []
+                for _it in _items:
+                    if isinstance(_it, dict) and _it.get("item_type") == "question":
+                        _it["summary"] = new_prompt
+                        if isinstance(_it.get("data"), dict):
+                            _it["data"]["content"] = new_prompt
+                if _idmap or _items:
+                    new_body_str = _mjson.dumps(_mb)
+            except ValueError:
+                pass  # body was not JSON after all -- fall through to the generic path
+
+
         # A recorded POST with no body is a broken capture, not a live session. Firing it
         # anyway often returns HTTP 200 from an error/landing page and reads as success.
         if str(self.method).upper() in ("POST", "PUT", "PATCH") and not new_body_str:
@@ -757,15 +799,8 @@ class UniversalSessionClient:
             if "claude.ai" in target_url and "/chat_conversations/" in target_url:
                 import re as _re, uuid as _uuid
                 target_url = _re.sub(r"/chat_conversations/[^/]+/completion", f"/chat_conversations/{_uuid.uuid4()}/completion", target_url)
-            # Monica binds the exchange to server-side task state: the recorded task_uid/item_id
-            # re-delivers the ORIGINAL captured answer regardless of the injected prompt. The
-            # browser mints both ids per message, so the replay does too.
-            if "api.monica.im" in target_url and self.base_body:
-                import re as _re, uuid as _uuid
-                new_body_str = _re.sub(r'"task_uid":"task:[0-9a-f-]+"',
-                                       f'"task_uid":"task:{_uuid.uuid4()}"', new_body_str)
-                new_body_str = _re.sub(r'"item_id":"msg:[0-9a-f-]+"',
-                                       f'"item_id":"msg:{_uuid.uuid4()}"', new_body_str)
+            # (Monica's id/prompt surgery now happens deterministically before the
+            # sentinel check -- see the api.monica.im branch above.)
             body_bytes = new_body_str.encode("utf-8") if self.base_body else None
             r = self._fire(self.method, target_url, self.headers, body_bytes, timeout=60)
 
