@@ -237,6 +237,14 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
         # browser. Free-tier quota spends $0 if present; one bounded submit, never a retry.
         from aistudio_video_client import AistudioVideoClient
         return AistudioVideoClient
+    if kind == "omniroute_native":
+        # Workstream A bridge (worklog #1372): OmniRoute's NATIVE /v1/videos/generations is a
+        # fully synchronous contract — the POST holds the connection for the whole render and
+        # returns the media bytes; there is no job id or status endpoint. The client holds the
+        # connection for the render budget, validates the ftyp magic, and lands the file under
+        # state/harvest/omniroute_native/. Gate + submit-once like every other video seat.
+        from omniroute_video_client import OmnirouteVideoClient
+        return OmnirouteVideoClient
 
     # WEBSOCKET seats (Doctrine 3a, CORRECTED 2026-08-28 per operator): a seat carrying
     # `recorded_ws` was captured by capture_websocket_cdp.py — the site speaks a websocket.
