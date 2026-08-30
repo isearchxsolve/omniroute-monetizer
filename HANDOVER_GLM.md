@@ -1,5 +1,10 @@
 # KNOWLEDGE HANDOVER — omniroute-monetizer
 
+> **CURRENT OVERRIDE — GLM 5.3 Flash:** Read [`HANDOVER_GLM_5_3_FLASH.md`](HANDOVER_GLM_5_3_FLASH.md)
+> first. It is the active operator premise and supersedes historical sections below, especially any
+> text saying OmniRoute and seat-pool must never be merged. They remain distinct harnesses and are
+> intentionally merged at the production consumer endpoint `http://127.0.0.1:8190/v1`.
+
 For an incoming agent (GLM 5.3) taking over from Claude Opus 5. Written 2026-08-27 00:45 IST.
 
 Every claim is marked **[VERIFIED]** with what measured it and when, or **[OPEN]** with how to settle
