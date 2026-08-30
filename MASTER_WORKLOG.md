@@ -9611,6 +9611,14 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What remains intentionally outside this certification:** A new video generation or quote was not submitted because the current video dispatch path may interact with parked live Chrome/seat tabs. Video inventory is read-only verified separately; this entry makes no new-spend or new-video claim. No seat, Chrome, credential, database, or process mutation occurred.
 
+### [2026-08-30 15:01] #1320 â€— Durable OmniRoute readiness handoff written
+
+**Implementation:** Added `docs/OMNIROUTE_READINESS.md` as the non-seat continuation document. It records the independently verified chat contracts, current repaired combo heads, exact combo restore snapshot, evidence artifacts, safe recurring checks, and the video dispatch boundary.
+
+**Purpose:** A later operator or agent can reproduce the accepted OmniRoute checks and restore prior combo order without reopening the large worklog or touching seat/Chrome state. The document is intentionally explicit that chat routing is certified while a newly dispatched video is not.
+
+**Safety:** Documentation-only change. No runtime, seat, Chrome, credential, database, or provider state changed.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
