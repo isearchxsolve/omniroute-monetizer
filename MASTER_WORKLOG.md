@@ -9759,6 +9759,18 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** This confirms the Chrome guard and operator-profile safety state, not provider website sessions in any profile. No additional route, render, credit movement, or provider credential is claimed by this postcheck.
 
+### [2026-08-30 16:55] #1333 — Final native OAuth refresh and post-refresh full provider reconciliation
+
+**Action:** Read `oauth_keepalive.py` before use and confirmed it uses only OmniRoute's supported `POST /api/providers/{id}/refresh` endpoint for active OAuth connections; it has no browser, Chrome, or database path. Ran `python scripts/automation/oauth_keepalive.py --once`, then a single `python scripts/automation/fleet_provider_audit.py --reactivate-inactive` reconciliation. The latter ran once to completion; no duplicate audit was started while it was still in progress.
+
+**OAuth result:** The native pass refreshed 14 active OAuth connections. Two active OAuth connections returned no new token and are reported as failed rather than treated as refreshed. This refresh mechanism acts only on active OAuth records; it cannot manufacture a missing/expired inactive credential.
+
+**Final reconciliation:** 117 total provider connections; 71 native tests valid; **24 inactive**. No additional inactive connection passed the supported validity gate, so the reactivation pass correctly enabled no new provider. The remaining blockers are evidence-classified as 4 missing credentials, 7 reauthorizations required, 2 missing local runtimes, 3 unsupported native validation paths, 2 upstream authentication failures, 5 upstream errors, and 1 upstream-unavailable failure. The refreshed audit artifact is `state/fleet_provider_audit.json`.
+
+**Safety:** All actions used native management/provider endpoints. No provider key was invented or overwritten, no OAuth login flow was driven in a browser, no Chrome/seat/process/database state was changed, and no invalid inactive provider was enabled.
+
+**What is not claimed:** The 24 blocked connections are not called dead or resolved. They need the specifically classified external condition—real credential, manual reauthorization, supported runtime installation, or provider/validation fix—before a native test can verify and activate them.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
