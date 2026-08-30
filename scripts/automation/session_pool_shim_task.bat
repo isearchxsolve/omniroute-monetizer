@@ -49,4 +49,8 @@ ping -n 4 127.0.0.1 >nul
 curl.exe -s -o nul --max-time 3 "http://127.0.0.1:8190/v1/models"
 if not errorlevel 1 exit /b 0
 echo [%date% %time%] FALLBACK-START alt-log >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
-start "" /b "D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim.py" 8190 >> "D:\omniroute-monetizer\logs\shim_stdout_alt.log" 2>&1
+rem A second fixed fallback file can itself be held exclusively.  Make the final
+rem task-owned launch log unique per attempt so an unrelated log handle cannot
+rem prevent the actual service process from starting.
+set "SHIM_FALLBACK_LOG=D:\omniroute-monetizer\logs\shim_stdout_fallback_%RANDOM%_%RANDOM%.log"
+start "" /b "D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim.py" 8190 >> "%SHIM_FALLBACK_LOG%" 2>&1
