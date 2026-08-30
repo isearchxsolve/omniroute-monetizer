@@ -10270,3 +10270,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Disposition.** No process was killed and no service mutation was attempted from this non-elevated session. The exact safe operator action is to stop the `OmniRoute` service, confirm PID `19128` and its child tree have exited, start the service, confirm the new service child—not an orphan—owns `20128`, then run a single `/health` request before any catalog or OAuth work. If stop/start leaves PID `19128` behind, an elevated targeted termination of that exact PID is required; do not terminate unrelated Node/Kilo/Codex processes.
 
 **What is NOT claimed.** This does not establish provider failure, credential loss, catalog corruption, or combo invalidity. It establishes a local listener/process-ownership and HTTP-readiness failure only.
+### [2026-08-30 23:45] #1348 — Confirmed consumer contract boundary: :8190 is the contract endpoint, :20128 is separate
+
+**Question audited.** Compared the requested consumer contract against `session_pool_shim.py`, `session_pool.py`, `session_pool_shim_task.bat`, `omni_supervisor.py`, and the live `127.0.0.1:8190` endpoint.
+
+**Finding.** The seat-pool shim does implement the OpenAI-compatible consumer face at `http://127.0.0.1:8190/v1`: `POST /v1/chat/completions`, `model=session-pool/auto` for balanced chat, `model=video/auto` for video dispatch, and `<host>/auto` / `video/<host>/auto` pinning. Its response code includes `provider` and `session` metadata. `GET /v1/models` returned HTTP 200 with 30 currently advertised routes in this snapshot, including the two aggregate aliases and per-seat routes. The implementation also has the durable asynchronous video-job contract (`POST /v1/video/jobs`, status/reconciliation, cancellation), while the chat-completions video shape is accepted as the compatibility face.
+
+**Important boundary.** OmniRoute `:20128` is not the final consumer endpoint and does not replace the seat-pool contract. It is the separate paid/OAuth management and chat plane. `:20130` is another superset/forwarding face. The film consumer should continue using `127.0.0.1:8190/v1`.
+
+**Observed variance.** The requested “50 models” is not true for the live snapshot checked here: `/v1/models` returned 30 entries. `/health` returned 404, which is expected for this shim because its documented liveness surface is `/v1/models`; the scheduled task probes that route. This is a count/documentation mismatch to reconcile, not a reason to switch endpoints.
+
+**What is NOT claimed.** This read-only check did not submit chat or video work, did not prove all 30 routes currently answer, and did not assert 25 chat plus 23 video sessions are presently active. It confirms the API contract and endpoint ownership only.
