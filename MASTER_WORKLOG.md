@@ -9675,6 +9675,18 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** An inactive provider with `hasCredential=true` is not thereby valid. No remaining inactive provider is claimed recovered by this classification alone.
 
+### [2026-08-30 16:05] #1326 — Dedicated video Chrome boundary is now mechanically preflighted
+
+**Implementation:** Added `scripts/automation/video_dedicated_profile_preflight.py` and `tests/test_video_dedicated_profile_preflight.py`. The preflight reads only the enabled video-account boundary fields (provider, automation profile tag, CDP port). It resolves each configured profile through `safe_profile_dir()` and `assert_safe()`, rejects a CDP port mapped to more than one profile, and calls `assert_cdp_safe()` against every configured port. It never opens Chrome, attaches to CDP, reads cookies, quotes, or submits a video. The output is a redacted state artifact at `state/video_dedicated_profile_preflight.json`.
+
+**Verification:** `python -m pytest -q tests/test_video_dedicated_profile_preflight.py` — **2 passed**. Live preflight `python scripts/automation/video_dedicated_profile_preflight.py` exited 0 with `SAFE_DEDICATED`: five enabled video account records map only to the three dedicated automation profile tags, and all three configured CDP ports are approved by the live-profile guard. No configured video port was advertised from the operator's live Chrome tree.
+
+**Execution gate:** The preflight deliberately reports `BLOCKED_PENDING_PROVIDER_SESSION_VERIFICATION`. `SAFE_DEDICATED` proves the browser/process boundary, not that an individual video website is currently signed in. The only valid next lane check is a no-spend provider-session verification against this guarded dedicated boundary; any login wall must be reported and left for manual sign-in.
+
+**Safety:** Ran `chrome_selfheal.py --dry-run` immediately before this Chrome-adjacent work; the guard remained installed and actively refused the live profile. The new preflight and its live invocation neither launched nor attached to Chrome. No tabs, seats, account state, provider credentials, routes, services, databases, quotes, or generations changed.
+
+**What is not claimed:** No Google Sync state is inferred for an automation profile. No provider-session authentication, video quote, video job, output media, spend, or end-to-end video route is claimed by this preflight.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
