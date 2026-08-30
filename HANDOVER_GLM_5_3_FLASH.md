@@ -61,6 +61,40 @@ artifact, the internal seat labels are `providers`/CDP `9222` (Profile 1 referen
 are candidate-site evidence, not already-graduated seats: they contain 51, 11, 21, and 20 site rows
 respectively. Do not turn those row counts into capacity without provider/account and runtime proof.
 
+### Reuse rule — Profile 1 is the reference implementation, not a task to repeat
+
+Do **not** restart the Profile-1 exercise from scratch. First load and reuse the existing Profile-1
+artifacts and tools: `state/seat_readiness.json`, `state/profile1_reconciliation.json`, the existing
+capture/graduation ledgers, the proven `session_pool.py` dispatch path, the universal replay and
+provider-adapter modules, the existing video client contracts, and every already-proven provider
+model-family mapping. Reuse their schemas, selectors, failure classifications, atomic seat-file
+updates, spend gates, and test harnesses. Do not create a second capture framework, a second
+graduation ledger, duplicate adapters, or a new interpretation of what constitutes a seat.
+
+Profile 1 may receive only a bounded regression smoke when a shared code change requires it. A
+regression smoke is not permission to re-run its entire roster, repeat completed signups, re-spend
+credits, or redo already-proven captures. For Profiles 2–4, copy the **method and code**, not stale
+credentials or Profile-1 account identity: parameterize the target profile, provider/account, CDP
+port, and evidence path; preserve each profile's isolation; and record only the delta from the
+reference run. If a Profile-1 artifact is reused as evidence, label it as reference evidence and
+run fresh proof for the new account/seat before counting it.
+
+The efficient execution order is therefore:
+
+```text
+load Profile-1 tools/contracts/evidence
+→ bounded shared-path regression only if necessary
+→ reconcile Profile 2 delta
+→ reconcile Profile 3 delta
+→ reconcile Profile 4 delta
+→ apply the same Python adapter/graduation gates
+→ audit OmniRoute-native video in parallel
+```
+
+The deliverable must state which Profile-1 tools were reused, which new files/contracts were added,
+and which results are genuinely new for Profiles 2–4. Repeating work already proven on Profile 1 is
+time and credit waste and is outside this assignment.
+
 For Profiles 2, 3, and 4, perform this sequence for every unauthenticated candidate that is useful:
 
 1. Reconcile the candidate against the profile's existing tabs, account mapping, capture files, and

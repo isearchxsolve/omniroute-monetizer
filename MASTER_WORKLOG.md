@@ -10701,6 +10701,16 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Anti-drift accounting.** The final report must contain an OmniRoute section, a seat-pool section, and a combined total. It must not omit OmniRoute because a seat route is easier to test, and it must not count a signup, capture, model inventory row, Chrome route, or adapter skeleton as capacity. Documentation verification only; no browser, provider, credential, session, signup, video, or service action occurred. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
 
+### [2026-08-31 01:50] #1386 - GLM reuse rule added: extend Profile 1 work; do not restart it from scratch
+
+**Operator correction.** While expanding Profiles 2–4, GLM must not repeat the Profile-1 exercise already completed today. Profile 1 is the reference implementation and evidence base. Re-running its roster, captures, signups, adapters, or credit tests from scratch would waste time and supply and would violate the intended handoff.
+
+**Handoff change.** Added a dedicated reuse rule to `HANDOVER_GLM_5_3_FLASH.md`. GLM must first load and reuse the existing Profile-1 tools, schemas, capture/graduation ledgers, `session_pool.py` dispatch path, universal replay/provider adapters, video client contracts, model-family mappings, selectors, failure classifications, spend gates, and test harnesses. It must not create a second framework, duplicate ledger, duplicate adapter, or alternate seat definition.
+
+**Required delta workflow.** A bounded Profile-1 regression smoke is allowed only when a shared code change requires it; it is not permission to re-run completed Profile-1 work or spend credits again. For Profiles 2–4, GLM must parameterize the already-proven machinery by profile, provider/account, CDP port, and evidence path, while preserving account isolation. Reused Profile-1 material must be labelled reference evidence; only fresh proof for the new account/seat may be counted as new capacity. The final report must list reused tools/contracts and the genuinely new delta files/results.
+
+**Verification.** Confirmed the handoff contains the “Profile 1 is the reference implementation” rule, no-rework prohibition, parameterized Profile 2–4 delta workflow, bounded regression exception, and required reuse/new-result report. `git diff --check` passed. Documentation only; no browser, provider, credential, session, signup, video, or service action occurred. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
+
 ### [2026-08-30 22:00] #1369 - Revised handover executed: real Python video-adapter sweep; two adapters built + wired; every verified-key unit walled on money/quota (0.0 spent); durable contract proven
 
 **Operator word.** "continue" after the revised HANDOVER_GLM_5_3_FLASH.md (commit 19ab303) assigned the real Python video-adapter graduation as highest priority. Primary orchestrator follow-ups acknowledged: 0d15676 (retain Omni catalog across discovery timeout) and ccd58e0 (fallback log collision-safe) - both touched files I authored; current state verified before building on them.
