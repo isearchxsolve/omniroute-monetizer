@@ -10292,3 +10292,18 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Conclusion.** The requested contract is implemented by the seat-pool shim at `:8190`, including route discovery and provider/session metadata. It is not implemented/available at `:20128`. Video was not submitted, so no credits were spent.
 
 **What is NOT claimed.** This unit does not certify every advertised seat, the documented 50-route count, video generation success, or current health of the `:20128` service. It certifies endpoint ownership and the observed `:8190` chat contract only.
+### [2026-08-31 00:08] #1350 — Thorough :8190 rollout audit: protocol passes, production capacity/quality fails
+
+**Audit executed.** Ran the repository’s `scratch_confirm_contract.py` plus bounded live negative-path checks against `http://127.0.0.1:8190/v1`. No video request was submitted.
+
+**Protocol results.** `GET /models` returned HTTP 200. The aliases `session-pool/auto`, `video/auto`, and `video/labs.google/auto` were present. The shim emitted 24 chat route records plus the aggregate chat alias and 2 video records (27 total model records). A chat completion request returned HTTP 200 with OpenAI-shaped `id`, `object`, `created`, `model`, `choices`, `usage` fields and the nonstandard `provider`, `session`, and `tenant` fields. Unknown GET route returned 404. Empty-message POST returned a structured HTTP 500 `chat_error` (`NO_MESSAGES`), demonstrating structured error handling, though the status choice is not ideal OpenAI compatibility.
+
+**Critical quality result.** The computed probe (`Reply with only the number: 41+17`) returned HTTP 200 but the content was a provider credit wall: `You've used all your credits...`. The harness correctly marked Law-3 as `CHECK-MANUALLY`, not PASS. Therefore HTTP 200 is not sufficient for production readiness and this pool currently failed an end-to-end answer-quality probe.
+
+**Capacity result.** The live pool reported 27 chat seats / 27 dispatchable and 1 video seat / 1 dispatchable. This does not match the rollout specification of 25 chat sessions and 23 video sessions. Advertised routes are therefore not equivalent to verified usable capacity. Four chat hosts were quarantined as adapter defects in the pool output; the single video route is insufficient for the stated production capacity.
+
+**Auth observation.** `/models` returned 200 even with an invalid bearer in this local configuration, while the request was labeled tenant `local`. This may be intentional local-mode behavior, but it means bearer enforcement was not proven by this check and should be decided explicitly before exposing the endpoint beyond localhost.
+
+**Rollout verdict.** NOT READY for a production rollout under the stated contract. The HTTP shape and metadata contract are implemented, but the live acceptance bar fails on computed answer quality, advertised-vs-actual chat/video capacity, and unproven external bearer enforcement. No code or runtime state was changed.
+
+**What is NOT claimed.** This does not claim every provider is dead, does not claim video generation fails, and does not claim the endpoint cannot be used for a controlled local pilot. It means the stated production promises are not currently evidenced.
