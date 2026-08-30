@@ -21,7 +21,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "automation"))
 from omniroute_api import OmniRouteAPI, redact
 from password_vault import retrieve_password
 
-OMNI_BASE = "http://localhost:20128"
+OMNI_BASE = "http://127.0.0.1:20128"
 CDP_URL = "http://127.0.0.1:9222"
 SCREENSHOT_DIR = PROJECT_ROOT / "state" / "reauth_screenshots"
 SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
@@ -30,6 +30,7 @@ SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 def get_api_session() -> requests.Session:
     pw = retrieve_password(PROJECT_ROOT / "state" / "omniroute_password.bin")
     session = requests.Session()
+    session.trust_env = False  # bypass loopback proxy that intercepts 127.0.0.1
     r = session.post(f"{OMNI_BASE}/api/auth/login", json={"password": pw})
     assert r.status_code == 200, f"Login failed: {r.status_code}"
     return session

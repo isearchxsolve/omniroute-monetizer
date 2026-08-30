@@ -35,7 +35,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 from password_vault import retrieve_password  # noqa: E402
 import requests  # noqa: E402
 
-OMNI_BASE = "http://localhost:20128"
+OMNI_BASE = "http://127.0.0.1:20128"
 BROWSER_PROFILE = str(PROJECT_ROOT / "state" / "browser_profile")
 RESULTS_FILE = PROJECT_ROOT / "state" / "oauth_reauth_results.json"
 
@@ -92,6 +92,7 @@ PROVIDERS_TO_REAUTH = [
 def get_api_session() -> requests.Session:
     pw = retrieve_password(PROJECT_ROOT / "state" / "omniroute_password.bin")
     session = requests.Session()
+    session.trust_env = False  # bypass loopback proxy that intercepts 127.0.0.1
     r = session.post(f"{OMNI_BASE}/api/auth/login", json={"password": pw})
     assert r.status_code == 200, f"Login failed: {r.status_code}"
     return session
@@ -110,6 +111,12 @@ def handle_device_code(session: requests.Session, conn_id: str, provider: str) -
     
     log(f"[{provider}] DEVICE CODE: {user_code}")
     log(f"[{provider}] Visit: {verification_uri}")
+    # Surface codes for the operator (non-redacted) so they can complete the flow
+    try:
+        with open(PROJECT_ROOT / "state" / "device_codes.txt", "a", encoding="utf-8") as fh:
+            fh.write(f"{provider} ({conn_id[:8]}): code={user_code}  url={verification_uri}\n")
+    except Exception:
+        pass
     log(f"[{provider}] Expires in {expires_in}s. Polling for completion...")
     
     # Poll for up to 10 minutes

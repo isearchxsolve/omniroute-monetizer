@@ -802,6 +802,8 @@ class UniversalSessionClient:
             # (Monica's id/prompt surgery now happens deterministically before the
             # sentinel check -- see the api.monica.im branch above.)
             body_bytes = new_body_str.encode("utf-8") if self.base_body else None
+            import time as _time
+            _send_started_ms = int(_time.time() * 1000)   # v0 poll cutoff: only newer messages count
             r = self._fire(self.method, target_url, self.headers, body_bytes, timeout=60)
 
 
@@ -870,11 +872,17 @@ class UniversalSessionClient:
             import pathlib as _pl, sys as _sys
             _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent))
             from multistep_replay import detect_bootstrap, run_followup
-        provider_key = detect_bootstrap(r.text)
+        provider_key = detect_bootstrap(r.text, host=_up.urlsplit(self.url).netloc)
         if provider_key:
+            _chat_id = None
+            try:
+                _chat_id = json.loads(new_body_str).get("chat_id")
+            except Exception:
+                _chat_id = None
             follow_text, follow_err = run_followup(
                 provider_key, r.text, self.headers,
-                self.raw.get("cookie_header", ""), timeout=60.0)
+                self.raw.get("cookie_header", ""), timeout=90.0,
+                chat_id=_chat_id, started_ms=_send_started_ms)
             if follow_text:
                 # The no-tool envelope is never the model's words (see unwrap_no_tool_text).
                 follow_text = unwrap_no_tool_text(follow_text) or follow_text

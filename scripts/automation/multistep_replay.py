@@ -336,18 +336,111 @@ def mistral_patch_stream_parse(raw_body: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# V0 (v0.app): POST /chat/api/send -> tiny "ok" ack -> poll
+# GET /api/chat/chat/latest?chatId=...&lastSyncedAt=... until an assistant
+# message newer than our send appears. Discovered by two-way sniff of the live
+# tab (2026-08-30): Chrome does exactly this after every send.
+# ---------------------------------------------------------------------------
+
+def _v0_text_from_node(node) -> str:
+    """Pull text out of v0's message-binary-format: nested tuples like
+    ["p", {}, ["text", {}, "58"]] -- collect the 3rd element of every
+    ["text", {}, <string>] node, recursively. Tolerates plain-text shapes."""
+    if isinstance(node, str):
+        return ""
+    if isinstance(node, list):
+        if len(node) >= 3 and node[0] == "text" and isinstance(node[2], str):
+            return node[2]
+        return "".join(_v0_text_from_node(child) for child in node)
+    if isinstance(node, dict):
+        if node.get("type") == "text" and isinstance(node.get("text"), str):
+            return node["text"]
+        return "".join(_v0_text_from_node(v) for v in node.values())
+    return ""
+
+
+def v0_followup(
+    bootstrap_body: str,
+    recorded_headers: Dict[str, str],
+    cookie_header: str,
+    timeout: float = 90.0,
+    chat_id: str = None,
+    started_ms: int = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Poll the v0 chat-latest endpoint for the assistant message answering OUR send.
+
+    Returns (answer_text, error). Exactly one is non-None. Stale answers are
+    rejected by createdAt: only messages created after started_ms (the send
+    fire time) count, so a failed send can never score the OLD recorded reply.
+    """
+    if not chat_id:
+        return None, "V0_NO_CHAT_ID"
+    started_ms = started_ms or int(time.time() * 1000)
+    cutoff_ms = started_ms - 5000          # 5s slack for clock jitter
+    url = f"https://v0.app/api/chat/chat/latest?chatId={chat_id}&lastSyncedAt={started_ms}"
+    headers = {
+        "Accept": "application/json",
+        "Cookie": cookie_header,
+        "Referer": f"https://v0.app/chat/{chat_id}",
+        "User-Agent": recorded_headers.get("User-Agent", "Mozilla/5.0"),
+    }
+    deadline = time.time() + timeout
+    last_err: Optional[str] = None
+    while time.time() < deadline:
+        try:
+            r = _stream_get(url, headers, timeout=15)
+        except _STREAM_EXC as e:
+            last_err = f"V0_POLL_HTTP: {e}"
+            time.sleep(3)
+            continue
+        if r.status_code != 200:
+            last_err = f"V0_POLL_{r.status_code}"
+            time.sleep(3)
+            continue
+        try:
+            body = json.loads(r.text)
+        except Exception:
+            last_err = "V0_POLL_NOT_JSON"
+            time.sleep(3)
+            continue
+        value = (body or {}).get("value") or {}
+        for m in reversed(value.get("newMessages") or []):
+            if not isinstance(m, dict) or m.get("role") != "assistant":
+                continue
+            created = str(m.get("createdAt") or "")
+            try:
+                from datetime import datetime
+                created_ms = int(datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp() * 1000)
+            except Exception:
+                created_ms = 0
+            if created_ms and created_ms < cutoff_ms:
+                continue                       # pre-dates our send -- stale, keep polling
+            if m.get("isContentLoading") or m.get("streaming"):
+                time.sleep(3)                  # still generating
+                break
+            text = _v0_text_from_node(m.get("content") or {}).strip()
+            if text:
+                return text, None
+        time.sleep(3)
+    return None, last_err or "V0_NO_NEW_MESSAGE"
+
+
+# ---------------------------------------------------------------------------
 # Registry: host -> followup function
 # ---------------------------------------------------------------------------
 
 FOLLOWUP_REGISTRY: Dict[str, Any] = {
     "felo.ai": felo_followup,
     "chat.mistral.ai": mistral_followup,
+    "v0.app": v0_followup,
 }
 
 
-def detect_bootstrap(body: str) -> Optional[str]:
+def detect_bootstrap(body: str, host: str = None) -> Optional[str]:
     """Detect if a response body is a bootstrap (small JSON with stream/task keys).
     Returns the provider key if recognized, else None."""
+    if host and "v0.app" in host and len(body) <= 64 and body.strip().strip('"').lower() == "ok":
+        return "v0.app"                        # 2-byte ack -- the answer arrives on the poll
     if len(body) > 2000:
         return None
     try:
@@ -371,9 +464,14 @@ def run_followup(
     recorded_headers: Dict[str, str],
     cookie_header: str,
     timeout: float = 60.0,
+    **extra,
 ) -> Tuple[Optional[str], Optional[str]]:
-    """Dispatch to the appropriate followup handler."""
+    """Dispatch to the appropriate followup handler (extra kwargs passed through)."""
     fn = FOLLOWUP_REGISTRY.get(provider_key)
     if not fn:
         return None, f"NO_FOLLOWUP_FOR_{provider_key}"
-    return fn(bootstrap_body, recorded_headers, cookie_header, timeout)
+    try:
+        return fn(bootstrap_body, recorded_headers, cookie_header, timeout, **extra)
+    except TypeError:
+        # handler predates the extra kwargs
+        return fn(bootstrap_body, recorded_headers, cookie_header, timeout)
