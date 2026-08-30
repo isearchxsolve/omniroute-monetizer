@@ -9556,6 +9556,16 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 **Decision:** Do not run `apply_master_healthy_combos.py` blindly. Its payload contains hard-coded model/provider IDs, while the fleet audit currently shows 46 invalid connections; applying it without a completed live-catalog diff could install unavailable heads and reduce routing quality. The safe next step is a bounded, timeout-aware combo/model diff artifact before any hot-reload.
 
 **Safety:** No combo, provider, credential, seat, Chrome, or process state was changed.
+
+### [2026-08-30 12:21] #1311 â€— Bounded combo/catalog diff proves hard-coded cascade drift
+
+**Implementation:** Added `scripts/automation/omniroute_combo_catalog_audit.py`, a read-only authenticated audit with explicit request timeouts. It compares every configured combo's model IDs against the live `/v1/models` catalog and persists only combo names, counts, heads, and missing model IDs.
+
+**Verification:** `python -m pytest -q tests/test_omniroute_capability_matrix.py` — **9 passed in 2.49s**. The live audit completed successfully: 16 combos, 9,431 catalog models, and all 16 combos contain at least one configured model ID absent from the live catalog.
+
+**Examples of drift:** Most master cascades reference unavailable `kimi-coding/kimi-coding-default` and/or `nvidia/nemotron-3-super-120b-a12b`; `OPS-5` and `OPS-4.8` heads are also absent from the current catalog. This validates the decision not to run the hard-coded combo hot-reload script. The full sanitized artifact is `state/omniroute_combo_catalog_audit.json`.
+
+**Safety:** No combo or provider was updated. No restart, seat access, Chrome access, credential change, or database write occurred.
 | Coze Web | www.coze.com | FAIL | etizer\state\capture_report_9222.json
 no session_*.json in D:\omnirout | no |
 | Doubao Web (ByteDance) | www.doubao.com | FAIL | t_9222.json

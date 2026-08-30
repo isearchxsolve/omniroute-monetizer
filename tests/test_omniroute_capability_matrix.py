@@ -76,6 +76,14 @@ def test_capability_summary_separates_auth_from_transport_failure() -> None:
     assert summary == {"ok2xx": 1, "auth4xx": 1, "other4xx": 1, "server5xx": 0, "timeouts": 1}
 
 
+def test_combo_catalog_extract_rows_is_shape_safe() -> None:
+    from omniroute_combo_catalog_audit import extract_rows
+
+    assert extract_rows({"combos": [{"name": "frontier"}]}, "combos") == [{"name": "frontier"}]
+    assert extract_rows({"data": []}, "combos") == []
+    assert extract_rows([], "combos") == []
+
+
 def test_supervisor_application_probe_distinguishes_http_success_and_failure() -> None:
     from omni_supervisor import http_health
 
