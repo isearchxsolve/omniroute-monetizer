@@ -64,6 +64,7 @@ ROOT = HERE.parents[1]
 STATE = ROOT / "state"
 LOGS = ROOT / "logs"
 STATUS_FILE = STATE / "supervisor_status.json"
+AUTHORITATIVE_STATUS_FILE = STATE / "supervisor_status_v2.json"
 INSTANCE_LOCK_FILE = STATE / "supervisor.lock"
 _INSTANCE_LOCK = None
 
@@ -382,6 +383,7 @@ def one_pass(svcs: list, fix: bool) -> dict[str, Any]:
                         if r["listening"] and r["state"] == "LISTENING_BUT_UNHEALTHY"]
     report = {
         "schemaVersion": 2,
+        "statusFile": str(AUTHORITATIVE_STATUS_FILE),
         "writerPid": os.getpid(),
         "writerPython": sys.executable,
         "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -402,7 +404,11 @@ def one_pass(svcs: list, fix: bool) -> dict[str, Any]:
         ],
     }
     STATE.mkdir(parents=True, exist_ok=True)
-    STATUS_FILE.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    encoded = json.dumps(report, indent=2)
+    # The versioned artifact is the authoritative read path. Keep updating the legacy filename for
+    # older consumers, but do not let an older supervisor overwrite the v2 report.
+    AUTHORITATIVE_STATUS_FILE.write_text(encoded, encoding="utf-8")
+    STATUS_FILE.write_text(encoded, encoding="utf-8")
     return report
 
 

@@ -98,3 +98,4 @@ def test_supervisor_defines_process_owned_instance_lock() -> None:
 
     assert omni_supervisor.INSTANCE_LOCK_FILE.name == "supervisor.lock"
     assert callable(omni_supervisor.acquire_instance_lock)
+    assert omni_supervisor.AUTHORITATIVE_STATUS_FILE.name == "supervisor_status_v2.json"

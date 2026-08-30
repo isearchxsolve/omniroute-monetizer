@@ -9665,3 +9665,13 @@ no session_*.json in D:\omniroute-moneti | no |
 **Capability evidence:** `omniroute_capability_matrix.py --timeout 2` wrote a fresh report with `allHealthy: false`; all five tested paths (`/health`, `/v1/models`, `/api/combos`, `/api/compression/status`, `/api/relay-proxies`) returned `TimeoutError` with no HTTP status. This is stronger current evidence that OmniRoute application readiness and management surfaces are unavailable, while TCP/process liveness alone remains insufficient.
 
 **Interpretation:** The instance lock prevents future new-source launches from racing, but cannot bind older interpreters that predate the lock. The remaining fix requires the existing task owner to naturally recycle the duplicate supervisor processes; forcing that would violate the no-restart/no-kill boundary. Seat and Chrome layers remain untouched.
+
+### [2026-08-30 11:18] #1306 â€— Versioned authoritative supervisor report eliminates stale legacy overwrite
+
+**Implementation:** Added `state/supervisor_status_v2.json` as the authoritative report path. The updated supervisor writes the v2 report first with schema and writer provenance, then maintains the legacy `state/supervisor_status.json` for backward compatibility. An older supervisor can still overwrite only the legacy file; it cannot overwrite the v2 artifact.
+
+**Verification:** Ran the full OmniRoute capability/supervisor test file — **7 passed in 2.57s**. Ran a read-only `--once --json` pass and inspected the v2 artifact after the legacy writer had another opportunity to race. The v2 report retained `schemaVersion: 2`, a writer PID, and `allApplicationHealthy: false` with only `omniroute` in `applicationDown`.
+
+**Current runtime evidence from the v2 report:** `chat_pool` is `UP`; `video_router` is `UP` with its `/healthz` response reporting authenticated; `session_pool_shim` is `UP`; OmniRoute is listening but `LISTENING_BUT_UNHEALTHY` because `/v1/models` timed out. This narrows the live application gap from “all routes unverified” to the OmniRoute management/chat endpoint specifically.
+
+**Safety:** No incumbent process was killed or restarted. No seat or Chrome state was opened or changed. Commit follows after this log entry.
