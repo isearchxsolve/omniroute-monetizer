@@ -10060,3 +10060,23 @@ no session_*.json in D:\omniroute-monetizer\state\ | no |
 - Therefore the challenge/invalid-event gate is CONNECTION-LEVEL trust: Chrome's TLS fingerprint + handshake profile passes; websocket-client's does not. Pure-python replication of Chrome's JA3 is out of scope for this stack.
 - DESIGN DECISION (doctrine: the browser is the client): Copilot graduates via a CDP LIVE-TAB ADAPTER -- pool request -> drive the open tab composer (JS_FOCUS_COMPOSER/insertText/JS_SEND already proven) -> read reply from DOM -> return. Same architectural pattern as the video lane's live-tab consumers. Estimated: one focused session (adapter class + tab residency guard + readiness in supervisor).
 - Todo state after this stretch: Groq restored (+1, gate 11). DeepInfra closed as paywall (jar replay proof). Evidence classes recorded: Akool DNS-dead, Phind deployment-404, Doubao region-ban, Poe/puter anonymous surfaces (login behind modal), Monica (conversation-state), V0 (submit->poll), Aymo (429 decay), Gemini/ChatHub (send-time auth).
+
+### [2026-08-30 08:57] #1336 - Copilot live-tab adapter E2E-verified: computed 58 through the trusted Chrome connection
+
+**Context.** Session resumed after a power trip mid-test (todo item 1 from #1316 queue: "Copilot live-tab adapter - highest value"). The adapter script scripts/automation/copilot_live_tab.py had been written and the DOM reply reader calibrated before power loss, but the first end-to-end test never returned a verdict.
+
+**Post-crash recovery findings.**
+- Seat Chrome :9222 alive again (supervisor restored the fleet after reboot: 33 chrome, 4 pythonw processes).
+- The Copilot tab did NOT survive the reboot and the supervisor does not restore tabs - only rtst.ai and labs.google Flow tabs were open.
+- Two PUT /json/new?url=... attempts landed tabs on about:blank (url param dropped); the repo's proven open_tab helper (with Target.createTarget fallback) opened the tab correctly.
+
+**Defects found and fixed in the adapter before first verdict.**
+1. sys.path.insert pointed at scripts/automation/scripts/automation (double-nested) - the capture_sessions_cdp import could never resolve. Fixed to the file's own directory.
+2. Reply reader returned the USER'S ECHO BUBBLE: first run returned "You said / Reply with only the number: 41 + 17" the instant the user article appeared (n > last_n fires on the echo, before the assistant bubble renders). Fixed with echo-skip (normalized text starting "you said" + containing the prompt is never a reply) + stability gate (reply accepted only after 2 consecutive identical polls, so streaming partials are not grabbed).
+
+**E2E verification (Law 3, arithmetic probe).**
+- Page state before send: signed in (signin: false), composer present, 0 articles.
+- Send driven through the page's own composer (JS_FOCUS_COMPOSER / Input.insertText / JS_SEND).
+- Result: Copilot said 58 Edit in a page - computed, not echoable. **Copilot graduates via the live-tab adapter.** No websocket replay, no TLS-fingerprint wall: Chrome's own connection is the client, exactly as designed in #1316.
+
+**State.** Adapter compiled clean, still untracked before this commit; committed with this entry. Remaining queue: Aymo 429 result check (background run was in flight at power loss, outcome unknown), sso_v2 modal step (Poe class), Monica task-uid rotation, V0 submit-poll client, Gemini/ChatHub send-time auth.
