@@ -10381,3 +10381,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Profile-1 seat baseline.** The dedicated Profile-1 roster remains 51 seats, 30 recorded outcomes, 21 pending evidence, and only one currently active video artifact. The main missing capacity is therefore graduation of browser-backed sources, especially video, not absence of OmniRoute model aliases.
 
 **Safety.** No provider was modified, no Chrome target was opened, no capture ran, and no video credit was spent in this baseline unit.
+### [2026-08-31 01:34] #1358 — Corrected capacity accounting: provider-to-model matrix, not raw route total
+
+**Correction.** Operator correctly noted that capacity must be represented as provider × number of models served; a raw total can overstate independent supply because one provider serves many models and aliases may duplicate namespaces.
+
+**Live OmniRoute matrix source.** Queried `:20128/v1/models` and grouped the 9,509 live records by their authoritative `owned_by` field (not the model-ID prefix). Top provider model counts: requesty 1,417; cline 982; openrouter 937; nous-research 914; kilocode 882; bazaarlink 836; pollinations 598; orcarouter 240; deepinfra 238; openadapter 200; lmarena 173; inference-net 170; novita 151; github 138; opencode-zen 131; ainative 107; kie 102; nvidia 93; anthropic 85; llm7 82; vertex 61; gemini 59; codex 57; mistral 56; combo 48. The full owner matrix contains 81 owner groups, including aliases and the 48 combo entries.
+
+**Seat-pool matrix source.** The merged `:8190/v1/models` response currently exposes 19 dispatchable chat host routes, one dispatchable video host route (`video/labs.google/auto`), and two aggregate aliases (`session-pool/auto`, `video/auto`). Those are seats/routes, not provider model counts; each browser seat may expose multiple upstream models only after its provider-specific video/chat contract is captured and graduated.
+
+**Operational consequence.** Profile-1 graduation should prioritize independent account/session sources and their model families, not chase a numeric route count. The next missing capacity action remains the dedicated video lane; the serial chat orchestrator currently has no safe new candidates because its three candidates have reached the two-attempt limit and must not be blindly re-hit.
+
+**Safety.** Matrix collection was read-only; no Chrome tab, provider, capture, video job, or credit was touched.
