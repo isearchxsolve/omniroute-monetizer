@@ -132,6 +132,14 @@ def test_contract_helpers_classify_sse_and_tool_calls() -> None:
     assert tool_contract({"choices": [{"message": {"tool_calls": [{"id": "call_1"}]}}]})["hasToolCall"] is True
 
 
+def test_acceptance_secret_scanner_keeps_real_keys_and_ignores_examples() -> None:
+    from acceptance_tests import is_documentation_placeholder
+
+    assert is_documentation_placeholder('API-Key: YDC_API_KEY') is True
+    assert is_documentation_placeholder('api_key": "tenant_name') is True
+    assert is_documentation_placeholder("sk-abcDef1234567890xyz") is False
+
+
 def test_supervisor_application_probe_distinguishes_http_success_and_failure() -> None:
     from omni_supervisor import http_health
 

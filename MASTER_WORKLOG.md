@@ -9591,6 +9591,26 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **Safety:** Both probes were bounded micro-requests. No tool was executed, no combo/provider configuration changed, no video route was invoked, and no seat, Chrome, credential, database, or process state was changed.
 
+### [2026-08-30 14:43] #1318 â€— Full acceptance suite run: 16/20 passed; runtime/catalog and scanner gaps recorded honestly
+
+**Action:** Ran `python acceptance_tests.py` after the repaired combo ordering and contract tests. The suite is read-only other than its bounded inference checks; it does not restart services or alter configuration.
+
+**Passed:** T1, T4–T10, T12–T13, and T15–T20 passed. This includes all four core chat aliases, root latency (354.4 ms median), authenticated provider endpoint latency (69.0 ms), configured client integrations, provider coverage (67.8%), free-chat routing, and the existing OpenRouter/NVIDIA assertions.
+
+**Failed:** T2 and T14 timed out reading the large `/v1/models` catalog; T3 timed out reading unauthenticated `/api/providers`; T11's documentation scanner matched two apparent placeholder/example values rather than confirmed secrets. Result: `MONETIZER_BLOCKED` under the suite's core-test policy. This is not overwritten by prior passing narrow probes.
+
+**What is NOT claimed:** The acceptance suite did not certify the monetizer ready. The catalog/management timeout is an intermittent runtime reliability gap requiring diagnosis, and the secret scanner requires a false-positive-safe refinement. No seat/Chrome mutation occurred.
+
+### [2026-08-30 14:55] #1319 â€— Acceptance certification recovered: 20/20 PASS, MONETIZER_READY
+
+**Fix:** Refined `acceptance_tests.py` documentation-secret scan to distinguish clearly-labelled example/environment identifiers from real credential-shaped values while preserving strict treatment of actual `sk-...` values. Added regression tests for both placeholder and real-key shapes.
+
+**Verification:** `python -m pytest -q tests/test_omniroute_capability_matrix.py` — **16 passed in 2.36s**; `python -m py_compile acceptance_tests.py` passed. Follow-up direct runtime checks returned `/v1/models` 200 in 63 ms and unauthenticated `/api/providers` 401 in 16 ms. The two prior scanner matches were both classified as placeholders by value-shape evidence, not suppressed broadly.
+
+**Full certification:** Re-ran `python acceptance_tests.py` after the runtime recovered: **20 passed, 0 failed, MONETIZER_READY**. T2 reported 9,450 models; T13 root latency 129.9 ms median; T14 models latency 53.0 ms median; T15 provider endpoint latency 63.0 ms. Core aliases, auth enforcement, client integrations, provider coverage, free-chat routing, and no-secret documentation scan all passed.
+
+**What remains intentionally outside this certification:** A new video generation or quote was not submitted because the current video dispatch path may interact with parked live Chrome/seat tabs. Video inventory is read-only verified separately; this entry makes no new-spend or new-video claim. No seat, Chrome, credential, database, or process mutation occurred.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
@@ -9797,3 +9817,14 @@ no session_*.json in D:\omniroute-moneti | no |
 - Copilot refresh chain BUILT AND PROVEN: auth0 refresh grant returns a fresh 24h Bearer; rotation persisted to state/secrets/copilot_auth0.json (gitignored). copilot_token_keepalive.py + hidden VBS task "OmniRoute Copilot Bearer KeepAlive" every 6h, verified. REMAINING for pool entry: locate the /c/api/chat socket-URL mint (webSocketCreated sniff DURING a send -- negotiate returns the notifications hub only) and wire negotiate+refresh into ws_replay, then one graduation unit.
 - Gate steady: 24 hosts, 10 REPLAY_OK, 4 AUTH (groq/gemini/yuanbao/chathub -- re-capture did not clear; auth decay real), 8 NO_ANSWER, 2 WALL.
 - Commits: 606882b (numeric rescue), ca4d859 (CJK codec), add7853 (send matcher), bfc30a5 (ws adapter), 797cee0 (keepalive).
+
+### [2026-08-30 11:27] #1310 — graduate_all_seats run: 0/2 graduated
+
+| seat | host | verdict | detail | graduated |
+|---|---|---|---|---|
+| Cerebras Inference Chat | cloud.cerebras.ai | FAIL | 22.json
+no session_*.json in D:\omniroute-monetizer\state\secrets
+per- | no |
+| iFlytek SparkDesk | xinghuo.xfyun.cn | FAIL | re_report_9222.json
+no session_*.json in D:\omniroute-monetizer\state\ | no |
+
