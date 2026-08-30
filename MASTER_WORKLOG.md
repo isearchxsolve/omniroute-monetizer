@@ -10363,3 +10363,12 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Conclusion.** Python replay is already built: `VideoUniversalSessionClient` can transform a recorded submit payload, preserve/replay the recorded multi-exchange job pipeline, poll, and extract a final URL. It cannot create the required artifact or prove a provider session still has credits/auth. Therefore the remaining work is a full, controlled video graduation pass per seat: visual/auth preflight, dry-run trigger proof, one explicitly approved real submit capture (submit -> poll -> result URL), replay verification, durable `session_video_*.json` admission, and zero-restart `:8190` rescan. A route counts only after its own completed video result is verified.
 
 **Safety.** No Chrome/tab action, job submit, provider request, or credit spend occurred in this assessment. The next spend-bearing step should be one best-candidate proof-of-concept seat, not a 23-seat batch.
+### [2026-08-31 01:12] #1356 — Profile-1 minimum-capture census: not achieved for all seats
+
+**Question.** Operator asked whether at least the minimum capture of every seat in the Profile-1/dedicated providers roster had been achieved.
+
+**Read-only evidence.** Parsed `state/profile1_reconciliation.json`. The roster has 51 total seats: 30 have a recorded outcome and 21 remain `PENDING_EVIDENCE`; 24 rows have any active artifact, with one active-artifact host mismatch. Therefore neither a current minimal artifact nor a recorded proof exists for every roster seat.
+
+**Video-specific minimum capture.** Of the eight video-relevant rows, only Google Flow has one active `modality=video` artifact. digen and rtst have runtime registry evidence at `:8189` but no active `:8190` video artifact; Akool, HeyGen, MagicHour, NemoVideo, and veoaifree have no active video artifact. Historical artifact files are provenance only and do not qualify as current capture/graduation.
+
+**Conclusion.** No: minimum capture of all Profile-1 seats has not been achieved. The honest baseline is 30/51 with recorded outcomes and 24/51 with any active artifact; for video the current active minimum capture is 1/8 relevant rows (Google Flow), not a complete fleet. No Chrome, provider, capture, or spend action occurred in this census.
