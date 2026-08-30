@@ -10462,3 +10462,10 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Anti-drift controls.** The brief requires a single combined consumer audit with source attribution, bans exhaustive 9,509-model probing and blind retries, preserves Chrome Gap Doctrine classifications, prohibits live Chrome access, requires task ownership for `:8190`, and defines `BLOCKED` as the correct state when the endpoint is absent. It provides the exact next sequence: recover task-owned `:8190`, run four smoke checks, build the live matrix, then graduate video by actual submit → poll → result proof.
 
 **Validation.** Checked that the brief contains the endpoint, two-harness distinction, capacity-accounting rule, non-drift rules, exact next sequence, and `BLOCKED` stop condition. Confirmed no credential values or secret-bearing fields were added. `git diff --check` passed. No service, Chrome profile, provider, credential, capture, or video state was changed by this handoff.
+### [2026-08-31 03:25] #1364 — Primary orchestration and final-audit authority pinned over GLM worker
+
+**Operator directive.** The lead Codex agent remains the primary orchestrator and final source of truth because GLM 5.3 Flash has a limited credit cap. GLM is a bounded execution worker, not an independent project owner or rollout certifier.
+
+**Handoff updated.** Added an `Orchestration authority` section to `HANDOVER_GLM_5_3_FLASH.md`. GLM may execute explicitly assigned implementation and verification units, but may not redefine the premise, broaden scope, spend credits, operate Chrome, change service ownership, promote inventory to healthy capacity, or declare production complete. GLM must return exact evidence, failures, changed files, tests, and commits to the primary orchestrator.
+
+**Final-decision rule.** Only the primary orchestrator may make the final health, capacity, graduation, and rollout decisions, using current evidence from the merged `:8190` consumer surface and the two distinct OmniRoute/seat-pool harnesses. No service, Chrome profile, provider, credential, capture, or video state was changed by this documentation update.

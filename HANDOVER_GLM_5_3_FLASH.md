@@ -6,6 +6,16 @@
 never be merged. They are distinct harnesses, but they are intentionally merged at the consumer
 endpoint.
 
+## Orchestration authority
+
+The primary orchestrator and final auditor remains the lead Codex agent coordinating this work.
+GLM 5.3 Flash is a bounded worker, used because of credit limits and only for explicitly assigned
+implementation or verification units. GLM must not redefine this premise, broaden scope, spend
+credits, operate Chrome, alter service ownership, promote an inventory row to healthy capacity, or
+declare production rollout complete. Every GLM result must be returned to the primary orchestrator
+with its exact evidence, failures, changed files, tests, and commit. The primary orchestrator makes
+the final health, capacity, graduation, and rollout decision from current evidence.
+
 ## Mission
 
 Make and maintain exactly one production consumer surface:
