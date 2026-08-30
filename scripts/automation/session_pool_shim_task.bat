@@ -22,6 +22,8 @@ curl.exe -s -o nul --max-time 3 "http://127.0.0.1:8190/v1/models"
 
 if not errorlevel 1 exit /b 0
 
+echo [%date% %time%] PRE-START >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
+
 rem Not answering -> start it. The venv launcher spawns the base interpreter as a child process
 rem (normal Python 3.11 venv behavior on Windows), so ONE healthy shim always shows as two
 rem python.exe rows: the launcher and the interpreter that holds :8190. That is expected, not a
@@ -36,3 +38,15 @@ rem Verified 2026-08-28: a /b child survives the bat's console closing, and its 
 rem in the log. The 5-min scheduled task remains the supervisor (probe guard above prevents
 rem double-launch; the shim's EADDRINUSE no-op guard is the second line of defense).
 start "" /b "D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim.py" 8190 >> "D:\omniroute-monetizer\logs\shim_stdout_current.log" 2>&1
+
+rem Verify the listener actually came up (worklog #1367). cmd does NOT set errorlevel
+rem when the >> append open fails -- it silently aborts the start line inside the hidden
+rem window. That failure mode has now bitten twice (historic logs/shim_stdout.log, then
+rem logs/shim_stdout_current.log): a foreign process holds an exclusive handle on the log
+rem and the shim never launches while the task keeps reporting 0. Probe the listener and,
+rem if absent, retry once against the alternate log file before yielding to the next cycle.
+ping -n 4 127.0.0.1 >nul
+curl.exe -s -o nul --max-time 3 "http://127.0.0.1:8190/v1/models"
+if not errorlevel 1 exit /b 0
+echo [%date% %time%] FALLBACK-START alt-log >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
+start "" /b "D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim.py" 8190 >> "D:\omniroute-monetizer\logs\shim_stdout_alt.log" 2>&1
