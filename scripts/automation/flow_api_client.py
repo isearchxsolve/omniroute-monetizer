@@ -50,6 +50,7 @@ import urllib.request
 from typing import Any, Dict, List, Optional
 
 from veoaifree_chat_client import ChatError
+from video_result_accounting import credits_spent as normalise_credits_spent
 
 DEFAULT_BASE = "http://127.0.0.1:8189"
 DEFAULT_MODEL = "veo_3_1_t2v_fast"     # cheapest proven Flow model: 20 credits per 8s clip
@@ -195,11 +196,13 @@ class FlowApiClient:
                 raise ChatError("NO_URL", f"flow job {job_id[:8]} succeeded but exposed no "
                                           f"content_url")
             url = rel if rel.startswith("http") else f"{self.base}{rel}"
+            spent = normalise_credits_spent({"credits": charged if isinstance(charged, (int, float))
+                                             else (need or 0.0)})
             return {"text": url, "label": self.host, "status": "completed",
                     "model": job.get("model") or want_model,
                     "duration": job.get("duration"),
-                    "credits": float(charged if isinstance(charged, (int, float))
-                                     else (need or 0.0)),
+                    "credits": spent,
+                    "credits_spent": spent,
                     "provider_account": job.get("account"),
                     "job_id": job_id}
 

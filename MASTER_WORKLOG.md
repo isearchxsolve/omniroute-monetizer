@@ -9711,6 +9711,22 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** This is a genuine no-spend provider submit-gate exercise, not a rendered-video E2E. No completed video job, media artifact, charge, or `:8190` consumer job receipt is claimed. The two blocked non-Flow providers remain blocked.
 
+### [2026-08-30 16:25] #1329 — One guarded Flow video completed end-to-end through the consumer endpoint
+
+**Action:** Submitted one deliberately small, idempotent video request to the designated `:8190` OpenAI-compatible consumer contract, pinned to `video/labs.google/auto`. The request used a unique durable `job_key`, a benign scene prompt, and the existing route spend gate. The first client wrapper errored locally before returning its response; before doing anything else, queried the durable ledger by the unique key and found exactly one running job. No retry with a new key was issued. The job was polled to terminal state, then the same key was replayed once to verify idempotency.
+
+**Verified E2E result:** Exactly one consumer job was created, dispatched to the guarded dedicated Flow route, completed successfully, and replaying its same `job_key` returned HTTP 200 with the same completed job rather than creating another render. The downstream video-router record reported `succeeded`, one media item, quoted charge equal to actual charge, and an MP4 content endpoint. A bounded content read returned HTTP 200 with `video/mp4`, a nonzero content length, and a valid ISO-BMFF/MP4 file signature. The render charged **20 credits**, equal to its pre-submit quote; no second charge occurred.
+
+**Finding:** The `:8190` durable receipt reported `creditsSpent: 0` even though the downstream Flow job correctly recorded the 20-credit charge. Root cause is a result-field mismatch: `FlowApiClient` returned `credits`, while the shim's durable ledger reads `credits_spent`. This is a consumer-accounting accuracy defect, not a generation failure.
+
+**Fix:** Added `video_result_accounting.py` and updated `flow_api_client.py` to emit both the existing `credits` value and the consumer-ledger-compatible `credits_spent` value from the same normalized number. Added `tests/test_video_result_accounting.py` and `tests/test_flow_api_client_contract.py`. `python -m pytest -q tests/test_video_result_accounting.py tests/test_flow_api_client_contract.py tests/test_video_dedicated_profile_preflight.py` — **6 passed**; `py_compile` passed for the modified production modules.
+
+**Deployment state:** The source-level fix is verified but the currently healthy shim process retains its already-imported client module. It must be reloaded only through its documented single-owner path; no kill/restart was performed in this entry. The completed historical job record is not rewritten, consistent with the no-direct-database rule.
+
+**Safety:** One and only one paid render was intentionally authorized and performed. No operator Chrome profile was touched; all browser activity stayed within the preflighted dedicated profile boundary. No provider credentials, cookies, account/project identifiers, full media bytes, or sensitive balances are logged here.
+
+**What is not claimed:** This E2E proves the working guarded Flow route and consumer idempotency, not rtst.ai or Digen recovery. The source fix is not claimed live until the shim owner reloads the process and a future no-duplicate verification observes the corrected receipt field.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
