@@ -62,7 +62,10 @@ VIDEO_EST_SECONDS = 300
 # produces an explicit fallback marker rather than silently pretending the paid side
 # answered.
 OMNIROUTE_UPSTREAM = os.environ.get("OMNIROUTE_UPSTREAM", "http://127.0.0.1:20128").rstrip("/")
-OMNIROUTE_MODEL_TIMEOUT_S = 1.5
+# The upstream catalog is ~9.5K rows.  1.5 seconds is enough for a warm local
+# request but not a reliable first fetch after a shim restart; it made discovery
+# collapse to local seat aliases while OmniRoute inference was still healthy.
+OMNIROUTE_MODEL_TIMEOUT_S = 10.0
 OMNIROUTE_CHAT_TIMEOUT_S = 8.0
 OMNIROUTE_FALLBACK_MODEL = os.environ.get("OMNIROUTE_FALLBACK_MODEL", "frontier")
 
@@ -108,6 +111,7 @@ class OmniRouteBridge:
         if now - self._models_at < 15.0:
             return list(self._models)
         self._models_at = now
+        cached = list(self._models)
         try:
             r = requests.get(f"{self.base}/v1/models", timeout=OMNIROUTE_MODEL_TIMEOUT_S)
             data = r.json() if r.ok else {}
@@ -117,7 +121,12 @@ class OmniRouteBridge:
             self._models = [row for row in rows if isinstance(row, dict) and row.get("id")]
             self._last_error = None
         except Exception as exc:
-            self._models = []
+            # Discovery must not claim capacity disappeared merely because this
+            # refresh timed out.  Preserve the last good catalog; status exposes
+            # the failed refresh so callers can distinguish cached inventory from
+            # a current upstream response.  On a cold start there is no cache, so
+            # returning an empty paid catalog remains honest.
+            self._models = cached
             self._last_error = type(exc).__name__
         return list(self._models)
 
