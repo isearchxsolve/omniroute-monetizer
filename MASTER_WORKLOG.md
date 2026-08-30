@@ -10139,3 +10139,96 @@ ew_body_str != base_body passed check 1b even with zero prompt replacement - the
 **Proof.** eplay_check --only monica -> HTTP 200, **REPLAY_OK**, the expected phrase present in the reply (2.9s). Monica graduates - jar-replayable host #13. Total serving supply now 14 with Puter's SDK-adapter lane (#1338).
 
 **Queue state.** Remaining: V0 submit-poll client, Gemini/ChatHub send-time auth.
+
+### [2026-08-30 10:35] #1341 - OmniRoute 24-inactive reauth: diagnosis, categorization, and honest blockers
+
+**Context.** Post power-trip recovery of the OmniRoute 24-inactive-provider task. Management plane `:20128` (node PID 6416, NSSM service "OmniRoute", app at `%LOCALAPPDATA%\hermes\node\node_modules\omniroute`). Goal: recover 24 inactive connections via native API only (no seat pool / Chrome / video / DB hacks).
+
+**Diagnosis (read-only first, ownership respected).**
+1. Initial `/api/*` timeouts were NOT a crash: root cause = the loopback proxy intercepts `localhost` but NOT `127.0.0.1`. Fix: use `127.0.0.1` + `requests(trust_env=False)`. (Same gotcha as TECHNOLOGY_TRANSFER §1.) This is the bug that had made every earlier probe hang.
+2. Node is **fragile**: wedges under concurrent API load (bulk `oauth_reauth_all.py` wedges it; self-recovers after ~60s idle). `Restart-Service OmniRoute` / `taskkill` both denied from this non-elevated shell (Access denied) — needs elevation to restart.
+
+**Reconciliation of the 24 inactive (`isActive=false`), overriding the GOAL's stale assumed counts:**
+- auth_missing (8): huggingface, friendliai, deepseek, chutes, openai(prio3), huggingchat (cookie), venice (corrupted key — curl text pasted), fal-ai (corrupted key — smart-quote in key).
+- reauth_required (10): xai-oauth x2, grok-cli, codex, amazon-q x2, kimi-coding, kilocode, grok-web, blackbox-web.
+- runtime_error (2): qoder x2 (local `qodercli` not runnable).
+- unsupported (4): windsurf x2, trae, dify ("test/validation endpoint not supported").
+
+**Reauth attempt (native, single-provider to avoid wedge).**
+- Built low-volume runner; device-code providers (kimi-coding, amazon-q x2, kilocode) generate a `user_code` for the operator to enter at the provider's device URL; poller exchanges via `POST /api/oauth/{p}/poll` with `deviceCode` (discovered: stale script used `device-poll`/`start-callback-server` which return "Unknown action" on this build; correct endpoints are `/oauth/{p}/authorize` + `/oauth/{p}/poll`).
+- codex/xai-oauth/grok-cli authorize flow hits **external OpenAI/X auth error** ("An error occurred during authentication") on the consent page — operator-side, not automatable.
+- kimi-coding device entry returns Kimi-side **"Missing user_code parameter"** — operator/Kimi device-verify issue.
+- amazon-q x2: device poll returns **`invalid_client`** ("Invalid client provided"). Root cause: stored `clientId` is stale. amazon-q (`providers/index.ts:"amazon-q":kiro`) reuses Kiro's handler, which only re-registers the OIDC client on the *import* path, not the device-code path. Attempted fix: POST AWS OIDC `https://oidc.us-east-1.amazonaws.com/client/register` (replicating `kiro.registerClient`) -> got a fresh clientId/clientSecret, stored via `PUT /api/providers/{id}` providerSpecificData. **Still `invalid_client`** — because the registration used Kiro's `issuerUrl`/`scopes` (the shared handler config), which AWS rejects when bound to the amazon-q device flow (issuer/client binding mismatch). A provider-correct registration is required; cannot be guessed.
+
+**Honest blockers (no fabrication, no key invention):**
+- 10 reauth providers blocked by external provider OAuth errors (OpenAI/X auth, Kimi Missing user_code, AWS invalid_client) — need operator-side resolution (valid provider session / correct client registration / dashboard re-auth).
+- Node fragility needs an elevated restart to stabilize bulk operations.
+- auth_missing (8) need real credentials; unsupported (4) need native adapters or evidence.
+
+**Next.** Awaiting operator's specific OmniRoute API endpoint for the invalid_client fix (or use of the dashboard re-auth). Then proceed sequentially: kilocode device-code (operator entry pending), grok-web/blackbox-web web-cookie refresh, qoder runtime check, then reconcile /v1/models + combos.
+
+
+### [2026-08-30 10:04] #1342 - qoder runtime_error root cause: qodercli needs AVX2, host is no_avx2
+
+**Symptom.** qoder x2 (`b2fe293d`, `e217f911`) inactive, lastError "Local CLI runtime is installed but not runnable (healthcheck_failed)", transport=`qodercli`.
+
+**Investigation.** `qodercli.exe` at `C:\Users\Admin\.qoder\bin\qodercli\qodercli.exe` exists. Direct invoke:
+```
+Bun v1.3.14 (0d9b296a) Windows x64
+CPU: sse42 avx   Features: no_avx2
+panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
+```
+**Root cause.** The binary is Bun-compiled requiring **AVX2**; this host CPU lacks AVX2 (`no_avx2`). Launch crashes with SIGILL. This is a hardware/toolchain incompatibility, not a missing file or bad path — the healthcheck cannot pass on this machine.
+
+**Disposition.** Not fixable by restoring the runtime or editing config (per GOAL "resolve runtime_error only by restoring documented local runtimes safely"). Requires either an AVX2-capable host or an AVX2-free `qodercli` build. Recorded as an environment blocker; qoder x2 remain inactive.
+
+**Node restart.** Operator will restart the OmniRoute NSSM service from an elevated shell (this non-elevated shell gets "System error 5: Access denied" on `net stop/start` and `Restart-Service`). After restart, node should be stable for sequential reauth work. OAuth reauth (amazon-q/kilocode + codex/xai-oauth/grok-cli/kimi/grok-web/blackbox-web) to be completed by operator via the OmniRoute dashboard; this agent will then verify + reconcile /v1/models and combos.
+
+
+### [2026-08-30 10:45] #1343 - RCA: 24-inactive reauth failures - four independent root-cause classes
+
+**Trigger.** Operator: "do an rca" after repeated reauth attempts failed across sessions ("everytime i fix them everytime same issue").
+
+**RCA - four independent classes, not one bug:**
+
+1. **Management-plane fragility (environmental).** Loopback proxy intercepts `localhost` but not `127.0.0.1` (fixed via `127.0.0.1` + `trust_env=False`). Node wedges under CONCURRENT API load; self-recovers after ~60s idle. Un-restartable from non-elevated shell (`net stop/start`, `Restart-Service`, `taskkill` all -> Access denied; NSSM service needs elevation).
+
+2. **Stale automation vs current API.** `oauth_reauth_all.py` uses `start-callback-server`/`device-poll` -> "Unknown action" on this build. Current endpoints: `GET /oauth/{p}/authorize` (returns authUrl) and `POST /oauth/{p}/poll` (requires `deviceCode` body param).
+
+3. **External provider rejections (hard wall, operator-side).**
+   - codex/xai-oauth/grok-cli: OpenAI returns `AuthApiFailure: unknown_error` at the authorize redirect - rejects OmniRoute's OAuth client outright (client_id `app_EMoamEEZ73f0CkXaXp7hrann`).
+   - kimi-coding: Kimi device-verify -> "Missing user_code parameter".
+   - amazon-q x2: `invalid_client`. Stored OIDC client stale; device path never re-registers (only import path does, kiro.ts L385). Direct AWS `client/register` replication (kiro.registerClient params) still fails - Kiro issuerUrl does not bind to amazon-q's flow.
+
+4. **Data/hardware (independent of OAuth).**
+   - qoder x2: qodercli.exe (Bun binary) requires AVX2; host CPU `no_avx2` -> SIGILL. Hardware block.
+   - venice: stored apiKey is a pasted curl command with `YOUR_API_KEY` placeholder (worklog L3680).
+   - fal-ai: stored apiKey is >=775 chars of prose with U+2019 at index 774 (worklog L3682).
+   - huggingface/friendliai/deepseek: no key stored. huggingchat: web cookie required.
+   - NOTE: `apiKey` is masked to a uniform 16 chars on read (worklog L3687) - shape inspection of the read-back field is meaningless; only the test endpoint's error text reflects the real stored value.
+
+**Operator's "corruption" claim vs evidence.** The worklog documents venice/fal-ai as junk PASTED into the key field (data-entry), and the OAuth failures as expired/missing refresh tokens (#1325). No worklog entry documents OmniRoute mangling valid credentials during storage. The token-inspection pass (raw providerSpecificData read of the 6 failed OAuth connections) was started but aborted by the operator before results.
+
+**Fixable by automation:** classes 1-2 (elevated restart + script endpoint update).
+**Operator-side:** class 3 (valid provider sessions / correct client registration / dashboard flow) and class 4 (real keys, AVX2-capable host or AVX2-free qodercli build).
+
+**Safety.** Read-only except: one `PUT /api/providers/{2248a0bf}` clearing then re-setting the amazon-q clientId/clientSecret via a fresh AWS OIDC registration (connection left with a freshly registered client, still inactive - net state unchanged). No keys invented; no credentials logged; worklog entries #1341-#1343 only.
+
+
+### [2026-08-30 10:45] #1341 - V0: full RCA of the replay failure + live-tab adapter built (account currently rate-limited)
+
+**Symptom.** Single-exchange jar replay of v0.app never produced an answer; the send POST returned "ok" but no message landed.
+
+**RCA (instrumented with a two-way CDP network capture on the live tab).**
+1. **x-is-human JWE gate (structural).** The send POST requires a client-minted x-is-human JWE (A256GCM, dir-encrypted) that the page's bot-detection SDK generates per send. The recorded header carries yesterday's token. Server acks "ok" and silently drops the message -- recorded-bytes replay is therefore impossible regardless of prompt injection. This is the honest classification, not a prompt-injection bug.
+2. **The live-tab composer path works.** Driving the page's ProseMirror editor (execCommand select-all+delete -> Input.insertText -> Enter key events) mints a fresh token and the message persists. Proven 4x this session (10:03, 10:06, 10:10, 10:13) -- arithmetic probe 41 + 17 returned computed **58** each time.
+3. **Answer retrieval.** v0's send POST returns only "ok"; the answer lands on a POLL. Sniff confirmed the page calls GET /api/chat/chat/latest?chatId=...&lastSyncedAt=... after every send. Response shape: {ok, value:{newMessages:[...], syncedAt}}. The assistant message nests its text in a message-binary-format tree (["p",{},["text",{},<string>]]); a recursive walker extracts it. Stale-message rejection uses the message createdAt (only messages newer than the send fire-time count).
+4. **429 rate limit on rapid reuse.** The instrumented capture showed POST /chat/api/chat -> 429 (body "9") as the ONLY non-200 in the flow, after which sends kept clearing the composer but no message landed for 20+ minutes. daily-model-usage returned usage:0, so it is NOT a credit cap -- a per-session / per-window throttle.
+
+**Adapter written.** scripts/automation/v0_live_tab.py (modeled on copilot_live_tab.py / puter_live_tab.py): derives chatId from the tab url (strips the slug prefix v0 adds post-submit), submits via the composer, polls in-page, and retries with a growing backoff (30s/60s) when a send is dropped.
+
+**Bugs fixed during the build.** (a) the poll fetch omitted chatId -> 0 messages; (b) the adapter used json.dumps(chat_id) which injected literal quotes into the query param -> fixed with urllib.parse.quote; (c) cap.targets() filters 	ype=="page" only, so cross-origin iframes (irrelevant here, but noted).
+
+**Current state.** The v0-free account is throttled from today's rapid test sends; the adapter's backoff retry is correct and the path is proven -- re-run in ~30 min when the window decays. NOT a permanent block; NOT a dead end by doctrine (Chrome chats with v0 right now; we drive Chrome's own composer).
+
+**Honest classification.** v0 = live-tab adapter (not jar-replayable, not dead). Held out of the gate until the throttle decays; the build is complete and committed.
