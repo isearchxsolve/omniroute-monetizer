@@ -122,6 +122,46 @@ def get_api_key() -> str:
     return os.environ.get("OMNIROUTE_API_KEY", "").strip()
 
 
+def extract_chat_content(body: Any, raw_text: str = "") -> str:
+    """Extract visible assistant text from JSON or OpenAI-compatible SSE replies.
+
+    Some upstreams emit `text/event-stream` even when a client requests a
+    non-streaming completion.  A 200 response with a valid SSE answer is a
+    successful inference, not a failed JSON parse.
+    """
+    def from_payload(payload: Any) -> str:
+        if not isinstance(payload, dict):
+            return ""
+        choices = payload.get("choices")
+        if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+            choice = choices[0]
+            message = choice.get("message") or choice.get("delta") or {}
+            if isinstance(message, dict):
+                content = message.get("content")
+                if isinstance(content, str):
+                    return content
+        output_text = payload.get("output_text")
+        return output_text if isinstance(output_text, str) else ""
+
+    content = from_payload(body)
+    if content or not raw_text:
+        return content
+    chunks = []
+    for line in raw_text.splitlines():
+        if not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if not data or data == "[DONE]":
+            continue
+        try:
+            piece = from_payload(json.loads(data))
+        except (TypeError, ValueError):
+            continue
+        if piece:
+            chunks.append(piece)
+    return "".join(chunks)
+
+
 class OmniRouteAPI:
     """Session-based client for the OmniRoute management + inference APIs."""
 
@@ -323,6 +363,7 @@ class OmniRouteAPI:
             ],
             "max_tokens": 16,
             "temperature": 0,
+            "stream": False,
         }
         start = time.monotonic()
         try:
@@ -333,16 +374,12 @@ class OmniRouteAPI:
                 timeout=timeout,
             )
             elapsed = round(time.monotonic() - start, 3)
+            raw_text = r.text if r.status_code == 200 else ""
             try:
                 body = r.json()
             except Exception:
-                body = {"raw": redact(r.text[:500])}
-            content = ""
-            if r.status_code == 200 and isinstance(body, dict):
-                try:
-                    content = body["choices"][0]["message"]["content"] or ""
-                except Exception:
-                    content = ""
+                body = {"raw": redact(raw_text[:500])}
+            content = extract_chat_content(body, raw_text) if r.status_code == 200 else ""
             return {
                 "model": model,
                 "http_status": r.status_code,

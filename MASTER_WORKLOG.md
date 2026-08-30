@@ -9549,6 +9549,16 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **Safety:** No combo, provider, credential, database, process, seat, or Chrome state was changed.
 
+### [2026-08-30 13:32] #1314 â€— SSE-aware inference probe fixes false negatives; six combo models now proven live
+
+**Root cause and fix:** Investigation showed OmniRoute can return `text/event-stream` for a request that asks for `stream: false`. `OmniRouteAPI.chat_probe()` previously only parsed JSON, so valid 200 SSE answers were misclassified as failures. Added `extract_chat_content()` to safely assemble OpenAI-compatible SSE `choices[].delta.content` events as well as regular JSON `choices[].message.content`, and made the probe explicitly send `stream: false`.
+
+**Verification:** Added JSON and SSE unit coverage. `python -m pytest -q tests/test_omniroute_capability_matrix.py` — **12 passed in 2.24s**; module compilation passed. A direct `codex/gpt-5.6-sol` probe changed from HTTP 200 / false-negative to `ok: true` with visible reply content.
+
+**Re-run evidence:** Re-ran the non-mutating combo optimizer dry run over 23 configured model IDs. It now verified 6 live models: `codex/gpt-5.6-sol`, `mistral/codestral-2508`, `aion/aion-labs/aion-2.0`, `cohere/c4ai-aya-expanse-32b`, `cloudflare-ai/@cf/meta/llama-3.2-3b-instruct`, and `agy/gemini-3.6-flash-high`. Seven combos have a deterministic in-memory reordering that promotes verified models; dry-run made no PUT calls.
+
+**Safety:** No combo was updated and no provider, credential, process, database, seat, or Chrome state was modified. The refreshed dry-run artifact remains `state/combo_optimization.json` with `dry_run: true`.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.

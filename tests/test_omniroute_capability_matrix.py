@@ -91,6 +91,20 @@ def test_combo_recommendation_provider_and_scoring_are_deterministic() -> None:
     assert score("mistral/codestral-2508", "auto/pro-coding") > score("mistral/large", "auto/pro-coding")
 
 
+def test_chat_probe_extracts_assistant_text_from_sse() -> None:
+    from omniroute_api import extract_chat_content
+
+    sse = 'data: {"choices":[{"delta":{"content":"O"}}]}\n\ndata: {"choices":[{"delta":{"content":"K"}}]}\n\ndata: [DONE]\n'
+    assert extract_chat_content({"raw": "ignored"}, sse) == "OK"
+
+
+def test_chat_probe_extracts_assistant_text_from_json() -> None:
+    from omniroute_api import extract_chat_content
+
+    body = {"choices": [{"message": {"content": "OK"}}]}
+    assert extract_chat_content(body) == "OK"
+
+
 def test_supervisor_application_probe_distinguishes_http_success_and_failure() -> None:
     from omni_supervisor import http_health
 
