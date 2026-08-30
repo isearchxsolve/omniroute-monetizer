@@ -10243,3 +10243,12 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Commit.** Pending immediate commit after this physical worklog update, per the incremental component loop.
 
 **What is NOT claimed.** No OAuth provider was reauthenticated. The external blockers documented in #1341–#1343 (OpenAI/X auth errors, Kimi parameter error, AWS invalid client, missing human credentials, and qoder AVX2 incompatibility) remain open until their required operator-side action or a provider-correct implementation is available.
+### [2026-08-30 23:12] #1345 — Bounded live verification stopped after documented management-plane wedge
+
+**Action.** Started `apply_master_healthy_combos.py --help`, `audit_full_working_catalog.py --help`, and `python acceptance_tests.py` concurrently as a bounded read/verification pass. Each management-backed script reached `[+] Management login OK` and then stalled during its live refresh/probe phase. The direct preflight `GET http://127.0.0.1:20128/v1/models` had already returned HTTP 200 with a multi-megabyte catalog response; unauthenticated `/api/providers` correctly returned HTTP 401.
+
+**Result.** After the commands produced no further output during repeated short polls, all three were interrupted with Ctrl+C. Exit code was 1 for each interrupted process. No combo PUT, provider update, credential change, browser action, or credit-spending request occurred. This behavior is consistent with the existing RCA that concurrent/live management operations can wedge the Node service and that an elevated NSSM restart is required for stable bulk work.
+
+**Decision.** Do not run `apply_master_healthy_combos.py` until a serialized, timeout-aware live catalog diff succeeds after the operator performs the elevated service restart. Do not claim acceptance certification from an interrupted run.
+
+**What is NOT claimed.** This does not prove the catalog, combos, or providers are unhealthy. It proves only that this concurrent verification attempt did not complete and that the current process should not be stressed with more parallel management calls.
