@@ -10856,3 +10856,17 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Workstream B status after this entry.** COMPLETED rows: rtst.ai/seat2/wan22 (#1370) + rtst.ai/seat3/wan22 (#1371), both ftyp-validated MP4s through the durable contract. niloy rtst = LOGIN_REQUIRED-class (SSO re-login next). Video-capable chat-provider capture on Profiles 2-4 = next.
 
 **Next single action.** niloy rtst SSO re-login via the profile's operator-confirmed Google session (premise-compliant, no password/OTP handling), then the chat-provider video capture sweep. Files: scripts/automation/omniroute_video_client.py (new), scripts/automation/session_pool.py (dispatch branch), MASTER_WORKLOG.md. Commit follows.
+
+### [2026-08-31 00:15] #1373 - Profile 2 (niloy) rtst row COMPLETED: third result-verified MP4; all three Profiles 2-4 rtst units now graduated
+
+**Operator-assisted onboarding (premise-clean).** After two flaky chromedriver drives (window-handle transitions killed the sessions) and a raw-CDP attempt that raced the auto-attach, the OPERATOR completed the one human step: the Google sign-in inside the niloy window. I then captured the token read-only via a flat CDP session (localStorage.auth_token, 368-char JWT, 3 segments - the value never printed) and wrote session_rtst_ai_niloy.json. Process note recorded honestly: the SSO driver should be parameterized into the existing capture machinery rather than temp scripts once this flow stabilizes; Profile-1 machinery itself remained untouched throughout (git-verified in the operator exchange).
+
+**Free capacity read.** niloy rtst account: 10.0 credits, 1 clip affordable (vidu 3s@540p 6.0).
+
+**Bounded generation through the durable :8190 contract.** POST model video/rtst.ai/auto, job_key rtst-grad-niloy-001 -> 202 receipt, session session_rtst_ai_niloy dispatched directly. Worker: submit-once, poll to succeeded, result URL https://cdn.rtst.ai/videos/6b97fd37-0fae-47d4-acdf-fad19771c8d2.mp4. Media-byte validation: 1,248,586 bytes, first 12 bytes 00 00 00 20 66 74 79 70 69 73 6f 6d = ftypisom, saved state/harvest/rtst/niloy_clip.mp4.
+
+**Spend verification.** niloy balance re-read after completion: 0.0 (the wan22 5s@480p debit, consistent with seat2/seat3 pricing).
+
+**Capacity accounting after this entry.** Graduated video rows: rtst.ai x {seat2 (kunal.colab), seat3 (xxpertcomments), niloy (niloydassana)} x wan22 = 3 completed rows, each a distinct provider/account with an ftyp-validated MP4 through the durable :8190 contract. Profile 1 (providers) rtst seat = WALL (1.0 credits, 0 clips - account drained). Workstream A (OmniRoute-native) unchanged: contract mapped, adapter built, vertex bounded tests stopped at the budget (worklog #1372).
+
+**Next single action.** Video-capable chat-provider capture sweep on Profiles 2-4 (chat providers that expose video models), then the OmniRoute-native retry when its vertex path stabilizes. Files: MASTER_WORKLOG.md only (seat file gitignored; media gitignored). Commit follows.
