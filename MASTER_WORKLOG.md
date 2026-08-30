@@ -9527,6 +9527,18 @@ no session_*.json in D:\omniroute-monetizer\ | no |
 | ChatGPT Free Web | chatgpt.com | UNPARSEABLE | 200 but no recognised response shape -- not scored as an answer | no |
 | ChatHub Web | chathub.gg | AUTH | auth refused (in body) -- cookie alone is not enough | no |
 | Groq Chat | console.groq.com | REPLAY_OK | [matched the report's only row, 'api.groq.com'] 58 | yes |
+
+### [2026-08-30 17:30] #1335 — Read-only runway and consumable-inventory snapshot
+
+**Action:** Per the operator's request for current runway status, performed a fresh read-only check of the designated consumer shim (`:8190`), the video router health endpoint (`:8189/healthz`), the latest sanitized native fleet audit (`state/fleet_provider_audit.json`), and the persisted video job ledger. No seat file, Chrome profile, provider credential, database, or service process was changed. Temporary HTTP response files used for aggregation were local diagnostics only and were not retained as inventory state.
+
+**Chat/provider runway:** The latest completed native fleet audit is timestamped `2026-08-30T06:36:10Z` and contains 117 configured connections, 71 native-valid connections, and 24 inactive connections. The remaining 22 records are active in the management registry but failed the native validity gate; they are not counted as consumable runway. A direct read of OmniRoute's `:20128/v1/models` and `/api/providers` timed out twice at the five-second boundary during this snapshot (HTTP 000, zero response bytes), while the listener remained present on TCP 20128. Therefore the 71-valid figure is the latest verified provider runway, not a claim that the management plane is currently responsive. No restart was attempted because OmniRoute is not supervisor-owned.
+
+**Consumer surface:** `:8190/v1/models` answered successfully and returned 29 model entries, including the two currently exposed video aliases `video/auto` and `video/labs.google/auto`. This confirms the designated consumer endpoint is alive and has a live model surface even while the management API is temporarily unresponsive.
+
+**Video runway:** `:8189/healthz` answered `200` with six configured video accounts, three ready accounts, and all three ready accounts on the Flow lane. The redacted aggregate balance is 1,950 credits; at the measured 20-credit Flow cost this is a theoretical ceiling of 97 full jobs (with 10 credits left), not a guarantee of uninterrupted generation or a reservation. rtst.ai and digen.ai remain unready and are excluded from the ready runway. The video ledger currently contains five terminal jobs: three succeeded and two failed; no active jobs were reported. Deliberate spend recorded in the ledger is 20 credits for the accounting-verified E2E job; earlier successful free/API video jobs recorded zero credits.
+
+**Conclusion:** The inventory is partially ready to consume now: chat has 71 verified native provider connections behind the latest audit, and video has a verified Flow route with approximately 97 theoretical 20-credit jobs across three ready accounts. It is not accurate to call the full configured inventory consumable: 24 providers are inactive, 22 active records fail validation, two video providers are unready, and the `:20128` management plane needs a separate non-destructive availability investigation. No seat-layer or operator-Chrome claim is included in this snapshot.
 | Microsoft Copilot Web | copilot.microsoft.com | NO_ANSWER | 200 but the extracted reply is not only '58': {"event":"connected","re | no |
 | Felo AI Web | felo.ai | REPLAY_OK | 58 | yes |
 | Grok on X / Grok Web | grok.com | FAIL | eport_9222.json
@@ -10026,3 +10038,10 @@ no session_*.json in D:\omniroute-monetizer\state\ | no |
 - sso_v2.py committed: login-modal pre-click + Google affordance search + account picker (shadow-piercing, JS-exception surfaced).
 - GATE FINAL: 24 hosts / 10 REPLAY_OK (claude, qwen, deepseek, mistral, cohere, chatgpt-via-chatx, 1min, felo, perplexity, veoaifree-chat) / 4 AUTH / 8 NO_ANSWER / 2 WALL. Pool :20130 serving 10.
 - NEXT SESSION QUEUE: (1) DeepInfra readiness rule -> replay its captured jar; (2) Groq --redo-passed; (3) Copilot socket-mint sniff during send -> negotiate wiring; (4) sso_v2 modal step for Poe/Puter/Phind-class; (5) Monica conversation-state, V0 pipeline, Gemini/ChatHub auth; (6) Aymo 429 decay retry.
+
+### [2026-08-30 12:14] #1314 — graduate_all_seats run: 1/1 graduated
+
+| seat | host | verdict | detail | graduated |
+|---|---|---|---|---|
+| Groq Chat | console.groq.com | REPLAY_OK | [matched the report's only row, 'api.groq.com'] 58 | yes |
+
