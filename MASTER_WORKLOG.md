@@ -10681,6 +10681,16 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Final status.** GLM's delivered adapter component is **accepted as partial progress**. The overall GLM task is **NOT COMPLETE**: Profile 2–4 seat expansion is outstanding, provider SSO onboarding has not produced new provider seats, and full pure-Python video graduation has produced zero new completed media rows. The next single action is to diagnose the current `:8190` timeout without disturbing task ownership, then resume Profile 2–4 provider-seat expansion and Python graduation with an operator-approved spend/unblock path where necessary. User-owned untracked `qfailure` remains untouched.
 
+### [2026-08-31 01:20] #1384 - Scope reconciliation: GLM completed prior adapter task; latest Profile 2–4 task was not yet handed off
+
+**Operator correction.** The operator clarified that GLM was executing the previous assignment, not the newer Profile 2–4 expansion assignment. Therefore the absence of Profile 2–4 signup/seat-expansion evidence is a handoff sequencing issue, not evidence that GLM failed to follow the task it actually received.
+
+**Prior task disposition.** GLM's previous task—build real Python video adapters and test the durable `:8190` contract—was completed as far as available account headroom allowed: KIE and AI Studio adapters were built and self-tested; durable receipts and Python worker failure handling were proven; real generation stopped at honest wallet/quota walls; no new MP4 capacity could be graduated. That result remains accepted partial progress for the prior task.
+
+**Current task to hand off next.** GLM must now receive the current `HANDOVER_GLM_5_3_FLASH.md` revision containing the exact Profile 2–4 assignment: expand `niloy`/9223, `seat2`/9224, and `seat3`/9225 using Profile 1 as the reference; use only already-authenticated Google SSO for ordinary signup; stop at password/OTP/email/CAPTCHA/MFA walls; then build pure Python provider adapters and complete the full chat/video graduation pass, including OmniRoute video providers and video-capable chat providers. Chrome is capture/onboarding only, never runtime serving or graduation proof.
+
+**Verification.** Confirmed the latest handoff remains present in the repository and separates the prior adapter result from the new profile-expansion task. No browser, provider, credential, session, signup, video, or service action occurred in this scope reconciliation. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
+
 ### [2026-08-30 22:00] #1369 - Revised handover executed: real Python video-adapter sweep; two adapters built + wired; every verified-key unit walled on money/quota (0.0 spent); durable contract proven
 
 **Operator word.** "continue" after the revised HANDOVER_GLM_5_3_FLASH.md (commit 19ab303) assigned the real Python video-adapter graduation as highest priority. Primary orchestrator follow-ups acknowledged: 0d15676 (retain Omni catalog across discovery timeout) and ccd58e0 (fallback log collision-safe) - both touched files I authored; current state verified before building on them.
