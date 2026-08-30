@@ -9699,6 +9699,18 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** A successful pre-submit Flow chain is not a generated video. No video output, spend, exact pricing, or successful completion/polling contract is claimed yet. rtst.ai and Digen are not claimed authenticated or routable.
 
+### [2026-08-30 16:14] #1328 — Video submit gate contract proven on all dedicated Flow paths at zero credit
+
+**Action:** Ran `python scripts/automation/video_router.py doctor --deep` only after the dedicated-profile preflight and the ordinary no-spend doctor chain had passed. In deep mode, the Flow adapter sends an intentionally empty prompt with a newly minted captcha. The provider must reject it as an invalid argument; an empty prompt cannot create a video and the adapter classifies that exact rejection as a zero-credit submit-gate proof.
+
+**Verified result:** Each of the three Flow paths again passed the dedicated-profile guard, tab/session/project/captcha/credit prerequisites, and then returned the expected HTTP 400 invalid-argument response at the actual provider submit endpoint. The adapter recorded this as `captcha accepted` with **0 credits**. This proves the browser-backed session can mint the required current captcha and reach the Flow submission validation endpoint, rather than only reading cached account state.
+
+**Blocked result:** rtst.ai remains unauthenticated in its dedicated tab and Digen remains missing its required captured session artifact. The command's non-zero exit is correct because these two independent provider routes are still unavailable.
+
+**Safety:** The intentionally invalid request has no generation parameters/content and was rejected before any job creation; no credits were spent. No quote, render, poll, media download, route reactivation, Chrome launch, operator-profile access, seat-file mutation, or service restart occurred.
+
+**What is not claimed:** This is a genuine no-spend provider submit-gate exercise, not a rendered-video E2E. No completed video job, media artifact, charge, or `:8190` consumer job receipt is claimed. The two blocked non-Flow providers remain blocked.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
