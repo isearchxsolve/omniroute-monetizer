@@ -50,6 +50,46 @@ prove the provider's real chat/video operation through `:8190`. GLM must spend i
 on provider functionality and video-capacity graduation, not on password/OTP/CAPTCHA automation or
 rebuilding signup flows that are not needed.
 
+## Next assigned task — expand Profiles 2–4, then graduate every new seat in Python
+
+This is the operator's exact next task. Treat Profile 1 as the reference process and extend the
+same process to the other three dedicated automation seats. In the repository's canonical readiness
+artifact, the internal seat labels are `providers`/CDP `9222` (Profile 1 reference), `niloy`/`9223`
+(Profile 2), `seat2`/`9224` (Profile 3), and `seat3`/`9225` (Profile 4). The current readiness rows
+are candidate-site evidence, not already-graduated seats: they contain 51, 11, 21, and 20 site rows
+respectively. Do not turn those row counts into capacity without provider/account and runtime proof.
+
+For Profiles 2, 3, and 4, perform this sequence for every unauthenticated candidate that is useful:
+
+1. Reconcile the candidate against the profile's existing tabs, account mapping, capture files, and
+   prior verdicts. A new seat means a distinct provider/account/session contract, not another model
+   alias or another tab for an existing account. Preserve the profile/account boundary.
+2. If ordinary signup is required, use the already-authenticated Google SSO session belonging to
+   that dedicated automation profile to drive only the provider's normal signup UI. Do not type a
+   password; do not handle OTP or email-verification codes; do not solve CAPTCHA; do not bypass MFA;
+   do not create or invent a Google account. If the SSO session is not already authenticated, record
+   `LOGIN_REQUIRED` and move on. Signup completion alone is not a successful seat.
+3. After the account/session exists, capture the provider's real post-signup chat/video exchange or
+   API contract, then make the provider work. For video-capable providers, record every actual model
+   family served, including models owned by a provider that also appears in the chat roster.
+4. Build or repair a **pure Python runtime adapter**. Chrome may be used for safe dedicated-profile
+   capture and visual protocol observation only; it must not be used to serve the request, poll the
+   job, or constitute graduation evidence.
+5. Run one bounded real test per provider/account/model family as appropriate. Chat requires a fresh
+   computed response. Video requires Python submit → poll/reconcile → completed downloadable media,
+   followed by the same provider's durable `:8190` video-job proof. Respect the task spend gate and
+   provider caps; stop on walls, quotas, OTP/email verification, CAPTCHA, or missing login.
+6. Add only proven rows to the combined matrix, with `profile/seat`, provider/account, model family,
+   Python transport, evidence timestamp, and result. Keep `LOGIN_REQUIRED`, `WALL`, `AUTH`,
+   `CAPTURE_GAP`, and adapter failures as explicit non-capacity outcomes.
+
+The deliverable is not “more Chrome tabs” and not “more signups.” It is expanded provider supply
+that continues to work after the Chrome tab is closed. The final report must show, per profile and
+across both OmniRoute and seat-pool harnesses: candidates found, SSO signups completed, provider
+accounts actually working, video model families served, Python adapters built, completed media proofs,
+and remaining blockers. Never merge four profiles into one anonymous count and never count a signup,
+capture, inventory model, Chrome route, or adapter skeleton as graduated capacity.
+
 ## Two harnesses, one surface
 
 Keep these implementations and evidence separate:
