@@ -34,6 +34,22 @@ It must be OpenAI-compatible:
 
 Use `127.0.0.1`, never `localhost`.
 
+## Original automation premise — do not inflate it into an auth project
+
+The operator's day-one signup request is deliberately narrow: when a provider requires account
+creation, automation may drive the ordinary signup UI using an **already-authenticated Google SSO
+session** in the approved dedicated automation profile. It must not type or retrieve a Google or
+provider password, enter an OTP or email-verification code, defeat CAPTCHA, bypass MFA, or invent a
+credential. If the existing SSO session is not already signed in, the correct result is a clearly
+reported login/verification wall and a request for the operator to complete that one human step.
+
+Signup is only an onboarding prerequisite. It is not the mission, not a capacity row, and not a
+graduation result. After an account exists, the actual work is to make the provider's service work:
+capture the legitimate post-signup session or API contract, build the Python runtime adapter, and
+prove the provider's real chat/video operation through `:8190`. GLM must spend its execution budget
+on provider functionality and video-capacity graduation, not on password/OTP/CAPTCHA automation or
+rebuilding signup flows that are not needed.
+
 ## Two harnesses, one surface
 
 Keep these implementations and evidence separate:
