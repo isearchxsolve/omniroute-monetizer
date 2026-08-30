@@ -9892,3 +9892,11 @@ per- | no |
 | iFlytek SparkDesk | xinghuo.xfyun.cn | FAIL | re_report_9222.json
 no session_*.json in D:\omniroute-monetizer\state\ | no |
 
+
+### [2026-08-30 06:25] #1311 — SSO v2 findings: Poe/Puter/Phind/Akool/DeepInfra anonymous surfaces; Doubao region-ban
+
+- sso_v2.py (login-modal pre-click + Google affordance + account picker) ran on the 5 walled tabs: none exposed a login affordance -- the pages render full ANONYMOUS surfaces (Poe shows the entire bot catalog). Chat on Poe requires login behind a modal; sso_v2 needs a menu/modal-opening step (profile button -> log in) as its next iteration.
+- Doubao tab now resolves to /security/doubao-region-ban -- region-banned for this deployment (hard wall).
+- Cerebras/iFlytek graduation units ran: ELIGIBLE per manifest but capture wrote no jar (same no-session class as the other UI-gated seats; per-site send diagnosis queued).
+- Copilot Bearer keepalive verified live: correctly skips when fresh (23h57m), refreshes near expiry; refresh token rotation persisted.
+- Gate steady: 24 hosts / 10 REPLAY_OK / 4 AUTH / 8 NO_ANSWER / 2 WALL.
