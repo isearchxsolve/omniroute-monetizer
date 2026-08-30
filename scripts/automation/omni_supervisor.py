@@ -58,6 +58,10 @@ try:
     import msvcrt
 except ImportError:  # pragma: no cover - Linux/macOS development fallback
     msvcrt = None
+try:
+    import psutil
+except ImportError:  # pragma: no cover - optional diagnostic dependency
+    psutil = None
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -67,6 +71,7 @@ STATUS_FILE = STATE / "supervisor_status.json"
 AUTHORITATIVE_STATUS_FILE = STATE / "supervisor_status_v2.json"
 INSTANCE_LOCK_FILE = STATE / "supervisor.lock"
 _INSTANCE_LOCK = None
+MEMORY_WARNING_BYTES = 2 * 1024 * 1024 * 1024
 
 PROBE_TIMEOUT_S = 10.0
 RESTART_BACKOFF_S = [5, 15, 60, 180]      # then give up and report
@@ -101,6 +106,18 @@ def acquire_instance_lock() -> bool:
         return False
     _INSTANCE_LOCK = handle
     return True
+
+
+def process_metrics(pid: Optional[int]) -> dict[str, Any]:
+    """Return safe process resource metadata without changing the process."""
+    if not pid or psutil is None:
+        return {}
+    try:
+        proc = psutil.Process(pid)
+        return {"workingSetBytes": int(proc.memory_info().rss),
+                "cpuPercent": float(proc.cpu_percent(interval=None))}
+    except (OSError, psutil.Error):
+        return {}
 
 
 # --------------------------------------------------------------------------------------------------
@@ -312,6 +329,7 @@ def probe(svc: Service) -> dict[str, Any]:
     if pid is None:
         row["state"] = "DOWN"
         return row
+    row.update(process_metrics(pid))
     if svc.health:
         ok, payload = http_health(svc.port, svc.health)
         row["state"] = "UP" if ok else "LISTENING_BUT_UNHEALTHY"
@@ -381,6 +399,10 @@ def one_pass(svcs: list, fix: bool) -> dict[str, Any]:
                      if r["required"] and r["state"] not in ("UP",)]
     application_down = [r["service"] for r in rows
                         if r["listening"] and r["state"] == "LISTENING_BUT_UNHEALTHY"]
+    resource_warnings = [
+        {"service": r["service"], "workingSetBytes": r["workingSetBytes"]}
+        for r in rows if r.get("workingSetBytes", 0) >= MEMORY_WARNING_BYTES
+    ]
     report = {
         "schemaVersion": 2,
         "statusFile": str(AUTHORITATIVE_STATUS_FILE),
@@ -393,6 +415,7 @@ def one_pass(svcs: list, fix: bool) -> dict[str, Any]:
         "allRequiredUp": not required_down,
         "applicationDown": application_down,
         "allApplicationHealthy": not application_down,
+        "resourceWarnings": resource_warnings,
         "chrome": chrome_state(),
         "capturedSupply": captured_supply(),
         "rules": [

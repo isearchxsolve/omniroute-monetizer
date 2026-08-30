@@ -400,6 +400,76 @@ def tab_targets(owner: PortOwner) -> list[dict[str, Any]]:
         return [target for target in payload if isinstance(target, dict) and target.get("type") == "page"]
 
 
+def capture_target_screenshot(port: int, target_id: str) -> pathlib.Path:
+    """Save one exact, *unfocused* page screenshot after re-attesting its seat.
+
+    The generic ``cdp.Page`` convenience class intentionally calls
+    ``Page.bringToFront`` before every page command.  That is useful for an explicit
+    interaction, but it makes a screenshot-first gate less trustworthy: it changes
+    what the operator would see and can wake a background SPA before we have any
+    visual evidence.  This helper deliberately uses only ``Page.captureScreenshot``
+    against the exact target.  It never enables a CDP domain, evaluates JavaScript,
+    focuses, navigates, clicks, types, or reads cookies.
+    """
+    if not re.fullmatch(r"[A-Fa-f0-9]{8,128}", target_id or ""):
+        raise SafetyRefusal("target id must be a DevTools hexadecimal id")
+    owner = assert_automation_seat(port)
+    try:
+        raw = urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=15).read()
+        targets = json.loads(raw.decode("utf-8", "replace"))
+    except (OSError, ValueError) as exc:
+        raise SafetyRefusal(f"could not read exact target metadata on :{port}: {type(exc).__name__}") from exc
+    target = next(
+        (row for row in targets if isinstance(row, dict) and row.get("type") == "page"
+         and str(row.get("id") or "") == target_id),
+        None,
+    )
+    ws_url = str((target or {}).get("webSocketDebuggerUrl") or "")
+    if not ws_url.startswith(f"ws://127.0.0.1:{port}/"):
+        raise SafetyRefusal("exact page target vanished or lacks a local DevTools websocket")
+    try:
+        import websocket
+        ws = websocket.create_connection(ws_url, timeout=30, suppress_origin=True)
+    except Exception as exc:
+        raise SafetyRefusal(f"exact page screenshot connection failed: {type(exc).__name__}") from exc
+    try:
+        ws.send(json.dumps({"id": 1, "method": "Page.captureScreenshot",
+                            "params": {"format": "png", "fromSurface": True}}))
+        deadline = time.monotonic() + 90.0
+        encoded = ""
+        while time.monotonic() < deadline:
+            ws.settimeout(max(0.5, deadline - time.monotonic()))
+            reply = json.loads(ws.recv())
+            if reply.get("id") != 1:
+                continue
+            encoded = str(((reply.get("result") or {}).get("data") or ""))
+            break
+        if not encoded:
+            raise SafetyRefusal("Page.captureScreenshot returned no PNG data")
+        try:
+            png = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError) as exc:
+            raise SafetyRefusal("Page.captureScreenshot returned invalid base64") from exc
+        if not png.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise SafetyRefusal("Page.captureScreenshot did not return a PNG")
+    except SafetyRefusal:
+        raise
+    except Exception as exc:
+        raise SafetyRefusal(f"Page.captureScreenshot failed: {type(exc).__name__}") from exc
+    finally:
+        try:
+            ws.close()
+        except Exception:
+            pass
+    directory = CANDIDATES / f"{port}_{target_id[:16].lower()}"
+    directory.mkdir(parents=True, exist_ok=True)
+    out = directory / "pre_capture.png"
+    temporary = out.with_suffix(".png.tmp")
+    temporary.write_bytes(png)
+    temporary.replace(out)
+    return out
+
+
 def read_json(path: pathlib.Path, fallback: Any) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -672,12 +742,23 @@ def main() -> int:
                         help="sanitised manifest output path")
     parser.add_argument("--execute", action="store_true",
                         help="perform exactly one explicitly named capture/replay unit")
+    parser.add_argument("--screenshot-target", default="",
+                        help="save an unfocused pre-action PNG for one exact current DevTools target")
     parser.add_argument("--site", default="", help="exact readiness site name; required with --execute")
     parser.add_argument("--wait", type=float, default=25.0, help="capture wait seconds when --execute is set")
     args = parser.parse_args()
 
+    if args.execute and args.screenshot_target:
+        parser.error("--execute and --screenshot-target are separate serial workflow steps")
     if args.execute and not args.site.strip():
         parser.error("--execute requires exactly one --site; run the manifest first and keep live work serial")
+    if args.screenshot_target:
+        try:
+            screenshot = capture_target_screenshot(args.port, args.screenshot_target.strip())
+        except SafetyRefusal as exc:
+            raise SystemExit(f"screenshot refused: {exc}") from exc
+        print(f"unfocused target screenshot: {screenshot}")
+        return 0
     if not args.execute:
         manifest = build_manifest(args.port)
         write_json(args.json, manifest)

@@ -157,6 +157,21 @@ for name, url in SEATS.items():
         login = {"ok": False, "error": type(e).__name__}
         print("   login click err:", type(e).__name__)
     time.sleep(6)
+    if not login.get("ok"):
+        # evidence: what does this page actually show?
+        slug = name.split()[0].lower().replace("(", "").replace(")", "")
+        try:
+            import base64
+            d = cdp.call("Page.captureScreenshot", {"format": "png"}, timeout=15)
+            open(fr"C:\Users\Admin\AppData\Local\Temp\kilo\sso_{slug}.png", "wb").write(
+                base64.b64decode(d["data"]))
+        except Exception as e:
+            print("   shot err:", type(e).__name__)
+        try:
+            txt = cdp.evaluate("(() => (document.body ? document.body.innerText : '').slice(0, 400))()")
+            print("   text head:", str(txt)[:300].replace("\n", " | "))
+        except Exception as e:
+            print("   text err:", type(e).__name__)
     try:
         found = cdp.evaluate(JS_FIND_GOOGLE)
     except Exception as e:

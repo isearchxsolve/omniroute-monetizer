@@ -757,6 +757,15 @@ class UniversalSessionClient:
             if "claude.ai" in target_url and "/chat_conversations/" in target_url:
                 import re as _re, uuid as _uuid
                 target_url = _re.sub(r"/chat_conversations/[^/]+/completion", f"/chat_conversations/{_uuid.uuid4()}/completion", target_url)
+            # Monica binds the exchange to server-side task state: the recorded task_uid/item_id
+            # re-delivers the ORIGINAL captured answer regardless of the injected prompt. The
+            # browser mints both ids per message, so the replay does too.
+            if "api.monica.im" in target_url and self.base_body:
+                import re as _re, uuid as _uuid
+                new_body_str = _re.sub(r'"task_uid":"task:[0-9a-f-]+"',
+                                       f'"task_uid":"task:{_uuid.uuid4()}"', new_body_str)
+                new_body_str = _re.sub(r'"item_id":"msg:[0-9a-f-]+"',
+                                       f'"item_id":"msg:{_uuid.uuid4()}"', new_body_str)
             body_bytes = new_body_str.encode("utf-8") if self.base_body else None
             r = self._fire(self.method, target_url, self.headers, body_bytes, timeout=60)
 

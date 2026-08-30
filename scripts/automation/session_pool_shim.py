@@ -23,7 +23,7 @@ import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
 
-from session_pool import SessionPool, ChatError
+from session_pool import SessionPool, ChatError, _load_quarantine
 from veo_session_replay import SessionExpired
 from video_job_store import VideoJobStore
 # The tool->prompt shim is IMPORTED, not copied. It is the piece that makes a free chat seat usable
@@ -201,6 +201,16 @@ def _maybe_rescan() -> None:
 def _force_rescan() -> dict:
     with _RESCAN_LOCK:
         r = pool.rescan()
+        # Quarantine is operator data alongside the seat files.  SessionPool loads it at
+        # construction, but the supported zero-restart rescan endpoint must also apply edits
+        # to pool_quarantine.json; otherwise a newly quarantined broken adapter can still be
+        # selected by the live auto router until an unsafe process restart.  Refresh the set
+        # only after the seat rescan succeeds so a malformed quarantine file cannot disturb
+        # the existing in-memory routing state.
+        try:
+            pool.quarantined = _load_quarantine()
+        except Exception:
+            pass
         try:
             st = os.stat(pool.secrets)
             _dir_sig[0] = (st.st_mtime_ns, st.st_ctime_ns)
