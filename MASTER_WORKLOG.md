@@ -9746,3 +9746,12 @@ no session_*.json in D:\omniroute-moneti | no |
 | Monica AI | monica.im | NO_ANSWER | 200 but the extracted reply is not only '58': omni. | no |
 | V0 by Vercel (v0.app) | v0.app | NO_ANSWER | 200 but the extracted reply is not only '58': ok | no |
 
+
+### [2026-08-30 05:50] #1309 — Closing pass, Copilot refresh chain, keepalive task; gate steady at 10
+
+- SSO tier: Creen AI + Giz AI signed in via bounded Google SSO (harness).
+- Baichuan proven CAPTCHA WALL: Aliyun slider PUZZLE (captcha-open.aliyuncs.com) fires on submit -- operator solve required, no bypass.
+- Final pass (groq/gemini/monica/v0/duck.ai/giz/genspark): only 3 had eligible tabs. Gemini AUTH (persistent, needs send-time header work), Monica NO_ANSWER (task_uid/item_id rotation INSUFFICIENT -- server binds deeper state; conversation-level freshening next), V0 ack (pipeline client unbuilt). Groq/duck.ai/giz/genspark had no eligible tab (jar/tab state), not attempted.
+- Copilot refresh chain BUILT AND PROVEN: auth0 refresh grant returns a fresh 24h Bearer; rotation persisted to state/secrets/copilot_auth0.json (gitignored). copilot_token_keepalive.py + hidden VBS task "OmniRoute Copilot Bearer KeepAlive" every 6h, verified. REMAINING for pool entry: locate the /c/api/chat socket-URL mint (webSocketCreated sniff DURING a send -- negotiate returns the notifications hub only) and wire negotiate+refresh into ws_replay, then one graduation unit.
+- Gate steady: 24 hosts, 10 REPLAY_OK, 4 AUTH (groq/gemini/yuanbao/chathub -- re-capture did not clear; auth decay real), 8 NO_ANSWER, 2 WALL.
+- Commits: 606882b (numeric rescue), ca4d859 (CJK codec), add7853 (send matcher), bfc30a5 (ws adapter), 797cee0 (keepalive).
