@@ -10281,3 +10281,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Observed variance.** The requested “50 models” is not true for the live snapshot checked here: `/v1/models` returned 30 entries. `/health` returned 404, which is expected for this shim because its documented liveness surface is `/v1/models`; the scheduled task probes that route. This is a count/documentation mismatch to reconcile, not a reason to switch endpoints.
 
 **What is NOT claimed.** This read-only check did not submit chat or video work, did not prove all 30 routes currently answer, and did not assert 25 chat plus 23 video sessions are presently active. It confirms the API contract and endpoint ownership only.
+### [2026-08-30 23:58] #1349 — Direct endpoint-contract verification: :8190 conforms; :20128 does not
+
+**Method.** Sent read-only route-discovery requests and a valid non-tiny computed chat probe to both candidate bases using `127.0.0.1`.
+
+**Evidence.** `GET http://127.0.0.1:8190/v1/models` returned HTTP 200 and advertised `session-pool/auto`, `video/auto`, and host-pinned `/auto` routes. `POST http://127.0.0.1:8190/v1/chat/completions` with `model=session-pool/auto`, a normal user message, `stream=false`, and `max_tokens=32` returned HTTP 200 with OpenAI-shaped fields plus `provider=poe.com` and `session=session_poe`. A second valid computed probe reached the shim but returned HTTP 500 from the selected provider; this is a provider/route attempt failure, not an endpoint-shape failure, and does not change the first successful contract evidence.
+
+**Counter-check.** `GET http://127.0.0.1:20128/v1/models` and the same `/chat/completions` shape both timed out. Therefore OmniRoute `:20128` is not currently a functioning implementation of the requested final consumer contract. The source and transfer architecture also identify `:20128` as the separate paid/OAuth plane; `:8190` is the designated consumer face.
+
+**Conclusion.** The requested contract is implemented by the seat-pool shim at `:8190`, including route discovery and provider/session metadata. It is not implemented/available at `:20128`. Video was not submitted, so no credits were spent.
+
+**What is NOT claimed.** This unit does not certify every advertised seat, the documented 50-route count, video generation success, or current health of the `:20128` service. It certifies endpoint ownership and the observed `:8190` chat contract only.
