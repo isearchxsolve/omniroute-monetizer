@@ -10307,3 +10307,19 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Rollout verdict.** NOT READY for a production rollout under the stated contract. The HTTP shape and metadata contract are implemented, but the live acceptance bar fails on computed answer quality, advertised-vs-actual chat/video capacity, and unproven external bearer enforcement. No code or runtime state was changed.
 
 **What is NOT claimed.** This does not claim every provider is dead, does not claim video generation fails, and does not claim the endpoint cannot be used for a controlled local pilot. It means the stated production promises are not currently evidenced.
+### [2026-08-31 00:25] #1351 — Implemented merged :8190 gateway and corrected three production-contract gaps
+
+**Goal.** Operator clarified that `http://127.0.0.1:8190/v1` must be the one final consumer endpoint merging OmniRoute and the seat pool, rather than merely the seat-pool endpoint.
+
+**Code changes.**
+1. Added bounded OmniRoute bridge behavior to `session_pool_shim.py`. Non-seat model names now route to `127.0.0.1:20128/v1/chat/completions`; successful OmniRoute JSON/SSE replies are normalized to an OpenAI-compatible response and marked `x_gateway_source=omniroute`. If OmniRoute is unavailable, empty, unparseable, or returns a body-level wall, the request falls back to the balanced session pool and returns explicit `x_gateway_source=session_pool_fallback` plus `x_gateway_fallback_reason`.
+2. `GET /v1/models` now merges OmniRoute models when its endpoint answers within 1.5 seconds, without allowing a wedged `:20128` to delay local discovery. It reports `x_gateway` capacity/status metadata and retains the healthy session-pool catalog on upstream failure.
+3. Seat discovery is now honest: it lists `pool.live()` only, excluding quarantined adapter defects and non-dispatchable sessions rather than treating raw session files as capacity.
+4. Added the observed provider wall text `used all your credits` / `add more credits` to `wall_in_reply()`, so this HTTP-200 quota page triggers failover rather than being returned as an assistant answer.
+5. Invalid JSON and empty/missing `messages` now return structured HTTP 400 `invalid_request_error` responses instead of HTTP 500.
+
+**Verification.** `python -m py_compile scripts/automation/session_pool.py scripts/automation/session_pool_shim.py` exited 0. `git diff --check` passed. Isolated unit checks passed: the observed credits text is classified as a wall; a mocked SSE-only OmniRoute reply is correctly normalized to an OpenAI completion with content `58` and source metadata.
+
+**Deployment state.** The currently listening shim is old code until it is restarted by its existing `OmniRoute Session Pool Shim (keepalive)` owner. This entry precedes the deployment action as required by the component state loop.
+
+**What is NOT claimed.** No video job was submitted, no provider credential was changed, and the currently wedged OmniRoute process did not become healthy because of this gateway change. The bridge deliberately keeps the final endpoint working through that upstream failure.

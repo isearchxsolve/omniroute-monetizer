@@ -51,7 +51,8 @@ REPLY_WALL_MARKS = ("limit reached", "rate-limit-exceed", "maximum allowance", "
                     "insufficient credit", "quota exceeded", "upgrade to continue",
                     "subscribe to continue", "please log in", "please sign in",
                     "session expired", "too many requests", "you have reached",
-                    "daily limit", "trial has ended")
+                    "daily limit", "trial has ended", "used all your credits",
+                    "add more credits")
 REPLY_WALL_MAX_LEN = 600
 
 # A garbage reply or an adapter exception is OUR defect, not a provider refusal, so it is not

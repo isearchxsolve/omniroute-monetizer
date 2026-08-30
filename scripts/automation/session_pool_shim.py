@@ -21,7 +21,9 @@ import threading
 import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Optional
+from typing import Any, Optional
+
+import requests
 
 from session_pool import SessionPool, ChatError, _load_quarantine
 from veo_session_replay import SessionExpired
@@ -31,6 +33,7 @@ from video_job_store import VideoJobStore
 # this port would drift from :20130's and only one of them would ever get fixed.
 from chat_pool_server import (tool_instruction, parse_tool_call, looks_like_overflow,
                               TOOL_RESULT_CAP)
+from omniroute_api import extract_chat_content
 
 # Initialize global pool
 pool = SessionPool()
@@ -52,6 +55,96 @@ CHAT_FAILOVER_TRIES = 5
 
 # Rough render budget advertised in receipts (estimate only; the status URL is authoritative).
 VIDEO_EST_SECONDS = 300
+
+# :8190 is the final consumer gateway.  Session-pool aliases and pinned seat routes
+# are served locally; every other model name is an OmniRoute request.  A sick :20128
+# must never make :8190 discovery or chat hang, so every bridge call is bounded and
+# produces an explicit fallback marker rather than silently pretending the paid side
+# answered.
+OMNIROUTE_UPSTREAM = os.environ.get("OMNIROUTE_UPSTREAM", "http://127.0.0.1:20128").rstrip("/")
+OMNIROUTE_MODEL_TIMEOUT_S = 1.5
+OMNIROUTE_CHAT_TIMEOUT_S = 8.0
+
+
+class OmniRouteBridge:
+    """Bounded merge/forward layer for the paid OmniRoute plane.
+
+    The endpoint is intentionally best-effort: the free/session side remains usable
+    when :20128 is wedged.  This is a gateway boundary, not another service owner;
+    it never restarts, mutates, or authenticates to OmniRoute management APIs.
+    """
+
+    def __init__(self, base: str = OMNIROUTE_UPSTREAM):
+        self.base = base
+        self._models: list[dict[str, Any]] = []
+        self._models_at = 0.0
+        self._last_error: Optional[str] = None
+
+    def models(self) -> list[dict[str, Any]]:
+        # Avoid making every consumer's model discovery wait on a repeatedly wedged
+        # upstream.  A successful list is cached briefly; a failed attempt is also
+        # rate-limited so the healthy local catalog stays fast.
+        now = time.monotonic()
+        if now - self._models_at < 15.0:
+            return list(self._models)
+        self._models_at = now
+        try:
+            r = requests.get(f"{self.base}/v1/models", timeout=OMNIROUTE_MODEL_TIMEOUT_S)
+            data = r.json() if r.ok else {}
+            rows = data.get("data") if isinstance(data, dict) else None
+            if not isinstance(rows, list):
+                raise ValueError("invalid model-list shape")
+            self._models = [row for row in rows if isinstance(row, dict) and row.get("id")]
+            self._last_error = None
+        except Exception as exc:
+            self._models = []
+            self._last_error = type(exc).__name__
+        return list(self._models)
+
+    def status(self) -> dict[str, Any]:
+        return {"base": self.base, "reachable": self._last_error is None,
+                "lastError": self._last_error, "cachedModels": len(self._models)}
+
+    def chat(self, raw: bytes, auth: str) -> tuple[Optional[dict[str, Any]], Optional[str]]:
+        headers = {"Content-Type": "application/json"}
+        if auth:
+            headers["Authorization"] = auth
+        try:
+            r = requests.post(f"{self.base}/v1/chat/completions", data=raw,
+                              headers=headers, timeout=OMNIROUTE_CHAT_TIMEOUT_S)
+        except Exception as exc:
+            return None, f"omniroute_unreachable:{type(exc).__name__}"
+        raw_text = r.text or ""
+        if not r.ok:
+            return None, f"omniroute_http_{r.status_code}"
+        try:
+            parsed = r.json()
+        except ValueError:
+            parsed = None
+        content = extract_chat_content(parsed, raw_text)
+        if not content:
+            return None, "omniroute_empty_or_unparseable"
+        # A paid route can also return an HTTP-200 credit/login wall.  Do not turn
+        # that into fake success at the merged consumer boundary.
+        from session_pool import wall_in_reply
+        if wall_in_reply(content):
+            return None, "omniroute_wall"
+        if isinstance(parsed, dict) and isinstance(parsed.get("choices"), list):
+            parsed.setdefault("provider", "omniroute")
+            parsed.setdefault("session", None)
+            parsed["x_gateway_source"] = "omniroute"
+            return parsed, None
+        return {
+            "id": f"chatcmpl-{int(time.time() * 1000)}", "object": "chat.completion",
+            "created": int(time.time()), "model": "omniroute",
+            "provider": "omniroute", "session": None, "x_gateway_source": "omniroute",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": content},
+                         "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        }, None
+
+
+omniroute = OmniRouteBridge()
 
 # ----------------------------------------------------------------- JSON intent ----
 # Worklog #1134 (OiiOii live E2E fix 1): JSON-intent session-pool/auto requests must never be
@@ -353,10 +446,10 @@ class ShimHandler(BaseHTTPRequestHandler):
                 {"id": "session-pool/auto", "object": "model", "created": int(time.time()), "owned_by": "session_pool"},
                 {"id": "video/auto", "object": "model", "created": int(time.time()), "owned_by": "session_pool"}
             ]
-            # List all hosts as well
-            for s in pool.sessions:
-                if not s.dispatchable:
-                    continue
+            # Only list routes the router can actually dispatch RIGHT NOW.  Raw
+            # session-file presence is not capacity: quarantined adapter defects
+            # and dead/non-dispatchable seats must not be advertised to consumers.
+            for s in pool.live():
                 prefix = "video/" if s.modality == "video" else ""
                 models.append({
                     "id": f"{prefix}{s.host}/auto",
@@ -364,7 +457,20 @@ class ShimHandler(BaseHTTPRequestHandler):
                     "created": int(time.time()),
                     "owned_by": "session_pool"
                 })
-            resp = {"object": "list", "data": models}
+            seat_ids = {m["id"] for m in models}
+            upstream_models = omniroute.models()
+            for row in upstream_models:
+                # A name collision belongs to the local seat route: it is the one
+                # whose pin syntax the consumer explicitly requested.
+                if row.get("id") not in seat_ids:
+                    merged = dict(row)
+                    merged.setdefault("owned_by", "omniroute")
+                    merged["x_gateway_source"] = "omniroute"
+                    models.append(merged)
+            resp = {"object": "list", "data": models,
+                    "x_gateway": {"seatPool": {"chat": len(pool.live("chat")),
+                                                  "video": len(pool.live("video"))},
+                                  "omniroute": omniroute.status()}}
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -447,15 +553,29 @@ class ShimHandler(BaseHTTPRequestHandler):
             req = json.loads(body)
         except Exception:
             self.send_response(400)
+            self.send_header("Content-Type", "application/json")
             self.end_headers()
+            self.wfile.write(json.dumps({"error": {"message": "request body must be valid JSON",
+                                                   "type": "invalid_request_error",
+                                                   "tenant": tenant}}).encode())
             return
             
         messages = req.get("messages", [])
         model = req.get("model", "")
+        if not isinstance(messages, list) or not messages:
+            self.send_response(400)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": {"message": "messages must be a non-empty array",
+                                                   "type": "invalid_request_error",
+                                                   "tenant": tenant}}).encode())
+            return
         host_target = None
         modality = "chat"
+        seat_model = False
         
         if model and model.startswith("video/"):
+            seat_model = True
             modality = "video"
             target_str = model.replace("video/", "")
             if target_str.endswith("/auto"):
@@ -466,11 +586,30 @@ class ShimHandler(BaseHTTPRequestHandler):
                 host_target = target_str if target_str != "auto" else None
             model = None
         elif model and model.endswith("/auto") and model != "session-pool/auto":
+            seat_model = True
             modality = "chat"
             host_target = model.split("/")[0]
             model = None
         elif model in ("auto", "auto/best-chat", "session-pool/auto", ""):
+            seat_model = True
             modality = "chat"
+            model = None
+
+        # Non-seat model names are OmniRoute routes.  Keep their upstream reply
+        # OpenAI-compatible, including its own model/tool details.  If OmniRoute is
+        # unavailable, continue through the balanced session pool and say so in the
+        # response; one sick paid service must never blank the consumer gateway.
+        upstream_fallback = None
+        if not seat_model:
+            upstream_reply, upstream_fallback = omniroute.chat(
+                body, self.headers.get("Authorization", ""))
+            if upstream_reply is not None:
+                upstream_reply["tenant"] = tenant
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(upstream_reply).encode())
+                return
             model = None
 
         # ------------------------------------------- video: immediate durable receipt ----
@@ -644,6 +783,9 @@ class ShimHandler(BaseHTTPRequestHandler):
                 "total_tokens": 0
             }
         }
+        if upstream_fallback:
+            resp["x_gateway_source"] = "session_pool_fallback"
+            resp["x_gateway_fallback_reason"] = upstream_fallback
         
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
