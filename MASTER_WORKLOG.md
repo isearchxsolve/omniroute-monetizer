@@ -9687,6 +9687,18 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** No Google Sync state is inferred for an automation profile. No provider-session authentication, video quote, video job, output media, spend, or end-to-end video route is claimed by this preflight.
 
+### [2026-08-30 16:10] #1327 — No-spend video provider-session health chain exercised inside the guarded boundary
+
+**Action:** After `SAFE_DEDICATED` preflight, ran `python scripts/automation/video_router.py doctor` without `--deep`. The doctor command first applies the live-profile guard to every enabled account port, then performs each provider's non-generating session/auth prerequisites. It was deliberately not run with `quote`, `wake`, `serve`, or any submit/generation command.
+
+**Verified result:** All three enabled Flow account paths passed the entire non-spend chain: live-profile guard, dedicated CDP debug port, expected tab, session token, project context, captcha mint, and credit RPC. This establishes that three Flow routes are provider-session authenticated in dedicated automation profiles and able to reach the pre-submit gate. No output repeats personal account identifiers, project identifiers, token values, captcha material, or balances.
+
+**Blocked result:** Two enabled non-Flow paths remain unavailable: the rtst.ai tab lacks its own session token, and the Digen adapter lacks its required captured session file. The disabled Flow record was correctly skipped. These are provider-session/capture gaps, not failures of the dedicated Chrome boundary.
+
+**Safety:** The command exited non-zero only because it truthfully reported the two unavailable providers. It did not quote, create, poll, download, or delete a video job; no credit was spent. It did not launch or navigate Chrome and did not touch the operator's live profiles.
+
+**What is not claimed:** A successful pre-submit Flow chain is not a generated video. No video output, spend, exact pricing, or successful completion/polling contract is claimed yet. rtst.ai and Digen are not claimed authenticated or routable.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
