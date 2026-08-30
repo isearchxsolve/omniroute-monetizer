@@ -10080,3 +10080,15 @@ no session_*.json in D:\omniroute-monetizer\state\ | no |
 - Result: Copilot said 58 Edit in a page - computed, not echoable. **Copilot graduates via the live-tab adapter.** No websocket replay, no TLS-fingerprint wall: Chrome's own connection is the client, exactly as designed in #1316.
 
 **State.** Adapter compiled clean, still untracked before this commit; committed with this entry. Remaining queue: Aymo 429 result check (background run was in flight at power loss, outcome unknown), sso_v2 modal step (Poe class), Monica task-uid rotation, V0 submit-poll client, Gemini/ChatHub send-time auth.
+
+### [2026-08-30 09:03] #1337 - Aymo re-probed after decay window: 429 is "Credit limit exceeded" - paywall class, not a rate-limit transient
+
+**Why.** Queue item 2: the Aymo 429 decay retry (background run at power loss never returned a verdict). The working hypothesis since #1313 was a transient rate limit that decays with time.
+
+**Probe.** eplay_check.py --only aymo against the captured jar, several hours after the last 429. Report: state/replay_check_aymo_one.json.
+
+**Result.** HTTP 429 with body {"statusCode":429,"message":"Credit limit exceeded"}. The decay-window hypothesis is disproven with evidence: the 429 is the provider's credit-exhaustion signal, not a rate limiter. This reclassifies Aymo from NO_ANSWER/429-transient to the **paywall class** - the same accepted closure as DeepInfra's 402 "positive balance required" (#1315). Per Law 5 the wall is reported, never solved or hammered.
+
+**Ledger note.** The graduation ledger row (attempts: 5, verdict NO_ANSWER, detail "http error 429") predates this probe and is only rewritten by full orchestrator runs; this replay report is the canonical evidence artifact for the reclassification.
+
+**Queue state.** Item 2 closed (wall, accepted class). Remaining: sso_v2 modal-opening step (Poe class), Monica task-uid rotation, V0 submit-poll client, Gemini/ChatHub send-time auth. Copilot live-tab adapter already closed this session (#1336, commit 4754baf).
