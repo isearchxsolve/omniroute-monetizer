@@ -9771,6 +9771,18 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** The 24 blocked connections are not called dead or resolved. They need the specifically classified external condition—real credential, manual reauthorization, supported runtime installation, or provider/validation fix—before a native test can verify and activate them.
 
+### [2026-08-30 17:12] #1334 — Google SSO reauthorization permission checked against current inactive set
+
+**Action:** The operator explicitly authorized Google SSO through a signed-in profile for reauthorization. I compared the live inactive connection IDs and provider/auth classes from the completed native audit against the repository's OAuth reauth target definitions, without opening a browser or starting an OAuth flow.
+
+**Finding:** The 24 inactive records contain no currently inactive `google_oauth` target. The Google-OAuth records in the reauth definition are already active; the inactive OAuth records instead require PKCE callback, device-code, or provider-specific import-token flows. Running the broad legacy orchestrator would therefore not be a targeted Google SSO fix: it includes unrelated device-code/manual flows and hard-coded account-context assumptions. It is not safe or honest to run that as if it solved the inactive set.
+
+**Decision:** Keep Google SSO permission available for a correctly matched, guarded dedicated-profile target if one appears, but do not invoke an account-mixing orchestrator with no applicable inactive Google target. No operator Chrome profile was opened or attached.
+
+**Safety:** Read-only comparison only. No OAuth token, callback, device code, browser tab, provider connection, seat, Chrome profile, database, or service state changed.
+
+**What is not claimed:** This does not reauthorize any PKCE/device-code/import-token provider. Those still need their own provider login/IDE token/manual callback, and their resulting OmniRoute native test must pass before activation.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
