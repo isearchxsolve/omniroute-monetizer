@@ -10648,3 +10648,13 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Read-only evidence.** The exact dedicated niloy Chrome process remains alive and responsive as PID `19280` on CDP `9223`, using `D:\omniroute-monetizer\state\automation_profiles\niloy`. The visible window title is now `New Tab - Google Chrome`; the CDP target list contains only a blank/new-tab target and no Google account page or visible profile-menu state exposed to the verifier.
 
 **Verdict.** The niloy profile process is healthy, but `GOOGLE_SYNC_AUTHENTICATED` remains **UNVERIFIED BY AGENT OBSERVATION**. A blank New Tab does not prove either signed-in or signed-out status. No cookies, local storage, passwords, profile databases, or session stores were read, and no browser action was performed. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
+
+### [2026-08-31 00:25] #1381 - Niloy dedicated Chrome closed and reopened on request
+
+**Operator request.** Close the niloy dedicated Chrome profile and reopen the same profile again to reload its persisted state.
+
+**Controlled close.** Verified the exact main process command line before acting: the niloy owner used `--user-data-dir=D:\omniroute-monetizer\state\automation_profiles\niloy` and `--remote-debugging-port=9223`. Sent a graceful close to that exact PID and waited for termination; a transient residual process identity was rechecked and had cleared, with `9223` not listening before relaunch. No other Chrome process was targeted.
+
+**Controlled reopen.** Relaunched through `scripts/automation/launch_single_seat.py 9223 niloy`. New Chrome PID `13972` is responsive, owns CDP `9223`, and uses the same isolated niloy profile path. The visible window title is `New Tab - Google Chrome`; no signup, provider, or video page was opened.
+
+**Verdict.** The requested close/reopen completed successfully. Profile persistence is not itself proof of Google authentication, and the blank New Tab does not establish `GOOGLE_SYNC_AUTHENTICATED`; that status remains unverified. No password, OTP, email code, CAPTCHA, MFA, cookie, local-storage, profile-database, provider, or video action occurred. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
