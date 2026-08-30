@@ -53,7 +53,9 @@ rebuilding signup flows that are not needed.
 ## Next assigned task — expand Profiles 2–4, then graduate every new seat in Python
 
 This is the operator's exact next task. Treat Profile 1 as the reference process and extend the
-same process to the other three dedicated automation seats. In the repository's canonical readiness
+same process to the other three dedicated automation seats **while simultaneously expanding and
+hardening OmniRoute's native video-provider path**. “Video expansion” must never be narrowed to
+seat-pool video alone. In the repository's canonical readiness
 artifact, the internal seat labels are `providers`/CDP `9222` (Profile 1 reference), `niloy`/`9223`
 (Profile 2), `seat2`/`9224` (Profile 3), and `seat3`/`9225` (Profile 4). The current readiness rows
 are candidate-site evidence, not already-graduated seats: they contain 51, 11, 21, and 20 site rows
@@ -84,11 +86,24 @@ For Profiles 2, 3, and 4, perform this sequence for every unauthenticated candid
    `CAPTURE_GAP`, and adapter failures as explicit non-capacity outcomes.
 
 The deliverable is not “more Chrome tabs” and not “more signups.” It is expanded provider supply
-that continues to work after the Chrome tab is closed. The final report must show, per profile and
-across both OmniRoute and seat-pool harnesses: candidates found, SSO signups completed, provider
-accounts actually working, video model families served, Python adapters built, completed media proofs,
-and remaining blockers. Never merge four profiles into one anonymous count and never count a signup,
-capture, inventory model, Chrome route, or adapter skeleton as graduated capacity.
+that continues to work after the Chrome tab is closed. GLM must run two named video workstreams in
+the same assignment:
+
+- **OmniRoute-native video:** enumerate active/provider-account connections that belong to the
+  native video registry, map every model family served by each account, verify the native
+  `/v1/videos/generations` contract, build or harden the pure Python adapter, and prove completed
+  media through the merged `:8190` job surface. Omni's 22-provider/route inventory is a candidate
+  list, not capacity; prioritize live keyed accounts and record auth, wallet, quota, and model-id
+  blockers precisely.
+- **Seat-pool video:** expand `niloy`, `seat2`, and `seat3`, including video-capable chat providers,
+  then capture/build pure Python adapters and prove submit → poll → downloadable media through
+  `:8190`. Chrome is capture/onboarding only.
+
+The final report must show both workstreams separately and the combined total: candidates found,
+SSO signups completed, provider accounts actually working, video model families served, Python
+adapters built, completed media proofs, and remaining blockers. Never merge four profiles into one
+anonymous count, never omit OmniRoute because a seat-pool route is easier to test, and never count a
+signup, capture, inventory model, Chrome route, or adapter skeleton as graduated capacity.
 
 ## Two harnesses, one surface
 

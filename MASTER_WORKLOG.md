@@ -10691,6 +10691,16 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Verification.** Confirmed the latest handoff remains present in the repository and separates the prior adapter result from the new profile-expansion task. No browser, provider, credential, session, signup, video, or service action occurred in this scope reconciliation. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
 
+### [2026-08-31 01:35] #1385 - Video assignment corrected: OmniRoute-native video is a mandatory parallel workstream
+
+**Operator correction.** The operator observed that GLM was interpreting the video assignment as seat-pool expansion only. That is incorrect. Video work must expand and harden both the OmniRoute-native video-provider path and the session-pool video-seat path, then report them separately and together at the merged `:8190` surface.
+
+**Handoff change.** Updated `HANDOVER_GLM_5_3_FLASH.md` to require two named workstreams in the same GLM assignment. The OmniRoute-native workstream must enumerate active keyed provider/account connections in the native video registry, map all video model families served by each account, verify OmniRoute's native `/v1/videos/generations` contract, build/harden the pure Python adapter, and prove completed media through the durable `:8190` job surface. The 22-provider/59-route Omni inventory is explicitly only a candidate list; live key, model-id, wallet, quota, and authentication evidence are required.
+
+**Seat-pool workstream retained.** GLM must also expand `niloy`, `seat2`, and `seat3`, including chat providers that expose video models, and graduate them through Python-only submit → poll → downloadable media proof. Chrome remains capture/onboarding only and may not be counted as runtime capacity.
+
+**Anti-drift accounting.** The final report must contain an OmniRoute section, a seat-pool section, and a combined total. It must not omit OmniRoute because a seat route is easier to test, and it must not count a signup, capture, model inventory row, Chrome route, or adapter skeleton as capacity. Documentation verification only; no browser, provider, credential, session, signup, video, or service action occurred. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
+
 ### [2026-08-30 22:00] #1369 - Revised handover executed: real Python video-adapter sweep; two adapters built + wired; every verified-key unit walled on money/quota (0.0 spent); durable contract proven
 
 **Operator word.** "continue" after the revised HANDOVER_GLM_5_3_FLASH.md (commit 19ab303) assigned the real Python video-adapter graduation as highest priority. Primary orchestrator follow-ups acknowledged: 0d15676 (retain Omni catalog across discovery timeout) and ccd58e0 (fallback log collision-safe) - both touched files I authored; current state verified before building on them.
