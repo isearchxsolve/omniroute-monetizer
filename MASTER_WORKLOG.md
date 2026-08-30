@@ -10659,6 +10659,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Verdict.** The requested close/reopen completed successfully. Profile persistence is not itself proof of Google authentication, and the blank New Tab does not establish `GOOGLE_SYNC_AUTHENTICATED`; that status remains unverified. No password, OTP, email code, CAPTCHA, MFA, cookie, local-storage, profile-database, provider, or video action occurred. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
 
+### [2026-08-31 00:35] #1382 - Operator confirms niloy profile is working and signed in
+
+**Operator confirmation.** The operator confirmed that the reopened niloy profile is working and signed in. This is the authoritative human handoff for the immediate next step: use the niloy dedicated profile for the operator's ordinary Google SSO onboarding action where needed.
+
+**State interpretation.** Record niloy as `GOOGLE_SYNC_AUTHENTICATED — operator-confirmed`, while retaining the separate `agent-visible avatar-menu proof — unavailable` label because the supported browser connection does not expose the dedicated niloy window. No provider session, signup completion, video capability, or Python adapter graduation is implied by this confirmation.
+
+**Safety boundary.** The operator remains responsible for any password, OTP, email-verification, CAPTCHA, MFA, payment, or other verification prompt. GLM's next work resumes after this onboarding step with provider contract capture and pure Python runtime graduation. No browser action or credential read was performed for this entry. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
+
 ### [2026-08-30 22:00] #1369 - Revised handover executed: real Python video-adapter sweep; two adapters built + wired; every verified-key unit walled on money/quota (0.0 spent); durable contract proven
 
 **Operator word.** "continue" after the revised HANDOVER_GLM_5_3_FLASH.md (commit 19ab303) assigned the real Python video-adapter graduation as highest priority. Primary orchestrator follow-ups acknowledged: 0d15676 (retain Omni catalog across discovery timeout) and ccd58e0 (fallback log collision-safe) - both touched files I authored; current state verified before building on them.
