@@ -9651,6 +9651,18 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** A locally present token is not claimed valid unless its upstream returned HTTP 200, and an upstream-valid token is not claimed wired unless OmniRoute's own connection test subsequently passes. No browser/provider session or video lane is claimed authenticated.
 
+### [2026-08-30 15:46] #1324 — Local Qoder runtime blocker confirmed; no installer was run
+
+**Action:** Performed a shallow local runtime sweep for the inactive Qoder connections: checked the documented CLI binary locations, command resolution, the existing `.qoder` state tree, likely application-install locations, and the configured `CLI_QODER_BIN` reference. This was file/process discovery only; no installer, updater, browser, credential reader, or provider API call was used.
+
+**Observation:** The `.qoder` configuration directory exists, but the expected `qodercli.exe` is absent, the `qoder`/`qodercli` commands do not resolve, and no Qoder executable was found under the usual program-install roots. `CLI_QODER_BIN` is configured to an executable leaf that does not exist. This directly matches OmniRoute's native provider-test diagnosis: `runtime_error` / `Local CLI runtime is not installed` for both inactive Qoder records.
+
+**Decision:** Do not silently download or install a third-party CLI into a production monetizer. Runtime installation changes the workstation and could create/update a local account session; it needs an explicit provider installer/source and then a post-install OmniRoute test. This blocker is accurately classified as a missing local runtime, not an authentication or Chrome failure.
+
+**Safety:** No runtime was installed, no environment value was changed, and no provider route was activated. Chrome, seats, services, databases, credentials, and OmniRoute connection state remain untouched.
+
+**What is not claimed:** The presence of `.qoder` settings does not prove that Qoder CLI is installed, authenticated, or routable. Neither inactive Qoder connection is a verified route.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
