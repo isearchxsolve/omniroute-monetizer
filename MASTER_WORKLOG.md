@@ -10392,3 +10392,16 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Operational consequence.** Profile-1 graduation should prioritize independent account/session sources and their model families, not chase a numeric route count. The next missing capacity action remains the dedicated video lane; the serial chat orchestrator currently has no safe new candidates because its three candidates have reached the two-attempt limit and must not be blindly re-hit.
 
 **Safety.** Matrix collection was read-only; no Chrome tab, provider, capture, video job, or credit was touched.
+### [2026-08-31 01:46] #1359 — Honest verification of untracked CAPACITY_MATRIX.md: sources mostly match, live-capacity wording needs correction
+
+**Scope.** Read-only comparison of `CAPACITY_MATRIX.md` (untracked user file) against its named JSON sources and current endpoints `:20128`, `:8190`, and `:8189`. The file itself was not edited.
+
+**Verified exact snapshot claims.** The document’s source-derived counts match current files: canonical replay gate 25 rows (REPLAY_OK 11 / NO_ANSWER 7 / AUTH 4 / WALL 3); graduation ledger 34 rows (REPLAY_OK 10 / FAIL 12 / NO_ANSWER 6 / WALL 3 / AUTH 2 / UNPARSEABLE 1); Profile-1 reconciliation 51 rows (PENDING_EVIDENCE 21 / FAIL 13 / REPLAY_OK 6 / NO_ANSWER 5 / WALL 3 / AUTH 2 / UNPARSEABLE 1). `video_capability_matrix.json` contains 22 provider definitions; `video_route_inventory.json` records 59 inventory routes across 11 providers; the dedicated-profile preflight records 5 enabled accounts across providers/seat2/seat3 and deliberately performed no quote or submit.
+
+**Verified current live claims.** `:20128/v1/models` is HTTP 200 with 9,509 model records. `:8190/v1/models` is HTTP 200 with 9,531 merged records and currently reports 19 dispatchable chat seats plus one dispatchable video seat. `:8189/v1/models` is HTTP 200 with 21 aliases: Flow 12, rtst 7, digen 2. `GET :8190/v1/video/models` is indeed HTTP 404.
+
+**Corrections required for honest wording.** (1) `:8190` does NOT serve “+9,526 host/auto routes”: it serves 9,509 merged OmniRoute model IDs plus 22 local seat-pool records (two aggregate aliases and 20 currently dispatchable host routes); OmniRoute model IDs are not host pins. (2) 22 video provider definitions and 59 video inventory routes are NOT live, graduated video capacity. (3) the preflight’s “Chrome not currently open” is a historical 2026-08-30 observation; current dedicated port :9222 is open. (4) 5 enabled account records are configuration, not verified authenticated or credit-positive accounts. (5) historical Law-3 graduation entries describe past proof, not a current all-route health certification.
+
+**Current capacity statement.** Verified live serving capacity: OmniRoute 9,509 advertised model records; merged gateway 9,531 advertised records; independently dispatchable session-pool capacity 19 chat seats and 1 video seat; separate `:8189` video router advertises 21 provider aliases, not 21 separately proven video accounts/results.
+
+**What is NOT claimed.** No claim is made that every OmniRoute model is currently inferable, that any inventory alias has credits, or that the historic video capacity is present. No Chrome, provider, capture, video, or credential state was changed.
