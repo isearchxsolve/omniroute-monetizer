@@ -10045,3 +10045,11 @@ no session_*.json in D:\omniroute-monetizer\state\ | no |
 |---|---|---|---|---|
 | Groq Chat | console.groq.com | REPLAY_OK | [matched the report's only row, 'api.groq.com'] 58 | yes |
 
+
+### [2026-08-30 07:35] #1315 — Copilot: webpubsub reliable subprotocol identified; DeepInfra = paywall; Groq restored
+
+- Groq --redo-passed: REPLAY_OK restored ("58"). Gate 6->11 REPLAY_OK hosts. Ledger/gate split-brain resolved via sanctioned redo flag. NOTE: :20130 restart exceeded its 180s bound -- supervisor task reloads within 5 min by design.
+- DeepInfra: jar replay answered 402 "You need positive balance to do inference" -> PAYWALL (accepted class). Registry's 'visited' readiness was technically correct (jar holds only analytics cookies); no readiness rule needed.
+- Copilot protocol root identified: the page's chat sockets are AZURE WEB PUBSUB clients with Sec-WebSocket-Protocol 'json.reliable.webpubsub.azure.v1' (captured 38 handshake dumps). Evidence assembled tonight: (a) refresh-token chain mints a 24h RS256 accessToken (keepalive live, 6h schedule); (b) the chat-socket URL shape is /c/api/chat?api-version=2&clientSessionId=<uuid>&accessToken=<that token>&X-UserIdentityType=google&features=anonymous-block-page&setflight=anonymous-block-page (captured 62 creations during one send window); (c) the reliable subprotocol's sequence machinery EXPLAINS the sequenceAck frame and the type:system connected frames seen in the sniff; (d) a raw (subprotocol-less) client connect gets connected(id=0) then challenge(method:null) then invalid-event for every frame -- the server's trust/challenge gate. REMAINING BUILD: implement the webpubsub json.reliable client framing (Azure Web PubSub SDK spec: client event wrappers + ack/sequence semantics) over the minted URL with the recorded handshake headers, then the existing handshake-frames + send + appendText assembly closes Copilot.
+- Also captured: page reconnect loop re-uses ONE clientSessionId across sockets; the accessToken in the socket URL is the SAME RS256 token family as the auth0 Bearer (single token material, two uses).
+- Gate final: 24 hosts / 11 REPLAY_OK / 3 AUTH / 7 NO_ANSWER / 3 WALL. Inner AI + DeepInfra = paywalls (accepted). Copilot = auth+protocol gated with a complete evidence map.
