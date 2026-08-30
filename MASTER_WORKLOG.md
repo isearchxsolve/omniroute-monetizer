@@ -10484,7 +10484,7 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Fresh blocker evidence (19:29 local).** `curl.exe --noproxy * http://127.0.0.1:8190/v1/models` -> HTTP 000 (connect failure). netstat shows only a transient SYN_SENT from the probe, no LISTENING socket on :8190. Task `OmniRoute Session Pool Shim (keepalive)` last ran 19:27, result 0, next run 19:32 - the task fires and reports success, but produces no shim process. `logs/shim_stdout_current.log` last write 18:53, unchanged. No wscript.exe resident; two python.exe rows (started 13:50) are not shim listeners. This matches worklog #1362 exactly: the Windows Task Scheduler/VBS launch path completes without executing the shim chain.
 
 **Status.** BLOCKED on all live verification per HANDOVER_GLM_5_3_FLASH.md (endpoint absent = stop the sequence). No hand-launch performed; ownership intact. Next single action remains a controlled repair/diagnosis of the task-owned VBS launch path. No commit made (no change to code or docs beyond this entry).
-### [2026-08-31 04:00] #1366 — Capacity expectation baseline for GLM execution handoff
+### [2026-08-31 04:00] #1367 — Capacity expectation baseline for GLM execution handoff
 
 **Operator question.** The operator asked what final capacity should be expected after GLM completes its assigned work. The answer must distinguish an evidence-backed ceiling from a forecast; no exact healthy-route count is promised before fresh probes complete.
 
