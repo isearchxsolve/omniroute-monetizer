@@ -9637,3 +9637,11 @@ no session_*.json in D:\omniroute-moneti | no |
 **Verification:** Re-ran `python -m pytest -q tests/test_omniroute_capability_matrix.py` — **6 passed**. Re-ran `python -m py_compile scripts/automation/omni_supervisor.py` — passed. The test exercises report construction with an empty service list and confirms schema/version, numeric writer PID, interpreter identity, and healthy-empty application aggregate.
 
 **Safety:** No seat files, Chrome profiles, provider credentials, databases, or owner-managed processes were touched. The existing duplicate live supervisor processes remain report-only findings; the new metadata will become authoritative after the task owner naturally reloads the updated source.
+
+### [2026-08-30 11:03] #1303 â€— OmniRoute-only change integrity gate passed
+
+**Verification:** Ran `git diff --check HEAD^` against the four files in the OmniRoute observability change; no whitespace errors were reported. Re-ran `python -m pytest -q tests/test_omniroute_capability_matrix.py`; **6 passed in 1.68s**.
+
+**Current handoff state:** The committed source is internally consistent and tested, but `state/supervisor_status.json` remains stale because the older live writer overwrites the new schema. The authoritative next action requires the existing supervisor task/process owner to perform its normal reload; this agent will not force that reload by killing or restarting services. Direct application capability probes remain the safe evidence source until the report writer converges.
+
+**Scope confirmation:** This entry and the preceding changes are OmniRoute/control-plane only. The four Chrome profiles, seat inventory, authentication state, and graduation artifacts were not opened or modified.
