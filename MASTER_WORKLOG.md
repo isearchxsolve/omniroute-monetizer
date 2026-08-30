@@ -10469,3 +10469,10 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Handoff updated.** Added an `Orchestration authority` section to `HANDOVER_GLM_5_3_FLASH.md`. GLM may execute explicitly assigned implementation and verification units, but may not redefine the premise, broaden scope, spend credits, operate Chrome, change service ownership, promote inventory to healthy capacity, or declare production complete. GLM must return exact evidence, failures, changed files, tests, and commits to the primary orchestrator.
 
 **Final-decision rule.** Only the primary orchestrator may make the final health, capacity, graduation, and rollout decisions, using current evidence from the merged `:8190` consumer surface and the two distinct OmniRoute/seat-pool harnesses. No service, Chrome profile, provider, credential, capture, or video state was changed by this documentation update.
+### [2026-08-31 03:40] #1365 — Corrected credit-cap authority: constraint is on primary orchestrator, not GLM
+
+**Operator correction.** The prior handoff wording incorrectly said GLM 5.3 Flash was bounded because of a credit cap. The credit cap is on the primary Codex orchestrator; GLM does not have that limitation.
+
+**Handoff corrected.** `HANDOVER_GLM_5_3_FLASH.md` now directs GLM to act as the full-capacity execution worker for assigned implementation, hardening, seat-graduation, and verification scope. The primary Codex agent remains the orchestrator and final auditor. GLM must still preserve the exact premise, avoid unrelated scope, respect Chrome/service ownership rules, return exact evidence and commits, and defer final health/capacity/graduation/rollout certification to the primary orchestrator.
+
+**No runtime change.** This correction changed documentation only. No service, Chrome profile, provider, credential, capture, or video state was touched.

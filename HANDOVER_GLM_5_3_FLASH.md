@@ -9,12 +9,14 @@ endpoint.
 ## Orchestration authority
 
 The primary orchestrator and final auditor remains the lead Codex agent coordinating this work.
-GLM 5.3 Flash is a bounded worker, used because of credit limits and only for explicitly assigned
-implementation or verification units. GLM must not redefine this premise, broaden scope, spend
-credits, operate Chrome, alter service ownership, promote an inventory row to healthy capacity, or
-declare production rollout complete. Every GLM result must be returned to the primary orchestrator
-with its exact evidence, failures, changed files, tests, and commit. The primary orchestrator makes
-the final health, capacity, graduation, and rollout decision from current evidence.
+The available credit constraint is on the primary orchestrator, **not on GLM 5.3 Flash**. GLM should
+therefore be used as the full-capacity execution worker for the assigned implementation, hardening,
+seat-graduation, and verification scope; do not artificially narrow its work because of a supposed
+GLM credit cap. GLM must still not redefine this premise, create an unrelated project, alter service
+ownership, access the operator's live Chrome profile, promote an inventory row to healthy capacity,
+or declare production rollout complete without primary-orchestrator review. Every GLM result must be
+returned with exact evidence, failures, changed files, tests, and commit. The primary orchestrator
+makes the final health, capacity, graduation, and rollout decision from current evidence.
 
 ## Mission
 
