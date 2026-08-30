@@ -141,3 +141,45 @@ Transport classifications (no lever pulled, no wasted probes):
 - **veoaifree.com** — class-(b) quota death, operator-verified in Chrome (§18.6); its stale gate REPLAY_OK is not acted on and not retried (no-hammering rule).
 
 Audit artifact: `state/merged_healthy_capacity_audit.json` (merged_advertised=9522, omni_inventory=9509, seat_chat=10, seat_video=1; verified routes: `frontier` healthy via omniroute 251ms, `session-pool/auto` healthy via stateless deepseek 12.5s).
+
+---
+
+## 6. Python video-adapter graduation sweep (2026-08-30 ~21:15-21:45 local) — worklog #1369
+
+Revised-handover assignment: real **Python-executed** submit -> durable job -> poll -> result
+proof through `:8190`'s `/v1/video/jobs` durable contract; browser only for dedicated-profile
+observation/capture. One provider/account/model-family unit at a time; one bounded generation
+per unit; honest evidence row on failure, no retry of a wall.
+
+**Adapter components committed this sweep** (dispatch on seat-file `api.kind`, spend gate
+`OMNI_VIDEO_CONFIRM_SPEND` + `OMNI_VIDEO_MAX_SPEND`, submit-exactly-once, ledger-before-poll):
+`scripts/automation/kie_video_client.py` (KIE Market createTask/recordInfo) and
+`scripts/automation/aistudio_video_client.py` (Gemini API Veo predictLongRunning). Seat files
+`session_kie_ai.json` / `session_aistudio_veo.json` written from VERIFIED vault keys (gitignored,
+keys never printed).
+
+| Unit (provider/account/family) | Python transport proof | Bounded generation result | Classification |
+|---|---|---|---|
+| kie.ai / vault key / kling-3.0 | createTask + recordInfo clients live; selftest 15/15; wallet read 7.79 | createTask refused: "Credits insufficient" (HTTP 402-class); **0.0 spent**; durable row `kie-grad-001` = failed/wall | **wall: wallet balance** (unit mismatch lesson: the measured 35-credits sample beat the doc-schema 1.23 placeholder; 7.79 < any clip) |
+| aistudio.google.com / vault key / veo-3.1-fast | ListModels 200 shows veo-3.1/-fast/-lite predictLongRunning; selftest 10/10 | predictLongRunning HTTP 429 RESOURCE_EXHAUSTED ("exceeded your current quota... billing"); **0.0 spent**; durable row `aistudio-veo-grad-001` = failed/wall | **wall: quota/billing** (key sees Veo; project has no generation quota) |
+| rtst.ai / rtst-1 / ltx25pro family | RtstApiClient free reads live: balance 1.0, menu + quotes parsed (cheapest vidu 3s@540p = 6.0) | no submit attempted: `can_afford` false at 1.0 balance | **wall: wallet balance** (stale "11 credits" from 2026-08-27 gone) |
+| segmind / vault key / (5 video ids) | get-user-credits 200 | balance 0.0 + free-credits 0.0 -> nothing spendable | **wall: empty wallet** |
+| pollinations / no key / 17 video ids (wan, seedance, grok-video, veo, nova-reel...) | keyless model discovery 200; docs contract captured (GET /video/{prompt} -> video/mp4) | generation requires Bearer key; ALL video models paid_only (Pollen); no key in vault | **wall: no account/key** (signup = harvest-agent territory, Law 5) |
+| novita, deepinfra, veoaifree | prior evidence | 403 NOT_ENOUGH_BALANCE / 402 / quota death | **walls, not retried** (no-hammering rule) |
+
+**Durable-contract proof achieved (independent of the walls):** both `:8190` submissions returned
+an immediate **202 durable receipt** (idempotent `job_key`, provider/session attribution), the
+worker thread executed the Python client, the terminal failure state is durable and queryable via
+`GET /v1/video/jobs/{id}`, and **zero credits were spent on any refusal**. The consumer contract
+and the adapter discipline work; the missing ingredient everywhere is **account headroom**.
+
+**What is NOT claimed:** no video capacity row is graduated this sweep — a completed
+result-verified row requires an actual MP4 (`ftyp`-checked) through the contract, and every unit
+with a live verified credential is walled on money/quota. Transport-side, the pool now dispatches
+`api.kind` = rtst/youcom/flow/digen/**kie**/**aistudio** statelessly.
+
+**Unblock paths (operator/orchestrator decisions, not agent work):** (a) top up ANY one wallet
+(kie 7.79 credits in wallet; cheapest observed clip ~35 credits) and the SAME committed adapters
+produce a result-verified row with one bounded generation; (b) authorize the dedicated-profile
+capture of a Google Flow job exchange (2,075-credit supply, tabs already open on 9222/9224/9225)
+to build the pure-Python Flow adapter — the largest stateless video prize available.

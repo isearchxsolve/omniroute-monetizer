@@ -224,6 +224,19 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
         # like flow/rtst (OMNI_VIDEO_CONFIRM_SPEND).
         from digen_session_replay import DigenSessionClient
         return DigenSessionClient
+    if kind == "kie":
+        # KIE Market API (worklog #1369, revised-handover Python video-adapter assignment): one
+        # verified vault key, one wallet, job-based generation over pure HTTP (createTask ->
+        # recordInfo -> resultUrls), no browser. First unit of the real Python video-adapter
+        # graduation; spend-gated like flow/rtst (OMNI_VIDEO_CONFIRM_SPEND + OMNI_VIDEO_MAX_SPEND).
+        from kie_video_client import KieVideoClient
+        return KieVideoClient
+    if kind == "aistudio":
+        # Google Veo via the Gemini API (worklog #1369): vault key VERIFIED, ListModels shows
+        # veo-3.1 * predictLongRunning. Python submit -> operation -> poll -> video URI, no
+        # browser. Free-tier quota spends $0 if present; one bounded submit, never a retry.
+        from aistudio_video_client import AistudioVideoClient
+        return AistudioVideoClient
 
     # WEBSOCKET seats (Doctrine 3a, CORRECTED 2026-08-28 per operator): a seat carrying
     # `recorded_ws` was captured by capture_websocket_cdp.py — the site speaks a websocket.
