@@ -43,7 +43,8 @@ Keep these implementations and evidence separate:
    not proof of live inference or account headroom.
 2. **Seat-pool harness (`session_pool.py`, exposed through `:8190`)** — independently captured or
    provider-specific browser/API seats. Its capacity unit is **account/session seat × model family
-   or route**, not the number of aliases in a catalog.
+   or route**, not the number of aliases in a catalog. A Chrome-backed route is a diagnostic/capture
+   aid or temporary bridge; it is **not** Chrome-independent Python-adapter capacity.
 
 The final audit must inspect both harnesses together through `:8190`, while preserving the source
 of every response (`omniroute`, `session_pool`, or explicit fallback). A fallback must never be
@@ -66,10 +67,42 @@ Do not count any of these as serving capacity by themselves:
 - a successful HTTP status with stale text, a wall, an empty answer, or malformed stream content.
 
 Chat capacity requires a fresh computed response through the real consumer endpoint. Video capacity
-requires the correct provider-specific submit → poll → result URL flow, with the completed result
-observed and the route admitted only after that proof. Chat providers that expose video models must
-appear in the video inventory, but they do not become graduated video capacity until their actual
-video contract succeeds.
+requires a **Python-executed**, provider-specific submit → poll → result URL flow, with the completed
+result observed and the route admitted only after that proof. A browser may be used only for safe
+dedicated-profile observation/capture of the live protocol; it is not an acceptable runtime executor
+or graduation substitute. **Chat providers frequently serve video models too.** Treat their video
+models as first-class candidates across both OmniRoute and seat-pool evidence; do not silo video work
+into only the dedicated-video-seat list. A chat-provider video model becomes graduated video capacity
+only when its actual video contract succeeds through the Python adapter.
+
+## Current assigned execution: real Python video-adapter graduation
+
+This is GLM's highest-priority task. The product's binding constraint is durable clip-generation
+capacity, not another Chrome-routed alias or an expanded inventory spreadsheet. Build and graduate
+real **Python runtime adapters** for video-capable seats, beginning with the existing captured
+evidence and stateless/API-capable providers. The runtime must work without an open Chrome tab once
+the capture/adapter is complete.
+
+Work in one provider/account/model-family unit at a time:
+
+1. Build the smallest faithful Python transport from the recorded/live protocol: submit, durable
+   job identifier, polling/reconciliation, terminal result URL, and response parsing. Reconstruct
+   fresh send-time fields where Chrome's own request proves they exist; classify every failure under
+   the Chrome Gap Doctrine rather than calling the provider dead.
+2. Execute one bounded real generation with the task-owned spend gate and provider cap respected.
+   Validate that the terminal URL is downloadable media (not HTML/error JSON; check video bytes such
+   as ISO-BMFF `ftyp` where applicable).
+3. Prove the same provider through the `:8190` durable `/v1/video/jobs` contract: submit receipt,
+   poll/reconcile, terminal completed result. Then admit it as **one** result-verified capacity row.
+4. Add each successful model family served by that same provider/account to the capacity matrix as
+   `provider/account × models served`; do not falsely count them as independent accounts. Include
+   video-capable models hosted by chat providers in this same accounting.
+5. On failure, retain an honest evidence row and move to the next independent provider/seat; do not
+   spend credits retrying an identical wall/quota/contract failure.
+
+Explicit non-goals: no more Chrome-runtime routing presented as capacity; no synthetic/mock video
+result; no model-keyword inventory promoted to capacity; no broad catalog probe; no operator-profile
+access; and no alteration of the scheduled-task ownership of `:8190` or `:8189`.
 
 ## Non-drift rules
 
@@ -100,8 +133,10 @@ video contract succeeds.
 - A Law-3 probe exposed malformed OmniRoute output (`5858` where the computed answer is `58`). The
   merged shim contains a narrow numeric duplicate repair, but the final live consumer proof has not
   been rerun.
-- The task-owned `:8190` listener is currently absent after recovery attempts. This is the immediate
-  blocker. Do not proceed to broad audits or video spending until it is restored.
+- The task-owned `:8190` listener has been restored and primary-audited. Cold discovery returned
+  9,523 rows with a 9,509-row Omni catalog; `frontier` (OmniRoute) and `session-pool/auto` (Cohere
+  seat) each returned the computed `58`. The shim's catalog-refresh timeout and task-log collision
+  gaps are committed closed (`0d15676`, `ccd58e0`).
 
 ## Exact next sequence
 
@@ -116,9 +151,10 @@ video contract succeeds.
    healthy unless the computed answer is correct and the response is structurally valid.
 4. Build the final provider × model-family × account/seat matrix from those live results plus the
    separate video evidence.
-5. Graduate Profile-1 seats serially through the transport Chrome actually uses. Use dry-run and
-   visual/auth checks first. Video is admitted only after submit → poll → result proof; never count
-   a Python replay skeleton or a model-name inventory as graduation.
+5. Execute the **real Python video-adapter graduation** assignment above. Build from Chrome capture
+   only where needed, but accept a provider only after a Python runtime performs submit → poll →
+   durable result proof through `:8190`. Sweep dedicated video seats **and video-capable chat
+   providers** across both harnesses; account provider/account × every model family served.
 6. Commit each component after its test and worklog entry. End with a concise healthy-model audit,
    not a dead-model catalog.
 
