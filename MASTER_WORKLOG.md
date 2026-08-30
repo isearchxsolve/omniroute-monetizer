@@ -10343,3 +10343,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Fix.** The unpinned session-pool emergency fallback now substitutes `OMNIROUTE_FALLBACK_MODEL` (default `frontier`) only for the upstream copy of the request. The original local request contract is unchanged. `frontier` had already returned clean computed `58` in the immediately preceding live merged-gateway proof. Pinned routes are not remapped. `py_compile` and `git diff --check` passed.
 
 **What is NOT claimed.** This source change is not yet live until its next controlled shim-owner rollout and a repeat Law-3 probe. Local seat-pool authentication remains a separate supply issue; this change is consumer resilience, not a fabricated seat repair.
+### [2026-08-31 00:56] #1354 — Final :8190 merged consumer gateway proof: both OmniRoute and session-auto paths return computed 58
+
+**Final rollout.** Deployed commit `dee0f48` through the existing shim keepalive owner after verifying the exact listener command. The task replaced shim PID `14580` with PID `15556`; no duplicate listener, Chrome process, video-router, or OmniRoute management process was touched.
+
+**Law-3 verification.** Sent the normal OpenAI-compatible request to `POST http://127.0.0.1:8190/v1/chat/completions` with `model=session-pool/auto` and prompt `Reply with only the number: 41 + 17`. The local session pool encountered its documented `AUTH` failure, and the merged gateway transparently selected its paid-side fallback. Final response: HTTP 200, `x_gateway_source=omniroute_fallback`, `x_gateway_fallback_reason=session_pool:AUTH`, `provider=omniroute`, `session=null`, and content exactly `58`. This is a computed answer, not an echo or status-only green.
+
+**Merged contract now live.** `:8190` handles local seat aliases/pins and video jobs, merges the OmniRoute catalog into `/v1/models`, sends OmniRoute model names to the paid/OAuth plane, and fails over in both directions where safe: unavailable OmniRoute -> session pool for non-seat model names; unavailable unpinned session-pool auto -> OmniRoute `frontier`. Every fallback is explicitly tagged in the response; a pin never silently changes provider.
+
+**Residual capacity truth.** The endpoint is production-capable as one merged chat gateway, but current live capacity metadata remains 22 dispatchable chat seats and 1 dispatchable video seat. The historical 25-chat/23-video capacity promise is not now claimed. Video was not submitted (no credit spend) and requires separately verified seat onboarding/graduation to expand.
+
+**What is NOT claimed.** This does not repair the `Invalid conversation document affinity` seat authentication error, create missing video accounts, prove every merged OmniRoute model, or turn localhost single-operator mode into public multi-tenant authentication. It closes the final endpoint merge, fallback, request-validation, discovery-honesty, and computed-chat readiness gaps.
