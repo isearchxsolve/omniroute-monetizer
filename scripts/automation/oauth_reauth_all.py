@@ -10,8 +10,8 @@ SECURITY: Never logs tokens, api keys, passwords, or any credentials.
 
 Flow per provider type:
   1. Google OAuth (antigravity/agy): GET /api/oauth/{p}/authorize -> browser popup -> exchange
-  2. PKCE callback server (xai-oauth/grok-cli/codex): GET /api/oauth/{p}/start-callback-server -> browser popup -> poll
-  3. Device code (kimi-coding/amazon-q/kilocode): GET /api/oauth/{p}/device-code -> user enters code
+  2. PKCE callback server (xai-oauth/grok-cli/codex): provider authorize flow -> browser popup -> poll
+  3. Device code (kimi-coding/amazon-q/kilocode): GET /api/oauth/{p}/device-code -> user enters code -> poll
   4. windsurf: import-token via /api/oauth/windsurf/import-token (requires token from IDE)
   5. trae: import via DevTools JWT capture (requires manual step)
   6. cline: browser OAuth via /api/oauth/cline/authorize
@@ -119,15 +119,18 @@ def handle_device_code(session: requests.Session, conn_id: str, provider: str) -
         pass
     log(f"[{provider}] Expires in {expires_in}s. Polling for completion...")
     
-    # Poll for up to 10 minutes
+    # Poll for up to 10 minutes. The current OmniRoute API stores the
+    # provider-issued device code under deviceCode and accepts it at /poll.
+    # Older builds used /device-poll and device_code; do not silently fall
+    # back to those retired routes because that masks API drift.
     interval = data.get("interval", 5)
     max_attempts = min(120, expires_in // max(interval, 1))
     
     for attempt in range(max_attempts):
         time.sleep(interval)
         poll_r = session.post(
-            f"{OMNI_BASE}/api/oauth/{provider}/device-poll",
-            json={"connectionId": conn_id, "device_code": "[PRESENT]"},  # server has it from state
+            f"{OMNI_BASE}/api/oauth/{provider}/poll",
+            json={"connectionId": conn_id, "deviceCode": data.get("deviceCode")},
             timeout=30,
         )
         poll_data = poll_r.json() if poll_r.ok or poll_r.status_code in (200, 400) else {}
@@ -342,22 +345,24 @@ async def run_pkce_callback_flow(
     provider: str,
 ) -> dict:
     """
-    PKCE flow using /api/oauth/{provider}/start-callback-server and poll-callback.
+    PKCE flow using the current provider authorize endpoint and /poll.
     """
-    # Step 1: Start callback server
-    r = session.post(
-        f"{OMNI_BASE}/api/oauth/{provider}/start-callback-server",
-        json={"connectionId": conn_id},
+    # Step 1: Obtain the provider authorization URL. The current API starts
+    # the callback state from GET /authorize; the former
+    # start-callback-server route is retired.
+    r = session.get(
+        f"{OMNI_BASE}/api/oauth/{provider}/authorize",
+        params={"connectionId": conn_id},
         timeout=30,
     )
     if not r.ok:
-        return {"success": False, "error": f"start-callback-server failed: {r.status_code} {r.text[:100]}"}
+        return {"success": False, "error": f"authorize failed: {r.status_code} {r.text[:100]}"}
     
     server_data = r.json()
     auth_url = server_data.get("authUrl")
     
     if not auth_url:
-        return {"success": False, "error": "No authUrl from start-callback-server"}
+        return {"success": False, "error": "No authUrl from authorize"}
     
     log(f"[{provider}] Opening PKCE OAuth window...")
     
@@ -369,7 +374,7 @@ async def run_pkce_callback_flow(
     for attempt in range(75):  # 150 seconds
         await page.wait_for_timeout(2000)
         poll_r = session.post(
-            f"{OMNI_BASE}/api/oauth/{provider}/poll-callback",
+            f"{OMNI_BASE}/api/oauth/{provider}/poll",
             json={"connectionId": conn_id},
             timeout=15,
         )
@@ -381,7 +386,7 @@ async def run_pkce_callback_flow(
             return {"success": True, "method": "pkce_callback"}
         
         if poll_data.get("error") and not poll_data.get("pending"):
-            return {"success": False, "error": f"poll-callback error: {poll_data.get('error')}"}
+            return {"success": False, "error": f"poll error: {poll_data.get('error')}"}
         
         if attempt % 5 == 0:
             log(f"[{provider}] Still waiting for PKCE callback ({attempt * 2}s)...")

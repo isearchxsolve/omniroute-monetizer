@@ -10232,3 +10232,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Current state.** The v0-free account is throttled from today's rapid test sends; the adapter's backoff retry is correct and the path is proven -- re-run in ~30 min when the window decays. NOT a permanent block; NOT a dead end by doctrine (Chrome chats with v0 right now; we drive Chrome's own composer).
 
 **Honest classification.** v0 = live-tab adapter (not jar-replayable, not dead). Held out of the gate until the throttle decays; the build is complete and committed.
+### [2026-08-30 23:05] #1344 — OAuth reauth runner updated to current OmniRoute poll API
+
+**Trigger.** `D:\conversations.txt` identified stale OAuth automation as one of the remaining code-side blockers. Read-only inspection of `scripts/automation/oauth_reauth_all.py` found calls to the retired `/api/oauth/{provider}/device-poll`, `/start-callback-server`, and `/poll-callback` routes. The current API behavior recorded in the preceding RCA uses `/api/oauth/{provider}/authorize` and `/api/oauth/{provider}/poll`.
+
+**Change.** Updated the device-code flow to POST to `/api/oauth/{provider}/poll` with the API-returned `deviceCode`. Updated the PKCE flow to obtain its authorization URL from GET `/api/oauth/{provider}/authorize`, then poll `/poll`. Updated comments and error labels so future failures identify the current route rather than the retired route. No browser was opened, no device code was generated, no credential was read or written, and no provider connection was changed.
+
+**Verification.** `python -m py_compile scripts/automation/oauth_reauth_all.py` exited 0. `git diff --check -- scripts/automation/oauth_reauth_all.py` reported no whitespace errors. The live management API was not exercised for OAuth because doing so would initiate external account/device interaction; therefore this is code-path validation, not a successful reauthentication claim.
+
+**Commit.** Pending immediate commit after this physical worklog update, per the incremental component loop.
+
+**What is NOT claimed.** No OAuth provider was reauthenticated. The external blockers documented in #1341–#1343 (OpenAI/X auth errors, Kimi parameter error, AWS invalid client, missing human credentials, and qoder AVX2 incompatibility) remain open until their required operator-side action or a provider-correct implementation is available.
