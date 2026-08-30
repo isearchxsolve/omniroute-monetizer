@@ -9663,6 +9663,18 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** The presence of `.qoder` settings does not prove that Qoder CLI is installed, authenticated, or routable. Neither inactive Qoder connection is a verified route.
 
+### [2026-08-30 15:53] #1325 — Remaining inactive provider set classified from native test evidence
+
+**Action:** Read the sanitized inactive records in `state/fleet_provider_audit.json`, grouping by provider and retaining only provider slug, auth type, active/key-presence flags, and native test diagnosis. This is a read-only examination of the immediately post-reactivation audit; account names, API keys, cookies, and raw connection payloads were excluded from the result.
+
+**Evidence-based classification:** The 24 inactive connections consist of seven OAuth connections whose refresh/access state requires reauthentication, six API-key connections with no credential present, two Qoder connections blocked by the confirmed missing local CLI, and nine connections with a key present but a native validation failure. Among the latter, the concrete diagnoses distinguish stale/invalid credentials, a web-cookie prerequisite, an unsupported validation endpoint, an expired/stale web request, and malformed stored header material. These are different remedies and must not be mass-reactivated.
+
+**Decision:** Continue only on independently verifiable local/runtime or validation-implementation gaps. The following are explicitly not candidates for automatic activation: missing keys, expired OAuth, web-cookie authentication, and entries whose upstream has rejected the stored credential. Native test validity remains the activation gate.
+
+**Safety:** No test was rerun in this classification step and no route, provider, credential, Chrome profile, seat, database, or service changed.
+
+**What is not claimed:** An inactive provider with `hasCredential=true` is not thereby valid. No remaining inactive provider is claimed recovered by this classification alone.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
