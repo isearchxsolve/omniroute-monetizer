@@ -9536,6 +9536,16 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 | Pollinations AI Web | pollinations.ai | FAIL | eport_9222.json
 no session_*.json in D:\omniroute-monetizer\state\secr | no |
 | V0 by Vercel (v0.app) | v0.app | NO_ANSWER | 200 but the extracted reply is not only '58': ok | no |
+
+### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
+
+**Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
+
+**Fleet result:** 117 total connections; all 117 management test calls returned HTTP 200; 71 reported valid tests and 46 reported invalid tests; 26 connections are currently inactive. Auth types were 90 API-key and 27 OAuth. The sanitized report was written to `state/fleet_provider_audit.json`.
+
+**Failure classification (sanitized type counts):** `upstream_unavailable` 11, `unsupported` 9, `upstream_error` 8, `reauth_required` 7, `upstream_auth_error` 4, `auth_missing` 4, and `runtime_error` 3. No secrets or raw credentials were logged. These are provider-level gaps behind a healthy OmniRoute management plane, not seat-layer findings.
+
+**Safety and verification:** The command exited 0 and used only native REST endpoints. No provider was reactivated, no key was changed, and no process was restarted. Seat files, Chrome profiles, and their login state remained untouched.
 | Coze Web | www.coze.com | FAIL | etizer\state\capture_report_9222.json
 no session_*.json in D:\omnirout | no |
 | Doubao Web (ByteDance) | www.doubao.com | FAIL | t_9222.json
@@ -9685,3 +9695,12 @@ no session_*.json in D:\omniroute-moneti | no |
 **Implementation:** Added a durable `summary` to `omniroute_capability_matrix.json` with separate counts for successful 2xx, authentication 401/403, other 4xx, 5xx, and timeouts. The first test run exposed a `None >= 400` classification bug for timeout results; normalized non-integer statuses to zero and reran successfully.
 
 **Verification:** `python -m pytest -q tests/test_omniroute_capability_matrix.py` — **8 passed in 3.27s**. Module compilation passed. No restart was required; no seat, Chrome, credential, database, or provider state was touched.
+
+### [2026-08-30 11:06] #1308 — graduate_all_seats run: 0/3 graduated
+
+| seat | host | verdict | detail | graduated |
+|---|---|---|---|---|
+| Google Gemini Web | gemini.google.com | AUTH | auth refused (in body) -- cookie alone is not enough | no |
+| Monica AI | monica.im | NO_ANSWER | 200 but the extracted reply is not only '58': omni. | no |
+| V0 by Vercel (v0.app) | v0.app | NO_ANSWER | 200 but the extracted reply is not only '58': ok | no |
+
