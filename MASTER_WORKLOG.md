@@ -9629,6 +9629,16 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **Safety:** No invalid connection was enabled. The remaining 24 inactive connections remain unchanged because they have authentication, runtime, upstream, unsupported, or human-account blockers. No seat, Chrome, provider credential, database, or process state was changed.
 
+### [2026-08-30 15:30] #1322 — Recovery scope and Chrome safety invariants re-established
+
+**Action:** At the start of the resumed provider/video recovery pass, re-read `TECHNOLOGY_TRANSFER.md` (including the Five Laws and service ownership/recovery/hot-add sections) and `CHROME_RULES_FOR_AGENTS.md` in full before inspecting any recovery mechanism or taking a Chrome-adjacent action.
+
+**Decision:** The operator clarified the required outcome as turning remaining failed/inactive OmniRoute providers into *verified routes*, and exercising the video lane only through an explicitly safe Chrome boundary. The seat layer remains out of scope. Provider recovery will therefore begin with local/native credentials and runtimes, then re-test via OmniRoute's supported management API. Browser-dependent providers are not to be opened, attached, copied, or driven through any operator Chrome profile. A video execution is permitted only after a dedicated guarded automation profile is preflighted and its provider-session state is explicitly verified; current live/parked seat tabs are not a safe target.
+
+**Service/credit boundary:** OmniRoute (`:20128`), video router (`:8189`), and shim (`:8190`) retain their documented single owners. No restart, kill, direct database edit, key disclosure, quote request, generation request, or spend will occur as part of this setup pass. A video job requires a separately confirmed safe profile and the existing explicit spend gate.
+
+**What is not claimed:** This documentation review does not prove any new provider route, provider session, Google Sync state, or video generation. No Chrome process, Chrome profile, seat file, provider credential, database, route, or service state changed.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
