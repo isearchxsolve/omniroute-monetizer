@@ -9619,6 +9619,16 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **Safety:** Documentation-only change. No runtime, seat, Chrome, credential, database, or provider state changed.
 
+### [2026-08-30 15:16] #1321 â€— Two verified inactive providers safely reactivated
+
+**Scope:** Operator explicitly authorized recovery of failed/inactive OmniRoute providers. Started with the only safe automatic subset: connections already validated by OmniRoute's upstream test and merely disabled.
+
+**Action:** Ran `python scripts/automation/fleet_provider_audit.py --reactivate-inactive`. The script uses the supported management REST API and re-enables an inactive connection only after its own test reports `valid`. It then immediately re-tests the reactivated connection.
+
+**Result:** `kiro` and `clinepass` were reactivated successfully. Inactive connection count fell from 26 to 24; total connections remain 117; 71 native provider tests remained valid. The operation exited 0 and refreshed `state/fleet_provider_audit.json`.
+
+**Safety:** No invalid connection was enabled. The remaining 24 inactive connections remain unchanged because they have authentication, runtime, upstream, unsupported, or human-account blockers. No seat, Chrome, provider credential, database, or process state was changed.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
