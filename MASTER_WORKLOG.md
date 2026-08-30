@@ -10092,3 +10092,22 @@ no session_*.json in D:\omniroute-monetizer\state\ | no |
 **Ledger note.** The graduation ledger row (attempts: 5, verdict NO_ANSWER, detail "http error 429") predates this probe and is only rewritten by full orchestrator runs; this replay report is the canonical evidence artifact for the reclassification.
 
 **Queue state.** Item 2 closed (wall, accepted class). Remaining: sso_v2 modal-opening step (Poe class), Monica task-uid rotation, V0 submit-poll client, Gemini/ChatHub send-time auth. Copilot live-tab adapter already closed this session (#1336, commit 4754baf).
+
+### [2026-08-30 09:45] #1338 - Puter supply proven and graduated via puter.js SDK live-tab adapter (computed 58)
+
+**Why.** sso_v2 queue item: Puter was classified an "anonymous surface" (#1311) with the cookie-based readiness prober recording isited (no auth-shaped cookies). The tab DOM showed a full authenticated desktop (Apps | Files | Usage | Account | Billing | Change Username | Delete Account) - a false negative with a structural cause.
+
+**Root cause of the classification gap.** Puter's anonymous-account session lives in localStorage (uth_token_v2 314 chars, user, logged_in_users), not cookies. seat_readiness.json is contractually cookie-based (eadOnly: true, verdict meanings are cookie-shape definitions), so hand-editing it was refused on principle; the false negative is structural and documented here instead.
+
+**Capture-path dead ends (each verified, not assumed).**
+- /app/ai-chat loads a dev-center.puter.com/coming-soon.html iframe; the composer the capture engine found was the desktop search <input editable:false> -> NO_REQUEST.
+- /app/chat loads chat-8qmyy.puter.site - a STATIC demo app; its "AI response goes here" is literal placeholder HTML. The chat composer lives in a cross-origin iframe with its own ephemeral CDP target (cap.targets() filters 	ype == "page", so the iframe is invisible to the repo's own helper; raw /json shows it). Driving the iframe produced only the placeholder - not supply.
+- graduate_all_seats --only puter plan: 0 eligible (readiness gate, consistent with the above).
+
+**The real client (what Chrome actually does).** The puter.com page context carries the full puter.js SDK (window.puter.ai.chat = function). The SDK sends with the tab's own session - no auth reconstruction at all. Driving it in-page is the live-tab doctrine: the browser is the client.
+
+**Adapter + proof.** scripts/automation/puter_live_tab.py written (modeled on copilot_live_tab.py): finds the puter.com tab on :9222, verifies/injects nothing (SDK is natively present; falls back to navigating to puter.com root if absent), invokes puter.ai.chat(prompt) in page context with a window-slot promise poll, redacts nothing (reply is model text), raises on SDK errors honestly. E2E: arithmetic probe 41 + 17 -> **58** (computed, Law 3). **Puter graduates.**
+
+**Classification updates.** Puter moves from "anonymous surface / PENDING_EVIDENCE" to live supply via SDK adapter. The "Puter Chat" site-directory chat surface URL remains wrong for supply purposes (static demo); any future jar-based capture should target the SDK call pattern instead.
+
+**Queue state.** Remaining: sso_v2 modal step now narrows to Poe only (Puter solved without SSO), Monica task-uid rotation, V0 submit-poll client, Gemini/ChatHub send-time auth.
