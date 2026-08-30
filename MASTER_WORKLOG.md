@@ -10419,3 +10419,12 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 - Honest three-cause classifications: Aymo 429 re-probed after decay and reclassified paywall (decay-retry disproven); Chrome-gated providers classified as live-tab build targets, not dead ends; no fabricated credentials.
 
 **Honesty notes carried in.** Every graduated host verified with computed Law-3 probe (41+17 -> 58), never echoable. V0 throttle is real and temporary, not site death.
+### [2026-08-31 01:54] #1360 — Correction: video-capable model families in OmniRoute and seat pool must count in capacity matrix
+
+**Operator correction accepted.** Capacity analysis must include video-capable models offered by ordinary OmniRoute/chat provider families and session-pool providers; isolating only browser-video seats understated available video model breadth.
+
+**Live catalog analysis.** `:20128/v1/models` does not expose a reliable `video: true` capability flag (published capability keys are predominantly tool_calling/reasoning/vision). Used conservative explicit video-generation model-name families instead: video, Veo, Sora, Kling, Seedance, Hailuo, Haiper, Runway, Pika, Luma, Mochi, CogVideo, Hunyuan-Video, Wan, T2V, I2V, V2V. This found 103 advertised video-model candidate IDs across 14 owner groups: pollinations 22; kie 16; alibaba 12; deepinfra 11; orcarouter 8; ainative 6; vertex 6; llm7 5; segmind 5; veoaifree-web 4; gemini 3; novita 2; session-pool 2; nvidia 1. Examples include DeepInfra Veo/Seedance/Wan/Pixverse, Vertex Veo, KIE Veo/Kling/Wan/Hailuo/Sora, and Pollinations Seedance/Grok-video/Wan/Veo.
+
+**Honest caveat.** 103 is an advertised candidate-ID count, not 103 independent accounts, completed video generations, or a guarantee that every model accepts the same `/v1/chat/completions` shape. Some are aliases of the same underlying model and at least one name match is a video detector rather than a generator. The matrix must therefore carry three columns: advertised video model IDs, independently authenticated provider/account seats, and end-to-end result-verified video routes.
+
+**Capacity policy updated.** Video graduation work will prioritize provider/account seats that unlock several explicit video model families, then verify the provider-specific generation contract before counting them as serving capacity. No Chrome, provider, capture, or video credit was touched in this catalog-only correction.
