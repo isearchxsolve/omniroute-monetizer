@@ -124,6 +124,14 @@ def test_video_capability_summary_redacts_accounts() -> None:
     assert report["models"][0]["id"] == "fast"
 
 
+def test_contract_helpers_classify_sse_and_tool_calls() -> None:
+    from omniroute_contract_probe import sse_contract, tool_contract
+
+    assert sse_contract('data: {"choices":[{"delta":{"content":"OK"}}]}\n\ndata: [DONE]\n') == {
+        "hasDataFrame": True, "hasDone": True, "hasContent": True}
+    assert tool_contract({"choices": [{"message": {"tool_calls": [{"id": "call_1"}]}}]})["hasToolCall"] is True
+
+
 def test_supervisor_application_probe_distinguishes_http_success_and_failure() -> None:
     from omni_supervisor import http_health
 

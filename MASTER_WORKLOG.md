@@ -9581,6 +9581,16 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is NOT claimed:** No new video was generated, no provider quote was requested, no credits were spent, and no account session was interacted with. The quote/generation path can drive a live browser tab and is intentionally excluded while the seat/Chrome layer remains parked.
 
+### [2026-08-30 14:25] #1317 â€— OmniRoute streaming and function-tool contracts proven on repaired aliases
+
+**Implementation:** Added `scripts/automation/omniroute_contract_probe.py`, a bounded runtime contract probe with one streaming chat request and one function-tool request. It stores only HTTP/status-shape booleans; it does not persist generated text, tool arguments, authorization values, or provider configuration.
+
+**Verification:** Test suite is now **15 passed in 1.85s**. Live streaming probe through `frontier` returned HTTP 200, OpenAI-style SSE data frames, a `[DONE]` terminator, and assistant content. Live OpenAI function-tool probe through `auto/pro-coding` returned HTTP 200 with a valid choice containing a `tool_calls` object and no plain-content fallback.
+
+**Meaning:** The repaired paid/chat routing surface now has independently verified non-streaming inference, SSE streaming, and tool-call response behavior. This is actual protocol proof, not a catalog or management-only claim.
+
+**Safety:** Both probes were bounded micro-requests. No tool was executed, no combo/provider configuration changed, no video route was invoked, and no seat, Chrome, credential, database, or process state was changed.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
