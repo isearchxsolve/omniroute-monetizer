@@ -10334,3 +10334,12 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Fix.** Added an emergency fallback: an unpinned session-pool auto request that raises `ChatError` now tries OmniRoute and, on success, returns `x_gateway_source=omniroute_fallback` plus the pool failure kind. Explicit host pins remain honest and do not silently swap providers; video remains on its durable video path. `py_compile` and `git diff --check` passed.
 
 **What is NOT claimed.** The video target remains one live video seat, not the historical 23-seat claim. No video job was submitted or credited. The fallback does not repair the failing seat’s session/auth state; it makes the final consumer endpoint resilient while that provider supply is repaired independently.
+### [2026-08-31 00:48] #1353 — Corrected session-pool fallback model after live Law-3 failure
+
+**Deployment/observation.** Deployed `2532b1` through the same verified scheduled-task owner: old shim PID `15848` was confirmed as `session_pool_shim.py 8190`, stopped, and replaced by task-launched PID `14580`. The direct `session-pool/auto` computed probe now returned HTTP 200 through the new `x_gateway_source=omniroute_fallback` path after the local pool’s `AUTH` failure.
+
+**Failure honesty.** That response was not accepted as Law-3 success: the content concatenated stale conversation text and ended in `58`, rather than being exactly the computed answer. Root cause: the fallback forwarded the local-only alias `session-pool/auto` verbatim to OmniRoute. That alias has no paid-side meaning and resolved to an unsuitable/stale upstream path.
+
+**Fix.** The unpinned session-pool emergency fallback now substitutes `OMNIROUTE_FALLBACK_MODEL` (default `frontier`) only for the upstream copy of the request. The original local request contract is unchanged. `frontier` had already returned clean computed `58` in the immediately preceding live merged-gateway proof. Pinned routes are not remapped. `py_compile` and `git diff --check` passed.
+
+**What is NOT claimed.** This source change is not yet live until its next controlled shim-owner rollout and a repeat Law-3 probe. Local seat-pool authentication remains a separate supply issue; this change is consumer resilience, not a fabricated seat repair.

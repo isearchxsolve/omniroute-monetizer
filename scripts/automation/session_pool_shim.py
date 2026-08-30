@@ -64,6 +64,7 @@ VIDEO_EST_SECONDS = 300
 OMNIROUTE_UPSTREAM = os.environ.get("OMNIROUTE_UPSTREAM", "http://127.0.0.1:20128").rstrip("/")
 OMNIROUTE_MODEL_TIMEOUT_S = 1.5
 OMNIROUTE_CHAT_TIMEOUT_S = 8.0
+OMNIROUTE_FALLBACK_MODEL = os.environ.get("OMNIROUTE_FALLBACK_MODEL", "frontier")
 
 
 class OmniRouteBridge:
@@ -679,8 +680,14 @@ class ShimHandler(BaseHTTPRequestHandler):
             # boundary: a caller who explicitly named a host asked us not to swap
             # providers.  Video never reaches here (it has its own durable path).
             if seat_model and host_target is None:
+                # `session-pool/auto` is meaningful only to this gateway.  Passing
+                # it upstream makes OmniRoute resolve an unrelated/stale alias on
+                # some builds.  Use the documented paid-side fallback alias while
+                # preserving every other request field verbatim.
+                fallback_req = dict(req)
+                fallback_req["model"] = OMNIROUTE_FALLBACK_MODEL
                 upstream_reply, bridge_reason = omniroute.chat(
-                    body, self.headers.get("Authorization", ""))
+                    json.dumps(fallback_req).encode(), self.headers.get("Authorization", ""))
                 if upstream_reply is not None:
                     upstream_reply["tenant"] = tenant
                     upstream_reply["x_gateway_source"] = "omniroute_fallback"
