@@ -10640,3 +10640,11 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Reopen evidence.** New Chrome PID `19280` is responsive, CDP `9223` is listening, and the command line again points to the exact niloy automation profile. The visible window title is `Sign in - Google Accounts`, and CDP target metadata includes a Google Accounts sign-in page titled `Hi Niloy`. This is not sufficient evidence of an authenticated Google profile; the sign-in page title is the opposite of a clean signed-in landing state.
 
 **Verdict.** Close/reopen succeeded, but `GOOGLE_SYNC_AUTHENTICATED` remains **NOT VERIFIED / likely still signed out** after reopen. No sign-in click, password, OTP, email code, CAPTCHA, MFA, provider signup, provider action, cookie read, local-storage read, profile-database read, or video action was performed. The operator must complete the Google sign-in in the reopened dedicated niloy window and leave the resulting authenticated account/profile view visible. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
+
+### [2026-08-31 00:10] #1380 - Niloy recheck: healthy profile, Google authentication still not visible to verifier
+
+**Operator request.** Recheck whether the operator's Google sign-in now persists in the reopened niloy profile.
+
+**Read-only evidence.** The exact dedicated niloy Chrome process remains alive and responsive as PID `19280` on CDP `9223`, using `D:\omniroute-monetizer\state\automation_profiles\niloy`. The visible window title is now `New Tab - Google Chrome`; the CDP target list contains only a blank/new-tab target and no Google account page or visible profile-menu state exposed to the verifier.
+
+**Verdict.** The niloy profile process is healthy, but `GOOGLE_SYNC_AUTHENTICATED` remains **UNVERIFIED BY AGENT OBSERVATION**. A blank New Tab does not prove either signed-in or signed-out status. No cookies, local storage, passwords, profile databases, or session stores were read, and no browser action was performed. User-owned untracked `qfailure` and unrelated worktree changes remain untouched.
