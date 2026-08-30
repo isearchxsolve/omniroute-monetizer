@@ -9559,6 +9559,18 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **Safety:** No combo was updated and no provider, credential, process, database, seat, or Chrome state was modified. The refreshed dry-run artifact remains `state/combo_optimization.json` with `dry_run: true`.
 
+### [2026-08-30 13:54] #1315 â€— Verified combo reordering applied with native API backup and post-route proof
+
+**Pre-change backup:** Added and ran `scripts/automation/backup_omniroute_combos.py`, which authenticates through the supported management API and saves a restorable exact combo-definition snapshot. Test suite was **13 passed in 2.68s**. Backup created: `state/combo_backups/combos_20260830T055047Z.json` (16 combos).
+
+**Change:** Ran `scripts/automation/combo_optimizer.py --probe-timeout 20` after the SSE parser fix. The optimizer re-probed the 23 existing unique combo models, verified six live models, and performed a non-destructive reorder of seven combos only. Failed/unverified entries were retained at the tail; no model entry was deleted and no provider credential was edited.
+
+**Applied combos:** `fusion-coder`, `auto/pro-coding`, `Frontier Max`, `auto/free-chat`, `auto/best-coding`, `frontier`, and `auto/qual-noplus`. Verified heads now include `codex/gpt-5.6-sol` then `mistral/codestral-2508` for the coding/frontier set; `auto/free-chat` starts with verified Cloudflare then Codex; `auto/qual-noplus` starts with verified AGY then Cohere.
+
+**Post-update proof:** The optimizer's native inference post-verification passed for `frontier`, `auto/pro-coding`, `auto/pro-reasoning`, and `auto/pro-chat` (all returned valid assistant content in about 2.1–2.4 seconds). A separate read-back through `/api/combos` confirmed the persisted head order. The authoritative supervisor v2 report remained `allApplicationHealthy: true` with no application-down services.
+
+**Safety:** This was a supported management API hot-reload only; OmniRoute itself was not restarted. Seat files, Chrome profiles, SSO state, databases, and provider credentials were not touched. Exact prior combo state is preserved in the backup file above.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.

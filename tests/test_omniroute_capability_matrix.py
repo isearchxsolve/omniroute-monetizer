@@ -105,6 +105,12 @@ def test_chat_probe_extracts_assistant_text_from_json() -> None:
     assert extract_chat_content(body) == "OK"
 
 
+def test_combo_backup_uses_dedicated_state_directory() -> None:
+    import backup_omniroute_combos
+
+    assert backup_omniroute_combos.ROOT.name == "omniroute-monetizer"
+
+
 def test_supervisor_application_probe_distinguishes_http_success_and_failure() -> None:
     from omni_supervisor import http_health
 
