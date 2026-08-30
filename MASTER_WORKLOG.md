@@ -10323,3 +10323,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Deployment state.** The currently listening shim is old code until it is restarted by its existing `OmniRoute Session Pool Shim (keepalive)` owner. This entry precedes the deployment action as required by the component state loop.
 
 **What is NOT claimed.** No video job was submitted, no provider credential was changed, and the currently wedged OmniRoute process did not become healthy because of this gateway change. The bridge deliberately keeps the final endpoint working through that upstream failure.
+### [2026-08-31 00:38] #1352 — Live merged-gateway deployment verified; added OmniRoute emergency fallback for failed session auto
+
+**Deployment.** After commit `229138a`, verified that listener PID `7648` was exactly `session_pool_shim.py 8190`. A first controlled task-owner rollout attempt refused safely because the Windows command line placed a quote before the `8190` argument; no process was stopped. The check was corrected, the exact listener PID was stopped, and `Start-ScheduledTask 'OmniRoute Session Pool Shim (keepalive)'` launched a replacement listener PID `15848` with the same verified shim command. No Chrome, video-router, or OmniRoute `:20128` process was stopped or modified.
+
+**Live post-deploy proof.** `GET :8190/v1/models` returned HTTP 200 and the merged catalog contained 9,534 records: 9,509 OmniRoute models plus the local aliases/live seat routes. `x_gateway` reported OmniRoute reachable and local capacity of 22 chat / 1 video. Quarantined adapter-defect routes were absent. Empty `messages` now returned HTTP 400 `invalid_request_error`. A non-seat `frontier` request returned HTTP 200, `x_gateway_source=omniroute`, `provider=omniroute`, and the Law-3 computed answer `58`.
+
+**Additional failure found.** A direct `session-pool/auto` Law-3 probe returned HTTP 500 with `AUTH: Auth rejected: Invalid conversation document affinity` after the local pool attempted its bounded seats. This proves the seat pool is still not independently reliable, even though the final merged endpoint’s OmniRoute path works.
+
+**Fix.** Added an emergency fallback: an unpinned session-pool auto request that raises `ChatError` now tries OmniRoute and, on success, returns `x_gateway_source=omniroute_fallback` plus the pool failure kind. Explicit host pins remain honest and do not silently swap providers; video remains on its durable video path. `py_compile` and `git diff --check` passed.
+
+**What is NOT claimed.** The video target remains one live video seat, not the historical 23-seat claim. No video job was submitted or credited. The fallback does not repair the failing seat’s session/auth state; it makes the final consumer endpoint resilient while that provider supply is repaired independently.

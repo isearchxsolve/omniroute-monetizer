@@ -674,6 +674,22 @@ class ShimHandler(BaseHTTPRequestHandler):
                                # that do not.
                                tries=TOOL_FAILOVER_TRIES if tools else CHAT_FAILOVER_TRIES)
         except ChatError as e:
+            # The merged gateway must remain useful when the free/session side is
+            # temporarily exhausted.  Only unpinned auto routing may cross this
+            # boundary: a caller who explicitly named a host asked us not to swap
+            # providers.  Video never reaches here (it has its own durable path).
+            if seat_model and host_target is None:
+                upstream_reply, bridge_reason = omniroute.chat(
+                    body, self.headers.get("Authorization", ""))
+                if upstream_reply is not None:
+                    upstream_reply["tenant"] = tenant
+                    upstream_reply["x_gateway_source"] = "omniroute_fallback"
+                    upstream_reply["x_gateway_fallback_reason"] = f"session_pool:{getattr(e, 'kind', 'chat_error')}"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(upstream_reply).encode())
+                    return
             # Pool exhausted (every session dead/cooling) is a RATE condition, not a server fault:
             # answer like OpenAI does so consumers can back off with Retry-After instead of
             # treating a healthy-but-busy pool as broken. (worklog #1110)
