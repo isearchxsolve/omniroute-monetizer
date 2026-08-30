@@ -91,6 +91,23 @@ def wall_in_error(exc: Any) -> Optional[str]:
             return phrase
     return None
 
+
+def _verified_chat_hosts() -> set[str]:
+    """Load the canonical Law-3 replay gate without reading any secret material.
+
+    ``status.alive`` on a seat only says its capture file was written. It is not
+    evidence that the captured exchange can serve a new prompt. Chat admission
+    must therefore require a current ``REPLAY_OK`` row. Video uses its separate
+    submit/poll/result graduation contract and is not filtered by this chat gate.
+    """
+    try:
+        payload = json.loads(REPLAY_GATE.read_text(encoding="utf-8"))
+        rows = payload if isinstance(payload, list) else payload.get("results", [])
+        return {str(row.get("host") or "") for row in rows
+                if isinstance(row, dict) and row.get("verdict") == "REPLAY_OK"}
+    except (OSError, ValueError, AttributeError):
+        return set()
+
 # Markers of a reply that is not an answer at all. Anchored to the START of the text on purpose: a
 # legitimate answer may *contain* "<html" because the user asked about HTML, but only a page shell or
 # an unparsed stream *begins* that way. Anchoring keeps a real answer from being thrown away.
@@ -147,6 +164,7 @@ def wall_in_reply(text: Any) -> Optional[str]:
     return None
 
 SECRETS = pathlib.Path(r"D:\omniroute-monetizer\state\secrets")
+REPLAY_GATE = pathlib.Path(r"D:\omniroute-monetizer\state\replay_check.json")
 # last-used timestamps ONLY (no cookie, no header) so the cooldown spreads load across CLI runs too.
 POOL_STATE = pathlib.Path(r"D:\omniroute-monetizer\state\session_pool_state.json")
 # Hosts withheld from dispatch because OUR adapter is broken -- see _load_quarantine().
@@ -441,12 +459,14 @@ class PooledSession:
         self.cooldown_until: float = 0.0
         self.dead: bool = False                                # set this run on SessionExpired
         self.last_error: Optional[str] = None
+        self.verified_chat_hosts: set[str] = set()
 
     @property
     def dispatchable(self) -> bool:
         return bool((self.has_recording or self.has_api or self.has_chrome
                      or self.has_video_chrome) and self.client_cls
-                    and not self.flagged_dead and not self.dead)
+                    and not self.flagged_dead and not self.dead
+                    and (self.modality != "chat" or self.host in self.verified_chat_hosts))
 
     def client(self):
         if self._client is None:
@@ -465,6 +485,7 @@ class SessionPool:
         self.cooldown = cooldown
         self._lock = threading.Lock()
         self._host_locks: Dict[str, threading.Lock] = {}
+        self.verified_chat_hosts = _verified_chat_hosts()
         self.sessions: List[PooledSession] = []
         for f in sorted(glob.glob(str(secrets / "session_*.json"))):
             try:
@@ -473,6 +494,7 @@ class SessionPool:
                 continue                                       # skip corrupt/partial secret files
         st = _load_pool_state()
         for s in self.sessions:
+            s.verified_chat_hosts = self.verified_chat_hosts
             s.last_used = float(st.get(s.key, 0.0))
         self.quarantined = _load_quarantine()
         if self.quarantined:
@@ -495,6 +517,7 @@ class SessionPool:
         Returns {"added": [...], "removed": [...], "changed": [...], "total": N}.
         """
         with self._lock:
+            self.verified_chat_hosts = _verified_chat_hosts()
             on_disk: Dict[str, pathlib.Path] = {}
             for f in sorted(glob.glob(str(self.secrets / "session_*.json"))):
                 p = pathlib.Path(f)
@@ -513,6 +536,7 @@ class SessionPool:
                     continue
                 cur = existing.get(key)
                 if cur is not None and getattr(cur, "_file_mtime", None) == mtime:
+                    cur.verified_chat_hosts = self.verified_chat_hosts
                     sessions.append(cur)                       # untouched: keep object+state
                     continue
                 try:
@@ -530,6 +554,7 @@ class SessionPool:
                 else:
                     s.last_used = float(st.get(s.key, 0.0))
                     added.append(key)
+                s.verified_chat_hosts = self.verified_chat_hosts
                 sessions.append(s)
             for key in existing:
                 if key not in on_disk:

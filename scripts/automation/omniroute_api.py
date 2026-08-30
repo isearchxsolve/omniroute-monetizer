@@ -146,7 +146,12 @@ def extract_chat_content(body: Any, raw_text: str = "") -> str:
     content = from_payload(body)
     if content or not raw_text:
         return content
-    chunks = []
+    # Some OmniRoute upstreams emit cumulative SSE fragments ("5", then "58")
+    # while others emit deltas ("5", then "8").  Joining both naively turns the
+    # former into "558" or, for repeated terminal frames, "5858".  Keep the
+    # longest cumulative extension, but retain genuine one-character repeated
+    # deltas ("a", "a" -> "aa").
+    chunks: list[str] = []
     for line in raw_text.splitlines():
         if not line.startswith("data:"):
             continue
@@ -159,7 +164,15 @@ def extract_chat_content(body: Any, raw_text: str = "") -> str:
             continue
         if piece:
             chunks.append(piece)
-    return "".join(chunks)
+    accumulated = ""
+    for piece in chunks:
+        if accumulated and piece.startswith(accumulated) and len(piece) > len(accumulated):
+            accumulated = piece
+        elif accumulated and piece == accumulated and len(accumulated) >= 2:
+            continue
+        else:
+            accumulated += piece
+    return accumulated
 
 
 class OmniRouteAPI:

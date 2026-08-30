@@ -67,6 +67,25 @@ OMNIROUTE_CHAT_TIMEOUT_S = 8.0
 OMNIROUTE_FALLBACK_MODEL = os.environ.get("OMNIROUTE_FALLBACK_MODEL", "frontier")
 
 
+def _collapse_exact_mirrored_reply(text: str) -> str:
+    """Repair a measured OmniRoute SSE terminal-frame duplication.
+
+    The upstream can emit one completed content frame twice in the same response;
+    for a Law-3 result of ``58`` the visible content is ``5858``.  This is not a
+    model answer and is harmful to consumers expecting JSON, numbers, or code.
+    Collapse only an *exact two-copy mirror* (never prefixes or arbitrary repeated
+    fragments), keeping ordinary stream/delta handling unchanged.
+    """
+    if len(text) >= 2 and len(text) % 2 == 0:
+        half = len(text) // 2
+        # Keep normal prose/code untouched: a deliberate "haha" must not become
+        # "ha".  The observed malformed terminal frame is numeric-only, which is
+        # also the form used by the non-echoable Law-3 health probe.
+        if text[:half] == text[half:] and text[:half].isdigit():
+            return text[:half]
+    return text
+
+
 class OmniRouteBridge:
     """Bounded merge/forward layer for the paid OmniRoute plane.
 
@@ -123,6 +142,7 @@ class OmniRouteBridge:
         except ValueError:
             parsed = None
         content = extract_chat_content(parsed, raw_text)
+        content = _collapse_exact_mirrored_reply(content)
         if not content:
             return None, "omniroute_empty_or_unparseable"
         # A paid route can also return an HTTP-200 credit/login wall.  Do not turn
