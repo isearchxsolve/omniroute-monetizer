@@ -9639,6 +9639,18 @@ no session_*.json in D:\omniroute-monetizer\state\secr | no |
 
 **What is not claimed:** This documentation review does not prove any new provider route, provider session, Google Sync state, or video generation. No Chrome process, Chrome profile, seat file, provider credential, database, route, or service state changed.
 
+### [2026-08-30 15:37] #1323 — Local credential recovery pass completed without an unsafe write
+
+**Action:** Read `scripts/automation/cli_token_harvester.py` before execution, confirming it only sources local environment/CLI/config credentials, verifies each candidate directly against the respective provider endpoint, redacts its artifact, and can run without injection under `--dry-run`. Ran `python scripts/automation/cli_token_harvester.py --dry-run`. Also performed the two Chrome-rule prerequisite inventory commands, in order: `python scripts/automation/paste_provider_key.py --status` then `python scripts/automation/paste_provider_key.py --list`.
+
+**Result:** Five local credential candidates were found. Three received upstream HTTP 200 verification; each corresponding OmniRoute path was already active or deliberately OAuth-only, so the dry run identified **zero** safe key injections and made none. Two local environment candidates returned upstream HTTP 401, so they are not treated as working credentials and were not injected. The redacted outcome artifact was updated at `state/harvest_result.json`.
+
+**Key inventory reconciliation:** The key-status tool confirms four previously stored provider keys as `VERIFIED` by their own upstream endpoint; one documented provider remains without a key and is explicitly a paid-plan skip. The companion list is a generic human navigation list and still lists already-verified providers; `--status` is the authoritative current-state check. No credential values are recorded here.
+
+**Safety:** This was a non-injecting credential verification pass. It did not change OmniRoute providers, active routes, Chrome, seats, services, processes, databases, or key stores. The result narrows the remaining inactive providers to missing/auth-failed credentials, OAuth reauthorization, runtime, or upstream/unsupported cases; it does not convert any of them into a verified route.
+
+**What is not claimed:** A locally present token is not claimed valid unless its upstream returned HTTP 200, and an upstream-valid token is not claimed wired unless OmniRoute's own connection test subsequently passes. No browser/provider session or video lane is claimed authenticated.
+
 ### [2026-08-30 11:42] #1309 â€— Authenticated native fleet audit completed
 
 **Action:** Ran the existing read-only `scripts/automation/fleet_provider_audit.py`, which authenticated through OmniRoute's supported management API and tested every configured connection. No `--reactivate-inactive` flag was used, so the run performed no writes.
