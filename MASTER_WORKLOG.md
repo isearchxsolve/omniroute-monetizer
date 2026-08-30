@@ -10261,3 +10261,12 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Classification.** This is a runtime/service-readiness failure, not evidence that providers or models are dead. The restart either did not replace the wedged Node process, the owning service relaunched stale/wedged state, or another local process is intercepting the port. Further management calls should pause until process ownership and listener state are checked from an elevated shell.
 
 **What is NOT claimed.** The catalog was not audited, acceptance was not certified, and combos were not applied. No provider reauthentication succeeded or failed in this unit.
+### [2026-08-30 23:32] #1347 — Port 20128 has a wedged orphan listener outside the service PID
+
+**Read-only diagnosis.** `Get-Service OmniRoute` reports `Running`, but `Get-CimInstance Win32_Service` reports service PID `1240` (NSSM). `Get-NetTCPConnection -LocalPort 20128 -State Listen` reports the listener as PID `19128`. The process tree shows PID `19128` is a `node.exe` child of PID `11732`, while PID `11732` is a child of NSSM PID `1240`; executable metadata/command lines are unavailable for both node processes. `netstat -ano` confirms PID `19128` owns the only `0.0.0.0:20128` listener and has accumulated established/CLOSE_WAIT connections.
+
+**Readiness test.** `/health`, `/v1/models`, and `/api/providers` each timed out against `127.0.0.1:20128` with a five-second request bound. A fresh authenticated login also timed out at 15 seconds. This confirms the listener is alive at TCP level but not serving HTTP responses.
+
+**Disposition.** No process was killed and no service mutation was attempted from this non-elevated session. The exact safe operator action is to stop the `OmniRoute` service, confirm PID `19128` and its child tree have exited, start the service, confirm the new service child—not an orphan—owns `20128`, then run a single `/health` request before any catalog or OAuth work. If stop/start leaves PID `19128` behind, an elevated targeted termination of that exact PID is required; do not terminate unrelated Node/Kilo/Codex processes.
+
+**What is NOT claimed.** This does not establish provider failure, credential loss, catalog corruption, or combo invalidity. It establishes a local listener/process-ownership and HTTP-readiness failure only.
