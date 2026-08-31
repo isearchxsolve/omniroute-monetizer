@@ -11257,6 +11257,16 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Decision.** Accept the mediation as the design direction for hardening multi-agent execution, but do not claim that Kilo has been structurally hardened yet. The current production audit remains the source of truth; OxAlpha's document is a control proposal, not runtime evidence. No service, Chrome profile, credential, database, or consumer application was changed.
 
+### [2026-08-31 13:35] #1418 - Kilo hardening: acceptance state machine rule added
+
+**Operator authorization.** The operator approved implementing OxAlpha's mediation in Kilo Code. Work is being performed as repository configuration hardening, independently from live provider probing. No service, Chrome profile, credential, database, or consumer application was modified.
+
+**Component implemented.** Added `.kilocode/rules/acceptance-state-machine.md`. It defines the mandatory evidence progression from `UNSEEN` through `SSO_INITIATED`, provider-session observation, onboarding/verification blocking, provider action, signup, session capture, pure-Python graduation, route attribution, and final capacity admission. It explicitly requires provider/account × model family × harness × modality evidence and canonical `http://127.0.0.1:8190/v1` attribution before capacity.
+
+**Controls included.** The rule rejects redirects, token-shaped cookies, screenshots, inventory, tab presence, generated code, and worker prose as standalone proof. It forbids unsupported signup/health/capacity language, preserves the OmniRoute-versus-seat-pool distinction, and carries forward the project safety boundaries for passwords, OTP/email verification, CAPTCHA/MFA/quota/payment walls, live Chrome, and unauthorized service replacement.
+
+**Validation.** Confirmed the file exists, is UTF-8 readable, contains the terminal `CAPACITY_ADMITTED` state, the canonical endpoint, and the safety-wall rule. `git diff --check` passed for the component. This component is ready to commit before the next Kilo control is added.
+
 ### [2026-08-31 09:20] #1411 - Gate 1 coverage confirmed: ALL seats consolidated in gate1_matrix.json
 
 Operator verification question: "did Gate 1 cover all seats?" Yes. `state/gate1_matrix.json` now contains every dedicated automation seat: providers/9222 (6), niloy/9223 (32), seat2/9224 (Google Flow EXISTING_ACCOUNT + rtst.ai VIDEO_SEAT_GATE3), seat3/9225 (same). seat2/seat3 held ONLY labs.google (Flow) and rtst.ai live surfaces -- no chat/AI signup candidates -- so Flow was resolved via the executor (EXISTING_ACCOUNT; artifacts signup_resolution_seat2/seat3_google_flow.json) and rtst.ai is correctly left to Gate 3 (video scope, not a Google-SSO chat signup). Total 42 rows: SIGNUP_COMPLETED=4, EXISTING_ACCOUNT=19, LOGIN_REQUIRED=16, SSO_INITIATED=1, VIDEO_SEAT_GATE3=2. No seat omitted.
