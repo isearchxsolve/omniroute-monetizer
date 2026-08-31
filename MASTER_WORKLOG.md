@@ -11275,6 +11275,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Validation.** Parsed `.kilocodemodes` with PowerShell `ConvertFrom-Json`; it contains two modes, the verifier has no `edit` group, the release gate is read-only, and both role definitions contain the canonical endpoint. `git diff --check` passed for this component. No live runtime state was changed.
 
+### [2026-08-31 14:05] #1420 - Signup automation entry points verified
+
+**Operator question.** The exact signup automation was checked in the repository to distinguish the orchestration script, the per-seat executor, the classifier, and the previously misused tab harness.
+
+**Verified entry points.** `scripts/automation/gate1_signup_sweep.py` is the all-seat Gate 1 orchestrator and launches `scripts/automation/seat_signup_matrix.py` per seat/provider. `seat_signup_matrix.py` is the primary bounded ordinary Google-SSO executor for profiles/CDP ports such as niloy on 9223. `scripts/automation/niloy_sso_account_resolution.py` is the older/specialized single niloy-Hyperbolic executor. `scripts/automation/signup_classify.py` is shared classification logic, not a browser runner. `scripts/automation/harness_all_tabs.py` only navigates/readiness-checks tabs and attempts bounded SSO clicks; it is not sufficient evidence of completed signup and must not be used as the signup proof harness.
+
+**Safety note.** No signup script was executed in this verification step, so no Chrome, provider, credential, or service state changed. The corrected acceptance rule remains authoritative: redirects and auth-shaped cookies are at most provider-session observations; no account or capacity claim is valid without provider-specific proof and later graduation.
+
 ### [2026-08-31 09:20] #1411 - Gate 1 coverage confirmed: ALL seats consolidated in gate1_matrix.json
 
 Operator verification question: "did Gate 1 cover all seats?" Yes. `state/gate1_matrix.json` now contains every dedicated automation seat: providers/9222 (6), niloy/9223 (32), seat2/9224 (Google Flow EXISTING_ACCOUNT + rtst.ai VIDEO_SEAT_GATE3), seat3/9225 (same). seat2/seat3 held ONLY labs.google (Flow) and rtst.ai live surfaces -- no chat/AI signup candidates -- so Flow was resolved via the executor (EXISTING_ACCOUNT; artifacts signup_resolution_seat2/seat3_google_flow.json) and rtst.ai is correctly left to Gate 3 (video scope, not a Google-SSO chat signup). Total 42 rows: SIGNUP_COMPLETED=4, EXISTING_ACCOUNT=19, LOGIN_REQUIRED=16, SSO_INITIATED=1, VIDEO_SEAT_GATE3=2. No seat omitted.
