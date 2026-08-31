@@ -11033,6 +11033,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Disposition.** Continue GLM without interruption. Accept the architecture and current direction as good; reserve final rollout certification until the worker commits the components, closes the exact-answer and attribution gaps, and completes all five gates. No primary mutation was made to GLM's in-progress scripts or live worker. User-owned untracked `qfailure` remains untouched.
 
+### [2026-08-31 11:25] #1403 - Niloy onboarding batch finished: five additional terminal records; broad mandate remains active
+
+**Live result review.** The primary monitor reviewed the terminal artifacts produced by GLM's sequential niloy/9223 signup-matrix batch. The five candidates launched at 10:48 all now have timestamped machine-readable outcomes: `multiplechat` = `EXISTING_ACCOUNT` (10:57), `arena_lmsys` = `EXISTING_ACCOUNT` (10:58), `huggingface` = `EXISTING_ACCOUNT` (10:59), `ai_sdk_dev` = `LOGIN_REQUIRED` (10:53), and `blackbox_ai` = `LOGIN_REQUIRED` (10:55). The earlier accepted `hyperbolic` record remains the one `SIGNUP_COMPLETED` result for niloy.
+
+**Gate-1 accounting.** Niloy's newly resolved candidate set is now: one ordinary Google-SSO signup, three existing authenticated accounts, and two truthful login-required outcomes. This is real onboarding/account-resolution progress; `EXISTING_ACCOUNT` is not a new signup and none of these rows is capacity until captured and graduated through the required Python/runtime gates.
+
+**Current worker state.** At 11:23 no related signup, graduation, capacity, or video worker process was active. The new signup-matrix and chat-graduation scripts remain uncommitted in the worktree, and no worklog/commit evidence exists yet for seat2/seat3, dual video graduation, durable video attribution, or the final matrix. GLM is therefore between stages / awaiting its next execution step, not complete. The correct continuation is to commit the completed niloy/chat components, then apply the same parameterized onboarding workflow to seat2 and seat3 before progressing to the remaining gates. No Chrome profile, service, credential, video job, or consumer was touched by the primary monitor. User-owned untracked `qfailure` and GLM's uncommitted scripts remain untouched.
+
 ### [2026-08-31 07:46] #1397 - Atomic niloy unit #1: Hyperbolic SSO signup resolved SIGNUP_COMPLETED (capability retest passed)
 
 **Unit contract (worklog #1394/#1396 retest gate).** One candidate, one executable, one terminal record. No harness_all_tabs.py, no capture sweep, no video/capacity/consumer work, no service touch, no operator Chrome.
