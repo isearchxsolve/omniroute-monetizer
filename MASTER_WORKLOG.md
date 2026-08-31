@@ -11009,6 +11009,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Interpretation.** GLM appears to have finished or stopped after the intentionally atomic Hyperbolic capability-retest unit, before beginning the new large mandate. This is not evidence that the Hyperbolic unit failed; that unit remains accepted. It means the next large assignment either was not delivered to the GLM session or was not executed. No Chrome profile, provider, service, credential, signup, video job, or consumer was touched during this status audit. User-owned untracked `qfailure` remains untouched.
 
+### [2026-08-31 10:32] #1400 - Power-outage correction: inactivity is not attributed to GLM abandonment
+
+**Operator correction.** The operator reported an approximately one-hour power outage during the apparent inactivity window. The prior #1399 repository conclusion remains correct—the large mandate has not been executed—but the causal interpretation must be corrected: absence of GLM commits during that window is not evidence that GLM voluntarily stopped, ignored, or abandoned the assignment.
+
+**Machine recovery evidence.** A read-only system check at 10:29 shows Windows `LastBootUpTime` remains 2026-08-30 13:47:46, so the host itself did not reboot during the reported outage. Current listeners are present on `:8189`, `:8190`, `:20128`, `:20130`, and dedicated automation CDP ports `9222`–`9225`; their owning processes also predate the outage. Scheduled keepalive tasks remain registered and current supervisor state updated at 10:29. No service restart, Chrome launch, or recovery mutation was required or performed.
+
+**Revised interpretation and resume point.** The outage likely interrupted the operator/agent interaction or prevented the newly recorded large mandate from being delivered and monitored, while the host-side services remained alive. GLM's accepted state therefore remains commit `295223a` (Hyperbolic signup retest complete). Resume the same GLM session from worklog #1398 and execute the large mandate; do not reset GLM, repeat Hyperbolic, restart services, or redo Profile 1. The final HY3 handoff remains gated on actual completion evidence. User-owned untracked `qfailure` remains untouched.
+
 ### [2026-08-31 07:46] #1397 - Atomic niloy unit #1: Hyperbolic SSO signup resolved SIGNUP_COMPLETED (capability retest passed)
 
 **Unit contract (worklog #1394/#1396 retest gate).** One candidate, one executable, one terminal record. No harness_all_tabs.py, no capture sweep, no video/capacity/consumer work, no service touch, no operator Chrome.
