@@ -17,6 +17,8 @@ import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from chrome_live_guard import assert_cdp_safe  # noqa: E402
+from signup_classify import (  # noqa: E402
+    classify_final_provider_state, classify_pre_sso_surface)
 import websocket  # noqa: E402
 
 PORT = 9223
@@ -222,31 +224,33 @@ def main():
             probe = {"url": final, "signedOut": True}
         steps.append(f"probe signedOut={probe.get('signedOut')}")
         if not probe.get("signedOut"):
-            recent = []
-            now = time.time()
-            for name in ("hyperbolic_google_surface_niloy.png",
-                         "hyperbolic_after_sso_niloy.png"):
-                p = EVID / name
-                if p.exists() and now - p.stat().st_mtime < 900:
-                    recent.append(name)
-                    if name not in evidence:
-                        evidence.append(name)
+            # Surface was already authenticated before any SSO click. This is an
+            # EXISTING account, never a new signup -- and if it is in fact an
+            # onboarding/questionnaire page, it is ONBOARDING_VERIFICATION_REQUIRED.
             identity = "not_disclosed"
+            body_low = ""
+            p_auth = []
             try:
                 body = tab.evaluate(
                     "document.body ? document.body.innerText.slice(0,3000) : ''")
+                body_low = (body or "").lower()
                 m = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", body or "")
                 if m:
                     identity = m.group(0)
+                p_cookies = cookie_names(tab, "https://app.hyperbolic.ai")
+                p_auth = [n for n in p_cookies
+                          if any(k in n.lower() for k in
+                                 ("token", "session", "auth", "jwt", "sid"))]
             except Exception:
                 pass
-            if recent:
-                steps.append(f"unit_drove_sso_evidence={recent}")
-                record("SIGNUP_COMPLETED", identity or "niloy_google_sso_account",
-                       evidence, steps)
+            pre = classify_pre_sso_surface(final, body_low, bool(p_auth))
+            steps.append(f"pre-sso classify={pre} (provider_auth_cookies={len(p_auth)})")
+            if pre in ("EXISTING_ACCOUNT", "ONBOARDING_VERIFICATION_REQUIRED",
+                       "SIGNUP_COMPLETED"):
+                record(pre, identity or "existing_niloy_session", evidence, steps)
             else:
                 record("EXISTING_ACCOUNT", identity or "existing_niloy_session",
-                       evidence, steps)
+                        evidence, steps)
             return 0
 
         clicked = tab.evaluate(GOOGLE_CLICK_JS)
@@ -336,8 +340,14 @@ def main():
                 if back and "accounts.google.com" not in back:
                     break
             if not back:
-                record("LOGIN_REQUIRED", identity if chooser != "none" else "not_disclosed",
-                       evidence, steps, wall="no redirect back to provider within budget")
+                # Google SSO was genuinely initiated (chooser selected + consent
+                # continued) but the provider never redirected back to a usable
+                # surface. That is SSO_INITIATED, NOT a completed signup.
+                record("SSO_INITIATED", identity if chooser != "none" else "not_disclosed",
+                        evidence, steps,
+                        wall="Google SSO initiated (chooser+consent) but no redirect "
+                             "back to provider surface within budget; provider "
+                             "onboarding did not complete to a usable account")
                 return 0
             steps.append(f"redirect {back[:90]}")
 
@@ -365,15 +375,30 @@ def main():
                         break
             except Exception as e:
                 steps.append(f"classification probe degraded: {type(e).__name__}")
-            auth_ok = bool(auth_like)
-            if auth_ok:
-                record("SIGNUP_COMPLETED", identity if chooser != "none"
-                       else "existing_google_account", evidence, steps)
-            else:
-                record("LOGIN_REQUIRED", identity if chooser != "none" else "not_disclosed",
-                       evidence, steps,
-                       wall="redirect completed but no authenticated provider "
-                            "surface/cookies observed")
+            # Honest acceptance gate (MASTER_WORKLOG.md #1404 / D:/conversations.txt):
+            # SIGNUP_COMPLETED requires the provider's FINAL authenticated
+            # account/dashboard surface AND an independently verified protected
+            # provider session. An onboarding/survey/questionnaire surface is
+            # ONBOARDING_VERIFICATION_REQUIRED, never success.
+            final_state = classify_final_provider_state(back, body_low, bool(auth_like))
+            if final_state == "ONBOARDING_VERIFICATION_REQUIRED":
+                record("ONBOARDING_VERIFICATION_REQUIRED",
+                        identity if chooser != "none" else "not_disclosed",
+                        evidence, steps,
+                        wall="SSO redirect reached a provider onboarding/questionnaire "
+                             "surface; the account is not yet verified for use. Automation "
+                             "stops; a human must complete it only if email/OTP/CAPTCHA/MFA "
+                             "is demanded -- never bypassed.")
+                return 0
+            if final_state == "SIGNUP_COMPLETED":
+                record("SIGNUP_COMPLETED",
+                        identity if chooser != "none" else "existing_google_account",
+                        evidence, steps)
+                return 0
+            record("LOGIN_REQUIRED", identity if chooser != "none" else "not_disclosed",
+                    evidence, steps,
+                    wall="SSO redirect completed but no authenticated provider "
+                         "dashboard surface / protected session observed")
             return 0
         finally:
             gt.close()
