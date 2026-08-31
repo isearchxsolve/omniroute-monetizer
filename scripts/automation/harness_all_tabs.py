@@ -112,10 +112,13 @@ CHAT_SURFACE = {
 
 # Sites whose signed-out state is acceptable to try to repair via the Google
 # SSO button.  Everything else classified SKIP_NOT_AUTHENTICATED is reported.
+# Groq verified 2026-08-31 (niloy/9223 live probe): signed-out playground
+# renders "Continue with Google" directly on the gate.
 SSO_SITES = {
     "ChatGPT Free Web", "Grok on X / Grok Web", "Coze Web",
     "SambaNova Cloud Chat", "DuckDuckGo AI Chat (duck.ai)", "Giz AI Chat",
     "Genspark AI", "Yuewen Chat", "Creen AI", "V0 by Vercel (v0.app)",
+    "Groq Chat",
 }
 
 # Read-only JS probes / one-click actions.  No typing, no form fills, no
@@ -533,6 +536,14 @@ def plan_rows(manifest: dict) -> list[dict]:
             action = "REGISTRY_PENDING"
         elif cls == "TRANSPORT_WEBSOCKET":
             action = "WEBSOCKET_ADAPTER_BUILD_TARGET"
+        elif cls == "ELIGIBLE_CAPTURE":
+            # The sweep's readiness verdict is a stale cookie-jar heuristic
+            # (niloy/Groq 2026-08-31: jar said signed-in, live gate said
+            # signed-out). Never trust it at apply time: VERIFY the surface
+            # live; if it is actually signed out, attempt the bounded SSO
+            # repair for sites in SSO_SITES (decided in apply_plan, since a
+            # plan-only run must drive nothing).
+            action = "VERIFY_LIVE" if target_url else "NONE"
         if action == "NONE" and not target_url:
             continue
         seen.add(site)
@@ -565,25 +576,44 @@ def apply_plan(plan: list[dict], owner, wait: float,
         row_wait = wait
         if budget is not None:
             row_wait = min(wait, max(5.0, budget - time.monotonic()))
+        settled = False
         try:
-            if action in ("VERIFY_OR_NAVIGATE", "NAVIGATE"):
-                now = current_urls(owner).get(row["targetId"], "")
-                if action == "VERIFY_OR_NAVIGATE" and on_target_surface(now, row["to"]):
-                    result.update(status="ALREADY_ON_SURFACE", finalUrl=now)
+            if action == "VERIFY_LIVE":
+                # Live ground truth beats the sweep's cookie-jar heuristic.
+                live = probe(owner, row["targetId"])
+                if live.get("signedOut") and site in SSO_SITES:
+                    action = "SSO_ATTEMPT"
+                    result["verify"] = ("live probe: signed-out on surface; "
+                                        "escalating to bounded SSO attempt")
+                elif live.get("signedOut"):
+                    result.update(status="REPORT_AUTH_WALL",
+                                  detail="live probe: signed-out; no SSO repair "
+                                         "configured for this site",
+                                  finalUrl=live.get("url", ""))
+                    settled = True
                 else:
-                    final = navigate_and_settle(owner, row["targetId"], row["to"], row_wait)
-                    result.update(status="NAVIGATED" if on_target_surface(final, row["to"])
-                                  else "NAVIGATED_OFF_TARGET", finalUrl=final)
-            elif action == "SSO_ATTEMPT":
-                row_budget = (max(30.0, budget - time.monotonic())
-                              if budget is not None else None)
-                outcome = sso_pass(owner, row["targetId"], row["to"], wait, row_budget)
-                label = outcome.pop("sso", "")
-                if not sso_label_is_canonical(label):
-                    raise ValueError(f"non-canonical SSO label emitted: {label!r}")
-                result.update(status=label, **outcome)
-            else:
-                result.update(status="REPORTED_ONLY")
+                    result.update(status="ALREADY_ON_SURFACE",
+                                  finalUrl=live.get("url", ""))
+                    settled = True
+            if not settled:
+                if action in ("VERIFY_OR_NAVIGATE", "NAVIGATE"):
+                    now = current_urls(owner).get(row["targetId"], "")
+                    if action == "VERIFY_OR_NAVIGATE" and on_target_surface(now, row["to"]):
+                        result.update(status="ALREADY_ON_SURFACE", finalUrl=now)
+                    else:
+                        final = navigate_and_settle(owner, row["targetId"], row["to"], row_wait)
+                        result.update(status="NAVIGATED" if on_target_surface(final, row["to"])
+                                      else "NAVIGATED_OFF_TARGET", finalUrl=final)
+                elif action == "SSO_ATTEMPT":
+                    row_budget = (max(30.0, budget - time.monotonic())
+                                  if budget is not None else None)
+                    outcome = sso_pass(owner, row["targetId"], row["to"], wait, row_budget)
+                    label = outcome.pop("sso", "")
+                    if not sso_label_is_canonical(label):
+                        raise ValueError(f"non-canonical SSO label emitted: {label!r}")
+                    result.update(status=label, **outcome)
+                else:
+                    result.update(status="REPORTED_ONLY")
         except SafetyRefusal as exc:
             result.update(status="TARGET_GONE", error=str(exc))
         except Exception as exc:
