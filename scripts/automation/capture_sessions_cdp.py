@@ -179,6 +179,78 @@ JS_READ_ACTIVE = r"""
 
 JS_PAGE_TEXT = "(() => (document.body ? document.body.innerText : '').slice(0, 6000))()"
 
+# 4th composer strategy: DIRECT ELEMENT TARGETING. Strategies 1-3 deliver text through the browser's
+# own input pipeline (IME insertText / pointer+insertText / per-char key events) and model-backed
+# editors (ProseMirror/Lexical-class) rejected all of them. Those editors still hold their model in
+# the DOM element's handlers, so the remaining gap is editors that ignore emulated input but DO run
+# their input/change listeners when the element's own content is rewritten. This snippet re-locates
+# the composer with the same scoring as JS_FOCUS_COMPOSER (shadow-piercing, biggest editable box low
+# on the page), focuses it, writes the sentinel through it, and dispatches input+change so framework
+# listeners execute. Two write paths, because they fail differently:
+#   - contenteditable -> textContent assignment;
+#   - textarea/input  -> the NATIVE prototype .value setter. React tracks .value and silently reverts
+#     a naive `el.value = x`, but a setter call from HTMLTextAreaElement/HTMLInputElement.prototype
+#     (el.constructor.prototype) is the one React's own event delegation honours.
+# `__SENTINEL_JSON__` is replaced from Python with the JSON-quoted sentinel literal.
+JS_FORCE_TEXT = r"""
+(() => {
+  const SENT = __SENTINEL_JSON__;
+  const shadows = (root, acc = []) => {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    let n;
+    while ((n = w.nextNode())) if (n.shadowRoot) { acc.push(n.shadowRoot); shadows(n.shadowRoot, acc); }
+    return acc;
+  };
+  const roots = [document, ...shadows(document)];
+  const cands = [];
+  for (const r of roots) {
+    for (const el of r.querySelectorAll('textarea, [contenteditable="true"], [contenteditable=""], input[type="text"], input[type="search"]')) {
+      const rect = el.getBoundingClientRect();
+      const st = el.ownerDocument.defaultView.getComputedStyle(el);
+      if (rect.width < 80 || rect.height < 18) continue;
+      if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) continue;
+      if (el.disabled || el.readOnly) continue;
+      let bonus = 0;
+      if (el.tagName === 'TEXTAREA') bonus = 1000000;
+      else if (el.isContentEditable || (el.getAttribute && el.getAttribute('role') === 'textbox')) bonus = 1000000;
+      if (el.id && el.id.toLowerCase().includes('prompt')) bonus += 5000000;
+      if (el.placeholder && el.placeholder.toLowerCase().includes('message')) bonus += 5000000;
+      if ((el.placeholder && el.placeholder.toLowerCase().includes('search')) ||
+          (el.getAttribute && (el.getAttribute('aria-label') || '').toLowerCase().includes('search'))) bonus -= 5000000;
+      cands.push({ el, score: rect.width * rect.height + rect.top * 2 + bonus });
+    }
+  }
+  if (!cands.length) return { ok: false, error: 'no visible composer' };
+  cands.sort((a, b) => b.score - a.score);
+  const el = cands[0].el;
+  el.scrollIntoView({ block: 'center' });
+  el.focus();
+  const tag = el.tagName.toLowerCase();
+  const editable = el.isContentEditable === true;
+  let via = 'none';
+  try {
+    if (editable) {
+      el.textContent = SENT;
+      via = 'textContent';
+    } else {
+      const desc = Object.getOwnPropertyDescriptor(el.constructor.prototype, 'value');
+      const setter = (desc && desc.set) || null;
+      if (setter) { setter.call(el, SENT); via = 'native-value-setter'; }
+      else { el.value = SENT; via = 'plain-value'; }
+    }
+  } catch (e) {
+    if (editable) { el.textContent = SENT; via = 'textContent-fallback'; }
+    else { el.value = SENT; via = 'plain-value-fallback'; }
+  }
+  try { el.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true })); }
+  catch (e) { try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e2) {} }
+  try { el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+  const t = ('value' in el && typeof el.value === 'string') ? el.value : (el.innerText || el.textContent || '');
+  return { ok: true, tag, editable, via,
+           landedHere: String(t).indexOf(SENT.split(':')[0]) !== -1 };
+})()
+"""
+
 # Finds -- and optionally clicks -- the send control. Needed because Enter is not universal: some
 # composers treat it as a newline and only submit on the button, and a few bind the handler to the
 # button alone. Deliberately prefers a button that sits to the RIGHT of and level with the composer,
@@ -559,6 +631,23 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
             back = c.evaluate(JS_READ_ACTIVE) or {}
             landed = SENTINEL.split(":")[0] in (back.get("text") or "")
             row["neededCharTyping"] = bool(landed)
+
+        if not landed:
+            # 4th strategy: direct composer element targeting. Everything above delivered the
+            # sentinel through the browser's input pipeline and the editor refused it; this path
+            # rewrites the element's own content and fires the DOM events the framework listens
+            # for (see JS_FORCE_TEXT). Verified afterwards exactly like the other strategies, by
+            # re-reading the focused element -- JS_READ_ACTIVE, not the snippet's own readback.
+            try:
+                c.evaluate(JS_FORCE_TEXT.replace("__SENTINEL_JSON__", json.dumps(SENTINEL)))
+                back = c.evaluate(JS_READ_ACTIVE) or {}
+                landed = SENTINEL.split(":")[0] in (back.get("text") or "")
+            except CDPError as e:
+                back = {"error": f"eval: {str(e)[:100]}"}
+                landed = False
+            row["neededJsForce"] = bool(landed)
+            if not landed and isinstance(back, dict) and back.get("error"):
+                row["jsForceDetail"] = str(back.get("error"))[:100]
 
         row["textLanded"] = bool(landed)
         if not landed:
