@@ -4,7 +4,7 @@
 This is deliberately an assembler, not another capture/replay implementation.
 It joins the existing proven tools into the one production lineage:
 
-  dedicated automation seat -> staged capture -> exact-file Law-3 replay proof
+  dedicated automation seat -> bounded SSO recovery -> staged capture -> exact-file Law-3 replay proof
   -> explicit ``runtime: replay`` promotion -> pure-Python registry -> :8190 hot reload
 
 Default operation is an OFFLINE inventory.  It reads non-secret metadata only:
@@ -14,6 +14,10 @@ sends one computed replay probe and modifies that one session file only after
 the verdict is REPLAY_OK.  ``--apply --capture-chat`` delegates one named seat
 to tab_graduation_sweep, preserving its automation-profile guard and serial
 capture discipline.
+
+``--apply --recover-sso`` delegates one exact provider host to the bounded
+fleet_sso_blueprint state machine.  It never types a password/OTP/email code,
+solves a CAPTCHA, claims a signup, captures a session, or promotes capacity.
 
 Video is represented in the ledger but is never auto-triggered: a video proof
 can spend credits and must use its separate submit -> poll -> result contract.
@@ -187,20 +191,38 @@ def capture_chat(port: int, site: str) -> None:
     print("capture/replay unit completed. Inspect the exact new session file, then run --apply --verify-and-admit.")
 
 
+def recover_sso(port: int, host: str, budget: float) -> None:
+    """Delegate one exact dedicated-seat SSO unit; no capture or promotion follows it."""
+    exact = host.strip().lower()
+    if not exact or "://" in exact or "/" in exact or "?" in exact:
+        raise SystemExit("--recover-sso requires one bare exact host, for example chat.qwen.ai")
+    cmd = [sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port", str(port),
+           "--drive", "--host-exact", exact, "--budget", str(budget)]
+    rc = subprocess.run(cmd, cwd=ROOT, check=False).returncode
+    if rc:
+        raise SystemExit(f"SSO recovery unit failed with exit code {rc}; no capture or promotion performed")
+    print("SSO recovery completed as surface evidence only. Run a separate guarded capture unit after reviewing its report.")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--apply", action="store_true", help="required before any provider request or session-file mutation")
     group = ap.add_mutually_exclusive_group()
     group.add_argument("--verify-and-admit", metavar="SESSION_FILE", help="one exact chat session_*.json")
     group.add_argument("--capture-chat", metavar="SITE", help="one exact named chat site via the guarded sweep")
-    ap.add_argument("--port", type=int, default=9222, help="required only with --capture-chat")
+    group.add_argument("--recover-sso", metavar="HOST", help="one exact provider host via bounded SSO recovery")
+    ap.add_argument("--port", type=int, default=9222, help="dedicated automation CDP port for capture or SSO recovery")
+    ap.add_argument("--sso-budget", type=float, default=240.0,
+                    help="wall-clock seconds for one --recover-sso host")
     args = ap.parse_args()
-    if (args.verify_and_admit or args.capture_chat) and not args.apply:
+    if (args.verify_and_admit or args.capture_chat or args.recover_sso) and not args.apply:
         ap.error("--apply is required: these operations send a provider request and/or change an admission")
     if args.verify_and_admit:
         verify_and_admit(exact_session(args.verify_and_admit))
     elif args.capture_chat:
         capture_chat(args.port, args.capture_chat)
+    elif args.recover_sso:
+        recover_sso(args.port, args.recover_sso, args.sso_budget)
     ledger = inventory()
     atomic_json(LEDGER, ledger)
     summary = ledger["summary"]

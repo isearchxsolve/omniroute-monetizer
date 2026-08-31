@@ -453,9 +453,13 @@ def main() -> int:
                     help="run the state machine (default: plan/ground-truth only)")
     ap.add_argument("--host", action="append", default=[],
                     help="restrict drive to these host substrings (repeatable)")
+    ap.add_argument("--host-exact", default="",
+                    help="drive exactly one normalized provider host (master-coordinator use)")
     ap.add_argument("--budget", type=float, default=240.0,
                     help="wall-clock seconds per host drive")
     args = ap.parse_args()
+    if args.host and args.host_exact:
+        ap.error("--host and --host-exact are mutually exclusive")
 
     rows, meta = plan(args.port)
     plan_path = STATE / f"fleet_blueprint_plan_{args.port}.json"
@@ -472,9 +476,12 @@ def main() -> int:
         return 0
 
     wanted = [h.lower() for h in args.host]
+    exact_host = args.host_exact.strip().lower()
     results = []
     for r in rows:
         host = r["host"]
+        if exact_host and host != exact_host:
+            continue
         if wanted and not any(w in host for w in wanted):
             continue
         kn = HOST_KNOWLEDGE.get(host, {})
