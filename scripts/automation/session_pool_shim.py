@@ -68,6 +68,23 @@ OMNIROUTE_UPSTREAM = os.environ.get("OMNIROUTE_UPSTREAM", "http://127.0.0.1:2012
 OMNIROUTE_MODEL_TIMEOUT_S = 10.0
 OMNIROUTE_CHAT_TIMEOUT_S = 8.0
 OMNIROUTE_FALLBACK_MODEL = os.environ.get("OMNIROUTE_FALLBACK_MODEL", "frontier")
+OMNI_VERIFIED_ROUTES = pathlib.Path(__file__).resolve().parents[2] / "state" / "omniroute_verified_routes.json"
+
+
+def _omni_verified_model_ids() -> Optional[set[str]]:
+    """Return the exact Omni model allowlist; absent file preserves pre-admission compatibility."""
+    if not OMNI_VERIFIED_ROUTES.exists():
+        return None
+    try:
+        data = json.loads(OMNI_VERIFIED_ROUTES.read_text(encoding="utf-8"))
+        entries = data.get("entries") if isinstance(data, dict) else None
+        if not isinstance(entries, list):
+            return set()  # malformed admission file fails closed
+        return {str(e.get("model")) for e in entries
+                if isinstance(e, dict) and e.get("state") == "ADMITTED" and e.get("modality", "chat") == "chat"
+                and e.get("model")}
+    except (OSError, ValueError):
+        return set()
 
 
 def _collapse_exact_mirrored_reply(text: str) -> str:
@@ -135,6 +152,14 @@ class OmniRouteBridge:
                 "lastError": self._last_error, "cachedModels": len(self._models)}
 
     def chat(self, raw: bytes, auth: str) -> tuple[Optional[dict[str, Any]], Optional[str]]:
+        allowed = _omni_verified_model_ids()
+        if allowed is not None:
+            try:
+                requested = json.loads(raw).get("model")
+            except (TypeError, ValueError, AttributeError):
+                requested = None
+            if requested not in allowed:
+                return None, "omniroute_route_not_admitted"
         headers = {"Content-Type": "application/json"}
         if auth:
             headers["Authorization"] = auth
@@ -489,7 +514,10 @@ class ShimHandler(BaseHTTPRequestHandler):
                 })
             seat_ids = {m["id"] for m in models}
             upstream_models = omniroute.models()
+            allowed_omni = _omni_verified_model_ids()
             for row in upstream_models:
+                if allowed_omni is not None and str(row.get("id") or "") not in allowed_omni:
+                    continue
                 # A name collision belongs to the local seat route: it is the one
                 # whose pin syntax the consumer explicitly requested.
                 if row.get("id") not in seat_ids:
@@ -639,6 +667,20 @@ class ShimHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps(upstream_reply).encode())
+                return
+            # Once the Omni graduation ledger exists, a named Omni model that
+            # is not in that exact-file/final-consumer allowlist must not fall
+            # through to a session-pool answer.  Otherwise a caller could ask
+            # for an ungraduated Omni route and receive a misleading healthy
+            # response from a different harness.
+            if upstream_fallback == "omniroute_route_not_admitted":
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    "error": "omniroute_route_not_admitted",
+                    "message": "OmniRoute model has no fresh direct + :8190 consumer graduation proof",
+                    "tenant": tenant}).encode())
                 return
             model = None
 

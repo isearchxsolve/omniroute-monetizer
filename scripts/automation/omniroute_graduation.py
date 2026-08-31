@@ -1,0 +1,342 @@
+#!/usr/bin/env python3
+"""OmniRoute's provider-by-model graduation master.
+
+This is the OmniRoute equivalent of ``fleet_graduation.py``.  It keeps the
+harnesses distinct while making their final admission rule identical:
+
+  OmniRoute catalog -> one serial lane per provider -> computed direct proof
+  -> computed pinned proof through http://127.0.0.1:8190/v1
+  -> exact provider/model admission ledger
+
+The default action is a read-only plan.  ``--apply --e2e`` performs inference
+requests.  ``--confirm-video-spend`` is additionally required when the native
+video sweep is requested because native video verification consumes credits.
+
+This file never changes OmniRoute's database, stops/restarts a service, or
+fabricates health from an active connection/model catalog.  It uses the
+published management API and the two published inference faces only.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import pathlib
+import re
+import subprocess
+import sys
+import time
+from collections import Counter, defaultdict
+from typing import Any
+
+import requests
+
+HERE = pathlib.Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
+STATE = ROOT / "state"
+RUN = STATE / "omniroute_graduation_run.json"
+ADMISSIONS = STATE / "omniroute_verified_routes.json"
+VIDEO_REPORT = STATE / "video_provider_probe.json"
+OMNI = "http://127.0.0.1:20128"
+CONSUMER = "http://127.0.0.1:8190/v1"
+PROMPT = "Reply with only the number: 41 + 17"
+EXPECTED = "58"
+VIDEO_PROMPT = "A five second abstract blue-and-gold ocean wave, no text."
+WALL_WORDS = ("payment", "billing", "quota", "credit", "captcha", "upgrade", "insufficient")
+
+sys.path.insert(0, str(HERE))
+from omniroute_api import OmniRouteAPI, extract_chat_content, get_password  # noqa: E402
+
+
+def now() -> str:
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+def read_json(path: pathlib.Path, fallback: Any) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return fallback
+
+
+def atomic_json(path: pathlib.Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def no_proxy_session() -> requests.Session:
+    session = requests.Session()
+    session.trust_env = False
+    return session
+
+
+def assistant_text(body: Any, raw: str = "") -> str:
+    text = extract_chat_content(body, raw)
+    return str(text or "").strip()
+
+
+def classify_failure(status: int | None, body: Any, raw: str = "") -> str:
+    low = (str(body) + " " + raw[:600]).lower()
+    if status in (401, 403):
+        return "AUTH"
+    if status == 402 or any(w in low for w in WALL_WORDS):
+        return "WALL"
+    if status == 429:
+        return "RATE"
+    if status == 404:
+        return "NOT_ROUTED"
+    if status == 200:
+        return "EMPTY"
+    return "ERROR"
+
+
+def live_catalog(session: requests.Session) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    started = time.perf_counter()
+    try:
+        response = session.get(f"{OMNI}/v1/models", timeout=120)
+        payload = response.json() if response.ok else {}
+        rows = [r for r in payload.get("data", []) if isinstance(r, dict) and r.get("id")]
+        return rows, {"http": response.status_code, "count": len(rows),
+                      "latencyMs": round((time.perf_counter() - started) * 1000)}
+    except Exception as exc:
+        return [], {"http": None, "count": 0, "error": f"{type(exc).__name__}: {exc}"[:220]}
+
+
+def provider_name(row: dict[str, Any]) -> str:
+    # owned_by is the catalog's routing owner.  Keep it separate from any
+    # provider string returned by a downstream response.
+    return str(row.get("owned_by") or row.get("provider") or "unknown")
+
+
+def is_non_chat(row: dict[str, Any]) -> bool:
+    mid = str(row.get("id") or "").lower()
+    return (mid.startswith("video/") or any(x in mid for x in
+            ("/veo", "/wan", "/kling", "/luma", "text-to-video", "image-generation")))
+
+
+def plan_from_catalog(catalog: list[dict[str, Any]], max_models: int = 0) -> list[dict[str, Any]]:
+    rows = []
+    for item in catalog:
+        model = str(item.get("id") or "")
+        owner = provider_name(item)
+        if not model or owner in {"combo", "session_pool", "unknown"} or is_non_chat(item):
+            continue
+        rows.append({"provider": owner, "model": model,
+                     "modelFamily": model_family(model), "catalogOwnedBy": owner})
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[row["provider"]].append(row)
+    # All models are the production default.  A cap is an explicit diagnostic
+    # mode and is recorded so a partial run can never look like full capacity.
+    for owner in grouped:
+        grouped[owner] = sorted(grouped[owner], key=lambda r: r["model"])
+        if max_models:
+            grouped[owner] = grouped[owner][:max_models]
+    return [row for owner in sorted(grouped) for row in grouped[owner]]
+
+
+def model_family(model: str) -> str:
+    low = model.lower()
+    if any(x in low for x in ("code", "coder", "codex", "program")):
+        return "coding"
+    if any(x in low for x in ("reason", "think", "r1", "qwq", "o1", "o3", "o4")):
+        return "reasoning"
+    if any(x in low for x in ("vision", "vl", "omni")):
+        return "multimodal"
+    if any(x in low for x in ("embed", "rerank", "tts", "audio")):
+        return "non-chat"
+    return "chat"
+
+
+def direct_probe(session: requests.Session, route: dict[str, Any], timeout: float) -> dict[str, Any]:
+    started = time.perf_counter()
+    result = {**route, "directProof": "NOT_PROVEN", "http": None}
+    try:
+        response = session.post(f"{OMNI}/v1/chat/completions", json={
+            "model": route["model"],
+            "messages": [{"role": "user", "content": PROMPT}],
+            "temperature": 0, "max_tokens": 32, "stream": False,
+        }, timeout=timeout)
+        raw = response.text or ""
+        body = response.json() if response.status_code == 200 else {}
+        answer = assistant_text(body, raw)
+        result.update(http=response.status_code, answer=answer[:80],
+                      directProof="DIRECT_LAW3_OK" if response.status_code == 200 and answer == EXPECTED
+                      else classify_failure(response.status_code, body, raw))
+    except Exception as exc:
+        result.update(directProof="TRANSPORT", error=f"{type(exc).__name__}: {exc}"[:220])
+    result["latencyMs"] = round((time.perf_counter() - started) * 1000)
+    return result
+
+
+def consumer_probe(session: requests.Session, row: dict[str, Any], timeout: float) -> dict[str, Any]:
+    started = time.perf_counter()
+    result = {"provider": row["provider"], "model": row["model"],
+              "modelFamily": row["modelFamily"], "consumerModel": row["model"],
+              "consumerProof": "NOT_PROVEN"}
+    try:
+        response = session.post(f"{CONSUMER}/chat/completions", json={
+            "model": row["model"],
+            "messages": [{"role": "user", "content": PROMPT}],
+            "temperature": 0, "max_tokens": 32, "stream": False,
+        }, timeout=timeout)
+        raw = response.text or ""
+        body = response.json() if response.status_code == 200 else {}
+        answer = assistant_text(body, raw)
+        result.update(http=response.status_code, answer=answer[:80],
+                      gatewaySource=body.get("x_gateway_source") if isinstance(body, dict) else None,
+                      consumerProof="CONSUMER_LAW3_OK" if response.status_code == 200 and answer == EXPECTED
+                      else classify_failure(response.status_code, body, raw))
+    except Exception as exc:
+        result.update(consumerProof="TRANSPORT", error=f"{type(exc).__name__}: {exc}"[:220])
+    result["latencyMs"] = round((time.perf_counter() - started) * 1000)
+    return result
+
+
+def management_snapshot() -> dict[str, Any]:
+    """Read provider connection metadata through OmniRoute's management API."""
+    api = OmniRouteAPI(base_url=OMNI, password=get_password())
+    try:
+        if not api.login():
+            return {"auth": "FAILED", "connections": []}
+        connections = api.get_connections()
+        active = [c for c in connections if c.get("isActive")]
+        return {"auth": "OK", "total": len(connections), "active": len(active),
+                "connections": [{"id": str(c.get("id") or ""),
+                                 "provider": str(c.get("provider") or ""),
+                                 "isActive": bool(c.get("isActive")),
+                                 "authType": str(c.get("authType") or "")}
+                                for c in connections]}
+    except Exception as exc:
+        return {"auth": "ERROR", "connections": [], "error": f"{type(exc).__name__}: {exc}"[:220]}
+
+
+def build_plan() -> dict[str, Any]:
+    session = no_proxy_session()
+    catalog, catalog_meta = live_catalog(session)
+    management = management_snapshot()
+    routes = plan_from_catalog(catalog)
+    return {"schemaVersion": 1, "generatedAt": now(),
+            "mode": "omniroute_all_catalog_plan_no_inference", "endpoint": OMNI,
+            "consumerContract": CONSUMER, "catalog": catalog_meta,
+            "management": {k: v for k, v in management.items() if k != "connections"},
+            "providers": dict(Counter(r["provider"] for r in routes)),
+            "routes": routes,
+            "whatThisDoesNotProve": ["current provider health", "credentials", "quota",
+                                      "consumer reachability", "video render success", "capacity"]}
+
+
+def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float) -> dict[str, Any]:
+    session = no_proxy_session()
+    results: list[dict[str, Any]] = []
+    by_provider: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in plan.get("routes", []):
+        by_provider[str(row["provider"])].append(row)
+    # Sequential inside each provider is mandatory; providers run one lane at
+    # a time in this master so the durable report order is deterministic and no
+    # provider is accidentally rate-bursted.
+    for owner in sorted(by_provider):
+        strikes = 0
+        for index, route in enumerate(by_provider[owner]):
+            result = direct_probe(session, route, timeout)
+            if result["directProof"] == "RATE":
+                strikes += 1
+                time.sleep(min(30, strikes * 5))
+                result = direct_probe(session, route, timeout)
+            elif result["directProof"] == "DIRECT_LAW3_OK":
+                strikes = 0
+            results.append(result)
+            # Persist after every route: a long fleet run is resumable evidence.
+            atomic_json(RUN, {"schemaVersion": 1, "updatedAt": now(),
+                              "phase": "direct_provider_model_probes", "results": results})
+            if result["directProof"] == "WALL":
+                # A provider wall stops only this provider lane.
+                for rest in by_provider[owner][index + 1:]:
+                    results.append({**rest, "directProof": "SKIPPED_PROVIDER_WALL"})
+                break
+    direct_ok = [r for r in results if r.get("directProof") == "DIRECT_LAW3_OK"]
+    consumer = [consumer_probe(session, r, consumer_timeout) for r in direct_ok]
+    admitted = [r for r in consumer if r.get("consumerProof") == "CONSUMER_LAW3_OK"]
+    admissions = {"schemaVersion": 1, "generatedAt": now(),
+                  "consumerContract": CONSUMER,
+                  "entries": [{"provider": r["provider"], "model": r["model"],
+                               "modelFamily": r["modelFamily"], "modality": "chat",
+                               "state": "ADMITTED", "directProof": "DIRECT_LAW3_OK",
+                               "consumerProof": "CONSUMER_LAW3_OK", "verifiedAt": now()}
+                              for r in admitted]}
+    atomic_json(ADMISSIONS, admissions)
+    matrix: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for r in admitted:
+        matrix[r["provider"]][r["modelFamily"]] += 1
+    return {"phase": "chat_direct_then_8190_consumer", "direct": results,
+            "consumer": consumer, "admitted": admissions["entries"],
+            "providerModelFamilyCapacity": {p: dict(v) for p, v in sorted(matrix.items())},
+            "counts": {"directLaw3": len(direct_ok), "consumerLaw3": len(admitted)}}
+
+
+def run_video_e2e(confirm: bool, timeout: int, max_routes: int) -> dict[str, Any]:
+    if not confirm:
+        return {"phase": "native_video", "state": "NOT_RUN",
+                "reason": "requires --confirm-video-spend"}
+    command = [sys.executable, str(HERE / "video_provider_probe.py"), "--all",
+               "--timeout", str(timeout)]
+    if max_routes:
+        command += ["--max", str(max_routes)]
+    env = os.environ.copy()
+    env["OMNI_VIDEO_CONFIRM_SPEND"] = "1"
+    completed = subprocess.run(command, cwd=ROOT, env=env, check=False)
+    report = read_json(VIDEO_REPORT, {})
+    working = report.get("working", []) if isinstance(report, dict) else []
+    return {"phase": "native_video", "commandExit": completed.returncode,
+            "endpoint": f"{OMNI}/v1/videos/generations", "workingModels": working,
+            "state": "DIRECT_VIDEO_MP4_PROOF_RECORDED" if working else "NO_VIDEO_MP4_PROOF"}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--plan", action="store_true", help="write the live catalog/management plan only")
+    ap.add_argument("--apply", action="store_true", help="required before inference or video work")
+    ap.add_argument("--e2e", action="store_true", help="run Omni chat graduation and native video proof")
+    ap.add_argument("--confirm-video-spend", action="store_true",
+                    help="required for native video MP4 generation")
+    ap.add_argument("--timeout", type=float, default=75, help="one chat route request timeout")
+    ap.add_argument("--consumer-timeout", type=float, default=90, help="one final :8190 request timeout")
+    ap.add_argument("--video-timeout", type=int, default=900, help="one native video request timeout")
+    ap.add_argument("--max-models-per-provider", type=int, default=0,
+                    help="diagnostic cap; 0 means every catalog model")
+    ap.add_argument("--max-video-routes", type=int, default=0,
+                    help="diagnostic video cap; 0 means every video registry route")
+    args = ap.parse_args()
+    if args.e2e and not args.apply:
+        ap.error("--apply is required with --e2e")
+    if args.e2e and not args.confirm_video_spend:
+        ap.error("--e2e requires --confirm-video-spend because native video proof spends capacity")
+
+    plan = build_plan()
+    if args.max_models_per_provider:
+        plan["routes"] = plan_from_catalog(
+            live_catalog(no_proxy_session())[0], args.max_models_per_provider)
+        plan["mode"] = "omniroute_capped_diagnostic_plan"
+    atomic_json(STATE / "omniroute_graduation_plan.json", plan)
+    if not args.e2e:
+        print(f"plan={STATE / 'omniroute_graduation_plan.json'} providers={len(plan['providers'])} routes={len(plan['routes'])}")
+        return 0
+
+    chat = run_chat_e2e(plan, args.timeout, args.consumer_timeout)
+    atomic_json(RUN, {"schemaVersion": 1, "generatedAt": now(), "endpoint": OMNI,
+                      "consumerContract": CONSUMER, "chat": chat})
+    video = run_video_e2e(args.confirm_video_spend, args.video_timeout, args.max_video_routes)
+    final = read_json(RUN, {})
+    final["video"] = video
+    final["completedAt"] = now()
+    atomic_json(RUN, final)
+    print(f"run={RUN} directLaw3={chat['counts']['directLaw3']} "
+          f"consumerLaw3={chat['counts']['consumerLaw3']} video={video['state']}")
+    return 0 if chat["counts"]["consumerLaw3"] or video.get("workingModels") else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
