@@ -11083,6 +11083,16 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Audit rule retained.** Regardless of worker choice, capacity remains admitted only after final provider authentication, fresh usable session, pure-Python adapter execution, exact fresh result/media proof, explicit provider/session attribution through `http://127.0.0.1:8190/v1`, and healthy provider/account × model-family evidence. Benchmark scores cannot waive any of those gates. User-owned untracked `qfailure` remains untouched.
 
+### [2026-08-31 12:00] #1406 - OxAlpha-to-Kilo free-access check
+
+**Operator question.** The operator asked how to use OxAlpha for free in Kilo Code.
+
+**Verified distinction.** OxAlpha's official website advertises a free, no-login browser chat and claims tools/structured output, but its public site does not document a public OpenAI-compatible API endpoint or a Kilo integration. Kilo's official custom-model documentation confirms that Kilo can connect to an OpenAI-compatible provider by configuring a provider ID, base URL, optional API key, model ID, and optional headers; that capability does not create an API for a website that has not published one.
+
+**Safe answer.** The free `oxalpha.com` web experience cannot be honestly installed into Kilo as a provider using only the website. A separate third-party page found during research documents an Ox Alpha route through Tokenra, but it requires a Tokenra account/key and must not be assumed to be the same service as `oxalpha.com`, free, stable, or production-safe without direct provider confirmation. No browser scraping, cookie extraction, unofficial relay, credential invention, or repo configuration change was performed.
+
+**Operational recommendation.** For Kilo, use its built-in anonymous free models where available, or configure a verified OpenAI-compatible endpoint through Kilo's Custom provider UI. If the operator later obtains a legitimate provider endpoint and key for Ox Alpha, configure it only in trusted/global Kilo configuration, keep the key out of repositories, verify `GET /v1/models` and one bounded tool-call request, and do not grant it rollout authority until the same independent acceptance gates used for HY3 are passed. User-owned untracked `qfailure` and other untracked worker files remain untouched.
+
 ### [2026-08-31 06:45] #1405 - REPAIR ACCEPTANCE LOGIC: signup state machine now honest (SSO_INITIATED / ONBOARDING_VERIFICATION_REQUIRED / SIGNUP_COMPLETED gated)
 
 **Mandate (D:/conversations.txt, superseding GLM #1398 and accepting operator #1404).** The primary implementation worker takes over. The GLM Hyperbolic/niloy `SIGNUP_COMPLETED` claim is REJECTED: it only reached `https://app.hyperbolic.ai/onboarding/survey` after Google account selection and never proved final provider onboarding/verification, a usable provider session, pure-Python execution, or `http://127.0.0.1:8190/v1` attribution. Correct niloy new-signup count = **0**. First mandated action: repair/replace the acceptance logic so (a) Google chooser/redirect => `SSO_INITIATED` only, (b) provider onboarding/questionnaire => `ONBOARDING_VERIFICATION_REQUIRED` (not success), (c) `SIGNUP_COMPLETED` only after the provider's FINAL authenticated account/dashboard surface AND a protected provider session are independently verified.
