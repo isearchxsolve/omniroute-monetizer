@@ -11231,6 +11231,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Verdict.** `api.cohere.com` remains a currently graduated seat-pool chat row through the canonical `:8190` endpoint. This slice does not certify the entire seat pool, OmniRoute-native capacity, video media delivery, new-account creation, or final merged capacity. Those remain separate gates. No secrets were printed or logged.
 
+### [2026-08-31 13:00] #1415 - Fresh merged-infrastructure catalog and pool health recheck
+
+**Method.** Performed read-only GET requests with a 20-second timeout against `http://127.0.0.1:20128/v1/models`, `http://127.0.0.1:8190/v1/models`, and `http://127.0.0.1:20130/health`. No service was restarted or modified.
+
+**Observed result.** OmniRoute `:20128/v1/models` returned HTTP 200 in 0.16 seconds with 9,509 catalog entries. The canonical merged `:8190/v1/models` returned HTTP 200 in 0.39 seconds with 9,531 entries and reported `x_gateway.omniroute.reachable=true`, `lastError=null`, `cachedModels=9509`, and seat-pool inventory metadata of 12 chat and 8 video entries. Chat-pool `:20130/health` returned HTTP 200 in 0.02 seconds and exposed its current pool/heartbeat status.
+
+**Interpretation.** The prior `:20128` outage statement is stale for this observation window; OmniRoute is currently reachable. The model counts and seat-pool counts remain inventory/health metadata, not graduated capacity. The next required proof is an exact fresh request through each harness with provider/session attribution, followed by video submit→poll→download proof.
+
 ### [2026-08-31 09:20] #1411 - Gate 1 coverage confirmed: ALL seats consolidated in gate1_matrix.json
 
 Operator verification question: "did Gate 1 cover all seats?" Yes. `state/gate1_matrix.json` now contains every dedicated automation seat: providers/9222 (6), niloy/9223 (32), seat2/9224 (Google Flow EXISTING_ACCOUNT + rtst.ai VIDEO_SEAT_GATE3), seat3/9225 (same). seat2/seat3 held ONLY labs.google (Flow) and rtst.ai live surfaces -- no chat/AI signup candidates -- so Flow was resolved via the executor (EXISTING_ACCOUNT; artifacts signup_resolution_seat2/seat3_google_flow.json) and rtst.ai is correctly left to Gate 3 (video scope, not a Google-SSO chat signup). Total 42 rows: SIGNUP_COMPLETED=4, EXISTING_ACCOUNT=19, LOGIN_REQUIRED=16, SSO_INITIATED=1, VIDEO_SEAT_GATE3=2. No seat omitted.
