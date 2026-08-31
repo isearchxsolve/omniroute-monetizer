@@ -11810,3 +11810,13 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Boundaries.** No operator-profile contact; only dedicated-seat tabs closed/opened; no video spend; no walls touched; the canonical file carries site names, owner ports, verdicts and reasons only (no cookies/secrets).
 
 **Next.** Master e2e-chat over the reconciled fleet (background, resumable), then per-host verdict accounting as before.
+
+### [2026-09-01 05:35] #1448 - Chathub 9th admission consumer-proven; roster reconcile applied; recurring CDP startup wedge on 9222/9224/9225 named as blocker with evidence
+
+**Carried from #1446-#1447 (committed 552bf41, ca5c16e).** chathub: signed in on niloy (real Google last-used click), submitted via the real icon-only send button (the submit ladder's miss), 409 fixed via _chathub_preflight (all four UUIDs client-minted), ADMITTED 9th, staging-quarantine promotion bug fixed (alive flag lifted on proof), consumer proof 58 through :8190. Fleet roster dedup+reconcile applied: 48 sites, one owner each (evidence-first), 106 exact-URL duplicate/blank tabs collapsed (video-router relaunch accumulation), canonical map written (state/seat_roster_canonical.json).
+
+**Recurring wedge (blocker, evidence recorded).** After the roster expansion, 9222/9224/9225 wedged again (DevTools HTTP times out; GUI process Responding; debug socket LISTENING). The task-owned recovery that succeeded at 03:40 now produces STARTUP-WEDGED instances: relaunch flags verified correct on the live process (remote-debugging-port bound by PID 38732 launched 05:03:34, --remote-allow-origins=*, no-discard features present), yet /json/version never answers. Pattern: Chrome 151 DevTools HTTP handler never serves after repeated hard-kill (/T) relaunch cycles of the same profile. The router's own heal loop keeps relaunching (PID churn visible in netstat); 9223 - the long-running instance that was never hard-killed - never wedges. RCA queued (Chrome 151 DevTools init vs hard-kill session-restore race); per the no-grinding rule this is named and stopped, not iterated blind. The 9225/9224 owned sites are the signed-out/visited expansions; all signed-in surfaces live on healthy 9223.
+
+**Run 3 in progress.** The lane is working 9223's reconciled roster (24 hosts planned): you.com -> WALL (shared signup classify regex - reported), monica -> LOGIN_REQUIRED (recurring; agent-in-loop fix pattern from #1446 applies next pass), plus SSO rows driven one pass each. Run 3 is resumable; wedged seats' lanes fail with SafetyRefusal rc evidence and skip cleanly.
+
+**Boundaries.** Two seat-kill cycles via the task-owned chain only; no operator profile; no provider sends beyond the lane's own; walls stand down.
