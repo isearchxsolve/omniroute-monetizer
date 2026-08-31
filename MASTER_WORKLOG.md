@@ -11647,3 +11647,18 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Boundaries.** Only pure-Python requests were sent (ws handshake + frames); no Chrome/CDP was touched (all listeners remain down); no walls hammered (copilot stops at the first invalid-event verdict); every live grok/copilot attempt is logged above with its verdict. Secrets never printed; frame forensics redacted of uuids/tokens.
 
 **Validation.** py_compile ws_replay.py after each cycle. Raw-frame forensics artifacts persisted in state/replay_raw/ (ws_grok.com_1788207770.txt etc.). No offline unit broke: test suite untouched by this change (grok branch is additive to the copilot branch). Worklog discipline: this entry documents all three cycles with verdicts.
+
+### [2026-09-01 03:30] #1441 - Cause C fully classified: no hand-rolled-field gap exists; all three are walls/dead-creds fixable only through a live seat
+
+**Continuation.** Work order item 4 of #1426/#1427 (cause C: send-time auth fields - aymo/sambanova/gemini). Method: one classified raw re-send per host, bodies saved to state/replay_raw/causeC_*, no retries, no hammering.
+
+**Exact verdicts (supersede the run-1 hypothesis).** Run-1 labelled these "demand computed send-time fields beyond cookies (SAPISIDHASH etc.)". The live bodies show that hypothesis was wrong in all three cases:
+1. aymo.ai -> HTTP 403 {"statusCode":403,"message":"You've used your one-time access to Claude Opus 5. Upgrade your plan to continue."} = QUOTA/PLAN WALL. The one-time premium access this session was harvested for is spent server-side. Law 5: reported, never solved, never retried. Not a build target.
+2. sambanova_cloud_chat -> HTTP 401 {"error":"Invalid token"} = expired bearer token (server-side timer, the oauth-keepalive docstring's own mechanism). No request field fixes an expired credential; the seat needs re-auth/re-capture.
+3. google_gemini_web -> HTTP 401 in the batchexecute envelope )]}\' 103 [["er",...,401,...]] = session cookies no longer accepted (matches 6.1's known state: extraction pinned, session needs re-capture).
+
+**Consequence.** Cause C dissolves: there is no SAPISIDHASH-class field to hand-roll here (and #1130's authorization for hand-rolling stays available for hosts that genuinely demand computed fields - none of these three turned out to be one). aymo is dead quota. sambanova and gemini join the seat-recovery queue: both need their automation profile signed in / re-captured through the task-owned seat chain, which is the same unblocker copilot's sniff and the chatgpt leg-2 capture already wait on.
+
+**Run-1 scoreboard after this unit.** 13 NOT_ADMITTED causes fully accounted: D closed (4th strategy committed; re-capture pending seats), B closed (monica admitted; v0 structural live-tab; chatx turnstile wall; chatgpt capture fix committed), A closed for grok (ADMITTED 7th) with copilot blocked on fresh sniff, C dissolved (wall x1, re-auth x2). Remaining executable work all converges on: task-owned seat relaunch chain.
+
+**Boundaries.** 3 pure-Python requests total, one per file, no retries; raw bodies persisted; walls stopped at first refusal. No Chrome/CDP touched (all four listeners remain down). Validation: raw artifacts in state/replay_raw/; nothing admitted this unit; scratch reports written by the sanctioned coordinator.
