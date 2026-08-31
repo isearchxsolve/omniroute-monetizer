@@ -280,6 +280,14 @@ def e2e_chat_apply(sso_budget: float, capture_wait: float, limit: int) -> None:
                 rc = subprocess.run([sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port", str(port),
                                      "--drive", "--host-exact", host, "--budget", str(sso_budget)], cwd=ROOT, check=False).returncode
                 unit["sso"].append({"host": host, "rc": rc})
+        # The harness is the navigation + bounded-SSO layer for tabs that are
+        # authenticated but not yet sitting on a capture surface.  Its default
+        # post-apply readiness audit is load-bearing: without it a just-signed-
+        # in site remains stale SKIP_NOT_AUTHENTICATED in the next manifest.
+        harness_rc = subprocess.run([sys.executable, str(HERE / "harness_all_tabs.py"), "--port", str(port),
+                                     "--apply", "--wait", "10", "--budget", str(max(120, int(sso_budget)))],
+                                    cwd=ROOT, check=False).returncode
+        unit["harnessRc"] = harness_rc
         manifest_path = STATE / f"fleet_e2e_manifest_{port}.json"
         subprocess.run([sys.executable, str(HERE / "tab_graduation_sweep.py"), "--port", str(port),
                         "--json", str(manifest_path)], cwd=ROOT, check=False)
