@@ -11165,3 +11165,22 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **OmniRoute-native video harness.** The second required video path (OmniRoute-native providers) proxies through :20128, which is currently UNRESPONSIVE (see #1407). It cannot be proven this session and is reported as BLOCKED, not dead.
 
 **Verdict.** Video media delivery is NOT yet proven this session: 0/2 seat-pool hosts returned downloadable media (adapter capture defect), OmniRoute-native blocked by :20128. This is an explicit, auditable gap -- not a false green. RCA on the rtst.ai / Flow video adapters (reconstruct generate->poll->media-URL capture) and :20128 recovery are prerequisites for a complete Gate 3. `qfailure` untouched.
+
+### [2026-08-31 08:50] #1409 - GATE 4 (rigorous): durable :8190 route proof with provider/session attribution
+
+**Proof.** The canonical consumer endpoint is `http://127.0.0.1:8190/v1` (127.0.0.1, NEVER localhost -- used by construction in every executor). Gate 2 already exercised it: the `api.cohere.com` admission was a request to `:8190/v1/chat/completions` (model=api.cohere.com/auto) that returned `provider=api.cohere.com`, `session=session_cohere_coral_web` and an exact computed answer -- i.e. the request was routed through :8190 to a specific provider seat with explicit attribution. Across Gate 2 the balanced `session-pool/auto` form returned DISTINCT providers (api.cohere.com, claude.ai, chat.deepseek.com, chat.qwen.ai) for successive requests, proving load spreading across seats is real and observable. A fresh dedicated 429-probe was attempted but the pool was cooling (429); the attribution proof therefore rests on the Gate 2 cohere admission, which is sufficient and already on disk (state/chat_graduation.json). Verdict: GATE 4 SATISFIED for the seat-pool harness (attribution present + load spreading proven). OmniRoute-native attribution half is BLOCKED by :20128 outage (cannot prove until recovered).
+
+### [2026-08-31 08:51] #1410 - GATE 5 (honest FINAL capacity matrix) -- NOT self-certified
+
+**Deliverable.** `state/capacity_matrix_final.json` (gitignored; referenced here) counts only provider/account x model-family x harness x modality with exact execution evidence / :8190 attribution. Dead/unverified rows are EXCLUDED with reason.
+
+**HEALTHY now (exact + attribution via :8190):** api.cohere.com (chat, seat-pool).
+**VERIFIED CAPABLE but currently cooling (429 from Gate-1 sweep; exact 58 + attribution proven earlier this session):** claude.ai, chat.qwen.ai, chat.deepseek.com (also a Gate-1 new account), chatgpt.com.
+**NEW ACCOUNTS created via Google SSO (Gate 1), chat not yet graduated:** chathub, copilot_microsoft, aymo (deepseek already in capable list).
+**EXCLUDED (with reason, NOT counted as capacity):** felo.ai / api.groq.com / chat.mistral.ai / www.perplexity.ai = adapter 500 (capture defect, fixable, NOT dead); api.1min.ai = pinned timeout (RCA); rtst.ai / aistudio.google.com(Flow) = seat-pool video adapter returned no media (capture defect, NOT dead); ALL OmniRoute-native chat+video = BLOCKED by :20128 outage.
+
+**Explicit non-counting.** No model family is admitted on a capture file, a tab, an onboarding page, a /v1/models listing, an adapter skeleton, or a browser-only result. Hyperbolic is NOT a new signup (rejected). The 4 adapter-500 hosts and 2 video-adapter hosts are explicitly OUT until RCA reproduces media.
+
+**Infra blocker (operator action).** OmniRoute :20128 is unresponsive (timeout on /,/health,/api/auth/login). Per mandate the worker MUST NOT restart it. Until :20128 returns, the OmniRoute-native half of the merged capacity (the second required harness) cannot be proven, and a calm re-run of Gates 2-4 post-cooldown will admit the 4 cooling chat hosts and should be performed. The worker does NOT self-certify completion; the primary orchestrator must verify all artifacts.
+
+**Summary of worker-delivered, evidence-backed supply this session:** 4 genuine new provider accounts (chathub, copilot, aymo, deepseek) via honest Google-SSO; 1 firmly graduated chat host (cohere) + 4 verified-capable-cooling chat hosts through :8190 with attribution; seat-pool video submission path proven (jobs dispatched + attributed) but media delivery blocked by adapter defects; OmniRoute-native blocked by :20128. `qfailure` untouched.
