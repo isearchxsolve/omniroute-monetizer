@@ -11025,6 +11025,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Current disposition.** GLM is **ACTIVE, NOT DONE**. Gate 1 onboarding is running; gate 2 has partial evidence; gates 3–5 and the final large-scope handoff are not yet complete. Do not reset or interrupt the worker and do not hand the task to HY3 yet. No Chrome or service action was performed by the primary monitor. User-owned untracked `qfailure` and GLM's two untracked in-progress scripts remain untouched by this commit.
 
+### [2026-08-31 10:52] #1402 - Interim GLM quality assessment: materially good recovery, final audit gaps retained
+
+**Quality verdict.** The recovered GLM execution is materially good work. It converted the corrected premise into a dedicated, parameterized per-seat signup executor; preserved the Chrome safety boundary; produced one visually and machine-verified Hyperbolic signup; generalized the workflow across niloy/seat2/seat3; ran a fresh pure-Python `:8190` chat graduation sweep; reported failures honestly; and is actively processing additional niloy candidates. This demonstrates useful reasoning, self-correction, reuse, and evidence discipline after the earlier scope ambiguity.
+
+**Audit gaps, not rejection.** The work is not final-ready yet. `chat_graduation_8190.py` currently accepts an expected number by substring containment plus a short-length guard; final Law-3 acceptance should require exact normalized equality to avoid a theoretical false positive. The three passing rows have computed answers but the observed attribution headers are blank in the report, so explicit provider/session attribution still needs to be proven before admission to final capacity. The new scripts are uncommitted while the live candidate sequence runs, and gates 3–5—dual-harness video proof, durable route proof, and final provider/account × model-family matrix—remain outstanding.
+
+**Disposition.** Continue GLM without interruption. Accept the architecture and current direction as good; reserve final rollout certification until the worker commits the components, closes the exact-answer and attribution gaps, and completes all five gates. No primary mutation was made to GLM's in-progress scripts or live worker. User-owned untracked `qfailure` remains untouched.
+
 ### [2026-08-31 07:46] #1397 - Atomic niloy unit #1: Hyperbolic SSO signup resolved SIGNUP_COMPLETED (capability retest passed)
 
 **Unit contract (worklog #1394/#1396 retest gate).** One candidate, one executable, one terminal record. No harness_all_tabs.py, no capture sweep, no video/capacity/consumer work, no service touch, no operator Chrome.
