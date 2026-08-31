@@ -84,6 +84,25 @@ def admitted_video_session_keys(path: pathlib.Path = REGISTRY) -> set[str]:
     return out
 
 
+def admitted_chat_hosts(path: pathlib.Path = REGISTRY) -> set[str]:
+    """Hosts for which at least one exact-file chat admission exists.
+
+    Mirror of the host-coincidence rule: an exact-file admission is strictly
+    stronger evidence than the legacy host-scoped replay gate, so once a host
+    has a proven file, unadmitted sibling files at that host must not serve
+    traffic off the stale legacy gate (measured 2026-09-01: chatx's
+    wall-classified unauth-mweb artifact shadowed the admitted chatgpt free
+    web session via LRU and answered the consumer with the wall response).
+    """
+    out: set[str] = set()
+    for entry in load_registry(path)["entries"]:
+        if (entry.get("state") == "ADMITTED" and entry.get("modality") == "chat"):
+            host = str(entry.get("host") or "")
+            if host:
+                out.add(host)
+    return out
+
+
 def transport_for(raw: dict[str, Any]) -> str:
     if raw.get("recorded_ws") or raw.get("transport") == "websocket":
         return "websocket"

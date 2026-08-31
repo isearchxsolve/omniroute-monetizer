@@ -443,6 +443,119 @@ def v0_followup(
 
 
 # ---------------------------------------------------------------------------
+# ChatGPT free web: POST /backend-api/f/conversation/prepare -> {"status":"ok",
+# "conduit_token": <fresh 60s JWT>} -> POST /backend-api/f/conversation carrying
+# the conduit in the x-conduit-token header. Both legs captured by the buffered
+# multi-exchange capture (recorded_exchanges, worklog #1438/#1439); prepare is
+# verified live to mint a NEW token on every re-send, so the recorded leg-2
+# x-conduit-token is replaced with the fresh one and the conversation body has
+# the sentinel swapped. Leg-1's own response is the bootstrap; leg-2's response
+# carries the answer stream.
+# ---------------------------------------------------------------------------
+
+def chatgpt_followup(
+    bootstrap_body: str,
+    recorded_headers: Dict[str, str],
+    cookie_header: str,
+    timeout: float = 60.0,
+    leg2: Optional[Dict[str, Any]] = None,
+    chat_id: Optional[str] = None,
+    started_ms: Optional[int] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Run leg-2 (POST /backend-api/f/conversation) with the fresh conduit token.
+
+    `leg2` is the second entry of the capture's recorded_exchanges: its url, headers
+    and request_body. The recorded x-conduit-token (60s TTL, long since dead) is
+    swapped for the fresh one minted by the leg-1 prepare re-send. chat_id/started_ms
+    are accepted-and-ignored so the shared run_followup kwargs pass-through reaches
+    this handler without its TypeError fallback stripping leg2."""
+    if not leg2 or not leg2.get("url"):
+        return None, "CHATGPT_NO_LEG2_IN_CAPTURE"
+    try:
+        boot = json.loads(bootstrap_body)
+    except Exception:
+        return None, "CHATGPT_BOOTSTRAP_NOT_JSON"
+    fresh = boot.get("conduit_token") or ""
+    if not fresh:
+        return None, "CHATGPT_NO_FRESH_CONDUIT"
+    headers = {k: v for k, v in (leg2.get("request_headers") or {}).items()}
+    if not any(k.lower() == "x-conduit-token" for k in headers):
+        return None, "CHATGPT_LEG2_NO_CONDUIT_HEADER"
+    for k in list(headers):
+        if k.lower() == "x-conduit-token":
+            headers[k] = fresh
+    # The sentinel swap already ran over the whole multi-exchange body set; leg2's
+    # request_body arrives here already carrying the caller's prompt.
+    body = (leg2.get("request_body") or "").encode("utf-8")
+    if _HAVE_CURL_CFFI:
+        r = curl_cffi.request(
+            "POST", leg2["url"], headers=headers, data=body, timeout=timeout,
+            impersonate=_IMPERSONATE, default_headers=False)
+    else:
+        r = requests.post(leg2["url"], headers=headers, data=body, timeout=timeout)
+    if r.status_code != 200:
+        return None, f"CHATGPT_LEG2_{r.status_code}: {r.text[:120]}"
+    assembled = _chatgpt_v_protocol_assemble(r.text)
+    if assembled:
+        return assembled, None
+    return None, f"CHATGPT_LEG2_NO_ANSWER: {r.text[:120]}"
+
+
+def _chatgpt_v_protocol_assemble(raw: str) -> Optional[str]:
+    """Assemble the answer from ChatGPT free-web's SSE v-protocol stream.
+
+    Pinned from live frames 2026-09-01 (state/replay_raw/chatgpt_leg2_*.txt):
+      * `data: "v1"` opens the stream; `data: [DONE]` closes it;
+      * dict frames carry either a full message state in {"v": {...message...}} or a
+        JSON-patch list in {"o": "patch", "v": [ops]};
+      * the model text is the ops' "v" string on /message/content/parts/0 ("append"
+        adds a delta, "add"/"replace" reset it);
+      * `message_stream_complete` terminates.
+    Returning raw SSE as the answer is refused upstream (unusable_reply), so this
+    assembler is the only path that can produce a legal consumer reply.
+    """
+    texts: list[str] = []
+    for line in (raw or "").split("\n"):
+        s = line.strip()
+        if not s.startswith("data: "):
+            continue
+        payload = s[6:]
+        if payload in ("[DONE]", '"v1"'):
+            continue
+        try:
+            d = json.loads(payload)
+        except Exception:
+            continue
+        if not isinstance(d, dict):
+            continue
+        if d.get("type") == "message_stream_complete":
+            break
+        ops = None
+        if isinstance(d.get("v"), list):
+            ops = d["v"]                       # {"o":"patch","v":[ops]}
+        elif isinstance(d.get("p"), str) and isinstance(d.get("v"), list):
+            ops = d["v"]
+        for op in ops or []:
+            if (isinstance(op, dict) and str(op.get("p") or "") == "/message/content/parts/0"
+                    and isinstance(op.get("v"), str)):
+                if op.get("o") == "append":
+                    texts.append(op["v"])
+                elif op.get("o") in ("add", "replace"):
+                    texts = [op["v"]]
+        v = d.get("v")
+        if isinstance(v, dict):
+            msg = v.get("message") or v
+            content = (msg.get("content") or {}) if isinstance(msg, dict) else {}
+            parts = content.get("parts")
+            if isinstance(parts, list) and parts and isinstance(parts[0], str):
+                if msg.get("status") == "in_progress" or not parts[0]:
+                    texts = [parts[0]] if parts[0] else texts
+                elif parts[0]:
+                    texts = [parts[0]]         # full state replaces accumulation
+    return "".join(texts).strip() or None
+
+
+# ---------------------------------------------------------------------------
 # Registry: host -> followup function
 # ---------------------------------------------------------------------------
 
@@ -450,6 +563,7 @@ FOLLOWUP_REGISTRY: Dict[str, Any] = {
     "felo.ai": felo_followup,
     "chat.mistral.ai": mistral_followup,
     "v0.app": v0_followup,
+    "chatgpt.com": chatgpt_followup,
 }
 
 
@@ -458,6 +572,13 @@ def detect_bootstrap(body: str, host: str = None) -> Optional[str]:
     Returns the provider key if recognized, else None."""
     if host and "v0.app" in host and len(body) <= 64 and body.strip().strip('"').lower() == "ok":
         return "v0.app"                        # 2-byte ack -- the answer arrives on the poll
+    if host and "chatgpt.com" in host and len(body) < 2000:
+        try:
+            d = json.loads(body)
+            if isinstance(d, dict) and d.get("status") == "ok" and "conduit_token" in d:
+                return "chatgpt.com"
+        except Exception:
+            pass
     if len(body) > 2000:
         return None
     try:

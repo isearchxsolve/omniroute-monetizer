@@ -73,6 +73,68 @@ if hasattr(sys.stdout, "reconfigure"):
         pass
 
 
+# Substitution ladder, module-level so multi-exchange captures substitute EVERY leg
+# the same way the first leg was substituted (see _inject_prompt and the
+# recorded_exchanges threading in chat()). The recorded sentinel contains no special
+# characters, so it is still searched for literally -- only the replacement is escaped.
+# Escape whenever the body carries JSON ANYWHERE, not just when the whole body is JSON:
+# huggingface.co posts multipart/form-data whose parts contain JSON, so a whole-body
+# check said "not JSON", the raw newlines went in unescaped and the inner JSON stopped
+# parsing -- HTTP 500. Defaulting to escaped is the safe direction: on a genuinely
+# plain body the only cost is a newline arriving as the two characters \n, where the
+# other order corrupts the payload outright.
+_PROMPT_PLACEHOLDERS = (
+    "Reply exactly one word: Omni.",
+    "Reply exactly one word: Omni",
+    "Reply exactly one word : Omni.",
+    "Reply exactly one word : Omni",
+    "Hi",
+    "Hello",
+)
+
+
+def substitute_prompt(body: str, new_prompt: str) -> str:
+    """Swap the recorded probe prompt for the caller's prompt in one body string."""
+    import urllib.parse
+    body = body or ""
+    stripped = body.lstrip()
+    is_json = stripped[:1] in ("{", "[") or '{"' in body
+    esc = json.dumps(new_prompt)[1:-1]
+    repl = esc if is_json else new_prompt
+    for ph in _PROMPT_PLACEHOLDERS:
+        if ph in body:
+            return body.replace(ph, repl)
+        # A url-encoded body is almost always a form field CARRYING JSON (Google's `f.req`,
+        # Next.js server actions), so the replacement is json-escaped before it is percent
+        # encoded. On a genuinely plain form field this only means a newline arrives as the
+        # two characters \n instead of a real newline -- wrong but harmless, where the other
+        # order corrupts the payload outright.
+        ph_url = urllib.parse.quote_plus(ph)
+        if ph_url in body:
+            return body.replace(ph_url, urllib.parse.quote_plus(esc))
+        ph_url2 = urllib.parse.quote(ph)
+        if ph_url2 in body:
+            return body.replace(ph_url2, urllib.parse.quote(esc))
+    return body
+
+
+def _leg2_for(provider_key: str, raw: dict, new_prompt: str):
+    """The second recorded exchange of a multi-exchange capture, sentinel-substituted.
+
+    Returns None for single-exchange captures (classic replay path unchanged) and for
+    providers whose follow-up is not exchange-driven. chatgpt.com is the current
+    consumer: prepare (leg 1, replayed as the recorded exchange) mints the conduit
+    token, conversation (leg 2) carries the actual message."""
+    if provider_key != "chatgpt.com":
+        return None
+    seq = raw.get("recorded_exchanges") or []
+    if len(seq) < 2:
+        return None
+    leg2 = dict(seq[1])
+    leg2["request_body"] = substitute_prompt(str(leg2.get("request_body") or ""), new_prompt)
+    return leg2
+
+
 class UniversalSessionClient:
     """
     Universal HTTP Replay Adapter.
@@ -181,50 +243,7 @@ class UniversalSessionClient:
     def _inject_prompt(self, new_prompt: str) -> str:
         if not self.base_body:
             return ""
-        body = self.base_body
-        import urllib.parse
-
-        # The prompt is substituted into a recorded body as raw text, so every character that is
-        # special in that body's ENCODING has to be escaped or the body stops parsing. This is not a
-        # corner case: real prompts contain newlines and quotes constantly, and an unescaped newline
-        # made chat.qwen.ai answer
-        #     {"code":"RequestValidationError","details":["Field '542': JSON decode error"]}
-        # which reads exactly like a dead session but is our own bug. The recorded sentinel contains
-        # no special characters, so it is still searched for literally -- only the replacement is
-        # escaped.
-        # Escape whenever the body carries JSON ANYWHERE, not just when the whole body is JSON.
-        # huggingface.co posts multipart/form-data whose parts contain JSON, so a whole-body check
-        # said "not JSON", the raw newlines went in unescaped and the inner JSON stopped parsing --
-        # HTTP 500. Defaulting to escaped is the safe direction: on a genuinely plain body the only
-        # cost is a newline arriving as the two characters \n, where the other error corrupts the
-        # payload outright.
-        stripped = body.lstrip()
-        is_json = stripped[:1] in ("{", "[") or '{"' in body
-        esc = json.dumps(new_prompt)[1:-1]
-        repl = esc if is_json else new_prompt
-
-        for ph in [
-            "Reply exactly one word: Omni.",
-            "Reply exactly one word: Omni",
-            "Reply exactly one word : Omni.",
-            "Reply exactly one word : Omni",
-            "Hi",
-            "Hello"
-        ]:
-            if ph in body:
-                return body.replace(ph, repl)
-            # A url-encoded body is almost always a form field CARRYING JSON (Google's `f.req`,
-            # Next.js server actions), so the replacement is json-escaped before it is percent
-            # encoded. On a genuinely plain form field this only means a newline arrives as the two
-            # characters \n instead of a real newline -- wrong but harmless, where the other order
-            # corrupts the payload outright.
-            ph_url = urllib.parse.quote_plus(ph)
-            if ph_url in body:
-                return body.replace(ph_url, urllib.parse.quote_plus(esc))
-            ph_url2 = urllib.parse.quote(ph)
-            if ph_url2 in body:
-                return body.replace(ph_url2, urllib.parse.quote(esc))
-        return body
+        return substitute_prompt(self.base_body, new_prompt)
 
     @staticmethod
     def _piece_from_obj(o) -> str:
@@ -905,7 +924,13 @@ class UniversalSessionClient:
             follow_text, follow_err = run_followup(
                 provider_key, r.text, self.headers,
                 self.raw.get("cookie_header", ""), timeout=90.0,
-                chat_id=_chat_id, started_ms=_send_started_ms)
+                chat_id=_chat_id, started_ms=_send_started_ms,
+                # Multi-exchange captures (recorded_exchanges, capture_sessions_cdp
+                # buffering): the follow-up replays the SECOND leg with values from the
+                # first response threaded forward. The leg-2 body gets the same sentinel
+                # substitution leg-1 got, so the caller's prompt -- not the recorded
+                # probe -- is what the pipeline answers.
+                leg2=_leg2_for(provider_key, self.raw, new_prompt))
             if follow_text:
                 # The no-tool envelope is never the model's words (see unwrap_no_tool_text).
                 follow_text = unwrap_no_tool_text(follow_text) or follow_text

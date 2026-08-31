@@ -131,6 +131,16 @@ def _admitted_video_session_keys() -> set[str]:
     except Exception:
         return set()
 
+
+def _admitted_chat_hosts() -> set[str]:
+    """Hosts with at least one exact-file chat admission (stronger than the legacy
+    host-scoped gate -- an unadmitted sibling must not serve off the stale gate)."""
+    try:
+        from pure_python_registry import admitted_chat_hosts
+        return admitted_chat_hosts(PURE_PYTHON_REGISTRY)
+    except Exception:
+        return set()
+
 # Markers of a reply that is not an answer at all. Anchored to the START of the text on purpose: a
 # legitimate answer may *contain* "<html" because the user asked about HTML, but only a page shell or
 # an unparsed stream *begins* that way. Anchoring keeps a real answer from being thrown away.
@@ -524,14 +534,22 @@ class PooledSession:
         self.verified_chat_hosts: set[str] = set()
         self.admitted_chat_session_keys: set[str] = set()
         self.admitted_video_session_keys: set[str] = set()
+        self.admitted_chat_hosts: set[str] = set()
 
     @property
     def dispatchable(self) -> bool:
+        # Exact-file admission outranks the legacy host gate: once one file at a host
+        # carries its own Law-3 proof, sibling files at that host lose the legacy-gate
+        # dispatch path (a stale/wall artifact must not shadow the proven one -- LRU
+        # would otherwise round-robin the caller onto the unproven sibling).
+        chat_ok = (
+            self.key in self.admitted_chat_session_keys
+            or (self.host in self.verified_chat_hosts
+                and self.host not in self.admitted_chat_hosts))
         return bool((self.has_recording or self.has_api or self.has_chrome
                      or self.has_video_chrome) and self.client_cls
                     and not self.flagged_dead and not self.dead
-                    and ((self.modality == "chat" and
-                          (self.host in self.verified_chat_hosts or self.key in self.admitted_chat_session_keys))
+                    and ((self.modality == "chat" and chat_ok)
                          or (self.modality == "video" and self.key in self.admitted_video_session_keys)))
 
     def client(self):
@@ -554,6 +572,7 @@ class SessionPool:
         self.verified_chat_hosts = _verified_chat_hosts()
         self.admitted_chat_session_keys = _admitted_chat_session_keys()
         self.admitted_video_session_keys = _admitted_video_session_keys()
+        self.admitted_chat_hosts = _admitted_chat_hosts()
         self.sessions: List[PooledSession] = []
         for f in sorted(glob.glob(str(secrets / "session_*.json"))):
             try:
@@ -565,6 +584,7 @@ class SessionPool:
             s.verified_chat_hosts = self.verified_chat_hosts
             s.admitted_chat_session_keys = self.admitted_chat_session_keys
             s.admitted_video_session_keys = self.admitted_video_session_keys
+            s.admitted_chat_hosts = self.admitted_chat_hosts
             s.last_used = float(st.get(s.key, 0.0))
         self.quarantined = _load_quarantine()
         if self.quarantined:
@@ -590,6 +610,11 @@ class SessionPool:
             self.verified_chat_hosts = _verified_chat_hosts()
             self.admitted_chat_session_keys = _admitted_chat_session_keys()
             self.admitted_video_session_keys = _admitted_video_session_keys()
+            self.admitted_chat_hosts = _admitted_chat_hosts()
+            # Quarantine releases are a file edit (pool_quarantine.json's own documented
+            # release procedure); reloading it here means a release needs no restart,
+            # same hot-reload contract as the seat files themselves.
+            self.quarantined = _load_quarantine()
             on_disk: Dict[str, pathlib.Path] = {}
             for f in sorted(glob.glob(str(self.secrets / "session_*.json"))):
                 p = pathlib.Path(f)
@@ -611,6 +636,7 @@ class SessionPool:
                     cur.verified_chat_hosts = self.verified_chat_hosts
                     cur.admitted_chat_session_keys = self.admitted_chat_session_keys
                     cur.admitted_video_session_keys = self.admitted_video_session_keys
+                    cur.admitted_chat_hosts = self.admitted_chat_hosts
                     sessions.append(cur)                       # untouched: keep object+state
                     continue
                 try:
@@ -631,6 +657,7 @@ class SessionPool:
                 s.verified_chat_hosts = self.verified_chat_hosts
                 s.admitted_chat_session_keys = self.admitted_chat_session_keys
                 s.admitted_video_session_keys = self.admitted_video_session_keys
+                s.admitted_chat_hosts = self.admitted_chat_hosts
                 sessions.append(s)
             for key in existing:
                 if key not in on_disk:

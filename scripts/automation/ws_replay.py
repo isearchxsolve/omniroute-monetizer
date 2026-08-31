@@ -57,9 +57,11 @@ def _sentinel_forms(s: str) -> list[str]:
 class WebSocketSessionClient:
     """Same .chat() contract as UniversalSessionClient, over the recorded websocket."""
 
-    def __init__(self, path):
+    def __init__(self, path=None, secret=None):
+        # `secret=` is the pool's constructor contract (PooledSession.client passes it);
+        # `path=` kept for the replay_check/direct callers.
         import pathlib
-        self.path = pathlib.Path(path)
+        self.path = pathlib.Path(secret or path)
         self.raw: Dict[str, Any] = json.loads(self.path.read_text(encoding="utf-8"))
         self.rec: Dict[str, Any] = self.raw.get("recorded_ws") or {}
         if not self.rec.get("url"):
