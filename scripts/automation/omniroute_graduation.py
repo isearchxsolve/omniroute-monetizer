@@ -26,8 +26,10 @@ import pathlib
 import re
 import subprocess
 import sys
+import threading
 import time
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 import requests
@@ -96,7 +98,7 @@ def classify_failure(status: int | None, body: Any, raw: str = "") -> str:
 def live_catalog(session: requests.Session) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     started = time.perf_counter()
     try:
-        response = session.get(f"{OMNI}/v1/models", timeout=120)
+        response = session.get(f"{OMNI}/v1/models", timeout=30)
         payload = response.json() if response.ok else {}
         rows = [r for r in payload.get("data", []) if isinstance(r, dict) and r.get("id")]
         return rows, {"http": response.status_code, "count": len(rows),
@@ -199,6 +201,7 @@ def consumer_probe(session: requests.Session, row: dict[str, Any], timeout: floa
 def management_snapshot() -> dict[str, Any]:
     """Read provider connection metadata through OmniRoute's management API."""
     api = OmniRouteAPI(base_url=OMNI, password=get_password())
+    api.session.trust_env = False
     try:
         if not api.login():
             return {"auth": "FAILED", "connections": []}
@@ -214,10 +217,15 @@ def management_snapshot() -> dict[str, Any]:
         return {"auth": "ERROR", "connections": [], "error": f"{type(exc).__name__}: {exc}"[:220]}
 
 
-def build_plan() -> dict[str, Any]:
+def build_plan(*, include_management: bool = True) -> dict[str, Any]:
     session = no_proxy_session()
     catalog, catalog_meta = live_catalog(session)
-    management = management_snapshot()
+    # Connection metadata is useful for a read-only plan, but it is not a
+    # prerequisite for route graduation.  A wedged /api/providers endpoint
+    # must not hold the production inference pass hostage after catalog
+    # discovery has succeeded.
+    management = management_snapshot() if include_management else {
+        "auth": "SKIPPED_E2E_OPTIONAL_METADATA", "connections": []}
     routes = plan_from_catalog(catalog)
     return {"schemaVersion": 1, "generatedAt": now(),
             "mode": "omniroute_all_catalog_plan_no_inference", "endpoint": OMNI,
@@ -229,18 +237,35 @@ def build_plan() -> dict[str, Any]:
                                       "consumer reachability", "video render success", "capacity"]}
 
 
-def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float) -> dict[str, Any]:
-    session = no_proxy_session()
-    results: list[dict[str, Any]] = []
+def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float,
+                 lanes: int = 10, resume: bool = True) -> dict[str, Any]:
+    prior_payload = read_json(RUN, {}) if resume else {}
+    prior_rows = prior_payload.get("results", []) if isinstance(prior_payload, dict) else []
+    prior = {(str(r.get("provider")), str(r.get("model"))): r for r in prior_rows
+             if isinstance(r, dict) and r.get("provider") and r.get("model")}
+    results: list[dict[str, Any]] = list(prior.values())
     by_provider: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in plan.get("routes", []):
         by_provider[str(row["provider"])].append(row)
-    # Sequential inside each provider is mandatory; providers run one lane at
-    # a time in this master so the durable report order is deterministic and no
-    # provider is accidentally rate-bursted.
-    for owner in sorted(by_provider):
+    write_lock = threading.Lock()
+
+    def record(result: dict[str, Any]) -> None:
+        with write_lock:
+            results.append(result)
+            # Persist after every route: a long fleet run is resumable evidence.
+            atomic_json(RUN, {"schemaVersion": 1, "updatedAt": now(),
+                              "phase": "direct_provider_model_probes", "results": results})
+
+    def provider_lane(owner: str, routes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """One request at a time for this provider; independent providers may overlap."""
+        session = no_proxy_session()
+        lane_results: list[dict[str, Any]] = []
         strikes = 0
-        for index, route in enumerate(by_provider[owner]):
+        for index, route in enumerate(routes):
+            old = prior.get((owner, str(route["model"])))
+            if old and old.get("directProof") not in {"TRANSPORT", "ERROR"}:
+                lane_results.append(old)
+                continue
             result = direct_probe(session, route, timeout)
             if result["directProof"] == "RATE":
                 strikes += 1
@@ -248,17 +273,32 @@ def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float) 
                 result = direct_probe(session, route, timeout)
             elif result["directProof"] == "DIRECT_LAW3_OK":
                 strikes = 0
-            results.append(result)
-            # Persist after every route: a long fleet run is resumable evidence.
-            atomic_json(RUN, {"schemaVersion": 1, "updatedAt": now(),
-                              "phase": "direct_provider_model_probes", "results": results})
+            lane_results.append(result)
+            record(result)
+            print(f"[{owner}] {index + 1}/{len(routes)} {route['model']} -> "
+                  f"{result['directProof']}", flush=True)
             if result["directProof"] == "WALL":
                 # A provider wall stops only this provider lane.
-                for rest in by_provider[owner][index + 1:]:
-                    results.append({**rest, "directProof": "SKIPPED_PROVIDER_WALL"})
+                for rest in routes[index + 1:]:
+                    skipped = {**rest, "directProof": "SKIPPED_PROVIDER_WALL"}
+                    lane_results.append(skipped)
+                    record(skipped)
                 break
+        print(f"[{owner}] lane complete: {sum(r.get('directProof') == 'DIRECT_LAW3_OK' for r in lane_results)} "
+              f"direct proofs / {len(lane_results)} rows", flush=True)
+        return lane_results
+
+    # This is the breadth-not-depth rule: up to N providers can be active,
+    # while a given provider has exactly one in-flight request.
+    with ThreadPoolExecutor(max_workers=max(1, lanes)) as executor:
+        futures = [executor.submit(provider_lane, owner, routes)
+                   for owner, routes in sorted(by_provider.items())]
+        for future in as_completed(futures):
+            future.result()  # direct_probe is per-route isolated; surface only an unexpected bug
+
     direct_ok = [r for r in results if r.get("directProof") == "DIRECT_LAW3_OK"]
-    consumer = [consumer_probe(session, r, consumer_timeout) for r in direct_ok]
+    consumer_session = no_proxy_session()
+    consumer = [consumer_probe(consumer_session, r, consumer_timeout) for r in direct_ok]
     admitted = [r for r in consumer if r.get("consumerProof") == "CONSUMER_LAW3_OK"]
     admissions = {"schemaVersion": 1, "generatedAt": now(),
                   "consumerContract": CONSUMER,
@@ -302,8 +342,12 @@ def main() -> int:
     ap.add_argument("--e2e", action="store_true", help="run Omni chat graduation and native video proof")
     ap.add_argument("--confirm-video-spend", action="store_true",
                     help="required for native video MP4 generation")
-    ap.add_argument("--timeout", type=float, default=75, help="one chat route request timeout")
+    ap.add_argument("--timeout", type=float, default=45, help="one chat route request timeout")
     ap.add_argument("--consumer-timeout", type=float, default=90, help="one final :8190 request timeout")
+    ap.add_argument("--lanes", type=int, default=10,
+                    help="providers probed concurrently; each provider remains one-request-at-a-time")
+    ap.add_argument("--fresh", action="store_true",
+                    help="ignore an interrupted omniroute_graduation_run.json; default resumes terminal route evidence")
     ap.add_argument("--video-timeout", type=int, default=900, help="one native video request timeout")
     ap.add_argument("--max-models-per-provider", type=int, default=0,
                     help="diagnostic cap; 0 means every catalog model")
@@ -315,7 +359,9 @@ def main() -> int:
     if args.e2e and not args.confirm_video_spend:
         ap.error("--e2e requires --confirm-video-spend because native video proof spends capacity")
 
-    plan = build_plan()
+    plan = build_plan(include_management=not args.e2e)
+    if args.e2e and not plan.get("routes"):
+        ap.error("OmniRoute catalog returned no chat routes; service/catalog is unavailable, no probes started")
     if args.max_models_per_provider:
         plan["routes"] = plan_from_catalog(
             live_catalog(no_proxy_session())[0], args.max_models_per_provider)
@@ -325,7 +371,7 @@ def main() -> int:
         print(f"plan={STATE / 'omniroute_graduation_plan.json'} providers={len(plan['providers'])} routes={len(plan['routes'])}")
         return 0
 
-    chat = run_chat_e2e(plan, args.timeout, args.consumer_timeout)
+    chat = run_chat_e2e(plan, args.timeout, args.consumer_timeout, args.lanes, resume=not args.fresh)
     atomic_json(RUN, {"schemaVersion": 1, "generatedAt": now(), "endpoint": OMNI,
                       "consumerContract": CONSUMER, "chat": chat})
     video = run_video_e2e(args.confirm_video_spend, args.video_timeout, args.max_video_routes)
