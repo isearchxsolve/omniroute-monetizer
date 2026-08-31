@@ -11746,3 +11746,17 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **What this run proves.** The master lane is now a complete, resumable production loop: SSO rows driven -> harness navigation -> serial captures -> per-file Law-3 -> exact-file admission -> :8190 hot reload, with per-host cause accounting. 8 pure-Python admitted chat files, 3 consumer-proven pinned routes (monica/chatgpt/grok through :8190 with computed 58).
 
 **Session handoff.** This session's context budget is at its end. Remaining work (in order): (1) copilot fresh two-way CDP sniff on a 9223 copilot tab -> refresh COPILOT_HANDSHAKE_FRAMES in ws_replay.py -> one verify-and-admit; (2) re-auth surfaces for sambanova/gemini (operator where SSO walls stand); (3) signed-in surface re-captures for together/cerebras/cohere/duck/monica-login; (4) video lane behind --confirm-video-spend. Memory key continuation.gapclose_1427 updated with the full state.
+
+### [2026-09-01 04:55] #1446 - chathub signed in on niloy and ADMITTED (9th) + consumer-proven; staging-quarantine promotion bug fixed
+
+**Operator call-out acted on.** Run 2 was not a full pass: chathub was never signed in on niloy and the other profiles were never expanded. This unit closes chathub end-to-end.
+
+**Sign-in (agent-in-loop).** Harness reported SSO_NO_GOOGLE_BUTTON; direct screenshot+DOM scan found the real surface: a login screen with "Google / last used" button. One trusted click at the live coordinates signed the seat in instantly (last-used Google account, no chooser) - post-click screenshot shows the authenticated app (GPT-5.6 Sol + Claude Sonnet 5 panes, Basic 0/60 quota bars). The harness's ready-wait raced the lazy-loaded auth screen; the surface was there.
+
+**The submit mystery solved.** The composer held 9x sentinel residue from earlier attempts: chathub's Enter inserts a newline and the send control is an ICON-ONLY button below the composer that the submit ladder's scoring missed every time. Agent-in-loop submit: cleared residue (Ctrl+A+Delete), typed ONE sentinel, DOM-scanned the real send candidate (icon+svg at composer right-below, score 90), clicked it - POSTs appeared: /api/v5/chat/completions x2 (All-In-One dual-model mode: one per model) + /api/chat/generate-title. Artifact staged via capture_payload with the ordered 3 exchanges, pending=True.
+
+**409 stream_request_conflict fixed.** First verify: 409 "This resumable chat stream ID belongs to a different request" - conversationId/streamId/threadId/messages[].id are ALL client-minted UUIDs per send and the recorded ones were consumed. multistep_replay gained _chathub_preflight (fresh UUID set, exactly Chrome's own behavior), registered under app.chathub.gg. Next verify: REPLAY_OK -> ADMITTED (9 admitted chat files).
+
+**Staging-quarantine promotion bug found and fixed.** The admitted artifact still carried status.alive=False (staged pending) - the pool's flagged_dead reads exactly that, so an admitted file could never be dispatched. fleet_graduation promotion now lifts the staging quarantine in the same transition as runtime:replay stamping (reason staging_quarantine_lifted_after_law3_proof). Consumer proof then passed: app.chathub.gg/auto through :8190 answered the computed 58.
+
+**Boundaries.** One sign-in click (no password, no OTP, Google last-used consent-free path), one sentinel submit, two verify requests, one consumer probe. Walls: none hit this unit. The other profiles' roster expansion is the next unit (in progress).

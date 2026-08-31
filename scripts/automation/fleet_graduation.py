@@ -238,6 +238,14 @@ def verify_and_admit(session_path: pathlib.Path) -> None:
         raise SystemExit(f"not admitted: {verdict or 'NO_VERDICT'} {detail}")
     # Promotion is a state transition after, never before, the exact-file proof.
     raw["runtime"] = "replay"
+    # A staged artifact carries status.alive=False (pending_replay_verification), which
+    # the pool reads as flagged_dead and refuses to dispatch. The proof just passed, so
+    # the staging quarantine is lifted in the same transition -- leaving it False would
+    # admit a file the pool can never serve.
+    if raw.get("status", {}).get("alive") is False:
+        raw["status"] = {"alive": True,
+                         "harvested_at": raw.get("status", {}).get("harvested_at"),
+                         "reason": "staging_quarantine_lifted_after_law3_proof"}
     raw["graduation"] = {
         "kind": "pure_python_replay",
         "verifiedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

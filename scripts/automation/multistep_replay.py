@@ -117,10 +117,33 @@ def _v0_preflight(body_str: str) -> str:
         return body_str
 
 
+def _chathub_preflight(body_str: str) -> str:
+    """app.chathub.gg: conversationId, streamId, threadId and messages[].id are ALL
+    client-minted UUIDs per send (measured 2026-09-01). Re-sending the recorded ones
+    hits 409 {"error":"This resumable chat stream ID belongs to a different request",
+    "code":"stream_request_conflict"} -- the resumable stream was already consumed by
+    the original send. Mint a fresh set, exactly as Chrome's own client does."""
+    try:
+        body = json.loads(body_str)
+        changed = False
+        for key in ("conversationId", "streamId", "threadId"):
+            if key in body:
+                body[key] = str(uuid.uuid4())
+                changed = True
+        for msg in body.get("messages") or []:
+            if isinstance(msg, dict) and "id" in msg:
+                msg["id"] = str(uuid.uuid4())
+                changed = True
+        return json.dumps(body) if changed else body_str
+    except Exception:
+        return body_str
+
+
 PREFLIGHT_REGISTRY: Dict[str, Callable[[str], str]] = {
     "chat.mistral.ai": _mistral_preflight,
     "claude.ai": _claude_preflight,
     "v0.app": _v0_preflight,
+    "app.chathub.gg": _chathub_preflight,
 }
 
 
