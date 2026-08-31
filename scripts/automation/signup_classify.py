@@ -93,6 +93,22 @@ DASHBOARD_BODY_RE = re.compile(
     r"your (models|tokens|usage))", re.I)
 
 
+# Hard provider walls automation must never bypass. One shared pattern so the
+# signup executors and the navigation harness cannot diverge on what counts as
+# a wall (email verification, OTP, CAPTCHA, unusual-traffic, card, plan, quota).
+WALL_BODY_RE = re.compile(
+    r"verify your email|verification code|enter the code|captcha|"
+    r"unusual traffic|check your email|confirm your email|otp|"
+    r"add a (credit|debit) card|billing|upgrade your plan|choose a plan|"
+    r"out of (free )?credits|quota exceeded|rate limit reached|"
+    r"phone (number )?(verification|required)", re.I)
+
+
+def body_is_hard_wall(body_low):
+    """True when a provider surface text matches a hard, report-only wall."""
+    return bool(WALL_BODY_RE.search(body_low or ""))
+
+
 def final_url_is_onboarding(url):
     return bool(ONBOARDING_URL_RE.search(url or ""))
 
