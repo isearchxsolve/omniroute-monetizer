@@ -39,6 +39,8 @@ ROOT = HERE.parents[1]
 STATE = ROOT / "state"
 SECRETS = STATE / "secrets"
 LEDGER = STATE / "fleet_graduation_ledger.json"
+E2E_PLAN = STATE / "fleet_e2e_graduation_plan.json"
+SEAT_ACCOUNTS = STATE / "video_accounts.json"
 SCRATCH = STATE / "scratch"
 VERIFY_PROMPT = "Reply with only the number: 41 + 17"
 VERIFY_EXPECT = "58"
@@ -69,6 +71,50 @@ def canonical_gate() -> dict[str, str]:
     rows = data.get("results", []) if isinstance(data, dict) else data
     return {str(r.get("host") or ""): str(r.get("verdict") or "")
             for r in rows if isinstance(r, dict)}
+
+
+def declared_fleet() -> list[dict[str, Any]]:
+    """The authoritative dedicated-seat topology, derived without Chrome/CDP."""
+    data = read_json(SEAT_ACCOUNTS, {})
+    grouped: dict[tuple[str, int], dict[str, Any]] = {}
+    for row in data.get("accounts", []) if isinstance(data, dict) else []:
+        if not isinstance(row, dict) or not row.get("enabled", True):
+            continue
+        profile, port = str(row.get("profile") or ""), int(row.get("port") or 0)
+        if not profile or not port:
+            continue
+        item = grouped.setdefault((profile, port), {"profile": profile, "port": port,
+                                                     "labels": [], "declaredVideoProviders": []})
+        if row.get("label"):
+            item["labels"].append(str(row["label"]))
+        if row.get("provider"):
+            item["declaredVideoProviders"].append(str(row["provider"]))
+    return [grouped[k] for k in sorted(grouped, key=lambda x: x[1])]
+
+
+def e2e_plan() -> dict[str, Any]:
+    """All-profile production plan.  Deliberately no CDP/network/provider action."""
+    fleet = declared_fleet()
+    return {
+        "schemaVersion": 1,
+        "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "mode": "all_profiles_static_e2e_plan_no_browser_no_provider_request",
+        "consumerContract": "http://127.0.0.1:8190/v1",
+        "fleet": fleet,
+        "serialExecutionOrder": [
+            "for each profile/port: bounded SSO recovery per exact host",
+            "refresh/read manifest for that same dedicated seat",
+            "capture one eligible chat surface",
+            "read that exact unit's Law-3 proof and admit only REPLAY_OK",
+            "continue to the next seat after spacing; never parallelize one host",
+            "run video submit-poll-result graduation separately with explicit spend confirmation",
+            "run pinned :8190 consumer probes and publish provider x model-family capacity",
+        ],
+        "whatThisDoesNotDo": [
+            "open Chrome", "drive SSO", "capture", "replay", "spend video credits",
+            "admit a seat", "claim capacity",
+        ],
+    }
 
 
 def inventory() -> dict[str, Any]:
@@ -211,6 +257,8 @@ def main() -> int:
     group.add_argument("--verify-and-admit", metavar="SESSION_FILE", help="one exact chat session_*.json")
     group.add_argument("--capture-chat", metavar="SITE", help="one exact named chat site via the guarded sweep")
     group.add_argument("--recover-sso", metavar="HOST", help="one exact provider host via bounded SSO recovery")
+    group.add_argument("--e2e-plan", action="store_true",
+                       help="write the all-profile/all-seat production plan; no Chrome or network")
     ap.add_argument("--port", type=int, default=9222, help="dedicated automation CDP port for capture or SSO recovery")
     ap.add_argument("--sso-budget", type=float, default=240.0,
                     help="wall-clock seconds for one --recover-sso host")
@@ -223,6 +271,11 @@ def main() -> int:
         capture_chat(args.port, args.capture_chat)
     elif args.recover_sso:
         recover_sso(args.port, args.recover_sso, args.sso_budget)
+    elif args.e2e_plan:
+        plan = e2e_plan()
+        atomic_json(E2E_PLAN, plan)
+        print(f"all-profile E2E plan: {E2E_PLAN.name}; seats={len(plan['fleet'])}; "
+              f"ports={[x['port'] for x in plan['fleet']]}")
     ledger = inventory()
     atomic_json(LEDGER, ledger)
     summary = ledger["summary"]
