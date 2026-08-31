@@ -11239,6 +11239,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Interpretation.** The prior `:20128` outage statement is stale for this observation window; OmniRoute is currently reachable. The model counts and seat-pool counts remain inventory/health metadata, not graduated capacity. The next required proof is an exact fresh request through each harness with provider/session attribution, followed by video submit→poll→download proof.
 
+### [2026-08-31 13:10] #1416 - Merged auto route verified as seat-pool fallback, OmniRoute graduation still unresolved
+
+**Method.** Sent one fresh exact arithmetic request through `http://127.0.0.1:8190/v1/chat/completions` with `model=auto/claude-sonnet`, asking `Reply with only the number: 41 + 17` and requiring exact answer `58`. No browser or service restart was used.
+
+**Observed result.** The merged endpoint returned HTTP 200 in 14.78 seconds, exact content `58`, `provider=claude.ai`, and `session=session_claude_official_web`. However, the response explicitly reported `x_gateway_source=session_pool_fallback` and `x_gateway_fallback_reason=omniroute_unreachable:ReadTimeout`. Therefore this is valid current seat-pool execution through the merged contract, not OmniRoute-native graduation. It must not be counted in the OmniRoute half of the capacity matrix.
+
+**Follow-up observation.** A direct pure-Python request to OmniRoute `:20128/v1/chat/completions` using the same model and a fresh arithmetic question did not complete within the 30-second command observation window; no successful OmniRoute response was observed. This is currently an upstream execution/latency gap, not evidence that the provider is dead. The catalog endpoint remains healthy, so the next RCA target is the OmniRoute completion path and its timeout/fallback interaction.
+
 ### [2026-08-31 09:20] #1411 - Gate 1 coverage confirmed: ALL seats consolidated in gate1_matrix.json
 
 Operator verification question: "did Gate 1 cover all seats?" Yes. `state/gate1_matrix.json` now contains every dedicated automation seat: providers/9222 (6), niloy/9223 (32), seat2/9224 (Google Flow EXISTING_ACCOUNT + rtst.ai VIDEO_SEAT_GATE3), seat3/9225 (same). seat2/seat3 held ONLY labs.google (Flow) and rtst.ai live surfaces -- no chat/AI signup candidates -- so Flow was resolved via the executor (EXISTING_ACCOUNT; artifacts signup_resolution_seat2/seat3_google_flow.json) and rtst.ai is correctly left to Gate 3 (video scope, not a Google-SSO chat signup). Total 42 rows: SIGNUP_COMPLETED=4, EXISTING_ACCOUNT=19, LOGIN_REQUIRED=16, SSO_INITIATED=1, VIDEO_SEAT_GATE3=2. No seat omitted.
