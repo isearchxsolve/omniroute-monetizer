@@ -11283,6 +11283,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Safety note.** No signup script was executed in this verification step, so no Chrome, provider, credential, or service state changed. The corrected acceptance rule remains authoritative: redirects and auth-shaped cookies are at most provider-session observations; no account or capacity claim is valid without provider-specific proof and later graduation.
 
+### [2026-08-31 14:28] #1421 - Signup review fixes: niloy safety, wall taxonomy, and verifier-owned completion
+
+**Review accepted.** The supplied code review identified a real niloy tab-hijack safety violation, missing post-SSO hard-wall classification, and an inconsistent completion predicate. These were treated as ship-blocking defects.
+
+**Changes.** `niloy_sso_account_resolution.py` now reuses only an existing Hyperbolic tab or creates a fresh target; it no longer hijacks an arbitrary non-Chrome tab. It adds an explicit post-redirect hard-wall check for email verification, OTP, CAPTCHA, unusual-traffic, and related signals; closes the Google OAuth target after its WebSocket closes; guards the budget deadline against negative remaining time; removes the unused `signed_in_surface`/`probe_fn` path; and retains the executor's fail-closed behavior. `signup_classify.py` now accepts separate `account_created_proof` and `provider_action_verified` inputs and returns `SIGNUP_COMPLETED` only when both are explicitly true. The executors pass neither proof, so signup completion remains verifier-owned rather than self-certified.
+
+**Test repair and result.** Updated the focused classifier test to assert the new two-proof contract: account proof alone remains `SSO_PROVIDER_SESSION_OBSERVED`, while account proof plus provider-action proof yields `SIGNUP_COMPLETED`. `python -m py_compile` passed for the three signup modules and `python -m pytest -q scripts/automation/test_signup_classify.py` passed **7/7**. No signup runner was executed and no Chrome/provider/service state changed.
+
 ### [2026-08-31 09:20] #1411 - Gate 1 coverage confirmed: ALL seats consolidated in gate1_matrix.json
 
 Operator verification question: "did Gate 1 cover all seats?" Yes. `state/gate1_matrix.json` now contains every dedicated automation seat: providers/9222 (6), niloy/9223 (32), seat2/9224 (Google Flow EXISTING_ACCOUNT + rtst.ai VIDEO_SEAT_GATE3), seat3/9225 (same). seat2/seat3 held ONLY labs.google (Flow) and rtst.ai live surfaces -- no chat/AI signup candidates -- so Flow was resolved via the executor (EXISTING_ACCOUNT; artifacts signup_resolution_seat2/seat3_google_flow.json) and rtst.ai is correctly left to Gate 3 (video scope, not a Google-SSO chat signup). Total 42 rows: SIGNUP_COMPLETED=4, EXISTING_ACCOUNT=19, LOGIN_REQUIRED=16, SSO_INITIATED=1, VIDEO_SEAT_GATE3=2. No seat omitted.

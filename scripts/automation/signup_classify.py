@@ -9,18 +9,29 @@ classification can never silently diverge between the two executors.
 Terminal states
 ----------------
 SSO_INITIATED
-    We reached the Google account chooser / redirect, i.e. SSO was genuinely
-    *initiated*, but the provider's own onboarding never completed to a usable
-    account. This is mid-flow evidence, NOT a completed signup.
+    Google chooser/consent was driven and the provider redirected, but the
+    provider never returned to a usable surface (no redirect back to the
+    provider in budget). SSO was genuinely *initiated*, but onboarding never
+    completed to a usable account. Mid-flow evidence, NOT a completed signup.
+SSO_PROVIDER_SESSION_OBSERVED
+    The SSO redirect returned to the provider surface AND auth-like session
+    cookies were independently observed on that surface -- but this is ONLY a
+    provisional observation. Per the corrected Gate-1 taxonomy, auth-like
+    cookies alone do NOT prove a new account was created. A new signup is only
+    counted when, in addition, provider-specific account-creation evidence AND a
+    successful harmless provider action are proven (see SIGNUP_COMPLETED).
 ONBOARDING_VERIFICATION_REQUIRED
     SSO redirect completed and the provider now shows an onboarding /
-    questionnaire / survey surface that must be completed (often by a human:
-    email verification, profile questionnaire, plan selection) before a usable
-    account exists. NOT success.
+    questionnaire / survey / loading / subscription / verification surface that
+    must be completed (often by a human: email verification, profile
+    questionnaire, plan selection) before a usable account exists. NOT success.
 SIGNUP_COMPLETED
-    The provider reached its FINAL authenticated account/dashboard surface AND a
-    protected provider session was independently verified (auth-like cookies on
-    that final surface). Only then is a new signup counted.
+    The FULL chain is proven: (1) provider-specific account-creation evidence
+    (e.g. an "account created" confirmation, a new-account welcome/onboarding
+    gate the automation did not itself pass, or a fresh account record) AND (2)
+    the provider reached its FINAL authenticated non-wall surface AND (3) one
+    harmless provider action succeeded (e.g. send a message, open a model
+    picker, list usage). Auth-like cookies alone are NOT sufficient.
 EXISTING_ACCOUNT
     The provider surface was already authenticated before any SSO click. Not a
     new signup.
@@ -30,8 +41,27 @@ LOGIN_REQUIRED
 WALL
     The provider demands a hard wall (card / captcha / otp / email-verify) that
     automation must not bypass. Terminal evidence, not a stop for the mandate.
+
+Strict rule applied everywhere: never count a SIGNUP_COMPLETED from screenshots,
+cookie names, open tabs, model inventory, browser-only activity, or route
+listings. The burden of proof is a real account-creation event + a confirmed
+harmless provider action.
 """
 import re
+
+# Canonical set of every terminal state this module may emit. Validators and
+# downstream aggregators import VALID_TERMINAL_STATES to reject unknown labels.
+VALID_TERMINAL_STATES = {
+    "SSO_INITIATED",
+    "SSO_PROVIDER_SESSION_OBSERVED",
+    "ONBOARDING_VERIFICATION_REQUIRED",
+    "SIGNUP_COMPLETED",
+    "EXISTING_ACCOUNT",
+    "LOGIN_REQUIRED",
+    "WALL",
+}
+
+SSO_PROVIDER_SESSION_OBSERVED = "SSO_PROVIDER_SESSION_OBSERVED"
 
 # URL paths that prove the provider flow is still in onboarding, not a usable
 # account. Onboarding/survey/questionnaire/verify-email surfaces are explicitly
@@ -67,20 +97,34 @@ def final_url_is_onboarding(url):
     return bool(ONBOARDING_URL_RE.search(url or ""))
 
 
-def classify_final_provider_state(url, body_low, auth_like_present):
+def classify_final_provider_state(url, body_low, auth_like_present,
+                                  account_created_proof=False,
+                                  provider_action_verified=False):
     """Classify the FINAL provider surface after an SSO redirect.
 
     Returns one of: ONBOARDING_VERIFICATION_REQUIRED, LOGIN_REQUIRED,
-    SIGNUP_COMPLETED.
+    SSO_PROVIDER_SESSION_OBSERVED, SIGNUP_COMPLETED.
+
+    Per the corrected Gate-1 taxonomy, the presence of auth-like session cookies
+    alone is NOT enough to count a new signup. It is only a provisional
+    ``SSO_PROVIDER_SESSION_OBSERVED``. A ``SIGNUP_COMPLETED`` additionally
+    requires both explicit provider account-creation evidence and a separately
+    verified harmless provider action. These are independent verifier inputs;
+    this classifier never infers either from a redirect, cookie, screenshot, or
+    dashboard-looking body.
     """
     if final_url_is_onboarding(url) or ONBOARDING_BODY_RE.search(body_low or ""):
         return "ONBOARDING_VERIFICATION_REQUIRED"
     if SIGNED_OUT_BODY_RE.search(body_low or ""):
         return "LOGIN_REQUIRED"
-    # Surface looks authenticated. A completed signup additionally requires an
-    # independently verified protected provider session (auth-like cookies).
+    # Surface looks authenticated and a protected provider session was
+    # independently observed (auth-like cookies). Without explicit proof that a
+    # new account was created AND a harmless provider action succeeded, this is
+    # only a provisional SSO/provider-session observation -- never a signup.
     if auth_like_present:
-        return "SIGNUP_COMPLETED"
+        if account_created_proof and provider_action_verified:
+            return "SIGNUP_COMPLETED"
+        return "SSO_PROVIDER_SESSION_OBSERVED"
     return "LOGIN_REQUIRED"
 
 

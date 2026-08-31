@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Atomic niloy account-resolution unit: ONE candidate (app.hyperbolic.ai), ONE terminal record.
 
-Scope contract (worklog #1394): emits exactly one of SIGNUP_COMPLETED / EXISTING_ACCOUNT /
-LOGIN_REQUIRED / WALL into state/signup_resolution_niloy_hyperbolic.json. Attaches read-only
+Scope contract (worklog #1394): emits exactly one of SSO_PROVIDER_SESSION_OBSERVED /
+SIGNUP_COMPLETED / EXISTING_ACCOUNT / LOGIN_REQUIRED / WALL / SSO_INITIATED /
+ONBOARDING_VERIFICATION_REQUIRED into state/signup_resolution_niloy_hyperbolic.json. Attaches read-only
 to the EXISTING dedicated seat Chrome on :9223 (never launches Chrome, never touches the
 operator's live profile, never touches services). Ordinary Google-SSO signup UI only: no
 password typing, no OTP/email-code handling, no CAPTCHA, no MFA bypass, no credential invention.
@@ -102,9 +103,6 @@ def pick_tab():
     for t in ts:
         if "hyperbolic" in (t.get("url") or ""):
             return t["id"]
-    for t in ts:
-        if not (t.get("url") or "").startswith("chrome"):
-            return t["id"]
     req = urllib.request.Request(f"{CDP}/json/new?{TARGET_URL}", method="PUT")
     return json.loads(urllib.request.urlopen(req, timeout=15).read())["id"]
 
@@ -133,6 +131,13 @@ def cookie_names(tab, url):
         return sorted({c.get("name", "") for c in res.get("cookies", [])})
     except Exception:
         return []
+
+
+def close_tab(target_id):
+    try:
+        urllib.request.urlopen(f"{CDP}/json/close/{target_id}", timeout=10)
+    except Exception:
+        pass
 
 
 def record(state, identity, evidence, steps, wall=None):
@@ -306,7 +311,7 @@ def main():
             else:
                 identity = chooser.split("clicked:", 1)[-1]
             consent_clicked = 0
-            deadline = time.monotonic() + min(60, BUDGET_S - (time.monotonic() - t0))
+            deadline = time.monotonic() + max(10, min(60, BUDGET_S - (time.monotonic() - t0)))
             back = None
             while time.monotonic() < deadline:
                 time.sleep(2)
@@ -351,7 +356,7 @@ def main():
                 return 0
             steps.append(f"redirect {back[:90]}")
 
-            auth_like, signed_in_surface = [], False
+            auth_like = []
             try:
                 for t in targets():
                     if "hyperbolic" in (t.get("url") or ""):
@@ -367,7 +372,6 @@ def main():
                             body_low = tab2.evaluate(
                                 "document.body ? document.body.innerText.slice(0,2000)"
                                 ".toLowerCase() : ''")
-                            signed_in_surface = not probe_fn(body_low)
                             steps.append(f"provider cookies={len(h_cookies)}"
                                          f" auth_like={auth_like[:6]}")
                         finally:
@@ -380,7 +384,17 @@ def main():
             # account/dashboard surface AND an independently verified protected
             # provider session. An onboarding/survey/questionnaire surface is
             # ONBOARDING_VERIFICATION_REQUIRED, never success.
-            final_state = classify_final_provider_state(back, body_low, bool(auth_like))
+            if re.search(r"verify your email|verification code|enter the code|captcha|"
+                         r"unusual traffic|check your email|confirm your email|otp",
+                         body_low or "", re.I):
+                record("WALL", identity if chooser != "none" else "not_disclosed",
+                       evidence, steps,
+                       wall="provider demands email verification / OTP / captcha after "
+                            "SSO redirect (premise: not handled)")
+                return 0
+            final_state = classify_final_provider_state(
+                back, body_low, bool(auth_like),
+                account_created_proof=False, provider_action_verified=False)
             if final_state == "ONBOARDING_VERIFICATION_REQUIRED":
                 record("ONBOARDING_VERIFICATION_REQUIRED",
                         identity if chooser != "none" else "not_disclosed",
@@ -390,10 +404,19 @@ def main():
                              "stops; a human must complete it only if email/OTP/CAPTCHA/MFA "
                              "is demanded -- never bypassed.")
                 return 0
-            if final_state == "SIGNUP_COMPLETED":
-                record("SIGNUP_COMPLETED",
-                        identity if chooser != "none" else "existing_google_account",
-                        evidence, steps)
+            if final_state == "SSO_PROVIDER_SESSION_OBSERVED":
+                # Auth-like session cookies were observed on the post-SSO provider
+                # surface, but no provider-specific account-creation evidence and no
+                # successful harmless provider action were proven. Provisional
+                # observation only -- never a counted signup.
+                record("SSO_PROVIDER_SESSION_OBSERVED",
+                        identity if chooser != "none" else "not_disclosed",
+                        evidence, steps,
+                        wall="SSO redirect reached a provider surface with auth-like "
+                             "session cookies, but no provider-specific account-creation "
+                             "evidence and no successful harmless provider action were "
+                             "observed. Provisional SSO/provider-session observation only "
+                             "-- NOT a new signup (no capacity claim).")
                 return 0
             record("LOGIN_REQUIRED", identity if chooser != "none" else "not_disclosed",
                     evidence, steps,
@@ -402,13 +425,9 @@ def main():
             return 0
         finally:
             gt.close()
+            close_tab(gtab["id"])
     finally:
         tab.close()
-
-
-def probe_fn(body_low):
-    import re
-    return bool(re.search(r"sign in|log in|sign up|create account|get started", body_low or ""))
 
 
 if __name__ == "__main__":
