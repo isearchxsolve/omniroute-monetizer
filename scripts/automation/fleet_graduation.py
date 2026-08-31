@@ -40,6 +40,7 @@ STATE = ROOT / "state"
 SECRETS = STATE / "secrets"
 LEDGER = STATE / "fleet_graduation_ledger.json"
 E2E_PLAN = STATE / "fleet_e2e_graduation_plan.json"
+E2E_RUN = STATE / "fleet_e2e_graduation_run.json"
 SEAT_ACCOUNTS = STATE / "video_accounts.json"
 SCRATCH = STATE / "scratch"
 VERIFY_PROMPT = "Reply with only the number: 41 + 17"
@@ -237,6 +238,79 @@ def capture_chat(port: int, site: str) -> None:
     print("capture/replay unit completed. Inspect the exact new session file, then run --apply --verify-and-admit.")
 
 
+def _admit_from_existing_proof(path: pathlib.Path, proof: pathlib.Path) -> str:
+    """Promote a fresh capture using its existing one-request scratch verdict."""
+    raw = read_json(path, {})
+    verdict, detail = read_single_verdict(proof)
+    if not isinstance(raw, dict) or verdict != "REPLAY_OK":
+        raise RuntimeError(f"proof not promotable: {verdict or 'NO_VERDICT'} {detail}")
+    problem = admission_problem(raw)
+    if problem:
+        raise RuntimeError(problem)
+    raw["runtime"] = "replay"
+    raw["graduation"] = {"kind": "pure_python_replay", "verifiedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                          "prompt": VERIFY_PROMPT, "expect": VERIFY_EXPECT, "verdict": verdict,
+                          "report": str(proof.relative_to(ROOT))}
+    atomic_json(path, raw)
+    registry = load_registry()
+    entry = admit(registry, session_file=path.name, host=str(raw.get("host") or ""), modality="chat",
+                  adapter=str(pure_python_adapter(raw)), verification={"kind": "Law-3 computed replay",
+                  "prompt": VERIFY_PROMPT, "expect": VERIFY_EXPECT, "verdict": verdict,
+                  "report": str(proof.relative_to(ROOT))})
+    write_registry(registry)
+    return str(entry["adapter"])
+
+
+def e2e_chat_apply(sso_budget: float, capture_wait: float, limit: int) -> None:
+    """Serial all-profile chat lane: SSO -> manifest -> capture/replay -> exact admission."""
+    from tab_graduation_sweep import scratch_report, session_slug
+    run = {"generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+           "mode": "serial_all_profile_chat_graduation", "consumerContract": "http://127.0.0.1:8190/v1",
+           "video": "not triggered; separate explicit spend-gated graduation", "profiles": []}
+    left = limit or 10**9
+    for seat in declared_fleet():
+        port, profile = int(seat["port"]), str(seat["profile"])
+        unit = {"profile": profile, "port": port, "sso": [], "captures": []}
+        # Plan gives current dedicated-seat hosts; only signed-out rows are driven.
+        subprocess.run([sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port", str(port)], cwd=ROOT, check=False)
+        plan = read_json(STATE / f"fleet_blueprint_plan_{port}.json", {})
+        for row in plan.get("hosts", []) if isinstance(plan, dict) else []:
+            if row.get("signedOut") is True and row.get("host"):
+                host = str(row["host"])
+                rc = subprocess.run([sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port", str(port),
+                                     "--drive", "--host-exact", host, "--budget", str(sso_budget)], cwd=ROOT, check=False).returncode
+                unit["sso"].append({"host": host, "rc": rc})
+        manifest_path = STATE / f"fleet_e2e_manifest_{port}.json"
+        subprocess.run([sys.executable, str(HERE / "tab_graduation_sweep.py"), "--port", str(port),
+                        "--json", str(manifest_path)], cwd=ROOT, check=False)
+        manifest = read_json(manifest_path, {})
+        seen: set[str] = set()
+        for tab in manifest.get("tabs", []) if isinstance(manifest, dict) else []:
+            if left <= 0 or tab.get("classification") != "ELIGIBLE_CAPTURE":
+                continue
+            site = str(tab.get("knownSite") or "")
+            if not site or site in seen:
+                continue
+            seen.add(site); started = time.time()
+            rc = subprocess.run([sys.executable, str(HERE / "tab_graduation_sweep.py"), "--port", str(port),
+                                 "--execute", "--site", site, "--wait", str(capture_wait)], cwd=ROOT, check=False).returncode
+            expected = SECRETS / f"session_{session_slug(site)}.json"
+            item = {"site": site, "captureRc": rc, "state": "NOT_ADMITTED"}
+            if rc == 0 and expected.exists() and expected.stat().st_mtime >= started - 2:
+                try:
+                    item.update(state="ADMITTED_TO_8190_PURE_PYTHON", sessionFile=expected.name,
+                                adapter=_admit_from_existing_proof(expected, scratch_report(site)))
+                except Exception as exc:
+                    item["detail"] = f"{type(exc).__name__}: {exc}"[:220]
+            else:
+                item["detail"] = "capture did not leave a fresh exact session artifact"
+            unit["captures"].append(item); left -= 1
+            atomic_json(E2E_RUN, {**run, "profiles": run["profiles"] + [unit]})
+            time.sleep(4)
+        run["profiles"].append(unit); atomic_json(E2E_RUN, run)
+    print(f"all-profile chat E2E complete: {E2E_RUN.name}")
+
+
 def recover_sso(port: int, host: str, budget: float) -> None:
     """Delegate one exact dedicated-seat SSO unit; no capture or promotion follows it."""
     exact = host.strip().lower()
@@ -259,11 +333,15 @@ def main() -> int:
     group.add_argument("--recover-sso", metavar="HOST", help="one exact provider host via bounded SSO recovery")
     group.add_argument("--e2e-plan", action="store_true",
                        help="write the all-profile/all-seat production plan; no Chrome or network")
+    group.add_argument("--e2e-chat", action="store_true",
+                       help="serial SSO -> capture -> proof -> pure-Python admission across every declared profile; video excluded")
     ap.add_argument("--port", type=int, default=9222, help="dedicated automation CDP port for capture or SSO recovery")
     ap.add_argument("--sso-budget", type=float, default=240.0,
                     help="wall-clock seconds for one --recover-sso host")
+    ap.add_argument("--capture-wait", type=float, default=25.0, help="per-seat capture wait in --e2e-chat")
+    ap.add_argument("--limit", type=int, default=0, help="cap chat seats in --e2e-chat (0 = all)")
     args = ap.parse_args()
-    if (args.verify_and_admit or args.capture_chat or args.recover_sso) and not args.apply:
+    if (args.verify_and_admit or args.capture_chat or args.recover_sso or args.e2e_chat) and not args.apply:
         ap.error("--apply is required: these operations send a provider request and/or change an admission")
     if args.verify_and_admit:
         verify_and_admit(exact_session(args.verify_and_admit))
@@ -276,6 +354,8 @@ def main() -> int:
         atomic_json(E2E_PLAN, plan)
         print(f"all-profile E2E plan: {E2E_PLAN.name}; seats={len(plan['fleet'])}; "
               f"ports={[x['port'] for x in plan['fleet']]}")
+    elif args.e2e_chat:
+        e2e_chat_apply(args.sso_budget, args.capture_wait, args.limit)
     ledger = inventory()
     atomic_json(LEDGER, ledger)
     summary = ledger["summary"]
