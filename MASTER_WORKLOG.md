@@ -11113,3 +11113,19 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 **Honest count.** niloy worker-created new signups (verified) = 4. Rejected false claim = hyperbolic (0 contribution). No self-certification; primary orchestrator to verify.
 
 **What is NOT claimed.** No capacity row admitted by Gate 1 alone; signup is onboarding only. Capacity requires Gate 2 (chat graduation) / Gate 3 (video) / Gate 4 (:8190 attribution) / Gate 5 (matrix). `qfailure` untouched. State artifacts are gitignored (evidence on disk; referenced here).
+
+### [2026-08-31 08:30] #1407 - GATE 2 (rigorous, partial): pure-Python chat graduation via :8190 with exact computed answer + provider/session attribution
+
+**Method (hardened per mandate).** `chat_graduation_8190.py` sends ONE fresh arithmetic Law-3 question ("Reply with only the number: a + b") per host through :8190, accepts ONLY an EXACT normalized computed answer (no substring; normalization strips quotes + a single trailing period), and captures the `provider`/`session` the shim attributes in the response body (session_pool_shim.py:819-820). Pinned form `<host>/auto` is required to credit a host; the balanced `session-pool/auto` fallback only proves the pool is alive and is NOT counted as that host''s capacity. Per-host request timeout 45s, no retries that hammer a seat.
+
+**Critical infra state (must not be hidden).** OmniRoute :20128 is UNRESPONSIVE (verified: / , /health , /api/auth/login all timeout). Per mandate the worker MUST NOT restart :20128. Consequence: (a) the shim''s /v1/models hangs (it calls omniroute.models()), so Gate 2 used a static seat-host list instead of live discovery; (b) the OmniRoute-native half of the merged capacity CANNOT be proven while :20128 is down. The seat-pool chat path itself is independent of :20128 and remains valid.
+
+**Degraded state from Gate 1 sweep.** The 38-seat SSO sweep + prior probes put several seat sessions into active cooldown (HTTP 429 on the pinned form, latency ~0s). These seats answered exact computed answers EARLIER this session (claude.ai, chat.qwen.ai, chat.deepseek.com, chatgpt.com all returned 58 with attribution), so they are capable but currently cooling; a calm re-run post-cooldown will admit them.
+
+**Result (state/chat_graduation.json, gitignored; run log state/gate2_chat_graduation_run.txt).**
+- ADMITTED on own pinned seat (exact answer + attribution): **api.cohere.com** (session_cohere_coral_web, 0.97s, answer 58).
+- Proven capable, currently cooling (429 on pinned; answered exact earlier this session): claude.ai, chat.qwen.ai, chat.deepseek.com, chatgpt.com.
+- Adapter/capture defect (pinned HTTP 500, internal adapter error): felo.ai, api.groq.com, chat.mistral.ai, www.perplexity.ai. Per Chrome Gap Doctrine these are FIXABLE send-time/capture gaps, NOT provider death; they require replay-adapter RCA, not declaration as dead.
+- Balanced pool answered all 9 non-admitted hosts (proving the merged gateway is alive and spreading load), but those are recorded as pool_alive_balanced_only, not host capacity.
+
+**Honest count.** Firmly admitted chat hosts (pinned exact + attribution): 1 (cohere). Capable-but-cooling: 4. Adapter-defect (RCA): 4. OmniRoute-native chat: BLOCKED (:20128 down). No self-certification; primary orchestrator to verify. `qfailure` untouched.
