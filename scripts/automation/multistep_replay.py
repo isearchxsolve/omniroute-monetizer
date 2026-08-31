@@ -101,9 +101,26 @@ def _claude_preflight(body_str: str) -> str:
         return body_str
 
 
+def _v0_preflight(body_str: str) -> str:
+    """v0.app: message_id is a client-generated UUID that must be unique per send.
+    Re-sending the recorded one re-answers an already-answered message: the send
+    'succeeds' (the 2-byte ok ack) but no NEW assistant message ever appears and the
+    poll times out with the caller's prompt scored against the old ack. Mint a fresh
+    one. chat_id is deliberately KEPT -- it names the conversation the poll watches,
+    and v0_followup polls that exact chat for a message newer than our send."""
+    try:
+        body = json.loads(body_str)
+        if "message_id" in body:
+            body["message_id"] = str(uuid.uuid4())
+        return json.dumps(body)
+    except Exception:
+        return body_str
+
+
 PREFLIGHT_REGISTRY: Dict[str, Callable[[str], str]] = {
     "chat.mistral.ai": _mistral_preflight,
     "claude.ai": _claude_preflight,
+    "v0.app": _v0_preflight,
 }
 
 

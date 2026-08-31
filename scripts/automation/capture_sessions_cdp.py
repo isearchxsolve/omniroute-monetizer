@@ -403,6 +403,48 @@ def has_sentinel(body: str) -> bool:
     return any(f in body for f in SENTINEL_FORMS if f)
 
 
+def capture_payload(hits: list[dict], cookie_header: str, site: str,
+                    pending: bool = False) -> dict[str, Any]:
+    """Build the session artifact from the ordered sentinel-bearing exchanges.
+
+    `hits` is ordered as Chrome sent them. The FIRST exchange stays in `recorded_exchange`
+    (the schema every replay reader consumes), so a single-exchange artifact is byte-shape
+    identical to the pre-multi-exchange format. When a multi-step flow produced more than
+    one sentinel-bearing POST (chatgpt prepare -> conversation, giz planner ->
+    assistantMessage -- both measured), every exchange is additionally stored, in order, in
+    `recorded_exchanges`; replay walks them as one pipeline with values threaded forward.
+    Dropping the later exchanges was the first-hit selection defect (Giz RCA #1190/#1194):
+    the seat's real answer transport was discarded because an earlier sentinel POST won.
+    """
+    if not hits:
+        raise ValueError("capture_payload: no sentinel-bearing exchanges")
+    first = hits[0]
+    payload: dict[str, Any] = {
+        "host": first["host"],
+        "modality": "chat",
+        "site": site,
+        "sentinel": SENTINEL,
+        "updated_at": int(time.time()),
+        "cookie_header": cookie_header,
+        "recorded_exchange": {"url": first["url"], "method": first.get("method"),
+                              "request_headers": first.get("request_headers") or {},
+                              "cookie_header": cookie_header,
+                              "request_body": first.get("request_body") or "",
+                              "host": first["host"]},
+        "status": {"alive": not pending,
+                   "harvested_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                   "reason": "pending_replay_verification" if pending else "capture_sessions_cdp"},
+    }
+    payload["exchangeCount"] = len(hits)
+    if len(hits) > 1:
+        payload["recorded_exchanges"] = [
+            {"url": h["url"], "method": h.get("method"),
+             "request_headers": h.get("request_headers") or {},
+             "request_body": h.get("request_body") or "", "host": h["host"]}
+            for h in hits]
+    return payload
+
+
 def targets(port: int) -> list[dict]:
     assert_safe_cdp_port(port)
     with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=10) as r:
@@ -669,32 +711,7 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
         handled: set[str] = set()
         ws_hit: dict[str, Any] = {}
         ws_caps: dict[str, dict] = {}   # requestId -> buffered websocket exchange (Chrome-gap)
-
-        def save(url: str, req: dict, body: str) -> dict[str, Any]:
-            jar = c.call("Network.getCookies", {"urls": [url, t.get("url", "")]}).get("cookies", [])
-            cookie_header = "; ".join(f"{k['name']}={k['value']}" for k in jar)
-            rh = {k: v for k, v in (req.get("headers") or {}).items() if not k.startswith(":")}
-            host = host_of(url)
-            payload = {
-                "host": host,
-                "modality": "chat",
-                "site": name,
-                "sentinel": SENTINEL,
-                "updated_at": int(time.time()),
-                "cookie_header": cookie_header,
-                "recorded_exchange": {"url": url, "method": req.get("method"),
-                                      "request_headers": rh, "cookie_header": cookie_header,
-                                      "request_body": body, "host": host},
-                "status": {"alive": not pending,
-                           "harvested_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                           "reason": "pending_replay_verification" if pending else "capture_sessions_cdp"},
-            }
-            out = output_dir / validated_session_filename(output_name, name)
-            atomic_json_write(out, payload)
-            return {"status": "CAPTURED", "endpointHost": host,
-                    "endpointPath": urllib.parse.urlsplit(url).path[:80],
-                    "bodyBytes": len(body), "headerCount": len(rh), "cookieCount": len(jar),
-                    "file": str(out.relative_to(ROOT))}
+        http_hits: list[dict] = []      # ordered sentinel-bearing POSTs (multi-step flows)
 
         def save_ws(rid: str) -> dict[str, Any] | None:
             """Save a WEBSOCKET capture: handshake url + Chrome's headers + every frame, in
@@ -787,7 +804,14 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
                     except CDPError:
                         body = ""
                 if has_sentinel(body):
-                    return save(url, req, body)
+                    # Multi-step flows: KEEP buffering instead of returning on the first hit.
+                    # Measured (Giz #1194, chatgpt free-web): the first sentinel POST can be a
+                    # planner/prepare leg while the answer-producing exchange comes second.
+                    # The caller saves once, after the watch window, with the full sequence.
+                    http_hits.append({"url": url, "method": req.get("method"),
+                                      "request_headers": dict(req.get("headers") or {}),
+                                      "request_body": body,
+                                      "host": host_of(url)})
             return None
 
         def watch(seconds: float) -> dict[str, Any] | None:
@@ -847,6 +871,29 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
 
         per = max(6.0, wait / 4.0)
         row["strategiesTried"] = []
+
+        def save_http_buffer(label: str) -> dict[str, Any]:
+            """Save ONCE from the ordered buffer. Runs as soon as a strategy's window
+            produced sentinel-bearing POSTs, so later strategies never fire (no extra
+            submits). The full window is waited out first so follow-on exchanges of a
+            multi-step flow (prepare -> conversation, planner -> message) land in the
+            buffer next to the first hit."""
+            jar = c.call("Network.getCookies",
+                         {"urls": [http_hits[0]["url"], t.get("url", "")]}).get("cookies", [])
+            cookie_header = "; ".join(f"{k['name']}={k['value']}" for k in jar)
+            payload = capture_payload(hits=http_hits, cookie_header=cookie_header,
+                                      site=name, pending=pending)
+            out = output_dir / validated_session_filename(output_name, name)
+            atomic_json_write(out, payload)
+            row["submitStrategy"] = label
+            row.update({"status": "CAPTURED", "endpointHost": http_hits[0]["host"],
+                        "endpointPath": urllib.parse.urlsplit(http_hits[0]["url"]).path[:80],
+                        "bodyBytes": len(http_hits[0].get("request_body") or ""),
+                        "headerCount": len(http_hits[0].get("request_headers") or {}),
+                        "exchangeCount": len(http_hits),
+                        "file": str(out.relative_to(ROOT))})
+            return row
+
         for label, fn in (("enter", strat_enter), ("js_click_send", strat_js_click),
                           ("mouse_send", strat_mouse_send), ("retype_keys", strat_retype)):
             try:
@@ -855,11 +902,26 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
                 row.setdefault("strategySkipped", {})[label] = str(e)[:90]
                 continue
             row["strategiesTried"].append(label)
-            hit = watch(per)
-            if hit:
-                row["submitStrategy"] = label
-                row.update(hit)
+            watch(per)
+            if ws_hit:
+                # The sentinel went out over a websocket: that is the seat's transport, and
+                # per the Chrome-gap doctrine it is a BUILD TARGET, not a dead end. A
+                # buffered ws exchange is saved as a first-class ws-transport capture
+                # (replayable by ws_replay.py); only a buffer that somehow failed to record
+                # falls back to the honest not-replayable-as-HTTP verdict.
+                saved = save_ws(str(ws_hit.get("rid") or ""))
+                if saved:
+                    row["submitStrategy"] = label
+                    row.update(saved)
+                    row["note"] = ("sentinel left over a websocket frame -- captured as a "
+                                   "ws-transport session (transport: websocket)")
+                    return row
+                row.update(status="WEBSOCKET", frameBytes=ws_hit.get("frameBytes"),
+                           note="sentinel left over a websocket frame but no ws exchange was "
+                                "buffered -- not captured")
                 return row
+            if http_hits:
+                return save_http_buffer(label)
 
         row.update(requestsSeen=seen["requests"], postsSeen=seen["posts"],
                    wsFramesSeen=seen["wsFrames"])

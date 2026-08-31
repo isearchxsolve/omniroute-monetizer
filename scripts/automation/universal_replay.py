@@ -874,11 +874,34 @@ class UniversalSessionClient:
             from multistep_replay import detect_bootstrap, run_followup
         provider_key = detect_bootstrap(r.text, host=_up.urlsplit(self.url).netloc)
         if provider_key:
+            # chat_id resolution: the send body is the authority (v0's chat_id names the
+            # conversation its poll watches), but some captures carry it only in the URL
+            # (referer/query) or in the bootstrap itself. Try, in order: parsed send body,
+            # request URL query, bootstrap body -- then give up honestly.
             _chat_id = None
-            try:
-                _chat_id = json.loads(new_body_str).get("chat_id")
-            except Exception:
-                _chat_id = None
+            import re as _re_id
+            # The recorded Referer often names the chat path (/.../chat/<id>) even when the
+            # send body's own chat_id field is empty -- measured on v0.app.
+            _referer = next((v for k, v in self.headers.items() if k.lower() == "referer"), "")
+            for _src in (new_body_str, _up.urlsplit(self.url).query, _referer, r.text):
+                try:
+                    _cand = json.loads(_src).get("chat_id")
+                    if _cand:
+                        _chat_id = str(_cand)
+                        break
+                except Exception:
+                    m = _re_id.search(r"[?&]chatId=([A-Za-z0-9_-]+)", str(_src) or "")
+                    if m:
+                        _chat_id = m.group(1)
+                        break
+                    m = _re_id.search(r"[?&]chat_id=([A-Za-z0-9_-]+)", str(_src) or "")
+                    if m:
+                        _chat_id = m.group(1)
+                        break
+                    m = _re_id.search(r"/chat/([A-Za-z0-9_-]+)", str(_src) or "")
+                    if m:
+                        _chat_id = m.group(1)
+                        break
             follow_text, follow_err = run_followup(
                 provider_key, r.text, self.headers,
                 self.raw.get("cookie_header", ""), timeout=90.0,
