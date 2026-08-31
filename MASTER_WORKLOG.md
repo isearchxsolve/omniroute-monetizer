@@ -11141,3 +11141,17 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 - Balanced pool answered all 9 non-admitted hosts (proving the merged gateway is alive and spreading load), but those are recorded as pool_alive_balanced_only, not host capacity.
 
 **Honest count.** Firmly admitted chat hosts (pinned exact + attribution): 1 (cohere). Capable-but-cooling: 4. Adapter-defect (RCA): 4. OmniRoute-native chat: BLOCKED (:20128 down). No self-certification; primary orchestrator to verify. `qfailure` untouched.
+
+### [2026-08-31 08:40] #1408 - GATE 3 (rigorous, PARTIAL/BLOCKED): seat-pool video submit->poll->download proof
+
+**Method.** `gate3_video_proof.py` submits ONE video job (model=video/<host>/auto) via POST :8190/v1/chat/completions, polls GET :8190/v1/video/jobs/{id} until terminal, then downloads the returned video.url in pure Python and verifies real downloadable media (Content-Type video/* or binary magic + bytes>0). No browser, no service restart.
+
+**Seat-pool attempts (both dispatched, attributed, but no media delivered).**
+- rtst.ai: submit queued -> running -> FAILED, provider=rtst.ai, session=session_rtst_ai_niloy, video_url=null. No media.
+- aistudio.google.com (Google Flow): submit -> running -> FAILED, provider=aistudio.google.com, session=session_aistudio_veo, video_url=null. No media.
+
+**Honest classification (Chrome Gap Doctrine / Law 5).** Neither failure is evidence of provider death. The job WAS accepted, a seat WAS reserved, and provider/session WERE attributed -- so the seat and provider are reachable. What failed is the seat adapter''s video-render capture (the site''s generate->poll->result media URL flow is not yet reconstructed in the adapter). This is a FIXABLE send-time/capture gap (class (a)), requiring replay-adapter RCA, NOT a declaration that rtst.ai / Flow are dead. No live-Chrome reproduction was performed (would require the operator''s dedicated seat in a real browser); the failure is localized to the adapter layer.
+
+**OmniRoute-native video harness.** The second required video path (OmniRoute-native providers) proxies through :20128, which is currently UNRESPONSIVE (see #1407). It cannot be proven this session and is reported as BLOCKED, not dead.
+
+**Verdict.** Video media delivery is NOT yet proven this session: 0/2 seat-pool hosts returned downloadable media (adapter capture defect), OmniRoute-native blocked by :20128. This is an explicit, auditable gap -- not a false green. RCA on the rtst.ai / Flow video adapters (reconstruct generate->poll->media-URL capture) and :20128 recovery are prerequisites for a complete Gate 3. `qfailure` untouched.
