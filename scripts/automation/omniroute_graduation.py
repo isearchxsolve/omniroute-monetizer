@@ -75,6 +75,39 @@ def no_proxy_session() -> requests.Session:
     return session
 
 
+class GlobalRequestGate:
+    """Bound live load sent to the single OmniRoute process.
+
+    Provider lanes preserve breadth, but OmniRoute is still one local gateway.  Without a
+    second global bound, ten provider lanes can simultaneously occupy the gateway with slow
+    upstream work.  The gate is deliberately process-local and does not change provider
+    credentials or service state.
+    """
+
+    def __init__(self, max_inflight: int = 2, min_interval: float = 1.0) -> None:
+        self._semaphore = threading.BoundedSemaphore(max(1, int(max_inflight)))
+        self._interval = max(0.0, float(min_interval))
+        self._lock = threading.Lock()
+        self._next_start = 0.0
+
+    def __enter__(self) -> "GlobalRequestGate":
+        self._semaphore.acquire()
+        try:
+            with self._lock:
+                now = time.monotonic()
+                delay = max(0.0, self._next_start - now)
+                self._next_start = max(now, self._next_start) + self._interval
+            if delay:
+                time.sleep(delay)
+            return self
+        except BaseException:
+            self._semaphore.release()
+            raise
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        self._semaphore.release()
+
+
 def assistant_text(body: Any, raw: str = "") -> str:
     text = extract_chat_content(body, raw)
     return str(text or "").strip()
@@ -238,7 +271,8 @@ def build_plan(*, include_management: bool = True) -> dict[str, Any]:
 
 
 def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float,
-                 lanes: int = 10, resume: bool = True) -> dict[str, Any]:
+                 lanes: int = 2, max_inflight: int = 2,
+                 min_interval: float = 1.0, resume: bool = True) -> dict[str, Any]:
     prior_payload = read_json(RUN, {}) if resume else {}
     prior_rows = prior_payload.get("results", []) if isinstance(prior_payload, dict) else []
     prior = {(str(r.get("provider")), str(r.get("model"))): r for r in prior_rows
@@ -248,6 +282,7 @@ def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float,
     for row in plan.get("routes", []):
         by_provider[str(row["provider"])].append(row)
     write_lock = threading.Lock()
+    request_gate = GlobalRequestGate(max_inflight=max_inflight, min_interval=min_interval)
 
     def record(result: dict[str, Any]) -> None:
         with write_lock:
@@ -266,11 +301,13 @@ def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float,
             if old and old.get("directProof") not in {"TRANSPORT", "ERROR"}:
                 lane_results.append(old)
                 continue
-            result = direct_probe(session, route, timeout)
+            with request_gate:
+                result = direct_probe(session, route, timeout)
             if result["directProof"] == "RATE":
                 strikes += 1
                 time.sleep(min(30, strikes * 5))
-                result = direct_probe(session, route, timeout)
+                with request_gate:
+                    result = direct_probe(session, route, timeout)
             elif result["directProof"] == "DIRECT_LAW3_OK":
                 strikes = 0
             lane_results.append(result)
@@ -344,8 +381,12 @@ def main() -> int:
                     help="required for native video MP4 generation")
     ap.add_argument("--timeout", type=float, default=45, help="one chat route request timeout")
     ap.add_argument("--consumer-timeout", type=float, default=90, help="one final :8190 request timeout")
-    ap.add_argument("--lanes", type=int, default=10,
-                    help="providers probed concurrently; each provider remains one-request-at-a-time")
+    ap.add_argument("--lanes", type=int, default=2,
+                    help="provider lanes (default 2); each provider remains one-request-at-a-time")
+    ap.add_argument("--max-inflight", type=int, default=2,
+                    help="global concurrent requests into OmniRoute (default 2)")
+    ap.add_argument("--min-interval", type=float, default=1.0,
+                    help="minimum global spacing between OmniRoute request starts in seconds")
     ap.add_argument("--fresh", action="store_true",
                     help="ignore an interrupted omniroute_graduation_run.json; default resumes terminal route evidence")
     ap.add_argument("--video-timeout", type=int, default=900, help="one native video request timeout")
@@ -371,7 +412,8 @@ def main() -> int:
         print(f"plan={STATE / 'omniroute_graduation_plan.json'} providers={len(plan['providers'])} routes={len(plan['routes'])}")
         return 0
 
-    chat = run_chat_e2e(plan, args.timeout, args.consumer_timeout, args.lanes, resume=not args.fresh)
+    chat = run_chat_e2e(plan, args.timeout, args.consumer_timeout, args.lanes,
+                        args.max_inflight, args.min_interval, resume=not args.fresh)
     atomic_json(RUN, {"schemaVersion": 1, "generatedAt": now(), "endpoint": OMNI,
                       "consumerContract": CONSUMER, "chat": chat})
     video = run_video_e2e(args.confirm_video_spend, args.video_timeout, args.max_video_routes)

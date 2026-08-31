@@ -11589,6 +11589,16 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Operational conclusion.** Do not rerun the 9,390-route production sweep while `/v1/models` is timing out. Do not use the stale model cache as a fallback and do not restart OmniRoute from this repo. The master is correctly fail-closed, but its default workload is too large for the observed service behavior. A safe next implementation unit is a staged graduation protocol: a fast catalog/HTTP readiness gate, bounded provider/model-family batches, a global concurrency and rate budget, checkpointed cooldown between batches, and admission only after direct plus pinned `:8190` proof. The server owner must separately inspect the 3.9 GiB process and recover the service through the approved owner/recovery chain before any new live probe.
 
+### [2026-09-01 01:16] #1440 - Add global OmniRoute load gate before next live attempt
+
+**Implementation decision.** The next live attempt must not send ten simultaneous requests into one local OmniRoute process. The existing provider-lane rule limited each provider to one request, but it did not limit aggregate gateway pressure and did not space request starts. That was insufficient because the catalog-wide plan contains 9,390 real chat probes.
+
+**Change.** Added `GlobalRequestGate` to `scripts/automation/omniroute_graduation.py`. It bounds aggregate in-flight gateway requests (default two) and spaces request starts (default one second), while preserving one-request-at-a-time behavior inside each provider lane. Lowered the default provider lane count from ten to two. The gate applies to normal probes and the bounded retry after a rate response. Existing checkpoint/resume, exact computed proof, and fail-closed catalog behavior are unchanged. The operator may override the bounds explicitly, but the safe defaults now apply to the unchanged production command.
+
+**Validation.** Added an offline gate regression test. `python -m py_compile scripts\\automation\\omniroute_graduation.py scripts\\automation\\test_omniroute_graduation.py` passed. `python scripts\\automation\\test_omniroute_graduation.py` passed 4/4, including the request-spacing assertion. `git diff --check` passed. No provider inference, video generation, Chrome/CDP action, service restart, credential mutation, or admission write occurred during this change.
+
+**Boundary.** This reduces client-generated load; it does not repair the currently unhealthy OmniRoute process. The full E2E command remains blocked until the no-proxy `GET http://127.0.0.1:20128/v1/models` health gate returns a valid catalog. After recovery, the first live run should use explicit diagnostic caps and one lane before the full catalog sweep is allowed to proceed.
+
 ### [2026-09-01 02:20] #1438 - Cause D closed: capture staging 4th composer strategy (JS direct element targeting)
 
 **Continuation context.** Resumed from worklog #1427 (memory key continuation.gapclose_1427, commit db05797) and e2e run #1 verdict #1426: 13 NOT_ADMITTED causes, no-skip mandate, work order = D (capture staging) -> B (envelope unwraps) -> A (websocket replay) -> C (send-time auth) -> 9224 re-pass -> wedged-seat recovery -> spend-gated video. This unit closes the FIRST item only.

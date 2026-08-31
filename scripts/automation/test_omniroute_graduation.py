@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import pathlib
 import tempfile
+import time
 from unittest.mock import patch
 
 import omniroute_graduation as master
@@ -47,6 +48,15 @@ def test_unadmitted_omni_routes_are_not_admitted_by_file_scope() -> None:
             data = master.read_json(path, {})
             models = {e["model"] for e in data["entries"]}
             assert models == {"openai/gpt-5"}
+
+
+def test_global_request_gate_spaces_gateway_work() -> None:
+    gate = master.GlobalRequestGate(max_inflight=1, min_interval=0.05)
+    started = []
+    for _ in range(2):
+        with gate:
+            started.append(time.monotonic())
+    assert started[1] - started[0] >= 0.045
 
 
 def main() -> None:
