@@ -11607,6 +11607,16 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Decision.** The bounded pilot was intentionally not launched. Starting it while the catalog and consumer HTTP gates are both unresponsive would violate the fail-closed graduation contract and could increase the existing OmniRoute memory/handler failure. The next executable action remains recovery through the approved OmniRoute owner path, followed by repeating the exact two-endpoint health check. Only a valid non-empty `:20128/v1/models` response and a responsive `:8190/v1/models` response authorize the pilot.
 
+### [2026-09-01 04:24] #1442 - Exact OmniRoute service owner and 4-GiB memory ceiling identified
+
+**Operator instruction.** The operator confirmed that no graduation terminal remains and asked the agent to perform every safe recovery step, escalating only if elevation is required.
+
+**Ownership discovery.** Read-only Windows inspection identified the `OmniRoute` Windows service as the actual owner of port `:20128`, not a repository scheduled task. It is an auto-start `WIN32_OWN_PROCESS` service running as `LocalSystem`, managed by NSSM (`PID 1240`) with two Node children (`PID 11732` then listener `PID 19128`). The service is `RUNNING`, `STOPPABLE`, has no declared dependencies, and no OmniRoute graduation process is active. The repository supervisor and keepalive scheduled tasks correctly do not own or restart this service.
+
+**Root cause confirmed.** NSSM configuration reports the application as `C:\\Users\\Admin\\AppData\\Local\\hermes\\node\\node.exe`, application directory `C:\\Users\\Admin\\AppData\\Local\\hermes\\node\\node_modules\\omniroute`, with parameters `--max-old-space-size=4096 ...omniroute.mjs`. This directly matches the observed approximately 3.9–4.2 GiB OmniRoute working set at which `GET /v1/models` ceased responding. The immediate failure is therefore Node old-space exhaustion/saturation at the configured 4-GiB ceiling, not the stale model cache, the client proxy, or a missing listener.
+
+**Elevation boundary.** The current agent shell is not elevated (`IsAdministrator=False`). A controlled `Restart-Service -Name OmniRoute` must be issued from an Administrator PowerShell session because the service runs as `LocalSystem`. Do not use `taskkill`, `Stop-Process`, raw NSSM controls, repository restart scripts, or any data/config cleanup. An elevated Windows service restart is the owner-consistent recovery action; after it returns, rerun the no-proxy `:20128` and `:8190` health gates before the capped pilot. No restart was attempted from the non-elevated agent shell.
+
 ### [2026-09-01 02:20] #1438 - Cause D closed: capture staging 4th composer strategy (JS direct element targeting)
 
 **Continuation context.** Resumed from worklog #1427 (memory key continuation.gapclose_1427, commit db05797) and e2e run #1 verdict #1426: 13 NOT_ADMITTED causes, no-skip mandate, work order = D (capture staging) -> B (envelope unwraps) -> A (websocket replay) -> C (send-time auth) -> 9224 re-pass -> wedged-seat recovery -> spend-gated video. This unit closes the FIRST item only.
