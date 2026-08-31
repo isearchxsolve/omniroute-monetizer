@@ -11696,3 +11696,13 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Unblocked by this.** (1) The 9224 SSO re-pass (poe/deepinfra/puter) from #1427; (2) copilot fresh sniff now possible on any seat with a copilot tab (9223 already holds three); (3) sambanova/gemini re-auth surfaces; (4) the video lane's seat prerequisites.
 
 **Boundaries.** Only seat Chrome processes were killed and only by the task-owned relaunch chain; 9223 untouched throughout (its 38-tab roster is the working chat surface). No provider requests were sent in this unit; no admissions; no captures.
+
+### [2026-09-01 04:00] #1444 - 9224-chat-roster reality + poe/deepinfra SSO re-pass EXISTING_ACCOUNT; master e2e-chat run 2 launched in background
+
+**SSO re-pass (the #1427 item).** Post-recovery 9224 holds only its two registered video tabs - the task-owned relaunch reopens registered video destinations only (known #1176 behavior), so 9224 has no chat roster to drive ("plan: 0 hosts"). The poe/deepinfra/puter tabs live on 9223 (niloy seat). Ran the bounded exact-host passes on the seat that actually holds the tabs: poe.com -> EXISTING_ACCOUNT, deepinfra.com -> EXISTING_ACCOUNT (both signed in; the run-1 SSO_INITIATED gap is resolved by evidence). puter.ai -> no plan row this run (readiness session_only, tab not present as a signed-out surface - nothing to drive, honestly empty).
+
+**Poe capture attempt.** Both the direct sweep and --capture-chat refused: manifest class SKIP_NOT_AUTHENTICATED (readiness "visited" is stale vs the blueprint's fresh EXISTING_ACCOUNT). The sanctioned resolution is the master lane's post-SSO harness navigation + readiness refresh (#1432), then capture - not a manual bypass of the manifest gate.
+
+**Run 2 of the master chat lane launched.** `fleet_graduation.py --apply --e2e-chat --capture-wait 30` running in the background (logs/e2e_chat_run2.log). Early results from :9223 SSO rows: v2.auth.mistral.ai EXISTING_ACCOUNT; monica.im, auth0.sambanova.ai, auth.meta.com, www.blackbox.ai, app.chathub.gg -> LOGIN_REQUIRED (reported, one pass each, no hammering). The lane continues: remaining SSO rows, then per-profile harness navigation/readiness refresh, then serial captures with Law-3 per-file verification and exact-file admission, durable progress after every unit.
+
+**Boundaries.** All driving through the sanctioned master + blueprint + sweep guards; walls stand down; no passwords/OTP/captcha; 9223 healthy roster untouched otherwise.
