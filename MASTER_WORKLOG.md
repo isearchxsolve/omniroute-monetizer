@@ -11267,6 +11267,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Validation.** Confirmed the file exists, is UTF-8 readable, contains the terminal `CAPACITY_ADMITTED` state, the canonical endpoint, and the safety-wall rule. `git diff --check` passed for the component. This component is ready to commit before the next Kilo control is added.
 
+### [2026-08-31 13:47] #1419 - Kilo hardening: verifier and release-gate modes added
+
+**Component implemented.** Added project-level `.kilocodemodes` with two separate modes: `verify` (read and command access, no edit group) and `release-gate` (read-only, human-confirmed). The verifier is instructed to independently re-probe claims, report fresh timestamps and exact endpoints, distinguish both harnesses/modalities, and only accept provider/session-attributed pure-Python evidence through canonical `:8190`. The release gate rejects worker prose, screenshots, inventory, stale reports, and worker-authored acceptance files as standalone proof.
+
+**Safety and scope.** Both modes prohibit live operator Chrome, credential handling, wall bypasses, service replacement, database mutation, and consumer-application changes. The definitions preserve the distinction between OmniRoute-native and seat-pool harnesses even though both are consumed through `http://127.0.0.1:8190/v1`.
+
+**Validation.** Parsed `.kilocodemodes` with PowerShell `ConvertFrom-Json`; it contains two modes, the verifier has no `edit` group, the release gate is read-only, and both role definitions contain the canonical endpoint. `git diff --check` passed for this component. No live runtime state was changed.
+
 ### [2026-08-31 09:20] #1411 - Gate 1 coverage confirmed: ALL seats consolidated in gate1_matrix.json
 
 Operator verification question: "did Gate 1 cover all seats?" Yes. `state/gate1_matrix.json` now contains every dedicated automation seat: providers/9222 (6), niloy/9223 (32), seat2/9224 (Google Flow EXISTING_ACCOUNT + rtst.ai VIDEO_SEAT_GATE3), seat3/9225 (same). seat2/seat3 held ONLY labs.google (Flow) and rtst.ai live surfaces -- no chat/AI signup candidates -- so Flow was resolved via the executor (EXISTING_ACCOUNT; artifacts signup_resolution_seat2/seat3_google_flow.json) and rtst.ai is correctly left to Gate 3 (video scope, not a Google-SSO chat signup). Total 42 rows: SIGNUP_COMPLETED=4, EXISTING_ACCOUNT=19, LOGIN_REQUIRED=16, SSO_INITIATED=1, VIDEO_SEAT_GATE3=2. No seat omitted.
