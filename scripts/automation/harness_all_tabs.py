@@ -119,6 +119,16 @@ SSO_SITES = {
     "SambaNova Cloud Chat", "DuckDuckGo AI Chat (duck.ai)", "Giz AI Chat",
     "Genspark AI", "Yuewen Chat", "Creen AI", "V0 by Vercel (v0.app)",
     "Groq Chat",
+    # Mandate 2026-08-31 (operator): every verified-Google-SSO site gets the
+    # bounded attempt. Evidence: monica /login "Log in with Google",
+    # mistral + perplexity + poe + chathub + together + deepinfra + cerebras
+    # + coral all expose Google auth surfaces (drives of 2026-08-31).
+    "Monica AI", "Mistral Le Chat", "Perplexity Free Web", "Poe",
+    "ChatHub Web", "DeepInfra Chat", "Together AI Chat",
+    "Cerebras Inference Chat", "Cohere Coral Web", "1min.AI",
+    "Aymo AI", "DeepSeek Chat", "Qwen Chat (Alibaba)", "Zhipu GLM Chat",
+    "HuggingChat", "Inner AI Web", "Felo AI Web", "You.com Chat",
+    "StepFun Web", "Pollinations AI Web", "ChatX",
 }
 
 # Read-only JS probes / one-click actions.  No typing, no form fills, no

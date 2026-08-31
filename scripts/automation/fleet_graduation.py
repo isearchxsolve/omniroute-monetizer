@@ -507,15 +507,21 @@ def e2e_chat_apply(sso_budget: float, capture_wait: float, limit: int) -> None:
     for seat in declared_fleet():
         port, profile = int(seat["port"]), str(seat["profile"])
         unit = {"profile": profile, "port": port, "sso": [], "captures": []}
-        # Plan gives current dedicated-seat hosts; only signed-out rows are driven.
+        # Plan gives current dedicated-seat hosts. Mandate (operator, 2026-08-31):
+        # every host gets its bounded SSO attempt unless the live probe
+        # positively says signed-in -- a probe ERROR (signedOut None, flaky
+        # hydration) must NEVER cause a silent skip. The state machine is
+        # probe-first: signed-in rows terminate as EXISTING_ACCOUNT without
+        # a single click, so driving them is safe and honest.
         subprocess.run([sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port", str(port)], cwd=ROOT, check=False)
         plan = read_json(STATE / f"fleet_blueprint_plan_{port}.json", {})
         for row in plan.get("hosts", []) if isinstance(plan, dict) else []:
-            if row.get("signedOut") is True and row.get("host"):
+            if row.get("host") and row.get("signedOut") is not False:
                 host = str(row["host"])
                 rc = subprocess.run([sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port", str(port),
                                      "--drive", "--host-exact", host, "--budget", str(sso_budget)], cwd=ROOT, check=False).returncode
-                unit["sso"].append({"host": host, "rc": rc})
+                unit["sso"].append({"host": host, "rc": rc,
+                                    "probe": str(row.get("signedOut"))})
         # The harness is the navigation + bounded-SSO layer for tabs that are
         # authenticated but not yet sitting on a capture surface.  Its default
         # post-apply readiness audit is load-bearing: without it a just-signed-
