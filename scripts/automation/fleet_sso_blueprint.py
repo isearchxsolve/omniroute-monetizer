@@ -414,14 +414,20 @@ def drive_host(port: int, url: str, tid_hint: str, budget: float = 240.0) -> dic
     return outcome
 
 
-def plan(port: int) -> tuple[list[dict], dict]:
-    """Ground truth only: live probes (freeze-wake aware), zero clicks."""
+def plan(port: int, include_video: bool = False) -> tuple[list[dict], dict]:
+    """Ground truth only: live probes (freeze-wake aware), zero clicks.
+
+    Video was historically omitted because the original blueprint was only an
+    SSO evidence worker.  The production master now explicitly requests it
+    before a spend-gated video capture, keeping the same bounded state machine
+    rather than inventing a second login path.
+    """
     owner = assert_automation_seat(port)
     seen, todo = set(), []
     for t in tab_targets(owner):
         u = t.get("url") or ""
         h = cdp._host(u)
-        if not h or h in seen or any(v in h for v in VIDEO_HOSTS):
+        if not h or h in seen or (not include_video and any(v in h for v in VIDEO_HOSTS)):
             continue
         seen.add(h)
         todo.append({"tid": t["id"], "host": h, "url": u[:120]})
@@ -457,11 +463,13 @@ def main() -> int:
                     help="drive exactly one normalized provider host (master-coordinator use)")
     ap.add_argument("--budget", type=float, default=240.0,
                     help="wall-clock seconds per host drive")
+    ap.add_argument("--include-video", action="store_true",
+                    help="include video-provider tabs for bounded exact-host SSO recovery; master use only")
     args = ap.parse_args()
     if args.host and args.host_exact:
         ap.error("--host and --host-exact are mutually exclusive")
 
-    rows, meta = plan(args.port)
+    rows, meta = plan(args.port, include_video=args.include_video)
     plan_path = STATE / f"fleet_blueprint_plan_{args.port}.json"
     plan_path.write_text(json.dumps({"meta": meta, "hosts": rows}, indent=1),
                          encoding="utf-8")

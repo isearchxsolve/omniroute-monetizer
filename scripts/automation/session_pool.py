@@ -122,6 +122,15 @@ def _admitted_chat_session_keys() -> set[str]:
     except Exception:
         return set()
 
+
+def _admitted_video_session_keys() -> set[str]:
+    """Load exact-file video graduation admissions, failing closed on errors."""
+    try:
+        from pure_python_registry import admitted_video_session_keys
+        return admitted_video_session_keys(PURE_PYTHON_REGISTRY)
+    except Exception:
+        return set()
+
 # Markers of a reply that is not an answer at all. Anchored to the START of the text on purpose: a
 # legitimate answer may *contain* "<html" because the user asked about HTML, but only a page shell or
 # an unparsed stream *begins* that way. Anchoring keeps a real answer from being thrown away.
@@ -219,6 +228,16 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
     # An API-CREDENTIAL seat comes first: it carries a bearer token plus a documented contract, so it
     # has no recorded exchange to replay and never will. Dispatch on the declared `api.kind`, not on
     # the host string, so a second account on the same provider needs no new entry anywhere.
+    # A captured and explicitly graduated video job must use its recorded
+    # provider exchange in Python, even when an older seat metadata file also
+    # names a bridge-style API kind (notably Flow).  This precedes API-kind
+    # dispatch so :8190 never silently routes a supposedly pure-Python seat
+    # back through :8189 or a live Chrome tab.
+    if ((raw or {}).get("runtime") == "replay" and (raw or {}).get("recorded_job")
+            and not (raw or {}).get("recorded_exchange")):
+        from video_universal_replay import VideoUniversalSessionClient
+        return VideoUniversalSessionClient
+
     kind = ((raw or {}).get("api") or {}).get("kind")
     if kind == "rtst":
         from rtst_api_client import RtstApiClient
@@ -504,14 +523,16 @@ class PooledSession:
         self.last_error: Optional[str] = None
         self.verified_chat_hosts: set[str] = set()
         self.admitted_chat_session_keys: set[str] = set()
+        self.admitted_video_session_keys: set[str] = set()
 
     @property
     def dispatchable(self) -> bool:
         return bool((self.has_recording or self.has_api or self.has_chrome
                      or self.has_video_chrome) and self.client_cls
                     and not self.flagged_dead and not self.dead
-                    and (self.modality != "chat" or self.host in self.verified_chat_hosts
-                         or self.key in self.admitted_chat_session_keys))
+                    and ((self.modality == "chat" and
+                          (self.host in self.verified_chat_hosts or self.key in self.admitted_chat_session_keys))
+                         or (self.modality == "video" and self.key in self.admitted_video_session_keys)))
 
     def client(self):
         if self._client is None:
@@ -532,6 +553,7 @@ class SessionPool:
         self._host_locks: Dict[str, threading.Lock] = {}
         self.verified_chat_hosts = _verified_chat_hosts()
         self.admitted_chat_session_keys = _admitted_chat_session_keys()
+        self.admitted_video_session_keys = _admitted_video_session_keys()
         self.sessions: List[PooledSession] = []
         for f in sorted(glob.glob(str(secrets / "session_*.json"))):
             try:
@@ -542,6 +564,7 @@ class SessionPool:
         for s in self.sessions:
             s.verified_chat_hosts = self.verified_chat_hosts
             s.admitted_chat_session_keys = self.admitted_chat_session_keys
+            s.admitted_video_session_keys = self.admitted_video_session_keys
             s.last_used = float(st.get(s.key, 0.0))
         self.quarantined = _load_quarantine()
         if self.quarantined:
@@ -566,6 +589,7 @@ class SessionPool:
         with self._lock:
             self.verified_chat_hosts = _verified_chat_hosts()
             self.admitted_chat_session_keys = _admitted_chat_session_keys()
+            self.admitted_video_session_keys = _admitted_video_session_keys()
             on_disk: Dict[str, pathlib.Path] = {}
             for f in sorted(glob.glob(str(self.secrets / "session_*.json"))):
                 p = pathlib.Path(f)
@@ -586,6 +610,7 @@ class SessionPool:
                 if cur is not None and getattr(cur, "_file_mtime", None) == mtime:
                     cur.verified_chat_hosts = self.verified_chat_hosts
                     cur.admitted_chat_session_keys = self.admitted_chat_session_keys
+                    cur.admitted_video_session_keys = self.admitted_video_session_keys
                     sessions.append(cur)                       # untouched: keep object+state
                     continue
                 try:
@@ -605,6 +630,7 @@ class SessionPool:
                     added.append(key)
                 s.verified_chat_hosts = self.verified_chat_hosts
                 s.admitted_chat_session_keys = self.admitted_chat_session_keys
+                s.admitted_video_session_keys = self.admitted_video_session_keys
                 sessions.append(s)
             for key in existing:
                 if key not in on_disk:

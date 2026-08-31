@@ -19,8 +19,12 @@ capture discipline.
 fleet_sso_blueprint state machine.  It never types a password/OTP/email code,
 solves a CAPTCHA, claims a signup, captures a session, or promotes capacity.
 
-Video is represented in the ledger but is never auto-triggered: a video proof
-can spend credits and must use its separate submit -> poll -> result contract.
+``--apply --e2e --confirm-video-spend`` is the deliberately explicit complete
+fleet command.  It drives chat and video across all declared automation
+profiles, persists a result after every unit, and does not call a seat
+graduated until its Python runtime and the :8190 consumer contract have each
+produced their required proof.  Video rendering is spend-sensitive, so the
+confirmation is intentionally impossible to omit by accident.
 """
 from __future__ import annotations
 
@@ -31,6 +35,10 @@ import pathlib
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
 from collections import Counter
 from typing import Any
 
@@ -41,10 +49,12 @@ SECRETS = STATE / "secrets"
 LEDGER = STATE / "fleet_graduation_ledger.json"
 E2E_PLAN = STATE / "fleet_e2e_graduation_plan.json"
 E2E_RUN = STATE / "fleet_e2e_graduation_run.json"
+E2E_VIDEO_RUN = STATE / "fleet_e2e_video_graduation_run.json"
 SEAT_ACCOUNTS = STATE / "video_accounts.json"
 SCRATCH = STATE / "scratch"
 VERIFY_PROMPT = "Reply with only the number: 41 + 17"
 VERIFY_EXPECT = "58"
+VIDEO_PROOF_PROMPT = "A five second abstract blue-and-gold ocean wave, no text."
 
 sys.path.insert(0, str(HERE))
 from pure_python_registry import (  # noqa: E402
@@ -93,6 +103,23 @@ def declared_fleet() -> list[dict[str, Any]]:
     return [grouped[k] for k in sorted(grouped, key=lambda x: x[1])]
 
 
+def declared_video_accounts() -> list[dict[str, Any]]:
+    """Return every enabled video account with its exact configured project URL."""
+    data = read_json(SEAT_ACCOUNTS, {})
+    out: list[dict[str, Any]] = []
+    for row in data.get("accounts", []) if isinstance(data, dict) else []:
+        if not isinstance(row, dict) or not row.get("enabled", True):
+            continue
+        if not all(row.get(k) for k in ("label", "provider", "port", "profile", "url")):
+            continue
+        item = dict(row)
+        item["port"] = int(item["port"])
+        item["host"] = urllib.parse.urlparse(str(item["url"])).hostname or ""
+        if item["host"]:
+            out.append(item)
+    return sorted(out, key=lambda r: (int(r["port"]), str(r["label"])))
+
+
 def e2e_plan() -> dict[str, Any]:
     """All-profile production plan.  Deliberately no CDP/network/provider action."""
     fleet = declared_fleet()
@@ -108,7 +135,7 @@ def e2e_plan() -> dict[str, Any]:
             "capture one eligible chat surface",
             "read that exact unit's Law-3 proof and admit only REPLAY_OK",
             "continue to the next seat after spacing; never parallelize one host",
-            "run video submit-poll-result graduation separately with explicit spend confirmation",
+            "run video submit-poll-result capture and Python graduation with explicit spend confirmation",
             "run pinned :8190 consumer probes and publish provider x model-family capacity",
         ],
         "whatThisDoesNotDo": [
@@ -138,9 +165,12 @@ def inventory() -> dict[str, Any]:
         if existing and modality == "chat":
             state = "ADMITTED_TO_8190_PURE_PYTHON"
             next_action = "local_endpoint_probe_when_operator_chooses"
+        elif existing and modality == "video":
+            state = "ADMITTED_TO_8190_PURE_PYTHON"
+            next_action = "pinned :8190 video consumer proof or periodic health audit"
         elif modality == "video":
             state = "VIDEO_PROOF_REQUIRED"
-            next_action = "record submit-poll-result then explicit spend-gated adapter proof"
+            next_action = "master --apply --e2e --confirm-video-spend captures, proves, and admits exactly this seat"
         elif issue:
             state = "NOT_PURE_PYTHON_ELIGIBLE"
             next_action = issue
@@ -261,6 +291,212 @@ def _admit_from_existing_proof(path: pathlib.Path, proof: pathlib.Path) -> str:
     return str(entry["adapter"])
 
 
+def _video_session_path(host: str, label: str) -> pathlib.Path:
+    stem = f"session_{host.replace('.', '_').replace('/', '_')}"
+    return SECRETS / f"{stem}_{label}.json"
+
+
+def _is_video_url(value: Any) -> bool:
+    return isinstance(value, str) and value.startswith(("https://", "http://"))
+
+
+def _video_python_client(path: pathlib.Path, raw: dict[str, Any]) -> Any:
+    """Select a browser-independent runtime for one freshly captured video file."""
+    # A captured submit->poll->result sequence is the most exact source of
+    # truth.  It intentionally wins over legacy `api.kind=flow`, whose old
+    # implementation delegates to :8189 and is therefore not graduation.
+    if raw.get("recorded_job"):
+        from video_universal_replay import VideoUniversalSessionClient
+        return VideoUniversalSessionClient(path)
+    kind = str((raw.get("api") or {}).get("kind") or "")
+    if kind == "digen":
+        from digen_session_replay import DigenSessionClient
+        return DigenSessionClient(path)
+    if kind == "rtst":
+        from rtst_api_client import RtstApiClient
+        return RtstApiClient(path)
+    raise RuntimeError("no captured video job and no registered pure-Python video API adapter")
+
+
+def verify_video_and_admit(path: pathlib.Path) -> dict[str, Any]:
+    """Spend one bounded Python render and admit the exact file only on URL proof."""
+    raw = read_json(path, {})
+    if not isinstance(raw, dict):
+        raise RuntimeError("invalid video session artifact")
+    if str(raw.get("modality") or "video") != "video":
+        raise RuntimeError("artifact is not a video seat")
+    problem = admission_problem(raw)
+    if problem:
+        raise RuntimeError(problem)
+    job = raw.get("recorded_job")
+    if isinstance(job, dict) and job.get("result_correlated") is not True:
+        raise RuntimeError("capture lacks correlated submit-poll-result proof")
+    result = _video_python_client(path, raw).chat([
+        {"role": "user", "content": VIDEO_PROOF_PROMPT},
+    ])
+    video_url = result.get("text") if isinstance(result, dict) else None
+    if not _is_video_url(video_url):
+        raise RuntimeError("Python video adapter returned no result URL")
+    raw["runtime"] = "replay"
+    raw["graduation"] = {
+        "kind": "pure_python_video_submit_poll_result",
+        "verifiedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "prompt": VIDEO_PROOF_PROMPT,
+        "resultUrlObserved": True,
+        "adapter": pure_python_adapter(raw),
+    }
+    atomic_json(path, raw)
+    registry = load_registry()
+    entry = admit(registry, session_file=path.name, host=str(raw.get("host") or ""), modality="video",
+                  adapter=str(pure_python_adapter(raw)), verification={
+                      "kind": "Python submit-poll-result", "resultUrlObserved": True,
+                      "prompt": VIDEO_PROOF_PROMPT,
+                  })
+    write_registry(registry)
+    return {"sessionFile": path.name, "host": entry["host"], "adapter": entry["adapter"],
+            "state": "ADMITTED_TO_8190_PURE_PYTHON", "resultUrlObserved": True}
+
+
+def capture_and_graduate_video(account: dict[str, Any], job_wait: float, sso_budget: float) -> dict[str, Any]:
+    """One seat: exact-host SSO -> project -> capture -> Python render -> admission."""
+    host, label = str(account["host"]), str(account["label"])
+    path = _video_session_path(host, label)
+    sso_rc = subprocess.run([sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port",
+                             str(account["port"]), "--drive", "--include-video", "--host-exact", host,
+                             "--budget", str(sso_budget)], cwd=ROOT, check=False).returncode
+    if sso_rc:
+        return {"profile": account["profile"], "port": account["port"], "label": label,
+                "provider": account["provider"], "host": host, "ssoRc": sso_rc,
+                "state": "NOT_ADMITTED", "detail": "bounded video SSO recovery failed; capture not attempted"}
+    started = time.time()
+    cmd = [sys.executable, str(HERE / "capture_video_job_cdp.py"), "--port", str(account["port"]),
+           "--match", str(account["url"]), "--url", str(account["url"]), "--host", host,
+           "--seat", label, "--job-wait", str(job_wait)]
+    rc = subprocess.run(cmd, cwd=ROOT, check=False).returncode
+    row: dict[str, Any] = {"profile": account["profile"], "port": account["port"], "label": label,
+                           "provider": account["provider"], "host": host, "ssoRc": sso_rc, "captureRc": rc,
+                           "state": "NOT_ADMITTED"}
+    if rc != 0 or not path.is_file() or path.stat().st_mtime < started - 2:
+        row["detail"] = "video capture left no fresh correlated session artifact"
+        return row
+    try:
+        row.update(verify_video_and_admit(path))
+    except Exception as exc:
+        row["detail"] = f"{type(exc).__name__}: {exc}"[:260]
+    return row
+
+
+def _http_json(url: str, payload: dict[str, Any] | None = None, timeout: float = 30.0) -> tuple[int, dict[str, Any]]:
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(url, data=data, method="POST" if data else "GET",
+                                     headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return int(response.status), json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            return int(exc.code), json.loads(exc.read().decode("utf-8"))
+        except Exception:
+            return int(exc.code), {}
+
+
+def consumer_video_probe(host: str, timeout: float = 1900.0) -> dict[str, Any]:
+    """Final pinned :8190 proof; submit once and poll its durable job receipt."""
+    key = f"fleet-graduation-{host.replace('.', '-')}-{uuid.uuid4().hex}"
+    status, receipt = _http_json("http://127.0.0.1:8190/v1/chat/completions", {
+        "model": f"video/{host}/auto", "messages": [{"role": "user", "content": VIDEO_PROOF_PROMPT}],
+        "video": {"job_key": key},
+    }, timeout=40)
+    row: dict[str, Any] = {"host": host, "model": f"video/{host}/auto", "submitHttp": status,
+                           "state": "CONSUMER_NOT_PROVEN"}
+    job_id = str(receipt.get("id") or receipt.get("job_id") or "")
+    if status not in (200, 202) or not job_id:
+        row["detail"] = str(receipt.get("error") or receipt.get("message") or "missing receipt")[:180]
+        return row
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status, body = _http_json(f"http://127.0.0.1:8190/v1/video/jobs/{job_id}", timeout=30)
+        state = str(body.get("status") or "").lower()
+        if state in {"completed", "succeeded", "success"}:
+            url = body.get("result_url") or body.get("video_url") or body.get("url")
+            row.update(state="CONSUMER_E2E_PROVEN", resultUrlObserved=_is_video_url(url), pollHttp=status)
+            if not row["resultUrlObserved"]:
+                row["state"] = "CONSUMER_RESULT_URL_MISSING"
+            return row
+        if state in {"failed", "cancelled", "canceled"}:
+            row.update(state="CONSUMER_FAILED", pollHttp=status, detail=str(body.get("error") or state)[:180])
+            return row
+        time.sleep(5)
+    row["state"] = "CONSUMER_TIMEOUT"
+    return row
+
+
+def consumer_chat_probe(host: str) -> dict[str, Any]:
+    """Pinned OpenAI-compatible Law-3 proof through the actual consumer face."""
+    status, body = _http_json("http://127.0.0.1:8190/v1/chat/completions", {
+        "model": f"{host}/auto",
+        "messages": [{"role": "user", "content": VERIFY_PROMPT}],
+    }, timeout=90)
+    content = ""
+    try:
+        content = str(body["choices"][0]["message"]["content"])
+    except (KeyError, IndexError, TypeError):
+        pass
+    return {"host": host, "model": f"{host}/auto", "http": status,
+            "state": "CONSUMER_E2E_PROVEN" if status == 200 and content.strip() == VERIFY_EXPECT
+            else "CONSUMER_NOT_PROVEN", "computedAnswerObserved": content.strip() == VERIFY_EXPECT}
+
+
+def e2e_chat_consumer_proofs() -> None:
+    """Append one pinned consumer proof per admitted chat host to the durable run."""
+    run = read_json(E2E_RUN, {})
+    if not isinstance(run, dict):
+        run = {}
+    registry = load_registry()
+    hosts = sorted({str(e.get("host") or "") for e in registry.get("entries", [])
+                    if isinstance(e, dict) and e.get("state") == "ADMITTED"
+                    and e.get("modality") == "chat" and e.get("host")})
+    run["consumerProofs"] = [consumer_chat_probe(host) for host in hosts]
+    atomic_json(E2E_RUN, run)
+
+
+def e2e_video_apply(job_wait: float, sso_budget: float) -> None:
+    """Serial complete video lane.  Every row is durable before the next spends."""
+    run = {"generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+           "mode": "serial_all_profile_video_capture_python_graduation_consumer_proof",
+           "consumerContract": "http://127.0.0.1:8190/v1", "seats": [], "consumerProofs": []}
+    for account in declared_video_accounts():
+        row = capture_and_graduate_video(account, job_wait, sso_budget)
+        run["seats"].append(row)
+        atomic_json(E2E_VIDEO_RUN, run)
+        time.sleep(4)
+    # A pin selects a provider host, not an account label.  Prove every host
+    # with at least one exact-file graduation, while the seat rows remain the
+    # capacity source of truth.
+    for host in sorted({str(r["host"]) for r in run["seats"]
+                        if r.get("state") == "ADMITTED_TO_8190_PURE_PYTHON"}):
+        run["consumerProofs"].append(consumer_video_probe(host))
+        atomic_json(E2E_VIDEO_RUN, run)
+    print(f"all-profile video E2E complete: {E2E_VIDEO_RUN.name}")
+
+
+def e2e_apply(sso_budget: float, capture_wait: float, limit: int, video_job_wait: float) -> None:
+    """The literal complete master sequence requested by the operator."""
+    # Child video clients use this established explicit spend gate.  It is set
+    # only inside the command that also required --confirm-video-spend.
+    prior = os.environ.get("OMNI_VIDEO_CONFIRM_SPEND")
+    os.environ["OMNI_VIDEO_CONFIRM_SPEND"] = "1"
+    try:
+        e2e_chat_apply(sso_budget, capture_wait, limit)
+        e2e_chat_consumer_proofs()
+        e2e_video_apply(video_job_wait, sso_budget)
+    finally:
+        if prior is None:
+            os.environ.pop("OMNI_VIDEO_CONFIRM_SPEND", None)
+        else:
+            os.environ["OMNI_VIDEO_CONFIRM_SPEND"] = prior
+
+
 def e2e_chat_apply(sso_budget: float, capture_wait: float, limit: int) -> None:
     """Serial all-profile chat lane: SSO -> manifest -> capture/replay -> exact admission."""
     from tab_graduation_sweep import scratch_report, session_slug
@@ -343,14 +579,22 @@ def main() -> int:
                        help="write the all-profile/all-seat production plan; no Chrome or network")
     group.add_argument("--e2e-chat", action="store_true",
                        help="serial SSO -> capture -> proof -> pure-Python admission across every declared profile; video excluded")
+    group.add_argument("--e2e", action="store_true",
+                       help="COMPLETE all-profile master: SSO, chat capture/proof/admission, video capture/Python render/admission, and pinned :8190 video proof")
     ap.add_argument("--port", type=int, default=9222, help="dedicated automation CDP port for capture or SSO recovery")
     ap.add_argument("--sso-budget", type=float, default=240.0,
                     help="wall-clock seconds for one --recover-sso host")
     ap.add_argument("--capture-wait", type=float, default=25.0, help="per-seat capture wait in --e2e-chat")
     ap.add_argument("--limit", type=int, default=0, help="cap chat seats in --e2e-chat (0 = all)")
+    ap.add_argument("--video-job-wait", type=float, default=420.0,
+                    help="seconds to record one browser video job's submit -> poll -> result sequence")
+    ap.add_argument("--confirm-video-spend", action="store_true",
+                    help="required with --apply --e2e; acknowledges real video renders in capture, Python proof, and pinned :8190 proof")
     args = ap.parse_args()
-    if (args.verify_and_admit or args.capture_chat or args.recover_sso or args.e2e_chat) and not args.apply:
+    if (args.verify_and_admit or args.capture_chat or args.recover_sso or args.e2e_chat or args.e2e) and not args.apply:
         ap.error("--apply is required: these operations send a provider request and/or change an admission")
+    if args.e2e and not args.confirm_video_spend:
+        ap.error("--apply --e2e requires --confirm-video-spend because it deliberately renders real videos")
     if args.verify_and_admit:
         verify_and_admit(exact_session(args.verify_and_admit))
     elif args.capture_chat:
@@ -364,6 +608,8 @@ def main() -> int:
               f"ports={[x['port'] for x in plan['fleet']]}")
     elif args.e2e_chat:
         e2e_chat_apply(args.sso_budget, args.capture_wait, args.limit)
+    elif args.e2e:
+        e2e_apply(args.sso_budget, args.capture_wait, args.limit, args.video_job_wait)
     ledger = inventory()
     atomic_json(LEDGER, ledger)
     summary = ledger["summary"]

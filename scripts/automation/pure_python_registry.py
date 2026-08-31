@@ -68,6 +68,22 @@ def admitted_chat_session_keys(path: pathlib.Path = REGISTRY) -> set[str]:
     return out
 
 
+def admitted_video_session_keys(path: pathlib.Path = REGISTRY) -> set[str]:
+    """Exact video files whose own Python submit/poll proof completed.
+
+    Video admission is deliberately not host scoped.  Four Flow accounts can
+    share ``labs.google`` while having independent balances and captures; a
+    proof for one must never make the other three routable.
+    """
+    out: set[str] = set()
+    for entry in load_registry(path)["entries"]:
+        filename = str(entry.get("sessionFile") or "")
+        if (entry.get("state") == "ADMITTED" and entry.get("modality") == "video"
+                and filename.startswith("session_") and filename.endswith(".json")):
+            out.add(pathlib.Path(filename).stem)
+    return out
+
+
 def transport_for(raw: dict[str, Any]) -> str:
     if raw.get("recorded_ws") or raw.get("transport") == "websocket":
         return "websocket"

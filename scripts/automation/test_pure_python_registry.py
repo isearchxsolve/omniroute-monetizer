@@ -5,7 +5,7 @@ import json
 import pathlib
 import tempfile
 
-from pure_python_registry import (admission_problem, admit, admitted_chat_session_keys,
+from pure_python_registry import (admission_problem, admit, admitted_chat_session_keys, admitted_video_session_keys,
                                   load_registry, pure_python_adapter, transport_for, write_registry)
 
 
@@ -39,6 +39,18 @@ def test_exact_file_admission_is_atomic_and_not_host_scoped() -> None:
         assert admitted_chat_session_keys(path) == {"session_same_host_a"}
         # Another account on the same host is not admitted by host coincidence.
         assert "session_same_host_b" not in admitted_chat_session_keys(path)
+
+
+def test_video_admission_is_also_exact_file_scoped() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        path = pathlib.Path(td) / "registry.json"
+        reg = load_registry(path)
+        admit(reg, session_file="session_labs_google_flow_a.json", host="labs.google", modality="video",
+              adapter="video_universal_replay.VideoUniversalSessionClient",
+              verification={"resultUrlObserved": True})
+        write_registry(reg, path)
+        assert admitted_video_session_keys(path) == {"session_labs_google_flow_a"}
+        assert "session_labs_google_flow_b" not in admitted_video_session_keys(path)
 
 
 def test_session_pool_accepts_exact_admission_without_host_gate() -> None:
