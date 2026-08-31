@@ -38,6 +38,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
+import websocket
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -46,6 +47,10 @@ from tab_graduation_sweep import (  # noqa: E402
     assert_automation_seat,
     build_manifest,
     tab_targets,
+)
+from signup_classify import (  # noqa: E402
+    classify_final_provider_state,
+    classify_pre_sso_surface,
 )
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -103,7 +108,8 @@ GOOGLE_CLICK_JS = (
     " const s = ((el.innerText || '') + ' ' + (el.getAttribute('aria-label') || '')"
     " + ' ' + (el.getAttribute('data-provider') || '') + ' '"
     " + (el.getAttribute('href') || '')).toLowerCase();"
-    " return s.includes('google') || s.includes('accounts.google.com'); });"
+    " return (/sign\\s*(in|up)|log\\s*in|continue\\s+with/i.test(s) &&"
+    " (s.includes('google') || s.includes('accounts.google.com'))); });"
     "if (!hit) return 'none';"
     "hit.click();"
     "return 'clicked:' + (hit.innerText || hit.getAttribute('aria-label') || '')"
@@ -128,7 +134,6 @@ class Tab:
                      if t.get("id") == target_id and t.get("webSocketDebuggerUrl")), None)
         if mine is None:
             raise SafetyRefusal(f"target {target_id[:12]} has no debugger url on :{port}")
-        import websocket  # websocket-client, already used across the automation suite
         self.ws = websocket.create_connection(mine["webSocketDebuggerUrl"],
                                               timeout=timeout, max_size=64 * 1024 * 1024)
         self._id = 0
@@ -185,6 +190,22 @@ def navigate_and_settle(owner, target_id: str, url: str, wait: float) -> str:
     return last
 
 
+def settle_only(owner, target_id: str, wait: float) -> str:
+    """Poll a target after an in-flight click without issuing Page.navigate."""
+    deadline = time.monotonic() + wait
+    last, stable = "", 0
+    while time.monotonic() < deadline:
+        time.sleep(1.5)
+        now = current_urls(owner).get(target_id, "")
+        if now == last and now:
+            stable += 1
+            if stable >= 2:
+                return now
+        else:
+            stable, last = 0, now
+    return last
+
+
 def probe(owner, target_id: str) -> dict:
     tab = Tab(owner.port, target_id)
     try:
@@ -220,25 +241,44 @@ def sso_pass(owner, target_id: str, url: str, wait: float) -> dict:
     if clicked == "none":
         return {"sso": "NO_GOOGLE_BUTTON", "finalUrl": final, "steps": steps}
 
-    final = navigate_and_settle(owner, target_id, final, wait)  # settle redirect
+    # The click may have started an in-flight redirect.  Never navigate the
+    # original URL again here: doing so aborts OAuth before it reaches Google.
+    final = settle_only(owner, target_id, wait)
     here = urllib.parse.urlsplit(final)
+    oauth_target = target_id
+    if "accounts.google.com" not in (here.hostname or ""):
+        deadline = time.monotonic() + wait
+        while time.monotonic() < deadline:
+            google = next((t for t in tab_targets(owner)
+                           if t.get("type") == "page" and
+                           "accounts.google.com" in (t.get("url") or "")), None)
+            if google:
+                oauth_target = google["id"]
+                final = settle_only(owner, oauth_target, wait)
+                here = urllib.parse.urlsplit(final)
+                break
+            time.sleep(1.5)
     if "accounts.google.com" in (here.hostname or ""):
         path = (here.path or "").lower()
         if "chooser" in path or "oauthchooseaccount" in path:
-            picked = evaluate_click(owner, target_id, CHOOSER_CLICK_JS)
+            picked = evaluate_click(owner, oauth_target, CHOOSER_CLICK_JS)
             steps.append(f"chooser {picked[:60]}")
             if picked == "none":
-                return {"sso": "CHOOSER_UNCLICKED", "finalUrl": final, "steps": steps}
-            final = navigate_and_settle(owner, target_id, final, wait)
+                return {"sso": "SSO_INITIATED", "finalUrl": final, "steps": steps,
+                        "detail": "Google chooser was present but no account was selected"}
+            final = settle_only(owner, oauth_target, wait)
         elif "signin" in path or "password" in path or "v3/signin" in path:
             # Password challenge: automation never types credentials.  The
             # profile's Google session should have prevented this; report it.
-            return {"sso": "PASSWORD_WALL", "finalUrl": final, "steps": steps}
+            return {"sso": "WALL", "finalUrl": final, "steps": steps,
+                    "detail": "Google interactive authentication/password wall"}
         elif "signin/consent" in path or "oauthapprove" in path:
-            return {"sso": "CONSENT_REQUIRED", "finalUrl": final, "steps": steps}
+            return {"sso": "WALL", "finalUrl": final, "steps": steps,
+                    "detail": "Google consent wall requires bounded human review"}
 
     state = probe(owner, target_id)
-    verdict = "still_signed_out" if state.get("signedOut") else "SIGNED_IN"
+    verdict = ("LOGIN_REQUIRED" if state.get("signedOut")
+               else "EXISTING_ACCOUNT")
     steps.append(f"verdict {verdict} @ {state.get('url', '')[:80]}")
     return {"sso": verdict, "finalUrl": state.get("url", final), "steps": steps}
 
@@ -289,19 +329,24 @@ def apply_plan(plan: list[dict], owner, wait: float) -> list[dict]:
     for row in plan:
         action, site = row["action"], row["site"]
         result = dict(row)
-        if action in ("VERIFY_OR_NAVIGATE", "NAVIGATE"):
-            now = current_urls(owner).get(row["targetId"], "")
-            if action == "VERIFY_OR_NAVIGATE" and now.startswith(row["to"]):
-                result.update(status="ALREADY_ON_SURFACE", finalUrl=now)
+        try:
+            if action in ("VERIFY_OR_NAVIGATE", "NAVIGATE"):
+                now = current_urls(owner).get(row["targetId"], "")
+                if action == "VERIFY_OR_NAVIGATE" and now.startswith(row["to"]):
+                    result.update(status="ALREADY_ON_SURFACE", finalUrl=now)
+                else:
+                    final = navigate_and_settle(owner, row["targetId"], row["to"], wait)
+                    result.update(status="NAVIGATED" if final.startswith(row["to"])
+                                  else "NAVIGATED_OFF_TARGET", finalUrl=final)
+            elif action == "SSO_ATTEMPT":
+                outcome = sso_pass(owner, row["targetId"], row["to"], wait)
+                result.update(status=outcome.pop("sso"), **outcome)
             else:
-                final = navigate_and_settle(owner, row["targetId"], row["to"], wait)
-                result.update(status="NAVIGATED" if final.startswith(row["to"])
-                              else "NAVIGATED_OFF_TARGET", finalUrl=final)
-        elif action == "SSO_ATTEMPT":
-            outcome = sso_pass(owner, row["targetId"], row["to"], wait)
-            result.update(status=f"SSO_{outcome.pop('sso')}", **outcome)
-        else:
-            result.update(status="REPORTED_ONLY")
+                result.update(status="REPORTED_ONLY")
+        except SafetyRefusal as exc:
+            result.update(status="TARGET_GONE", error=str(exc))
+        except Exception as exc:
+            result.update(status="ROW_ERROR", error=f"{type(exc).__name__}: {exc}")
         print(f"  {result['status']:24} {site[:30]}")
         results.append(result)
         time.sleep(1.0)

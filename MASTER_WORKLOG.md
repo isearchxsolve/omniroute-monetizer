@@ -11291,6 +11291,16 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Test repair and result.** Updated the focused classifier test to assert the new two-proof contract: account proof alone remains `SSO_PROVIDER_SESSION_OBSERVED`, while account proof plus provider-action proof yields `SIGNUP_COMPLETED`. `python -m py_compile` passed for the three signup modules and `python -m pytest -q scripts/automation/test_signup_classify.py` passed **7/7**. No signup runner was executed and no Chrome/provider/service state changed.
 
+### [2026-08-31 15:02] #1422 - harness_all_tabs OAuth flow and row-isolation repair
+
+**Review findings accepted.** The harness had been re-navigating the source tab after clicking Google, which could abort an in-flight OAuth redirect; it assumed OAuth stayed in the same tab; and one stale target could abort the full apply run before the report was written.
+
+**Changes.** Added `settle_only`, which polls target metadata without issuing `Page.navigate`, and used it after the Google-button and chooser clicks. Added OAuth target discovery across the CDP target list so a popup/new-tab Google flow can be followed. Moved the websocket import to module scope. Wrapped each apply-plan row in exception handling: stale debugger targets become `TARGET_GONE`, unexpected row failures become `ROW_ERROR`, and later rows continue. Tightened Google-button matching to require an authentication verb alongside Google text. Normalized the harness's SSO result labels for the currently represented states (`LOGIN_REQUIRED`, `EXISTING_ACCOUNT`, `WALL`, and `SSO_INITIATED`) rather than emitting the former `SIGNED_IN`/password/consent labels.
+
+**Boundary retained.** This remains a navigation and bounded-SSO harness only; it does not capture, replay, graduate, or claim capacity. No signup run was executed and no Chrome/provider/service state changed.
+
+**Validation.** `python -m py_compile scripts/automation/harness_all_tabs.py` passed. `python -m pytest -q scripts/automation/test_signup_classify.py` passed **7/7**. `git diff --check` reported no errors. Full shared-taxonomy evidence capture and redirect-host validation remain follow-up work.
+
 ### [2026-08-31 09:20] #1411 - Gate 1 coverage confirmed: ALL seats consolidated in gate1_matrix.json
 
 Operator verification question: "did Gate 1 cover all seats?" Yes. `state/gate1_matrix.json` now contains every dedicated automation seat: providers/9222 (6), niloy/9223 (32), seat2/9224 (Google Flow EXISTING_ACCOUNT + rtst.ai VIDEO_SEAT_GATE3), seat3/9225 (same). seat2/seat3 held ONLY labs.google (Flow) and rtst.ai live surfaces -- no chat/AI signup candidates -- so Flow was resolved via the executor (EXISTING_ACCOUNT; artifacts signup_resolution_seat2/seat3_google_flow.json) and rtst.ai is correctly left to Gate 3 (video scope, not a Google-SSO chat signup). Total 42 rows: SIGNUP_COMPLETED=4, EXISTING_ACCOUNT=19, LOGIN_REQUIRED=16, SSO_INITIATED=1, VIDEO_SEAT_GATE3=2. No seat omitted.
