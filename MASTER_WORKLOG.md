@@ -11599,6 +11599,14 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Boundary.** This reduces client-generated load; it does not repair the currently unhealthy OmniRoute process. The full E2E command remains blocked until the no-proxy `GET http://127.0.0.1:20128/v1/models` health gate returns a valid catalog. After recovery, the first live run should use explicit diagnostic caps and one lane before the full catalog sweep is allowed to proceed.
 
+### [2026-09-01 04:19] #1441 - Bounded pilot correctly withheld while both HTTP gates timed out
+
+**Operator instruction.** The operator approved proceeding with the next step after the global load gate was added. The prescribed sequence was health check first, then a one-model-per-provider/one-video-route pilot only if both final endpoints were responsive.
+
+**Health-gate result.** A no-proxy Python `requests.Session` tested `http://127.0.0.1:20128/v1/models` and `http://127.0.0.1:8190/v1/models`, each with a 2-second connect and 8-second read bound. Both requests returned `ReadTimeout` after approximately 8 seconds. No provider model probe, pinned consumer probe, native video generation, Chrome/CDP action, credential mutation, service restart, process kill, or admission write was performed.
+
+**Decision.** The bounded pilot was intentionally not launched. Starting it while the catalog and consumer HTTP gates are both unresponsive would violate the fail-closed graduation contract and could increase the existing OmniRoute memory/handler failure. The next executable action remains recovery through the approved OmniRoute owner path, followed by repeating the exact two-endpoint health check. Only a valid non-empty `:20128/v1/models` response and a responsive `:8190/v1/models` response authorize the pilot.
+
 ### [2026-09-01 02:20] #1438 - Cause D closed: capture staging 4th composer strategy (JS direct element targeting)
 
 **Continuation context.** Resumed from worklog #1427 (memory key continuation.gapclose_1427, commit db05797) and e2e run #1 verdict #1426: 13 NOT_ADMITTED causes, no-skip mandate, work order = D (capture staging) -> B (envelope unwraps) -> A (websocket replay) -> C (send-time auth) -> 9224 re-pass -> wedged-seat recovery -> spend-gated video. This unit closes the FIRST item only.
