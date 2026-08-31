@@ -11017,6 +11017,14 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Revised interpretation and resume point.** The outage likely interrupted the operator/agent interaction or prevented the newly recorded large mandate from being delivered and monitored, while the host-side services remained alive. GLM's accepted state therefore remains commit `295223a` (Hyperbolic signup retest complete). Resume the same GLM session from worklog #1398 and execute the large mandate; do not reset GLM, repeat Hyperbolic, restart services, or redo Profile 1. The final HY3 handoff remains gated on actual completion evidence. User-owned untracked `qfailure` remains untouched.
 
+### [2026-08-31 10:49] #1401 - Live GLM check: large mandate actively executing, gates 1 and 2 in progress
+
+**Live worker evidence.** At 10:48 local time GLM had created two new uncommitted executables: `scripts/automation/seat_signup_matrix.py` and `scripts/automation/chat_graduation_8190.py`; both passed Python compilation in the primary read-only check. A live PowerShell worker is sequentially invoking the signup matrix against niloy/9223 for Blackbox AI, MultipleChat, LMSYS Arena, Hugging Face, and ai-sdk.dev. The current child process is the bounded Blackbox candidate. This is an active signup-capable workflow, not the old readiness harness.
+
+**Gate 2 evidence produced.** `state/chat_graduation.json` was generated at 10:46 from fresh pure-Python requests through `http://127.0.0.1:8190/v1`. Three of eleven attempted hosts passed fresh computed-answer verification: `api.cohere.com`, `chat.qwen.ai`, and `claude.ai`. The remaining rows honestly record 429, 500, or timeout outcomes. This is useful live evidence but remains uncommitted and must still be reviewed for attribution/capacity semantics before final admission.
+
+**Current disposition.** GLM is **ACTIVE, NOT DONE**. Gate 1 onboarding is running; gate 2 has partial evidence; gates 3–5 and the final large-scope handoff are not yet complete. Do not reset or interrupt the worker and do not hand the task to HY3 yet. No Chrome or service action was performed by the primary monitor. User-owned untracked `qfailure` and GLM's two untracked in-progress scripts remain untouched by this commit.
+
 ### [2026-08-31 07:46] #1397 - Atomic niloy unit #1: Hyperbolic SSO signup resolved SIGNUP_COMPLETED (capability retest passed)
 
 **Unit contract (worklog #1394/#1396 retest gate).** One candidate, one executable, one terminal record. No harness_all_tabs.py, no capture sweep, no video/capacity/consumer work, no service touch, no operator Chrome.
