@@ -125,6 +125,7 @@ class WebSocketSessionClient:
         payloads: list = []
         append_texts: list = []
         acked_connected = False
+        last_text_at = time.monotonic()
         try:
             host = urllib.parse.urlparse(self.url).hostname or ""
             # Copilot handshake (two-way CDP sniff of the live page, 2026-08-30): after the send
@@ -136,6 +137,7 @@ class WebSocketSessionClient:
             # sequenceAck on a server that never asked for it is a protocol violation we must
             # not introduce for the other ws seats.
             copilot = host.endswith("copilot.microsoft.com")
+            grok = host.endswith("grok.com")
             if copilot:
                 # The send frame carries a conversationId the CLIENT mints per new chat
                 # (Chrome's own page created a fresh one per message -- two-way sniff
@@ -157,8 +159,66 @@ class WebSocketSessionClient:
                 unique_frames = COPILOT_HANDSHAKE_FRAMES + [
                     _re.sub(r'"conversationId":"[A-Za-z0-9]+"',
                             f'"conversationId":"{fresh}"', f) for f in send_frames]
-            for frame in unique_frames:
-                ws.send(frame)
+            if grok:
+                # Grok's protocol (measured in the recorded frames, 2026-09-01): the FIRST
+                # frame is a session.create whose event_id is client-minted and whose
+                # session_id the SERVER assigns; the response.create frame then references
+                # that session_id. Replaying a stale session_id addresses a session the
+                # server has torn down: it answers {"event":{"type":"error"}} and no reply
+                # stream ever opens (exact run-1 verdict). Chrome's own client mints both
+                # per message, so the replay does the same: send session.create with a
+                # fresh event_id, read the server-assigned session_id from its ack, rewrite
+                # every subsequent frame with it, then send them.
+                import json as _json
+                import re as _re
+                import uuid as _uuid
+                create_frame = next((f for f in unique_frames if '"session.create"' in f), None)
+                send_frames = [f for f in unique_frames if '"response.create"' in f]
+                if not send_frames:
+                    raise ChatError("SENTINEL_NOT_FOUND",
+                                    "grok replay: no response.create frame in the recorded sequence")
+                sid = None
+                if create_frame:
+                    create_frame = _re.sub(r'"event_id":"evt_init_[^"]+"',
+                                           f'"event_id":"evt_init_{_uuid.uuid4()}"', create_frame)
+                    ws.send(create_frame)
+                    deadline_ack = time.monotonic() + 15.0
+                    while time.monotonic() < deadline_ack and not sid:
+                        try:
+                            ws.settimeout(1.0)
+                            ack = ws.recv()
+                        except websocket.WebSocketTimeoutException:
+                            continue
+                        except (websocket.WebSocketConnectionClosedException, ConnectionError):
+                            break
+                        if isinstance(ack, bytes):
+                            ack = ack.decode("utf-8", "replace")
+                        if not ack:
+                            continue
+                        payloads.append(ack)
+                        last_text_at = time.monotonic()
+                        try:
+                            ad = _json.loads(ack)
+                        except ValueError:
+                            continue
+                        ev = ad.get("event") if isinstance(ad.get("event"), dict) else {}
+                        sid = (ad.get("session_id") or ev.get("session_id")
+                               or (ev.get("session") or {}).get("session_id"))
+                    if not sid:
+                        raise ChatError("HTTP_ERROR",
+                                        "grok replay: session.create produced no session_id "
+                                        "(server error or protocol change)")
+                rewritten = [_re.sub(r'"session_id":"[A-Za-z0-9-]+"',
+                                     f'"session_id":"{sid}"', f) for f in send_frames]
+                if '"presence.update"' in " ".join(unique_frames):
+                    presence = next(f for f in unique_frames if '"presence.update"' in f)
+                    rewritten.append(_re.sub(r'"session_id":"[A-Za-z0-9-]+"',
+                                             f'"session_id":"{sid}"', presence))
+                for frame in rewritten:
+                    ws.send(frame)
+            else:
+                for frame in unique_frames:
+                    ws.send(frame)
             deadline = time.monotonic() + self.timeout
             last_text_at = time.monotonic()
             while time.monotonic() < deadline:
@@ -194,6 +254,25 @@ class WebSocketSessionClient:
                             append_texts.append(str(d.get("text") or ""))
                         if d.get("event") == "done" and append_texts:
                             break
+                        # Grok reply shape (PINNED from live frames 2026-09-01, see
+                        # state/replay_raw/ws_grok.com_*.txt): the answer arrives as
+                        # {"event":{"type":"response.chunk","chunk":{"text":{"text":"58",
+                        # "channel":"CHANNEL_ASSISTANT_RESPONSE"}}}}. The server also streams
+                        # UI noise through the same chunk shape
+                        # (CHANNEL_ASSISTANT_NOTETAKER_HEADER: "Thinking about your request")
+                        # -- only the RESPONSE channel is the model's words. Terminators:
+                        # response.done / response.persisted.
+                        ev = d.get("event")
+                        if isinstance(ev, dict):
+                            etype = str(ev.get("type") or "")
+                            if etype == "response.chunk":
+                                chunk = ev.get("chunk") or {}
+                                txt = chunk.get("text") or {}
+                                if (txt.get("channel") == "CHANNEL_ASSISTANT_RESPONSE"
+                                        and txt.get("text")):
+                                    append_texts.append(str(txt["text"]))
+                            elif etype in ("response.done", "response.persisted") and append_texts:
+                                break
         finally:
             try:
                 ws.close()
@@ -203,6 +282,17 @@ class WebSocketSessionClient:
         joined = "\n".join(payloads)
         if not joined:
             raise ChatError("HTTP_ERROR", "ws replay received no frames before its deadline")
+
+        # Forensics: keep the received frames so a reply-shape gap is diagnosed from the
+        # actual server events, never guessed (same discipline as state/replay_raw for HTTP).
+        try:
+            import pathlib as _pl
+            _raw_dir = _pl.Path(__file__).resolve().parents[2] / "state" / "replay_raw"
+            _raw_dir.mkdir(parents=True, exist_ok=True)
+            (_raw_dir / f"ws_{self.raw.get('host', 'unknown')}_{int(time.time())}.txt").write_text(
+                joined, encoding="utf-8")
+        except Exception:
+            pass
 
         # Event-assembled text first (exact model words, no protocol noise), then the generic
         # extraction pipeline over the raw frames as the fallback.
