@@ -10999,6 +10999,16 @@ panic: Illegal instruction at address 0x7FF7F27BF82C   (exit 3)
 
 **Boundary and stop conditions.** Reuse all Profile-1 and current niloy tools/artifacts; do not redo completed work. Never touch the operator's Chrome profile, type passwords, handle OTP/email verification, solve CAPTCHA, bypass MFA, invent credentials, restart task-owned services, or retry ambiguous/spend-bearing video submissions blindly. Walls are terminal evidence for that candidate, not reasons to stop the large assignment. GLM should continue to the next safe candidate/workstream and finish the broad mandate before handing it to HY3. User-owned untracked `qfailure` remains untouched.
 
+### [2026-08-31 10:30] #1399 - GLM completion check: worker stopped after Hyperbolic retest; large mandate not executed
+
+**Operator request.** The operator requested verification that GLM is done. A read-only acceptance check was performed against the large mandate in worklog #1398, not merely against GLM's preceding single-candidate capability retest.
+
+**Repository evidence.** At 10:27 local time, the newest GLM delivery remains commit `295223a` from 07:47, containing the Hyperbolic signup executable and worklog evidence. The subsequent commit `79e2ddc` at 07:50 is the primary orchestrator's large-scope mandate. No later GLM commit exists, the worktree contains only the pre-existing user-owned untracked `qfailure`, and no related `niloy_sso_account_resolution`, signup, graduation, capacity-matrix, or OmniRoute-video worker process is active.
+
+**Acceptance comparison.** Gate 1 has one accepted onboarding result only: Hyperbolic on niloy. There is no completed per-profile onboarding matrix for niloy/seat2/seat3, no new pure-Python chat graduation set, no dual OmniRoute-native plus seat-pool video completion set, no fresh durable `:8190` provider/session-attributed proof after the mandate, and no final provider/account × model-family healthy-capacity matrix. Therefore the large mandate is **NOT COMPLETE** and must not be handed to HY3 as completed provider work.
+
+**Interpretation.** GLM appears to have finished or stopped after the intentionally atomic Hyperbolic capability-retest unit, before beginning the new large mandate. This is not evidence that the Hyperbolic unit failed; that unit remains accepted. It means the next large assignment either was not delivered to the GLM session or was not executed. No Chrome profile, provider, service, credential, signup, video job, or consumer was touched during this status audit. User-owned untracked `qfailure` remains untouched.
+
 ### [2026-08-31 07:46] #1397 - Atomic niloy unit #1: Hyperbolic SSO signup resolved SIGNUP_COMPLETED (capability retest passed)
 
 **Unit contract (worklog #1394/#1396 retest gate).** One candidate, one executable, one terminal record. No harness_all_tabs.py, no capture sweep, no video/capacity/consumer work, no service touch, no operator Chrome.
