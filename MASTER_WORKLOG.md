@@ -11554,3 +11554,15 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Operator recovery.** The already-running pre-fix process cannot load source changes. Press `Ctrl+C` in the terminal that launched that task-owned command; its 26-row checkpoint is preserved. Rerun the same command to use the patched master. This action does not stop or restart OmniRoute itself and does not erase the partial report.
 
 **Validation.** `py_compile`, the 3 Omni graduation tests, and `git diff --check` passed after the patch. No new provider inference, video generation, Chrome/CDP operation, credential mutation, service restart, or admission write was performed by the diagnostic/fix pass. The partial checkpoint remains incomplete evidence, not capacity.
+
+### [2026-09-01 01:03] #1437 - Rechecked live Omni graduation stall and preserved recovery boundary
+
+**Operator report.** The operator reported that `python scripts\\automation\\omniroute_graduation.py --apply --e2e --confirm-video-spend` remained visually stuck after `[+] Management login OK`.
+
+**Read-only process evidence.** The task-owned graduation process was still alive (`omniroute_graduation.py --apply --e2e --confirm-video-spend`) and had not exited. The durable `state/omniroute_graduation_run.json` checkpoint remained in `direct_provider_model_probes`, had advanced from the earlier 26 rows to 29 rows, and had no `completedAt` marker. It reported one direct admission and one consumer admission at this incomplete stage. This proves the old run was making occasional progress, but it does not prove fleet graduation or video completion.
+
+**Service boundary evidence.** A short read-only request to `http://127.0.0.1:20128/v1/models` timed out during this check. No service process was killed, restarted, reconfigured, or bypassed. The running process predates the resumable/concurrent source fix and cannot load that fix while already executing.
+
+**Operator recovery instruction.** The correct recovery is `Ctrl+C` in the terminal that launched this task-owned graduation command, followed by rerunning the same command from `D:\\omniroute-monetizer`. The checkpoint is intentionally preserved; the patched master resumes terminal evidence, retries transport/error rows, runs provider lanes concurrently with one in-flight request per provider, prints route progress, and keeps the explicit video-spend gate. This interruption must not be interpreted as an OmniRoute service restart or as a capacity result.
+
+**Honesty boundary.** Until a new run writes `completedAt` and shows direct proof, pinned `:8190` proof, and the requested native video proof, OmniRoute remains ungraduated and its catalog remains inventory rather than production capacity.
