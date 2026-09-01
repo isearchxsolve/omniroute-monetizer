@@ -11894,3 +11894,11 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Current truth table (surface_audit, 2026-09-01, evidence in state/surface_audit_evidence/).** APP_SURFACE: rtst, flow (9222 video); perplexity, v0-tab, duck.ai, cohere-tab*, groq, qwen, deepseek, cerebras, aymo, chathub, together, blackbox (9223; cohere = onboarding surface, not graduated). LOGIN_WALL: monica, sambanova x2. CDP_FAIL: auth.meta. UNCLEAR: you.com, 1min.ai, mistral console. 9222/9224/9225: CDP startup wedge (named #1448), task-owned heal loop retrying.
 
 **Fix order (starts now, one at a time, each with screenshot evidence at claim time).** 1) monica sign-in (the operator's example). 2) sambanova. 3) UNCLEAR sites. 4) wedged-seat RCA. Nothing is declared done until its row flips in the audit.
+
+### [2026-09-01 05:55] #1450 - monica surface FIXED under the hard-stop discipline (fix #1 of the operator-named queue)
+
+**Evidence-first claim.** monica.im on 9223 flipped LOGIN_WALL -> APP_SURFACE. Path: pre-click screenshot (monica_pre_*.png), "Log In" header control -> /login page, "Log in with Google" div located by text-node geometry (440x44 at 800,376; the earlier locator failed because the control is a styled div, not button/[role=button]), one trusted click -> auth-landing -> monica.im/home (signed-in redirect), post screenshots (monica_aftergoogle_*.png), surface_audit row re-run: verdict APP_SURFACE, hasComposer true, loginBtn null. Evidence: state/surface_audit_evidence/monica_aftergoogle_*.png + state/surface_audit.json.
+
+**Layers now both true for monica:** the pure-Python replay admission (artifact layer, proven earlier with computed 58) AND the live signed-in surface (this unit). Before this unit only the artifact layer existed - the exact gap the operator named.
+
+**No other claims in this entry.** Next in queue: sambanova auth0 walls.
