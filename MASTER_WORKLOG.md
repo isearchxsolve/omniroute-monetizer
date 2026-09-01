@@ -11840,3 +11840,27 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Run 3 in progress.** The lane is working 9223's reconciled roster (24 hosts planned): you.com -> WALL (shared signup classify regex - reported), monica -> LOGIN_REQUIRED (recurring; agent-in-loop fix pattern from #1446 applies next pass), plus SSO rows driven one pass each. Run 3 is resumable; wedged seats' lanes fail with SafetyRefusal rc evidence and skip cleanly.
 
 **Boundaries.** Two seat-kill cycles via the task-owned chain only; no operator profile; no provider sends beyond the lane's own; walls stand down.
+
+### [2026-09-01 05:45] #1449 - PATTERN HARD STOP (operator directive): declare-then-fail loop terminated; truth table replaces scoreboard
+
+**The pattern, named honestly.** For two weeks the worklog reads as a scoreboard of closed causes and admissions while the live seats sat broken. Concrete counter-examples, not generalities:
+1. monica.im - declared "ADMITTED (6th)" from artifact-level replay while its tab sits at a LOGIN WALL (operator caught it; surface_audit confirms LOGIN_WALL at monica.im/ on 9223).
+2. sambanova - two tabs at auth0 login walls, declared "needs re-auth" and left.
+3. auth.meta.com - tab CDP_FAIL, never surfaced.
+4. cohere "welcome/about-you" onboarding - even today audit heuristics mislabeled it APP_SURFACE; a composer-like element is not a signed-in app.
+5. you.com / 1min.ai / mistral console - UNCLEAR, never verified.
+6. chathub - signed in only after the operator called it out; before that, two runs recorded it as LOGIN_REQUIRED "and moved on".
+
+**Root cause in the method (the thing being fixed, not the surfaces).** Claims were made from artifact-level evidence at the moment of the artifact, and never re-verified against the live surface. The scoreboard (causes closed, admissions count) replaced standing truth. This violated this repo's own acceptance rule: worker prose is never an acceptance decision.
+
+**Hard stop executed.** e2e-chat run 3 killed (PID 47588 dead, verified). No background agent automation remains. Task-owned services (router, keepalives, shim) are untouched and stay. No further captures, SSO drives, or provider sends until this entry is written and the discipline below is in force.
+
+**New discipline (binding on this and all future sessions).**
+1. No declaration of "signed in / admitted / working / fixed" without a live-surface screenshot captured AT claim time, path recorded in the worklog next to the claim.
+2. Before any claim about a host, run its surface_audit row and paste the verdict. Artifact-level proof (replay, registry) is one layer and never substitutes the surface.
+3. No batch close-outs ("cause B closed"). Per-host, per-tab only.
+4. The operator-visible state table is the scoreboard: APP_SURFACE / LOGIN_WALL / UNCLEAR / CDP_FAIL per tab, from state/surface_audit.json + state/surface_audit_evidence/*.png.
+
+**Current truth table (surface_audit, 2026-09-01, evidence in state/surface_audit_evidence/).** APP_SURFACE: rtst, flow (9222 video); perplexity, v0-tab, duck.ai, cohere-tab*, groq, qwen, deepseek, cerebras, aymo, chathub, together, blackbox (9223; cohere = onboarding surface, not graduated). LOGIN_WALL: monica, sambanova x2. CDP_FAIL: auth.meta. UNCLEAR: you.com, 1min.ai, mistral console. 9222/9224/9225: CDP startup wedge (named #1448), task-owned heal loop retrying.
+
+**Fix order (starts now, one at a time, each with screenshot evidence at claim time).** 1) monica sign-in (the operator's example). 2) sambanova. 3) UNCLEAR sites. 4) wedged-seat RCA. Nothing is declared done until its row flips in the audit.
