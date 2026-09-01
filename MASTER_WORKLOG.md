@@ -12017,6 +12017,14 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Correct release model.** Functional Omni E2E may proceed through the local gateway in its documented mode. Final customer release additionally requires authentication evidence at the public provider/consumer boundaries. Gateway tenant auth is an optional separate hardening dimension unless the operator explicitly changes the local endpoint contract.
 
+### [2026-09-01 09:00] #1466 - Corrected acceptance interpretation: local gateway auth is not a release prerequisite; preflight wrapper cutoff is not a shim regression
+
+**Operator correction accepted.** The original endpoint contract makes `127.0.0.1:8190/v1` a private local merge/transport surface. The later auth requirement applies to public provider and consumer execution lineages. The acceptance coordinator was corrected accordingly: no tenant map is classified as `LOCAL_CONTRACT_OPEN_BY_DESIGN`; only an unavailable gateway or a deliberately configured broken gateway-auth layer blocks the corresponding gate.
+
+**Verification note.** A subsequent no-flags preflight invocation was cut off by the shell execution channel before its final report write, after the previous live verification had already established five successful patched `/v1/models` responses. This cutoff is not treated as a new shim timeout or regression. The durable report remains the last completed artifact until a full preflight is run through a long-lived execution channel.
+
+**No new side effects.** No provider inference, video spend, consumer job, Chrome/CDP action, seat-pool action, credential/database change, service restart, or shim restart occurred in this correction.
+
 ### [2026-09-01 06:10] #1451 - sambanova: OAuth signed in, surface = ONBOARDING_VERIFICATION_REQUIRED (never first-run-completed); monica remains the model claim
 
 **Evidence-first unit.** Sequence: fresh tab (old auth0 renderers hung - closed) -> cloud.sambanova.ai -> /chat is a dead route -> /dashboard shell ambiguous ("Login/Signup" nav) -> /playground rendered a composer (auth0+auth0_compat cookies present) -> live send bounced to auth0 = browser session was DEAD -> auth0 screen shows "Continue with Google" (screenshot sambanova_auth0_fresh_*.png) -> clicked -> Google chooser showed the seat account (monica_goog_chooser_*.png) -> account row click -> CONSENT "Continue" clicked -> landed back on cloud.sambanova.ai (sambanova_oauth_done_*.png). OAuth SUCCEEDED.
