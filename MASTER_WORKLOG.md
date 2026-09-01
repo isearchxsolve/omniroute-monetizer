@@ -12461,6 +12461,18 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Verification.** `python -m unittest discover -s tests -p 'test_omni_video_runtime_patch.py' -v` passed **4/4**, including dedicated endpoint markers, upstream model mapping, exact reversible replacements, and the Turbopack route-root test. `python -m py_compile scripts/automation/omni_video_runtime_patch.py` passed. A plan against the active package reported the prior five replacements as `status=applied` and the two new KIE Veo branches as `status=pending`; the live package was not modified by this component.
 
 **Next.** Commit the adapter/tool tests, apply the two pending exact replacements with a new rollback manifest, run `node --check` against the modified compiled chunk, and keep the Omni service running until an explicitly controlled reload is chosen. Only then should the two KIE Veo rows receive a narrow, single-candidate proof request.
+
+### [2026-09-01 23:12] #1510 - Applied and statically verified the Omni KIE Veo adapter; live reload intentionally deferred
+
+**Apply.** Executed the deterministic patch tool against the registered active 3.8.50 package. The two pending replacements from #1509 were applied: the source handler now contains the dedicated KIE Veo branch, and the exact compiled video-route chunk now contains the same branch. The earlier five repairs remained in `status=applied`; no unrelated file was edited.
+
+**Rollback record.** The new byte-for-byte backup and manifest are at `state\\omni_video_runtime_backups\\20260901T170952Z\\manifest.json`. The patch manifest records before/after SHA-256 values for the source handler and compiled chunk. A second `--apply` returned `mode=already_applied`, so the repair is idempotent and did not create another backup.
+
+**Verification.** The focused Omni patch suite passed **4/4**. `python -m py_compile scripts/automation/omni_video_runtime_patch.py` passed. `node --check` passed against `dist\\.build\\next\\server\\chunks\\_0zgjgqu._.js`, the compiled chunk containing the KIE video handler. A post-apply `--plan` reported all **7/7** repairs as `status=applied`. `GET http://127.0.0.1:20128/api/health` returned HTTP `200` with `status=ok` at `2026-09-01T17:10:15.391Z`.
+
+**Runtime truth.** The OmniRoute Windows service was not restarted, so the currently running process has not loaded these on-disk changes yet. No KIE request, Vertex request, audio request, credential mutation, database mutation, or route admission occurred. Native video capacity therefore remains **0 graduated routes** until a controlled service reload and narrow MP4-byte proof; the patches are code remediation, not graduation evidence.
+
+**Remaining Omni-only work.** The next action is a controlled reload of the task-owned Omni service followed by narrow probes of `kie/veo/veo-3-1`, `kie/veo/veo-3-1-fast`, and the repaired Vertex 3.1 rows—not another blind 39-route sweep. KIE credit/balance walls and Vertex credential/project authorization must still be reported honestly if they persist. Audio remains a separate native modality with no proof run because the current contract is chat/video-oriented.
 ### [2026-09-01 21:04] #1500 - Rebuilt native-video graduation as a durable current-build MP4 admission pass
 
 **Failure removed.** The prior all-model worker could spend up to 900 seconds behind one request, buffered all output, and wrote `video_provider_probe.json` only after the entire queue. A crash or upstream stall therefore looked like no evidence and could discard the whole run. It also treated any HTTP 200 with a URL-like field as provisional success and did not verify inline base64 media.
