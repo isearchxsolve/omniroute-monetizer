@@ -212,6 +212,32 @@ def plan_from_catalog(catalog: list[dict[str, Any]], max_models: int = 0) -> lis
     return [row for owner in sorted(grouped) for row in grouped[owner]]
 
 
+def representative_routes_by_family(routes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Choose one deterministic live-probe representative per provider/family.
+
+    A catalog can contain thousands of aliases for one upstream connection.  The
+    graduation unit is the provider/model-family transport proof, not an
+    unbounded paid request for every spelling in that catalog.  The complete
+    catalog remains in the inventory; only rows that subsequently pass both
+    direct and consumer Law-3 proof become consumer-admitted routes.
+    """
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for route in routes:
+        grouped[(str(route["provider"]), str(route["modelFamily"]))].append(route)
+
+    def score(route: dict[str, Any]) -> tuple[int, int, str]:
+        model = str(route["model"]).lower()
+        # Prefer provider defaults and conventional text-chat names; avoid a
+        # known non-chat embedding/audio/image alias when another row in the
+        # same provider-family can prove the same execution transport.
+        default = 0 if model.endswith("/auto") or model.endswith("-auto") or model.endswith("/default") else 1
+        modality_noise = sum(token in model for token in (
+            "embed", "rerank", "tts", "audio", "image", "dall-e", "whisper", "moderation"))
+        return (modality_noise, default, model)
+
+    return [min(candidates, key=score) for _, candidates in sorted(grouped.items())]
+
+
 def capability_inventory(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Keep every concrete Omni provider/model row visible for final capacity truth.
 
@@ -477,6 +503,8 @@ def main() -> int:
     ap.add_argument("--video-timeout", type=int, default=900, help="one native video request timeout")
     ap.add_argument("--max-models-per-provider", type=int, default=0,
                     help="diagnostic cap; 0 means every catalog model")
+    ap.add_argument("--representative-per-family", action="store_true",
+                    help="probe one deterministic provider/model-family representative (catalog remains inventory)")
     ap.add_argument("--max-video-routes", type=int, default=0,
                     help="diagnostic video cap; 0 means every video registry route")
     args = ap.parse_args()
@@ -492,6 +520,14 @@ def main() -> int:
         plan["routes"] = plan_from_catalog(
             authenticated_live_catalog()[0], args.max_models_per_provider)
         plan["mode"] = "omniroute_capped_diagnostic_plan"
+    if args.representative_per_family:
+        plan["routes"] = representative_routes_by_family(list(plan["routes"]))
+        plan["mode"] = "omniroute_provider_model_family_graduation"
+        plan["selection"] = {
+            "strategy": "one_deterministic_representative_per_provider_model_family",
+            "catalogChatRows": int(plan.get("catalog", {}).get("count") or 0),
+            "probeRows": len(plan["routes"]),
+        }
     atomic_json(STATE / "omniroute_graduation_plan.json", plan)
     if not args.e2e:
         print(f"plan={STATE / 'omniroute_graduation_plan.json'} providers={len(plan['providers'])} routes={len(plan['routes'])}")
