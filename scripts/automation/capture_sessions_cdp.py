@@ -1010,7 +1010,7 @@ def main() -> int:
                     help="open a tab for sites that have none (a full sweep needs this)")
     ap.add_argument("--output-dir", type=pathlib.Path, default=SECRETS,
                     help="capture destination (default: active state/secrets); use a staged directory "
-                    "until independent replay approves promotion")
+                         "until independent replay approves promotion")
     ap.add_argument("--output-name", default="",
                     help="simple session_*.json basename; required for a unique per-tab staged artifact")
     ap.add_argument("--pending", action="store_true",
@@ -1060,6 +1060,10 @@ def main() -> int:
         output_label = a.output_dir.relative_to(ROOT)
     except ValueError:
         output_label = a.output_dir
+    # A relative --output-dir must still resolve against ROOT: capture() computes
+    # out.relative_to(ROOT) for its report row, which raises for a bare relative path.
+    if not a.output_dir.is_absolute():
+        a.output_dir = ROOT / a.output_dir
     print(f"sentinel: {SENTINEL!r}   capture destination -> {output_label}\n")
 
     by_dom: dict[str, dict] = {}
