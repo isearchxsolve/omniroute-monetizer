@@ -12805,3 +12805,22 @@ Both Vertex rows reached the repaired Vertex handler and returned HTTP 400 with 
 **What is NOT claimed:** no captures/admissions on 9224 yet; LOGIN_WALL re-SSO is the next lane (Google-layer on this seat is signed-out at the chooser per the 9222 pattern - operator-visible).
 
 **Next:** 9224 captures for artifact-less APP_SURFACE set, then 9225 align+audit, then 9223 cycle 2, then cross-seat LOGIN_WALL re-SSO pass.
+
+### [2026-09-02 23:59] #1518 - 9225 cycle: align + audit v2 + deep-drives -> 50/50 rows terminal
+
+**Align.** 9225 had 2-3 video tabs only; reconcile --apply opened 49 union sites -> 50/50 FLEET ALIGNED.
+
+**Audit v2 + drives (paced, health-backoff, cookie-banner handling added pass4):**
+- audit v2: 6 APP_SURFACE / 31 NEEDS_DRIVE / 10 LOGIN_WALL / 1 PAY_WALL / 2 CDP_FAIL.
+- drive pass 2: you.com + together-signin + monica + claude LOGIN_WALL, pollinations SIGNUP, digen PAY, perplexity APP_SURFACE, deepseek SIGNUP.
+- pass 2b: +7 APP_SURFACE (veoaifree x2, rtst surface, phind, heygen, groq, doubao); stepfun/hailuoai LOGIN; 7 CDP_FAIL burst (DevTools stall class, self-recovered).
+- pass 3/4 (health-backoff + consent-click): cerebras + phind APP_SURFACE (cookie banner over signed-in surface), xinghuo/chatglm LOGIN (登录), nemovideo LOGIN (Starter+ gate), coze REGION (not available in your country), sambanova/yuanbao/genspark/baichuan/1min/promptql LOGIN or empty-session surfaces.
+- pass 5 (last six): veoaifree + cerebras APP_SURFACE final; giz WALL (404 surface gone, cross-seat consistent); doubao REGION_WALL (arearestrict login); poe LOGIN_WALL; akool LOGIN_WALL.
+
+**Final 9225 ledger (state/surface_audit_9225_full.json): 14 APP_SURFACE, 27 LOGIN_WALL, 3 PAY_WALL, 3 SIGNUP_WALL, 2 REGION_WALL, 1 WALL = 50/50, zero rows outside terminal states.**
+
+**Pattern worth noting:** 9225's session layer is the most signed-out of the fleet (27 LOGIN_WALL) - the seat holds the Flow PRO video identity but most chat-provider sessions never existed or expired here. This is the re-SSO lane's biggest beneficiary.
+
+**What is NOT claimed:** no captures/admissions on 9225 yet; LOGIN walls named not solved.
+
+**Next:** 9223 cycle 2 (the proven seat: 38-tab roster, live admissions), then cross-seat re-SSO pass on the 60+ LOGIN_WALL rows, then captures for artifact-less APP_SURFACE sets fleet-wide.
