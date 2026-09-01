@@ -36,7 +36,7 @@ def test_supervisor_has_application_paths_for_unowned_services() -> None:
     configured = {svc.key: svc.health for svc in services()}
     assert configured["omniroute"] == "/v1/models"
     assert configured["video_router"] == "/healthz"
-    assert configured["session_pool_shim"] == "/v1/models"
+    assert configured["session_pool_shim"] == "/healthz"
 
 
 def test_paths_are_read_only_capability_surface() -> None:

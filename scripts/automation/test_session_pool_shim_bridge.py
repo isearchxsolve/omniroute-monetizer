@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from unittest.mock import patch
 
-from session_pool_shim import OmniRouteBridge
+from session_pool_shim import OmniRouteBridge, SHIM_HEALTH_VERSION, shim_health_payload
 
 
 class FakeResponse:
@@ -57,3 +57,12 @@ def test_stale_refresh_is_coalesced() -> None:
             time.sleep(0.005)
         time.sleep(0.02)
         assert get.call_count == 1
+
+
+def test_health_payload_is_constant_local_liveness_metadata() -> None:
+    payload = shim_health_payload()
+    assert payload["ok"] is True
+    assert payload["service"] == "session-pool-shim"
+    assert payload["version"] == SHIM_HEALTH_VERSION
+    assert isinstance(payload["pid"], int)
+    assert "upstream" not in payload

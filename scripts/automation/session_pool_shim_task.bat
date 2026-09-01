@@ -14,15 +14,24 @@ rem pool's video seats to charge. rtst clips cost 6 credits, flow clips ~20 cred
 rem per-seat clients still enforce their own OMNI_VIDEO_MAX_SPEND caps before any submit.
 set OMNI_VIDEO_CONFIRM_SPEND=1
 
-rem Health probe (worklog #1134): use curl.exe (built into Windows) instead of a python one-liner.
+rem Liveness probe (worklog #1475): use the shim's constant-time local /healthz,
+rem NOT /v1/models.  /v1/models is a merged readiness/discovery surface and can
+rem reflect a sick upstream catalog even while this local process is alive.
+rem curl.exe (built into Windows) avoids a visible Python launcher pair.
 rem The old python probe spawned a venv-launcher + base-interpreter python.exe PAIR every 5 minutes
 rem -- that transient pair is exactly the "two duplicate processes popping every 5 mins" the operator
 rem saw. curl.exe spawns nothing visible and exits non-zero on any failure, same semantics.
-curl.exe -s -o nul --max-time 3 "http://127.0.0.1:8190/v1/models"
+curl.exe -s -f -o nul --max-time 3 "http://127.0.0.1:8190/healthz"
 
 if not errorlevel 1 exit /b 0
 
 echo [%date% %time%] PRE-START >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
+
+rem A live listener that fails /healthz is a wedged task-owned shim.  Before
+rem launching a replacement, stop ONLY the exact listener for this script; never
+rem kill a foreign owner of port 8190.  This is the missing recovery step that
+rem previously caused endless PRE-START / EADDRINUSE no-op loops.
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$p=Get-NetTCPConnection -LocalPort 8190 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess; if($p){$c=Get-CimInstance Win32_Process -Filter ('ProcessId='+$p); if($c -and $c.CommandLine -match 'session_pool_shim\.py\s+8190'){ Stop-Process -Id $p -Force; Write-Output ('stopped verified wedged shim pid='+$p) }}" >> "D:\omniroute-monetizer\logs\shim_task_diag.log" 2>&1
 
 rem Not answering -> start it. The venv launcher spawns the base interpreter as a child process
 rem (normal Python 3.11 venv behavior on Windows), so ONE healthy shim always shows as two
@@ -46,7 +55,7 @@ rem logs/shim_stdout_current.log): a foreign process holds an exclusive handle o
 rem and the shim never launches while the task keeps reporting 0. Probe the listener and,
 rem if absent, retry once against the alternate log file before yielding to the next cycle.
 ping -n 4 127.0.0.1 >nul
-curl.exe -s -o nul --max-time 3 "http://127.0.0.1:8190/v1/models"
+curl.exe -s -f -o nul --max-time 3 "http://127.0.0.1:8190/healthz"
 if not errorlevel 1 exit /b 0
 echo [%date% %time%] FALLBACK-START alt-log >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
 rem A second fixed fallback file can itself be held exclusively.  Make the final

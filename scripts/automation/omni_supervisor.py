@@ -173,7 +173,7 @@ def services() -> list:
         ),
         Service(
             key="session_pool_shim", label="Session pool shim (chat+video face)", port=8190,
-            health="/v1/models", owned=False, required=False,
+            health="/healthz", owned=False, required=False,
             note="Owned by the 'OmniRoute Session Pool Shim (keepalive)' scheduled task, which "
                  "relaunches it every 5 minutes. Do not fight the task -- it always wins. "
                  "(2026-08-28 worklog #1134: was owned=True here AND owned by the bat task; that "

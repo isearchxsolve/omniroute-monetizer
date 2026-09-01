@@ -69,6 +69,24 @@ OMNIROUTE_MODEL_TIMEOUT_S = 10.0
 OMNIROUTE_CHAT_TIMEOUT_S = 8.0
 OMNIROUTE_FALLBACK_MODEL = os.environ.get("OMNIROUTE_FALLBACK_MODEL", "frontier")
 OMNI_VERIFIED_ROUTES = pathlib.Path(__file__).resolve().parents[2] / "state" / "omniroute_verified_routes.json"
+SHIM_HEALTH_VERSION = "2026-09-01-liveness-v1"
+
+
+def shim_health_payload() -> dict[str, Any]:
+    """Constant-time process liveness payload for the task-owned watchdog.
+
+    This deliberately does *not* rescan seat files, enumerate routes, merge the
+    OmniRoute catalog, inspect tenant configuration, or call an upstream.  Those
+    are readiness/discovery concerns and must never determine whether the local
+    :8190 process itself is alive.  The scheduler uses this endpoint to avoid the
+    historical `/v1/models` timeout -> duplicate-launch loop.
+    """
+    return {
+        "ok": True,
+        "service": "session-pool-shim",
+        "version": SHIM_HEALTH_VERSION,
+        "pid": os.getpid(),
+    }
 
 
 def _omni_verified_model_ids() -> Optional[set[str]]:
@@ -509,6 +527,17 @@ def _video_worker(job_id: str, messages: list, host: str = None) -> None:
 
 class ShimHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        # Liveness must be the first branch: no tenant-map read, hot rescan,
+        # pool enumeration, JSON catalog merge, or paid-Omni dependency is allowed
+        # ahead of the watchdog response.
+        if self.path == "/healthz":
+            body = json.dumps(shim_health_payload()).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         _maybe_rescan()                              # zero-restart hot-add (worklog #1112)
         tenant, err = _tenant_for(self.headers.get("Authorization"))
         if err:
