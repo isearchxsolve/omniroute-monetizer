@@ -12075,6 +12075,16 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Conclusion.** The sweep remains active and the final JSON report has not been written. No capacity or release certification is made from these counts.
 
+### [2026-09-01 13:02] #1472 - Started independent native Omni video E2E with explicit spend consent
+
+**Decision and scope.** The operator explicitly authorized proceeding with the native Omni video E2E while the long chat provider/model discovery sweep continues. Source inspection verified that `video_provider_probe.py` is independent of the active chat acceptance process: it writes `state\\video_provider_probe.json` and downloads only returned MP4 evidence; it does not overwrite the chat graduation run or admissions ledger.
+
+**Bounded plan.** A read-only `--all --plan-only` inspection identified 10 native-video registry candidates across 6 providers. The actual worker was started with `OMNI_VIDEO_CONFIRM_SPEND=1` and `--all --timeout 900`, making real bounded video generation attempts and byte/ffprobe validation of any returned asset. This is direct Omni native video (`http://127.0.0.1:20128/v1/videos/generations`), not a chat payload routed to a video-named model and not a seat-pool/Chrome task.
+
+**Launch evidence.** Durable parent PID 21940 with Python child PID 17248. stdout: `logs\\omni_video_e2e_20260901.out.log`; stderr: `logs\\omni_video_e2e_20260901.err.log`; final video evidence: `state\\video_provider_probe.json`. The prior all-plan-only process remained in a read-only management refresh and made no generation request. No chat worker, seat-pool, Chrome/CDP, consumer application, credential, database, service, or endpoint-contract mutation was made.
+
+**Certification rule.** Video capacity is counted only for a provider/model that returns an asset and passes MP4 byte verification. Catalog presence, an HTTP 200 without an asset, or a video name carried by a chat provider do not count as graduated video capacity.
+
 **Discipline note.** Old artifact stays NOT admitted (401 dead bearer - honest). No claims beyond what the screenshots show. The hung auth0 tabs were closed and replaced with fresh ones (renderer hygiene, no session loss: auth0 state is server-side).
 
 ### [2026-09-01 06:30] #1452 - Reconcile v2 CONSTANT-N MIRROR + one-profile-at-a-time cycle started (operator solution to the 4x51 wedge)
