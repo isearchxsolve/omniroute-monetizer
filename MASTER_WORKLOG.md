@@ -12124,3 +12124,20 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Wedge reality (third occurrence, now understood operationally).** Bulk tab operations (~45 opens/seat in minutes) wedge Chrome 151 DevTools on the three younger instances; the router heal loop recovers them in 2-5 minutes; 9223 (never hard-killed) is stable. Hence the one-profile-at-a-time + paced cycle. 9222/9224/9225 cycles proceed as each seat stabilizes; their current tab states: mid-recovery, rosters partially restored from the last aligned pass.
 
 **Claims discipline.** Only 9223 is called aligned, with the tool verification line quoted. No per-site claims beyond the audit rows quoted. Next: 9222 cycle (align -> audit -> gemini/HuggingChat-tier captures where owned -> drain), then 9224, 9225.
+
+### [2026-09-01 07:45] #1453 - 9222 chathub signed in (SSO-inclusive cycle proof); rest-of-e2e queue stated
+
+**Evidence-first claim.** 9222 chathub tab: "Welcome to ChatHub" modal Google button (Last used badge) located by screenshot (800,352) after the text-node scan missed the icon+span label; one trusted click -> signed in. Verified: signinVisible=false, app chrome present. Screenshot: state/surface_audit_evidence/p9222_chathub_now_1788248831.png (pre-click: p9222_chathub_nogoogle_1788248668.png shows the modal). Pattern note: the working locator for this modal is the SCREENSHOT position, not DOM text walk - record for future drives.
+
+**Wedge handling during this unit.** The 48-open burst wedged 9222 twice; both recovered via wait (2-5 min, router heal). Suspended chathub renderers were replaced with a fresh tab (close + json/new) - renderer hygiene pattern.
+
+**REST OF E2E (queue state, per-profile one-at-a-time cycle):**
+1. 9222 window (OPEN NOW): remaining rows - pollinations LOGIN_WALL (drive), 9 UNCLEAR (xinahuo/chatglm/yuanbao/stepfun/sambanova-dashboard/nemovideo/heygen/innerai/gemini-root: check each for sign-in state), 32 suspended (wake one by one, verdict each). Then captures for APP_SURFACE sites w/ stale artifacts, then drain.
+2. 9224 window: align -> audit -> GEMINI fresh capture (surface looked signed-in, artifact 401) -> creen.ai LOGIN_WALL drive -> drain.
+3. 9225 window: align -> audit -> copilot/gpt/heygen/giz drives -> drain.
+4. 9223 cycle 2: monica/chathub already proven; sambanova onboarding = operator action; audit the 43 suspended rows individually.
+5. Hard walls standing: v0 (JWE), chatx (turnstile, parked), aymo (quota), phind (CF), you.com (signup).
+6. Operator actions: sambanova + cohere onboarding forms.
+7. Video lane: spend-gated.
+
+**Honest scope statement.** Full e2e = every declared site (50) with verdict: currently ~13 sites APP_SURFACE-verified across 9222/9223 (each with screenshot), 2 hard-wall proven (chathub-9223 capture admitted, 9 consumer-proven artifact layer), 2 onboarding-walls waiting on operator, 5 hard walls, remainder = unverified-per-tab (suspended or not yet driven). No batch claims; each site flips its own row or stays put.
