@@ -89,6 +89,36 @@ def test_video_only_master_requires_explicit_spend_confirmation() -> None:
             raise AssertionError("video-only master accepted an unconfirmed video spend")
 
 
+def test_video_lane_resumes_without_repeating_terminal_seat() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        run_path = pathlib.Path(td) / "video_run.json"
+        run_path.write_text(json.dumps({
+            "generatedAt": "earlier", "seats": [
+                {"label": "digen-01", "host": "digen.ai", "state": "NOT_ADMITTED"}
+            ], "consumerProofs": []
+        }), encoding="utf-8")
+        accounts = [
+            {"label": "digen-01", "host": "digen.ai", "profile": "providers", "port": 9222},
+            {"label": "flow-seat2", "host": "labs.google", "profile": "seat2", "port": 9224},
+        ]
+        with patch.object(fleet, "E2E_VIDEO_RUN", run_path), \
+             patch.object(fleet, "declared_video_accounts", return_value=accounts), \
+             patch.object(fleet, "capture_and_graduate_video", return_value={
+                 "label": "flow-seat2", "host": "labs.google", "state": "ADMITTED_TO_8190_PURE_PYTHON"
+             }) as capture, \
+             patch.object(fleet, "consumer_video_probe", return_value={
+                 "host": "labs.google", "state": "CONSUMER_E2E_PROVEN", "resultUrlObserved": True
+             }), \
+             patch.object(fleet.time, "sleep"):
+            fleet.e2e_video_apply(13.0, 11.0)
+        assert capture.call_count == 1
+        assert capture.call_args.args[0]["label"] == "flow-seat2"
+        run = json.loads(run_path.read_text(encoding="utf-8"))
+    assert run["resumedFrom"] == "earlier"
+    assert [row["label"] for row in run["seats"]] == ["digen-01", "flow-seat2"]
+    assert run["consumerProofs"][0]["host"] == "labs.google"
+
+
 def test_video_capture_command_targets_exact_declared_seat() -> None:
     account = {"profile": "seat2", "port": 9224, "label": "flow-seat2", "provider": "flow",
                "host": "labs.google", "url": "https://labs.google/fx/tools/flow/project/project-id"}

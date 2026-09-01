@@ -473,11 +473,23 @@ def e2e_chat_consumer_proofs() -> None:
 
 
 def e2e_video_apply(job_wait: float, sso_budget: float) -> None:
-    """Serial complete video lane.  Every row is durable before the next spends."""
+    """Serial resumable video lane.  A terminal seat is never automatically re-spent."""
+    prior = read_json(E2E_VIDEO_RUN, {})
+    prior_seats = prior.get("seats") if isinstance(prior, dict) else []
+    prior_proofs = prior.get("consumerProofs") if isinstance(prior, dict) else []
+    seats = [dict(row) for row in prior_seats if isinstance(row, dict)] if isinstance(prior_seats, list) else []
+    proofs = [dict(row) for row in prior_proofs if isinstance(row, dict)] if isinstance(prior_proofs, list) else []
+    completed_labels = {str(row.get("label") or "") for row in seats if row.get("label") and row.get("state")}
     run = {"generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "mode": "serial_all_profile_video_capture_python_graduation_consumer_proof",
-           "consumerContract": "http://127.0.0.1:8190/v1", "seats": [], "consumerProofs": []}
+           "consumerContract": "http://127.0.0.1:8190/v1", "seats": seats, "consumerProofs": proofs}
+    if seats:
+        run["resumedFrom"] = str(prior.get("generatedAt") or "unknown")
     for account in declared_video_accounts():
+        label = str(account["label"])
+        if label in completed_labels:
+            print(f"video resume: {label} already has terminal evidence; not re-running", flush=True)
+            continue
         row = capture_and_graduate_video(account, job_wait, sso_budget)
         run["seats"].append(row)
         atomic_json(E2E_VIDEO_RUN, run)
@@ -485,8 +497,10 @@ def e2e_video_apply(job_wait: float, sso_budget: float) -> None:
     # A pin selects a provider host, not an account label.  Prove every host
     # with at least one exact-file graduation, while the seat rows remain the
     # capacity source of truth.
+    attempted_hosts = {str(row.get("host") or "") for row in run["consumerProofs"] if row.get("host")}
     for host in sorted({str(r["host"]) for r in run["seats"]
-                        if r.get("state") == "ADMITTED_TO_8190_PURE_PYTHON"}):
+                        if r.get("state") == "ADMITTED_TO_8190_PURE_PYTHON" and str(r.get("host") or "")
+                        not in attempted_hosts}):
         run["consumerProofs"].append(consumer_video_probe(host))
         atomic_json(E2E_VIDEO_RUN, run)
     print(f"all-profile video E2E complete: {E2E_VIDEO_RUN.name}")
