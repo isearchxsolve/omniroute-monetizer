@@ -12149,6 +12149,14 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Approved upgrade shape.** Stage 3.8.50 in an isolated directory/port/data directory first; prove the catalog/health regression is fixed with no production state present; identify and make a byte-for-byte recoverable backup of the exact live data directory plus launch environment; then run one controlled owner-led cutover with migration/readiness/rollback checks. No package install, data copy, restart, database write, credential operation, or consumer mutation was performed in this assessment.
 
+### [2026-09-01 13:51] #1481 - Began isolated OmniRoute 3.8.50 sandbox staging
+
+**Action.** Following the approved no-production-state upgrade shape, began `npm install --prefix D:\\omniroute-monetizer\\state\\omniroute-3.8.50-sandbox omniroute@3.8.50` from the official npm registry. The destination is a new isolated sandbox directory; it has not been given a production `DATA_DIR`, production port, production launch command, database, credential store, or session/OAuth artifact.
+
+**Runtime observation.** The npm child is actively resolving/downloading the package's large dependency graph (nonzero/rising CPU and working set, npm registry fetches returning 200); it has not yet finished materializing `node_modules\\omniroute\\package.json`, so no sandbox server has been started. No production package file, OmniRoute process, data directory, database, credential, consumer, Chrome/CDP, or seat-pool state has been altered.
+
+**Next exact gate.** When install completes: verify package version 3.8.50, start it only on an isolated port with an empty isolated data directory, measure repeated `/healthz` and `/v1/models`, and only then compare it to the wedged 3.8.49 production process. Production cutover remains prohibited until exact data-dir discovery, backup, migration/rollback plan, and sandbox proof are complete.
+
 **Discipline note.** Old artifact stays NOT admitted (401 dead bearer - honest). No claims beyond what the screenshots show. The hung auth0 tabs were closed and replaced with fresh ones (renderer hygiene, no session loss: auth0 state is server-side).
 
 ### [2026-09-01 06:30] #1452 - Reconcile v2 CONSTANT-N MIRROR + one-profile-at-a-time cycle started (operator solution to the 4x51 wedge)
