@@ -12553,3 +12553,22 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Boundaries.** Only the wedged seat tree was killed and only through the established single-owner recovery; 9222/9225/9223 untouched; :8189/:8190/:20128 untouched; no provider requests, no captures, no admissions in this unit.
 
 **Next:** re-run 9224 audit v2 + deep-drive pass 2 on the fresh seat (tabs newly opened need sign-in state discovery), then captures.
+
+### [2026-09-01 22:42] #1507 - Built and verified the Omni-only native video runtime patch tool
+
+**Component reviewed.** Continued the Omni-only work from #1506. Reviewed the active 3.8.50 published package layout, the native video route manifest, and the source/runtime patch script. The Windows service resolves to `D:\omniroute-monetizer\state\omniroute-3.8.50-sandbox\node_modules\omniroute`; its video route loads Turbopack chunks from `dist\.build\next\server\chunks`. No service, Chrome profile, seat-pool process, database, provider setting, or consumer app was touched.
+
+**Defects found in the repair tooling.** The first plan invocation failed with `Expected exactly one video-route chunk containing ...; found 0: none`. The failure was in the tool's path calculation, not in the Omni package: `route.js` is under `...\\next\\server\\app\\...`, while its `R.c("server/chunks/...")` references are rooted at `...\\next\\server`. The resolver incorrectly anchored at the `.build` directory. The KIE source patch also initially referenced `body.mode`, `body.multi_shots`, and `body.resolution` without adding those fields to the narrow TypeScript body type.
+
+**Implementation.** `scripts/automation/omni_video_runtime_patch.py` now:
+1. Resolves the actual `next/server` chunk root (`route.parents[5].parent`) and count-checks the exact loaded chunks.
+2. Patches the source KIE body type as well as the model-specific request construction.
+3. Accepts `--plan` explicitly while retaining plan as the default.
+4. Recognizes both pending and already-applied states, rejects partial/ambiguous states, and makes a second apply safe without creating an unnecessary backup.
+5. Keeps the backup-first, exact-match, no-restart, no-spend, no-database-mutation contract.
+
+**Tests added.** `tests/test_omni_video_runtime_patch.py` covers the Turbopack route-root calculation, the required KIE fields, and exact pending/applied replacement states (including the minified KIE new-text-prefix case).
+
+**Verification.** `python -m unittest discover -s tests -p 'test_omni_video_runtime_patch.py' -v` passed **3/3**. `python -m py_compile scripts/automation/omni_video_runtime_patch.py` passed. `python scripts/automation/omni_video_runtime_patch.py --plan` resolved the registered active package and reported **5/5 pending exact replacements**: Vertex source registry, KIE source request fields, KIE source model defaults, Vertex compiled registry, and KIE compiled model defaults. The plan read the compiled route chunks successfully and produced SHA-256 fingerprints; no runtime file was changed in this component.
+
+**Next.** Commit this deterministic tool/test unit, then run its backup-first `--apply` against the active 3.8.50 package. Applying it will prepare the next controlled service reload; it will not reload the already-running process or claim live video capacity until a narrow post-reload MP4 proof is obtained.
