@@ -12067,6 +12067,14 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Status truth.** `state\\omniroute_e2e_acceptance.json` remains the prior preflight snapshot (`STABLE_CATALOG`, `LOCAL_CONTRACT_OPEN_BY_DESIGN`, provider sweep `NOT_RUN`) because the active run has not reached final report write. No fleet capacity, graduation, provider-death, or release claim is made. No seat-pool, Chrome/CDP, consumer-job, native-video, credential, database, service, or contract mutation occurred during this check.
 
+### [2026-09-01 12:45] #1471 - Counted interim Omni E2E model outcomes
+
+**Evidence count.** The live stdout currently contains 3,430 model classification lines: `NOT_ROUTED` 1,488; `EMPTY` 770; `TRANSPORT` 643; `ERROR` 344; `AUTH` 167; `RATE` 13; and `WALL` 5. These are non-proof/interim outcomes, not all equivalent provider-death failures.
+
+**Pass count.** Summing the coordinator's completed-lane summaries gives 134 direct proofs across 5,360 rows in 57 completed lane summaries, leaving 5,226 rows without a direct proof in those summaries. The summary-row total exceeds the currently visible classification-line count because the resumable coordinator includes prior lane evidence while live output only contains emitted classification lines; therefore these are explicitly interim counts, not the final deduplicated fleet totals.
+
+**Conclusion.** The sweep remains active and the final JSON report has not been written. No capacity or release certification is made from these counts.
+
 **Discipline note.** Old artifact stays NOT admitted (401 dead bearer - honest). No claims beyond what the screenshots show. The hung auth0 tabs were closed and replaced with fresh ones (renderer hygiene, no session loss: auth0 state is server-side).
 
 ### [2026-09-01 06:30] #1452 - Reconcile v2 CONSTANT-N MIRROR + one-profile-at-a-time cycle started (operator solution to the 4x51 wedge)
