@@ -4,6 +4,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import patch
 import json
+import os
 import pathlib
 import tempfile
 import sys
@@ -65,6 +66,27 @@ def test_complete_master_orders_chat_consumer_then_video() -> None:
          patch.object(fleet, "e2e_video_apply", side_effect=lambda *a: calls.append("video")):
         fleet.e2e_apply(11.0, 12.0, 0, 13.0)
     assert calls == ["chat", "chat-consumer", "video"]
+
+
+def test_video_only_continuation_does_not_rerun_chat() -> None:
+    calls: list[str] = []
+    original = os.environ.get("OMNI_VIDEO_CONFIRM_SPEND")
+    with patch.object(fleet, "e2e_video_apply", side_effect=lambda *a: calls.append("video")), \
+         patch.object(fleet, "e2e_chat_apply", side_effect=lambda *a: calls.append("chat")), \
+         patch.object(fleet, "e2e_chat_consumer_proofs", side_effect=lambda: calls.append("chat-consumer")):
+        fleet.e2e_video_only_apply(13.0, 11.0)
+    assert calls == ["video"]
+    assert os.environ.get("OMNI_VIDEO_CONFIRM_SPEND") == original
+
+
+def test_video_only_master_requires_explicit_spend_confirmation() -> None:
+    with patch.object(sys, "argv", ["fleet_graduation.py", "--apply", "--e2e-video"]):
+        try:
+            fleet.main()
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:
+            raise AssertionError("video-only master accepted an unconfirmed video spend")
 
 
 def test_video_capture_command_targets_exact_declared_seat() -> None:

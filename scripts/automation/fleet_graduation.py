@@ -25,6 +25,10 @@ profiles, persists a result after every unit, and does not call a seat
 graduated until its Python runtime and the :8190 consumer contract have each
 produced their required proof.  Video rendering is spend-sensitive, so the
 confirmation is intentionally impossible to omit by accident.
+
+``--apply --e2e-video --confirm-video-spend`` is the resumable video-only
+continuation.  It reuses completed chat graduation evidence and runs every
+declared video seat without re-driving chat tabs or re-spending chat probes.
 """
 from __future__ import annotations
 
@@ -505,6 +509,19 @@ def e2e_apply(sso_budget: float, capture_wait: float, limit: int, video_job_wait
             os.environ["OMNI_VIDEO_CONFIRM_SPEND"] = prior
 
 
+def e2e_video_only_apply(job_wait: float, sso_budget: float) -> None:
+    """Run every declared video seat without repeating a completed chat lane."""
+    prior = os.environ.get("OMNI_VIDEO_CONFIRM_SPEND")
+    os.environ["OMNI_VIDEO_CONFIRM_SPEND"] = "1"
+    try:
+        e2e_video_apply(job_wait, sso_budget)
+    finally:
+        if prior is None:
+            os.environ.pop("OMNI_VIDEO_CONFIRM_SPEND", None)
+        else:
+            os.environ["OMNI_VIDEO_CONFIRM_SPEND"] = prior
+
+
 def e2e_chat_apply(sso_budget: float, capture_wait: float, limit: int) -> None:
     """Serial all-profile chat lane: SSO -> manifest -> capture/replay -> exact admission."""
     from tab_graduation_sweep import scratch_report, session_slug
@@ -593,6 +610,8 @@ def main() -> int:
                        help="write the all-profile/all-seat production plan; no Chrome or network")
     group.add_argument("--e2e-chat", action="store_true",
                        help="serial SSO -> capture -> proof -> pure-Python admission across every declared profile; video excluded")
+    group.add_argument("--e2e-video", action="store_true",
+                       help="all-profile video-only continuation; reuses chat evidence and does not re-drive chat seats")
     group.add_argument("--e2e", action="store_true",
                        help="COMPLETE all-profile master: SSO, chat capture/proof/admission, video capture/Python render/admission, and pinned :8190 video proof")
     ap.add_argument("--port", type=int, default=9222, help="dedicated automation CDP port for capture or SSO recovery")
@@ -605,10 +624,10 @@ def main() -> int:
     ap.add_argument("--confirm-video-spend", action="store_true",
                     help="required with --apply --e2e; acknowledges real video renders in capture, Python proof, and pinned :8190 proof")
     args = ap.parse_args()
-    if (args.verify_and_admit or args.capture_chat or args.recover_sso or args.e2e_chat or args.e2e) and not args.apply:
+    if (args.verify_and_admit or args.capture_chat or args.recover_sso or args.e2e_chat or args.e2e_video or args.e2e) and not args.apply:
         ap.error("--apply is required: these operations send a provider request and/or change an admission")
-    if args.e2e and not args.confirm_video_spend:
-        ap.error("--apply --e2e requires --confirm-video-spend because it deliberately renders real videos")
+    if (args.e2e or args.e2e_video) and not args.confirm_video_spend:
+        ap.error("--apply --e2e/--e2e-video requires --confirm-video-spend because it deliberately renders real videos")
     if args.verify_and_admit:
         verify_and_admit(exact_session(args.verify_and_admit))
     elif args.capture_chat:
@@ -622,6 +641,8 @@ def main() -> int:
               f"ports={[x['port'] for x in plan['fleet']]}")
     elif args.e2e_chat:
         e2e_chat_apply(args.sso_budget, args.capture_wait, args.limit)
+    elif args.e2e_video:
+        e2e_video_only_apply(args.video_job_wait, args.sso_budget)
     elif args.e2e:
         e2e_apply(args.sso_budget, args.capture_wait, args.limit, args.video_job_wait)
     ledger = inventory()
