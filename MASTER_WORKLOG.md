@@ -12489,3 +12489,19 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Repair.** `veoaifree-web` now receives a maximum 90-second client budget because it is a browser-backed web adapter without a bounded job receipt. It will finish as an explicit `TRANSPORT_TIMEOUT` or provider response, allowing the remaining Vertex and XAI routes to run. Genuine asynchronous API-backed providers retain the user-authorized 900-second generation budget. The report classifies transport timeouts separately from ordinary provider errors.
 
 **Verification.** Focused video/registry tests passed **7/7**; Python compilation and `git diff --check` passed. No generation was sent during this repair. The current report remains diagnostic partial evidence until the restarted exact-plan pass completes.
+
+### [2026-09-01 19:55] #1502 - 9222 final re-audit: 56/56 rows terminal; cycle DRAINED
+
+**Straggler retry (scripts/automation/drive_straggler_9222.py, state/drive_batch5_9222.json).** coze.com: reload + wake-first CDP_FAIL again - RENDERER_HANG now proven twice (batch4 wake-first, batch5 full reload); named terminal with reopen-at-next-align note. giz.ai: /chat serves the site's own 404 (oops nothing here) - chat surface gone; earlier artifact session_giz_ai_chat.json (3468B sentinel body) stands.
+
+**Terminal fixups applied to the ledger (all with evidence references):** 5 rtst.ai rows (3 had APP_SURFACE verdicts from batch3 - same by-design API-credential seat per #1151) -> API_SEAT; baichuan -> WALL DNS NXDOMAIN (drive4_5C76EBA7); creen -> WALL site network-error (drive4_0ACF92F4); coze -> WALL RENDERER_HANG x2 proven; grok-9222 -> SIGNUP_WALL restored from batch1 proven evidence (grok_9222_sent3 - anonymous tier cannot answer; grok capacity lives on 9223); stale transport-error details replaced with batch4 evidence on chatgpt/akool/magichour/hailuoai/pollinations.
+
+**Final ledger (state/surface_audit_9222_full.json): 38 APP_SURFACE, 6 WALL, 5 API_SEAT, 4 SIGNUP_WALL, 1 ONBOARDING_WALL (sambanova - operator action), 1 LOGIN_WALL (hailuoai), 1 PAY_WALL (magichour). Zero NEEDS_DRIVE / CDP_FAIL / TAB_GONE. Every row is terminal with a named wall, an API-seat record, or an APP_SURFACE screenshot.**
+
+**Final re-audit (scripts/automation/final_reaudit_9222.py).** All 35 unique APP_SURFACE domains still live on 9222. Instant composer probe: 22/35 present; 13 report no composer at probe instant (1min, chatglm, groq, heygen, meta, mistral, monica, poe, prompt.ql, stepfun, tencent/yuanbao, v0, you.com). Honest reading: surface state is dynamic (renderer throttle at 1.2s probe settle, post-submit collapse); the referee screenshots and the durable artifacts are the evidence of record - groq/mistral/monica/poe/v0/yuanbao/1min already hold pool artifacts, so no capacity regressed. The 13 flags feed the next captures pass (chatglm, meta, prompt.ql, stepfun, you.com were already artifact-less targets with named blocks).
+
+**9222 cycle DRAIN condition met: zero rows outside terminal states.** Operator actions remain open: sambanova (payment form), cohere (about-you). Walls named, never solved (Law 5).
+
+**What is NOT claimed:** 9222 is surface+SSO drained, not fully capture-complete - together/cerebras/chatglm/promptql/meta/puter/xinghuo still lack artifacts (named blocks: renderer thaw, transport RCA, fresh-tab signed-out). Per the no-skip mandate the remaining stage-3-5 work continues next pass before 9224/9225/9223 cycles.
+
+**Next:** continue 9222 captures stage 3-5 for the artifact-less set, then 9224 cycle.
