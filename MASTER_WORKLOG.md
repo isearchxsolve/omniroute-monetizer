@@ -11859,6 +11859,24 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **What is not claimed.** No remaining video seat has been rerun in this code component. The hardened parent deadline prevents future indefinite waiting; it cannot turn the three existing absent-capture rows into video supply. The next invocation will resume after those three rows, with one master only.
 
+### [2026-09-01 06:30] #1457 - All-profile video master completed once under serial/no-repeat control: 0 of 6 seats admitted, exact failure classes preserved
+
+**Execution ownership.** After verifying no previous video master remained, launched exactly one hidden, redirected, guarded `fleet_graduation.py --apply --e2e-video --confirm-video-spend` process. It resumed the durable state rather than replaying Digen/Flow-providers/RTST. Its stdout records the terminal skips and final completion; stderr is empty. No duplicate master or capture child remained at completion.
+
+**Durable all-seat result.** `fleet_e2e_video_graduation_run.json` now has all six declared accounts exactly once:
+1. providers / `digen-01` / digen.ai: `ssoRc=0`, `captureRc=1`, `NOT_ADMITTED` — no fresh correlated submit-poll-result artifact.
+2. providers / `pro-1` / labs.google Flow: `ssoRc=0`, `captureRc=1`, `NOT_ADMITTED` — no fresh correlated artifact.
+3. providers / `rtst-1` / rtst.ai: `ssoRc=0`, `captureRc=1`, `NOT_ADMITTED` — no fresh correlated artifact.
+4. niloy / `niloy-1` / labs.google Flow: `ssoRc=0`, `captureRc=1`, `NOT_ADMITTED` — no fresh correlated artifact.
+5. seat2 / `flow-seat2` / labs.google Flow: `ssoRc=1`, `NOT_ADMITTED` — bounded video SSO failed; capture correctly not attempted.
+6. seat3 / `flow-seat3` / labs.google Flow: `ssoRc=1`, `NOT_ADMITTED` — bounded video SSO failed; capture correctly not attempted.
+
+**Hard truth and capacity.** There are **0 admitted video seats, 0 Python submit-poll-result proofs, 0 result URLs, and 0 pinned `:8190` video job proofs**. The master therefore reports no video capacity. This does not call the providers dead: the classes are (a) capture/adapter gap for the four SSO-successful seats, and (b) bounded SSO-state gap for seat2/seat3. Both are build/seat-state targets, not supply claims.
+
+**Controls proven by this run.** No completed terminal seat was re-run; Digen/pro-1/RTST were skipped after their stored rows. The parent deadline prevented a repeat of the earlier indefinite child wait. The master completed normally, and no Chrome process, operator profile, OmniRoute service, shim, provider credential, or database was terminated/changed in the final all-seat run.
+
+**Next diagnostic direction.** Do not spend another render blindly. Read the per-port SSO/capture reports and inspect the generated video-capture request lifecycle to classify each failure as missing provider UI submit, capture listener mismatch, missing submit-to-poll correlation, or a real provider wall. Only after that diagnosis produces a specific adapter/capture repair should the relevant exact seat be deliberately re-opened for a new attempt.
+
 ### [2026-09-01 05:20] #1447 - Fleet roster DEDUP + RECONCILE applied; chathub consumer-proven (9th admission)
 
 **chathub end-to-end (operator call-out closed).** Sign-in on niloy via the real "Google / last used" control (screenshot-verified authenticated app), real send-button submit (icon-only button below the composer was the miss in all previous attempts; residue proved 9 typed-but-unsubmitted sentinels), artifact staged with the real transport (/api/v5/chat/completions x2 dual-model + title POST), 409 stream_request_conflict fixed via _chathub_preflight (all four UUIDs client-minted per send - conversationId/streamId/threadId/messages[].id), ADMITTED as 9th chat file, consumer proof through :8190 answered computed 58. Also fixed in the same unit: promotion left staged status.alive=False in place, which the pool reads as flagged_dead -> an admitted file could never dispatch; promotion now lifts the staging quarantine on proof.
