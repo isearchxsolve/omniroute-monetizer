@@ -12409,3 +12409,22 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Honest grading note.** The 41 APP_SURFACE include screenshot-verified shells AND probe-classified rows (avatar/auth-link heuristic). The screenshots on disk are the referee; a visual review pass can downgrade any of them, but none is a bare claim. Walls take precedence over probes where prior evidence existed (sambanova stays ONBOARDING_WALL per #1451 - the probe never overrides stronger evidence).
 
 **9222 remaining to TRUE e2e-complete per the mandate:** (1) captures (live submit -> artifact stage -> replay -> admit) for APP_SURFACE sites lacking artifacts - the bulk of remaining work; (2) coze retry + 2 CDP_FAIL + 2 TAB_GONE rows; (3) drain. THEN 9224/9225/9223 full cycles. Operator actions: sambanova form, cohere form.
+
+### [2026-09-01 18:55] #1500 - 9222 resume drive batch 4: six walls classified with screenshots; baichuan DNS-dead; coze renderer hang persists
+
+**Continuation.** Session resumed from persisted todos (9222 deep-drive lane). Wrote scripts/automation/drive_resume_9222.py (wake-first activate+2.5s settle, 30s CDP timeouts, paced 3s between tabs, one tab at a time, screenshots as referee). Ran it as a paced background run.
+
+**Results (state/drive_batch4_9222.json, ledger merged by url):**
+- SIGNUP_WALL proven: akool.com (marketing page, signup-only entry), pollinations.ai (build-an-app landing, no anonymous chat), chatgpt.com-9222 (composer present but anonymous tier gated - log in / sign up required; matches batch1 evidence; no auto account creation per Law 5).
+- PAY_WALL proven: magichour.ai (pricing-gated product page).
+- LOGIN_WALL confirmed: hailuoai.com (composer present but account-gated surface).
+- SITE-DOWN evidence: yi.baichuan-ai.com -> Chrome DNS error page (server IP could not be found) - network-level death, not an auth gap. creen.ai -> site's own network-error page (server unreachable). Both screenshots on disk.
+- giz.ai: tab reopened to /404, page body empty, NEEDS_DRIVE persists (navigation retry next pass).
+- coze.com: CDP_FAIL again (CDPError on wake-first) - renderer hang persists; retried next align.
+- rtst.ai: recorded API_SEAT_BYPASS_UI (JWT API-credential seat bypasses CDP UI by design per #1151); the 7 rtst tabs are duplicates.
+
+**Honest wall semantics:** chatgpt/pollinations/akool signup-vs-login checks done by reading the actual wall text head + screenshot; no credentials typed, no walls solved (Law 5). The todo item "LOGIN_WALL drive: signup-vs-login check" is complete for all six rows (creen's check produced network-error evidence instead).
+
+**What is NOT claimed:** no captures, no replays, no admissions in this entry; walls are named, not worked around; baichuan/creen verdicts are network evidence, not permanent death certificates.
+
+**Next:** captures lane (APP_SURFACE tabs lacking artifacts -> submit -> stage -> replay -> admit), then final re-audit -> drain; then 9224/9225/9223 cycles.
