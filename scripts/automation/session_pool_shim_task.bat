@@ -31,7 +31,7 @@ rem A live listener that fails /healthz is a wedged task-owned shim.  Before
 rem launching a replacement, stop ONLY the exact listener for this script; never
 rem kill a foreign owner of port 8190.  This is the missing recovery step that
 rem previously caused endless PRE-START / EADDRINUSE no-op loops.
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$p=Get-NetTCPConnection -LocalPort 8190 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess; if($p){$c=Get-CimInstance Win32_Process -Filter ('ProcessId='+$p); if($c -and $c.CommandLine -match 'session_pool_shim\.py\s+8190'){ Stop-Process -Id $p -Force; Write-Output ('stopped verified wedged shim pid='+$p) }}" >> "D:\omniroute-monetizer\logs\shim_task_diag.log" 2>&1
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$p=Get-NetTCPConnection -LocalPort 8190 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess; if($p){$c=Get-CimInstance Win32_Process -Filter ('ProcessId='+$p); if($c -and $c.CommandLine -match 'session_pool_shim\.py\x22?\s+8190'){ Stop-Process -Id $p -Force; Write-Output ('stopped verified wedged shim pid='+$p) }}" >> "D:\omniroute-monetizer\logs\shim_task_diag.log" 2>&1
 
 rem Not answering -> start it. The venv launcher spawns the base interpreter as a child process
 rem (normal Python 3.11 venv behavior on Windows), so ONE healthy shim always shows as two

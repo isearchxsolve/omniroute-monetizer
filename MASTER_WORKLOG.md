@@ -12119,6 +12119,12 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Verification before deployment.** Added an offline liveness-payload test and updated the supervisor contract assertion. `python -m pytest -q scripts\\automation\\test_session_pool_shim_bridge.py tests\\test_omniroute_capability_matrix.py` passed **19/19**. `python -m py_compile scripts\\automation\\session_pool_shim.py scripts\\automation\\omni_supervisor.py` and `git diff --check` passed. No OmniRoute restart, Chrome/CDP action, seat-pool supply mutation, credential, database, or consumer action occurred during the implementation. The next step is the one controlled task-owned shim reload so the running process loads this route.
 
+### [2026-09-01 13:24] #1477 - Corrected quoted task-owner command-line matcher before controlled shim reload
+
+**Deployment observation.** The first task-owned reload attempt received the expected 404 from the old shim's absent `/healthz` endpoint and entered its recovery branch, but did not stop the listener. Inspection proved the reason: the listener command line contains `session_pool_shim.py" 8190`; the first strict matcher required whitespace immediately after `.py`, so it safely rejected the true owner rather than risking a broad kill. The existing listener remained PID 43372 and no foreign process was touched.
+
+**Correction.** Updated the task-owned matcher to accept the optional command-line quote using the PowerShell regex escape `\x22?`, avoiding an embedded double quote that would corrupt cmd.exe's `-Command` argument. The guard still requires both the listening PID on port 8190 and the script/port identity before `Stop-Process` is permitted. Focused tests again passed **19/19** and `git diff --check` passed. The corrected controlled task reload remains pending at the next action.
+
 **Discipline note.** Old artifact stays NOT admitted (401 dead bearer - honest). No claims beyond what the screenshots show. The hung auth0 tabs were closed and replaced with fresh ones (renderer hygiene, no session loss: auth0 state is server-side).
 
 ### [2026-09-01 06:30] #1452 - Reconcile v2 CONSTANT-N MIRROR + one-profile-at-a-time cycle started (operator solution to the 4x51 wedge)
