@@ -147,6 +147,11 @@ JS_FOCUS_COMPOSER = r"""
       else if (el.isContentEditable || (el.getAttribute && el.getAttribute('role') === 'textbox')) bonus = 1000000;
       if (el.id && el.id.toLowerCase().includes('prompt')) bonus += 5000000;
       if (el.placeholder && el.placeholder.toLowerCase().includes('message')) bonus += 5000000;
+      // Same composer-placeholder rule as JS_FOCUS_COMPOSER: the real chat input over a
+      // system-prompt field (see that block's comment).
+      const ph_ = (el.placeholder || '').toLowerCase();
+      if (/(start typing|type a message|send a message|ask any|say something|how can i help|type here|enter a prompt|ask me)/.test(ph_)) bonus += 5000000;
+      if (/system prompt/.test(ph_)) bonus -= 5000000;
       if ((el.placeholder && el.placeholder.toLowerCase().includes('search')) ||
           (el.getAttribute && (el.getAttribute('aria-label') || '').toLowerCase().includes('search'))) bonus -= 5000000;
       cands.push({ el, score: rect.width * rect.height + rect.top * 2 + bonus });
@@ -166,18 +171,110 @@ JS_FOCUS_COMPOSER = r"""
 """
 
 # Reads back whatever the focused composer now holds. Pierces shadow roots, because
-# document.activeElement stops at the shadow host.
+# document.activeElement stops at the shadow host. Falls back to the highest-scoring
+# composer element when focus is stolen (playground pages embed Stripe/payment iframes
+# that grab focus on click -- together.ai measured 2026-09-02), so a landed sentinel is
+# still recognised even when activeElement points elsewhere.
 JS_READ_ACTIVE = r"""
 (() => {
   let a = document.activeElement;
   while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
-  if (!a) return { ok: false, text: '' };
-  const t = ('value' in a && typeof a.value === 'string') ? a.value : (a.innerText || a.textContent || '');
-  return { ok: true, tag: a.tagName.toLowerCase(), text: String(t).slice(0, 400) };
+  const read = (e) => (e && 'value' in e && typeof e.value === 'string') ? e.value : (e ? (e.innerText || e.textContent || '') : '');
+  if (a && a.tagName !== 'IFRAME' && a.tagName !== 'BODY') {
+    const t = read(a);
+    if (t && t.trim()) return { ok: true, text: t.slice(0, 4000) };
+  }
+  // focus-stolen fallback: read the best-scoring visible composer anywhere in the page
+  let best = null, bestScore = -1;
+  const consider = (el) => {
+    const rect = el.getBoundingClientRect();
+    const st = el.ownerDocument.defaultView.getComputedStyle(el);
+    if (rect.width < 80 || rect.height < 18) return;
+    if (st.visibility === 'hidden' || st.display === 'none') return;
+    if (el.disabled || el.readOnly) return;
+    let bonus = 0;
+    if (el.tagName === 'TEXTAREA') bonus = 1000000;
+    else if (el.isContentEditable || (el.getAttribute && el.getAttribute('role') === 'textbox')) bonus = 1000000;
+    const score = rect.width * rect.height + rect.top * 2 + bonus;
+    if (score > bestScore) { bestScore = score; best = el; }
+  };
+  for (const el of document.querySelectorAll('textarea, [contenteditable="true"], [contenteditable=""], div[role="textbox"]')) consider(el);
+  if (!best) return { ok: false, text: '' };
+  return { ok: true, text: read(best).slice(0, 4000), viaComposerFallback: true };
 })()
 """
 
 JS_PAGE_TEXT = "(() => (document.body ? document.body.innerText : '').slice(0, 6000))()"
+
+# 6th composer strategy: WRITE + SEND in one element-scoped evaluate, immune to focus
+# theft. Playground pages embed iframes (Stripe/payment controllers) that take focus on
+# any pointer event, so a trusted CDP Enter is delivered to the iframe and the composer
+# never submits (measured on together.ai 2026-09-02: text landed, 0 sentinel posts).
+# This snippet locates the composer by the shared scoring, writes the sentinel through
+# the element's native prototype setter (the React-honoured path), fires input/change,
+# and dispatches SYNTHETIC Enter keydown/keyup directly on that element. React-class
+# composers attach keydown handlers on the element and accept synthetic events.
+JS_FORCE_SYNTH_ENTER = r"""
+(() => {
+  const SENT = __SENTINEL_JSON__;
+  const shadows = (root, acc = []) => {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    let n;
+    while ((n = w.nextNode())) if (n.shadowRoot) { acc.push(n.shadowRoot); shadows(n.shadowRoot, acc); }
+    return acc;
+  };
+  const roots = [document, ...shadows(document)];
+  const cands = [];
+  for (const r of roots) {
+    for (const el of r.querySelectorAll('textarea, [contenteditable="true"], [contenteditable=""], input[type="text"], input[type="search"]')) {
+      const rect = el.getBoundingClientRect();
+      const st = el.ownerDocument.defaultView.getComputedStyle(el);
+      if (rect.width < 80 || rect.height < 18) continue;
+      if (st.visibility === 'hidden' || st.display === 'none' || Number(st.opacity) === 0) continue;
+      if (el.disabled || el.readOnly) continue;
+      let bonus = 0;
+      if (el.tagName === 'TEXTAREA') bonus = 1000000;
+      else if (el.isContentEditable || (el.getAttribute && el.getAttribute('role') === 'textbox')) bonus = 1000000;
+      if (el.placeholder && el.placeholder.toLowerCase().includes('message')) bonus += 5000000;
+      const ph_ = (el.placeholder || '').toLowerCase();
+      if (/(start typing|type a message|send a message|ask any|say something|how can i help|type here|enter a prompt|ask me)/.test(ph_)) bonus += 5000000;
+      if (/system prompt/.test(ph_)) bonus -= 5000000;
+      if ((el.placeholder && el.placeholder.toLowerCase().includes('search')) ||
+          ((el.getAttribute && (el.getAttribute('aria-label') || '')).toLowerCase().includes('search'))) bonus -= 5000000;
+      cands.push({ el, score: rect.width * rect.height + rect.top * 2 + bonus });
+    }
+  }
+  if (!cands.length) return { ok: false, error: 'no visible composer' };
+  cands.sort((a, b) => b.score - a.score);
+  const el = cands[0].el;
+  el.scrollIntoView({ block: 'center' });
+  el.focus();
+  let wrote = false;
+  if (el.isContentEditable) {
+    el.textContent = SENT; wrote = true;
+  } else {
+    const desc = Object.getOwnPropertyDescriptor(el.constructor.prototype, 'value');
+    if (desc && desc.set) { desc.set.call(el, SENT); wrote = true; }
+    else { el.value = SENT; wrote = true; }
+  }
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  // Chrome's KeyboardEvent constructor zeroes the legacy keyCode/which; handlers that
+  // read e.keyCode/e.which (legacy React keydown guards) must see 13, so pin them.
+  const mkEnter = (type) => {
+    const ev = new KeyboardEvent(type, { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true });
+    Object.defineProperty(ev, 'keyCode', { get: () => 13 });
+    Object.defineProperty(ev, 'which', { get: () => 13 });
+    Object.defineProperty(ev, 'charCode', { get: () => 13 });
+    return ev;
+  };
+  el.dispatchEvent(mkEnter('keydown'));
+  el.dispatchEvent(mkEnter('keypress'));
+  el.dispatchEvent(mkEnter('keyup'));
+  const back = (el && 'value' in el) ? el.value : (el.innerText || el.textContent || '');
+  return { ok: true, wrote, sent: true, echo: (back || '').includes(SENT.split(':')[0]) };
+})()
+"""
 
 # 4th composer strategy: DIRECT ELEMENT TARGETING. Strategies 1-3 deliver text through the browser's
 # own input pipeline (IME insertText / pointer+insertText / per-char key events) and model-backed
@@ -215,6 +312,12 @@ JS_FORCE_TEXT = r"""
       else if (el.isContentEditable || (el.getAttribute && el.getAttribute('role') === 'textbox')) bonus = 1000000;
       if (el.id && el.id.toLowerCase().includes('prompt')) bonus += 5000000;
       if (el.placeholder && el.placeholder.toLowerCase().includes('message')) bonus += 5000000;
+      // Playground-style pages ship TWO textareas: a system-prompt field and the real chat
+      // input. Composer-like placeholders beat generic editables; a "system prompt" field is
+      // never the send target (its Enter handler is a newline, so the send never fires).
+      const ph_ = (el.placeholder || '').toLowerCase();
+      if (/(start typing|type a message|send a message|ask any|say something|how can i help|type here|enter a prompt|ask me)/.test(ph_)) bonus += 5000000;
+      if (/system prompt/.test(ph_)) bonus -= 5000000;
       if ((el.placeholder && el.placeholder.toLowerCase().includes('search')) ||
           (el.getAttribute && (el.getAttribute('aria-label') || '').toLowerCase().includes('search'))) bonus -= 5000000;
       cands.push({ el, score: rect.width * rect.height + rect.top * 2 + bonus });
@@ -905,6 +1008,18 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
                         capture_output=True, text=True, timeout=15)
 
 
+        def strat_jsforce_synth() -> None:
+            # 6th strategy: focus-theft-proof write+send in one evaluate. Playground pages
+            # embed iframes (Stripe etc.) that steal focus on click, so a TRUSTED CDP Enter
+            # lands on the iframe, not the composer (together.ai measured 2026-09-02). This
+            # strategy never relies on activeElement: it locates the composer by score,
+            # writes the sentinel through the native prototype setter, dispatches
+            # input/change, then dispatches a SYNTHETIC keydown/keyup Enter directly on the
+            # element -- React-class handlers listen on the element and accept it.
+            r = c.evaluate(JS_FORCE_SYNTH_ENTER.replace("__SENTINEL_JSON__",
+                                                       json.dumps(SENTINEL))) or {}
+            row["jsforceSynth"] = {k: r.get(k) for k in ("ok", "wrote", "sent")}
+
         per = max(6.0, wait / 4.0)
         row["strategiesTried"] = []
 
@@ -932,7 +1047,8 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
 
         for label, fn in (("enter", strat_enter), ("js_click_send", strat_js_click),
                           ("mouse_send", strat_mouse_send), ("retype_keys", strat_retype),
-                          ("paste_clipboard", strat_paste)):
+                          ("paste_clipboard", strat_paste),
+                          ("jsforce_synth_enter", strat_jsforce_synth)):
             try:
                 fn()
             except CDPError as e:
