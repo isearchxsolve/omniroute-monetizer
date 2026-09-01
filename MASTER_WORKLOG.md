@@ -12706,6 +12706,12 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Safety boundary.** No chat, audio, video, catalog, provider, or consumer inference request was sent after restart. In particular, no spend-bearing KIE/Vertex video probe was launched: a responsive direct Omni HTTP health surface is the precondition for any patch validation. No service was stopped, restarted, reconfigured, or otherwise mutated by this check; the result is a truthful post-restart liveness observation to guide the next Omni-only diagnosis.
 
+### [2026-09-02 10:15] #1519 - OmniRoute post-restart health poll recovered; new runtime is ready for narrow video proof
+
+**Bounded poll.** Per operator instruction, polled only `http://127.0.0.1:20128/api/health` with `curl.exe`, system-proxy bypass, 3-second connect timeout, and 6-second total timeout. The first poll after the prior nonresponsive interval returned HTTP 200 in 22.998 ms with `status=ok`. The service is therefore now HTTP-responsive on the new registered NSSM/Node process tree.
+
+**Consequence.** The prerequisite for spend-bearing native video validation is now met: health is not being inferred from Windows service state alone. The next component may safely execute only the repaired KIE Veo 3.1 and Vertex 3.1 direct video candidates, validating returned MP4 bytes and preserving any provider wall/credential/transport result. No provider workload was sent during this poll component.
+
 ### [2026-09-01 20:59] #1514 - Mandate re-locked: full E2E+SSO all seats; 9222 found SSO-bounced, realigned 50/50
 
 **Scope correction (operator, 20:44Z).** The standing mandate is FULL E2E with SSO on ALL FOUR profiles (9222/9223/9224/9225). The #1513 "Omni-only" narrowing is superseded; seat lane resumed. Operator directive 20:53Z: "you handle seat, omni taken up via another agent" - seat lane is this agent's lane. Memory corrected (mandate.no_skip_full_e2e_all_profiles).
