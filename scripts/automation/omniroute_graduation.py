@@ -386,8 +386,14 @@ def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float,
                  min_interval: float = 1.0, resume: bool = True) -> dict[str, Any]:
     prior_payload = read_json(RUN, {}) if resume else {}
     prior_rows = prior_route_results(prior_payload)
+    selected = {(str(r.get("provider")), str(r.get("model")))
+                for r in plan.get("routes", []) if isinstance(r, dict)}
+    # A prior run may have used a broader catalog plan.  Resume only evidence
+    # for an exact row in *this* plan; otherwise historical results leak into
+    # consumer admission for a narrower family/run and manufacture capacity.
     prior = {(str(r.get("provider")), str(r.get("model"))): r for r in prior_rows
-             if isinstance(r, dict) and r.get("provider") and r.get("model")}
+             if isinstance(r, dict) and r.get("provider") and r.get("model")
+             and (str(r.get("provider")), str(r.get("model"))) in selected}
     results: list[dict[str, Any]] = list(prior.values())
     by_provider: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in plan.get("routes", []):
