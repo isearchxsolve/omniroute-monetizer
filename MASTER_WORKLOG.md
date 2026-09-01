@@ -12091,6 +12091,16 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Impact.** The active chat E2E worker and the active `video_provider_probe.py --all --timeout 900` worker were not targeted. No video job, seat-pool task, Chrome/CDP activity, credential, database, service, or endpoint contract was modified by this cleanup.
 
+### [2026-09-01 13:10] #1474 - Paused chat discovery and video proof after direct Omni became unhealthy
+
+**Observed health state.** Direct probes to `http://127.0.0.1:20128/v1/models` and the merged `http://127.0.0.1:8190/v1/models` both established TCP promptly but timed out before an HTTP response. The always-on supervisor's latest durable report classifies OmniRoute as `LISTENING_BUT_UNHEALTHY` (PID 46464) and the shim similarly unhealthy; OmniRoute's measured working set is 4,515,508,224 bytes with 0% sampled CPU. This is a shared control-plane outage, not a conclusion about video providers.
+
+**Sequencing decision.** Preserved the resumable chat sweep evidence and paused only the exact `omniroute_e2e_acceptance.py --apply --e2e` process pair. The video worker had produced no output because it was blocked before management login on the same direct Omni outage; stopped only that exact `video_provider_probe.py --all --timeout 900` process pair rather than leaving it to consume a 900-second timeout. Neither run produced a final certification.
+
+**Ownership discipline.** Per TECHNOLOGY_TRANSFER §7 and §16, OmniRoute itself was not stopped, killed, or restarted. It holds live OAuth state and is foreign/owned for recovery. The supervisor may probe and report only. A local, read-only static `video_registry.py` audit was launched to identify the next provider-handler expansion targets while the direct service is repaired by its owner.
+
+**Capacity interpretation.** The current 10 runnable native-video registry candidates across 6 providers remains inventory/probe scope, not graduated capacity. The separate `:8189` video router is currently UP and reports Flow/RTST/Digen as its provider set, with multiple Flow seats ready, but that seat-pool/live-CDP plane is not operated in this Omni repair action and must not be conflated with direct Omni native-video proof.
+
 **Discipline note.** Old artifact stays NOT admitted (401 dead bearer - honest). No claims beyond what the screenshots show. The hung auth0 tabs were closed and replaced with fresh ones (renderer hygiene, no session loss: auth0 state is server-side).
 
 ### [2026-09-01 06:30] #1452 - Reconcile v2 CONSTANT-N MIRROR + one-profile-at-a-time cycle started (operator solution to the 4x51 wedge)
