@@ -12697,3 +12697,19 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Critical process-age evidence.** The current NSSM process was created 2026-09-01 23:08:32 and its Node child at 23:08:33. The final KIE compiled Veo API branch was applied afterward (worklog #1510, 23:12). Therefore, although `omni_video_runtime_patch.py --plan` confirms all seven source/compiled replacements are present on disk, the active in-memory Node runtime predates the final patch and cannot yet be claimed to serve it. A healthy port alone is not proof of code reload.
 
 **Safety decision.** No narrow KIE/Vertex video request was sent against the stale runtime, so no provider credit was spent and no old-handler result was misclassified as a patch outcome. The exact next action is an elevated restart through the existing `OmniRoute` Windows service owner, then verify a new process creation timestamp/PID and health before the four narrow MP4-byte probes. No service operation was performed by this inspection component.
+
+### [2026-09-01 20:59] #1514 - Mandate re-locked: full E2E+SSO all seats; 9222 found SSO-bounced, realigned 50/50
+
+**Scope correction (operator, 20:44Z).** The standing mandate is FULL E2E with SSO on ALL FOUR profiles (9222/9223/9224/9225). The #1513 "Omni-only" narrowing is superseded; seat lane resumed. Operator directive 20:53Z: "you handle seat, omni taken up via another agent" - seat lane is this agent's lane. Memory corrected (mandate.no_skip_full_e2e_all_profiles).
+
+**Baseline reads.** TECHNOLOGY_TRANSFER.md (full) and CHROME_RULES_FOR_AGENTS.md re-read per rule 0a/0 before any action.
+
+**Finding - 9222 fleet SSO bounce.** Read-only CDP census: 57 of 58 9222 tabs sat on accounts.google.com/v3/signin/accountchooser, ALL with the same client_id (365941595420-v51i7q8 = labs.google OAuth consent step, distinct code_challenge per tab, continue->consent). The chooser DOM names "to continue to AI Test Kitchen" with isearch.xsolve@gmail.com marked "Signed out". Diagnosis: the video-router task-owned relaunch reopened Flow video tabs against a degraded Google session; each bounced to the consent chooser and the provider roster was displaced (0 of 50 union sites matched). No kill, no restart, no profile contact was performed - the bounce was diagnosed from tab URLs + one read-only DOM text.
+
+**Other seats healthy.** 9223/9224/9225 CDP OK, 2-3 video tabs each, zero accountchooser tabs - the bounce is 9222-local.
+
+**Align (scripts/automation/reconcile_seat_rosters.py --only 9222 --apply).** CONSTANT-N MIRROR policy, same sanctioned procedure as #1504: closed 58 strays + 1 blank, opened 48 missing union sites. Verification re-list: matched 50/50, 50 tabs, unmatched 0 - FLEET ALIGNED. Deterministic re-run opens nothing.
+
+**What is NOT claimed:** fresh tabs are NOT verified signed-in; the 9222 Google layer (isearch.xsolve) being "Signed out" at the chooser is operator-verifiable and predicts LOGIN_REQUIRED verdicts on the fresh roster until re-SSO. No captures, no admissions, no provider requests in this unit.
+
+**Next:** 9222 signed-in-state audit v2 of the fresh 50 (wake -> classify with wall naming, same discipline as #1503), then SSO drives for LOGIN_REQUIRED rows, then captures stage 3-5 (together/cerebras/chatglm/promptql/meta/puter/xinghuo), then drain; then 9224 audit v2 + deep-drive pass 2 -> 9225 -> 9223 cycle 2.
