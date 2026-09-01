@@ -12766,3 +12766,24 @@ Both Vertex rows reached the repaired Vertex handler and returned HTTP 400 with 
 **What is NOT claimed:** no captures, no replays, no admissions yet this session; APP_SURFACE verdicts prove surface+session state, not replayable supply.
 
 **Next:** captures stage 3-5 on the artifact-less APP_SURFACE set (together/cerebras + re-check meta/puter/giz artifacts), then replay -> admit -> drain; then 9224 audit v2 + deep-drive pass 2 -> 9225 -> 9223 cycle 2.
+
+### [2026-09-02 22:40] #1516 - 9222 captures stage 3-5: deepinfra captured (replay->WALL), engine hardened x3, walls named
+
+**Capture run (staged dir state/capture_staging_9222_v2, manifest-gated per-site, no hammering).**
+- DeepInfra Chat: CAPTURED (api.deepinfra.com/v1/openai/chat/completions, 258B sentinel body, via enter). Replay-check (one request): HTTP 402 "You need positive balance" -> **WALL classified, reported, not solved (Law 5)**. Artifact stays staged; no admission.
+- Together AI Chat: TEXT_REJECTED -> NO_REQUEST after engine fixes. RCA: playground page has TWO textareas (system prompt + chat); composer scoring locked the wrong one; after placeholder-scoring fix text lands, but the page embeds a Stripe payment iframe that STEALS FOCUS on every pointer event, so trusted CDP Enter is delivered to the iframe. 6th strategy (JS_FORCE_SYNTH_ENTER: native prototype setter + input/change + synthetic Enter with pinned keyCode/which directly on the element) wrote+sent but produced 0 sentinel posts - the app's keydown guard checks isTrusted (synthetic event rejected server-side of the handler). Parked as NAMED BUILD TARGET (Chrome can do it; replay path = record via operator-assisted or CDP Input dispatch on the exact element), not a dead end.
+- Cerebras chat.cerebras.ai: NO_COMPOSER even with ta present (textarea exists but offsetParent null - collapsed behind "Get Free API Key" gate). LOGIN-gated surface; named.
+- Meta AI: NO_REQUEST (24 posts seen, none sentinel-bearing - chat payload shape not matched by sentinel scan or send not actually fired). Named build target.
+- NemoVideo/Groq/HailuoAI: NO_COMPOSER (groq shows "Log In / Create an account" wall text + client-side app error; hailuoai client-side exception; nemovideo workspace tab holds the sentinel text in a saved draft but no live composer).
+- Phind: WALL cloudflare (left untouched).
+- creen/coze/veoaifree/digen: PAGE-level walls already in ledger (payment / region-ban / CF).
+
+**Capture engine fixes (scripts/automation/capture_sessions_cdp.py, all offline-tested, committed):**
+1. Relative --output-dir anchored to ROOT (first successful staged save crashed with ValueError).
+2. Composer-placeholder scoring in BOTH JS strategies: "start typing|type a message|..." +5M; "system prompt" -5M (playground two-textarea pages).
+3. JS_READ_ACTIVE focus-stolen fallback: when activeElement is IFRAME/BODY, read the best-scoring visible composer instead of failing (together's Stripe iframe theft).
+4. New 6th submit strategy jsforce_synth_enter (JS_FORCE_SYNTH_ENTER constant) - focus-theft-proof write+send; proven working at the DOM layer (wrote+sent echo true), blocked only by the app's isTrusted guard.
+
+**What is NOT claimed:** no admissions this unit; deepinfra is a WALL-classified staged artifact; together/meta remain capture build targets; groq/hailuoai/cerebras surfaces are login/error-gated, listed not solved.
+
+**Next:** 9224 audit v2 + deep-drive pass 2 (seat fresh from #1504 recovery) -> 9225 align -> 9223 cycle 2. Then cross-seat capture re-pass on named targets (together via element-scoped trusted Enter or replay-class triage).
