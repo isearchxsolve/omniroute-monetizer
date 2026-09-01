@@ -12043,4 +12043,12 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Safety and truthfulness.** No credentials, database, service configuration, Chrome profile, seat-pool state, or endpoint contract was changed. Native Omni video remains `NOT_RUN_REQUIRES_EXPLICIT_SPEND_CONSENT`, and real OiiOii/Emergent jobs remain unrun until their explicit runtime gates are supplied. Provider/model capacity will be reported only from concrete direct evidence/admissions, not catalog inventory.
 
+### [2026-09-01 07:38] #1468 - Omni E2E sweep remains active; partial provider evidence inspected
+
+**Runtime verification.** Re-read the mandatory transfer/worklog context, then inspected the durable worker processes, report, and logs. The Omni acceptance worker remains active as parent PID 10044 with Python child PID 39880, launched using `scripts\\automation\\omniroute_e2e_acceptance.py --apply --e2e`. stderr remains empty.
+
+**Progress observed.** Live stdout shows `ainative` completed with 0 direct proofs / 106 rows, `amazon-q` completed with 0 direct proofs / 2 rows (`ERROR` and `AUTH`), `alibaba` at 35/38 rows, and `anthropic` at 10/85 rows. Several rows are currently classified `TRANSPORT`; these are provisional transport findings and are not classified as provider death without the required evidence analysis.
+
+**Report interpretation.** `state\\omniroute_e2e_acceptance.json` still contains the prior completed preflight (`STABLE_CATALOG`, `LOCAL_CONTRACT_OPEN_BY_DESIGN`, `NOT_RUN`) because the coordinator has not completed its final write. No global capacity, graduation, or release claim is made. No seat-pool, Chrome/CDP, consumer-job, native-video, credential, database, service, or contract mutation occurred during this check.
+
 **Discipline note.** Old artifact stays NOT admitted (401 dead bearer - honest). No claims beyond what the screenshots show. The hung auth0 tabs were closed and replaced with fresh ones (renderer hygiene, no session loss: auth0 state is server-side).
