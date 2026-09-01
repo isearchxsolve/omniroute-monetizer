@@ -27,11 +27,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -39,8 +43,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import requests  # noqa: E402
 
-from omniroute_api import BASE_URL, STATE_DIR, OmniRouteAPI, redact, redact_url, save_json  # noqa: E402
-from video_registry import annotate_supported, flatten_models, load_registry  # noqa: E402
+from omniroute_api import BASE_URL, STATE_DIR, OmniRouteAPI, redact, redact_url  # noqa: E402
+from video_registry import (  # noqa: E402
+    DEFAULT_OMNIROUTE_DIST,
+    annotate_supported,
+    flatten_models,
+    load_registry,
+)
 
 # Login is bcrypt-bound and measured at ~9.5s on this host; the shared client's 15s
 # ceiling is too tight and flakes. Probing must never fail for that reason.
@@ -50,6 +59,12 @@ LOGIN_TIMEOUT = 120
 # (submit + poll a task url) so the router can hold the connection for minutes.
 # Overridable per-run: reachability probes want it short, real renders want it long.
 GEN_TIMEOUT = 150
+REPORT_PATH = STATE_DIR / "video_provider_probe.json"
+PLAN_PATH = STATE_DIR / "video_probe_plan.json"
+ADMISSION_PATH = STATE_DIR / "omniroute_verified_video_routes.json"
+REPORT_SCHEMA = 2
+OMNI_BASE = BASE_URL.replace("localhost", "127.0.0.1")
+DURATION_FALLBACKS = (4, 6, 8)
 
 # Models that cannot be driven by a text prompt alone. The router rejects these with
 # "Image input is required" / "Video input is required", which is a correct response to
@@ -61,6 +76,20 @@ PROMPT = (
     "A slow cinematic dolly-in on a lone astronaut standing at the edge of a vast "
     "red canyon at golden hour, dust drifting through low sunlight, shot on 35mm."
 )
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def atomic_json(path: Path, value: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + f".{os.getpid()}.tmp")
+    tmp.write_text(
+        json.dumps(value, indent=2, ensure_ascii=False, default=str) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(tmp, path)
 
 
 def _tier(provider: str, auth_type: str, conns_by_provider: Dict[str, List[dict]]) -> tuple[int, str]:
@@ -122,8 +151,35 @@ def build_plan(registry: Dict[str, Any], connections: List[dict], shortlist: boo
     return out
 
 
-def _find_video_urls(node: Any, found: List[str]) -> None:
-    """Walk a response body collecting anything that looks like a video reference."""
+def runnable_t2v_plan(
+    registry: Dict[str, Any], *, one_per_provider: bool = False
+) -> List[Dict[str, Any]]:
+    """Return only current-build routes capable of accepting a text prompt."""
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for model in flatten_models(registry):
+        definition = registry.get(model["provider"]) or {}
+        if not definition.get("handlerImplemented", True):
+            continue
+        if not is_text_to_video(model["qualified"]):
+            continue
+        if one_per_provider and model["provider"] in seen:
+            continue
+        seen.add(model["provider"])
+        out.append(
+            {
+                **model,
+                "rank": 0,
+                "reason": "active-build implemented text-to-video handler",
+                "handlerImplemented": True,
+                "textToVideo": True,
+            }
+        )
+    return sorted(out, key=lambda row: (row["provider"], row["model"]))
+
+
+def _find_video_assets(node: Any, found: List[Dict[str, str]]) -> None:
+    """Collect URL/base64 media without ever persisting live credential material."""
     if isinstance(node, dict):
         for k, v in node.items():
             if isinstance(v, str):
@@ -131,14 +187,20 @@ def _find_video_urls(node: Any, found: List[str]) -> None:
                 if lk in {"url", "video_url", "videourl", "uri", "gcsuri", "output"} and v.startswith(
                     ("http://", "https://", "gs://", "data:")
                 ):
-                    found.append(v)
+                    found.append({"kind": "url", "value": v})
                 elif lk in {"b64_json", "bytesbase64encoded", "base64"} and len(v) > 64:
-                    found.append(f"<base64 payload, {len(v)} chars>")
+                    found.append({"kind": "base64", "value": v})
             else:
-                _find_video_urls(v, found)
+                _find_video_assets(v, found)
     elif isinstance(node, list):
         for v in node:
-            _find_video_urls(v, found)
+            _find_video_assets(v, found)
+
+
+def _public_asset_ref(asset: Dict[str, str]) -> str:
+    if asset["kind"] == "base64":
+        return f"<base64 payload, {len(asset['value'])} chars>"
+    return redact_url(asset["value"])
 
 
 def probe_model(session: requests.Session, qualified: str, duration: int, timeout: int) -> Dict[str, Any]:
@@ -152,7 +214,7 @@ def probe_model(session: requests.Session, qualified: str, duration: int, timeou
     started = time.monotonic()
     try:
         r = session.post(
-            f"{BASE_URL}/v1/videos/generations",
+            f"{OMNI_BASE}/v1/videos/generations",
             json=payload,
             timeout=timeout,
             headers={"Content-Type": "application/json"},
@@ -173,42 +235,61 @@ def probe_model(session: requests.Session, qualified: str, duration: int, timeou
     except Exception:
         body = {"raw": r.text[:800]}
 
-    refs: List[str] = []
-    _find_video_urls(body, refs)
+    assets: List[Dict[str, str]] = []
+    _find_video_assets(body, assets)
     # Keep the live URLs in-process for byte verification, but persist only redacted
     # forms: a presigned OSS/S3/GCS query string is credential material (see redact_url).
     return {
         "model": qualified,
         "http_status": r.status_code,
         "elapsed": elapsed,
-        "ok": r.status_code == 200 and bool(refs),
-        "video_refs": [redact_url(u) for u in refs[:3]],
-        "video_refs_live": refs[:3],
+        "ok": r.status_code == 200 and bool(assets),
+        "video_refs": [_public_asset_ref(asset) for asset in assets[:3]],
+        "video_assets_live": assets[:3],
         "error": None if r.status_code == 200 else redact(json.dumps(body, default=str))[:400],
         "body_preview": redact(json.dumps(body, default=str))[:600],
     }
 
 
-def verify_video_bytes(url: str, dest: Path) -> Dict[str, Any]:
-    """Download a returned video URL and prove it is a real MP4, not just a 200.
+def verify_video_asset(asset: Dict[str, str], dest: Path) -> Dict[str, Any]:
+    """Materialise a returned video asset and prove it is a real MP4, not just a 200.
 
     AGENTS.md forbids reporting something as working on the strength of a status code
     alone. A provider can return 200 with an error page, an empty object, or an expired
     link. So we fetch the asset, check the ISO-BMFF ``ftyp`` box at offset 4, and — when
     ffprobe is available — read back the real duration and resolution.
     """
-    out: Dict[str, Any] = {"fetched": False}
+    out: Dict[str, Any] = {"fetched": False, "assetKind": asset.get("kind")}
     try:
-        r = requests.get(url, timeout=180, headers={"User-Agent": "omniroute-monetizer/1.0"})
-        out["fetch_status"] = r.status_code
-        if r.status_code != 200:
-            return out
-        data = r.content
+        if asset.get("kind") == "base64":
+            data = base64.b64decode(asset.get("value", ""), validate=True)
+            out["fetch_status"] = "inline"
+        else:
+            url = asset.get("value", "")
+            if url.startswith("data:") and ";base64," in url:
+                data = base64.b64decode(url.split(",", 1)[1], validate=True)
+                out["fetch_status"] = "data-uri"
+            else:
+                client = requests.Session()
+                client.trust_env = False
+                r = client.get(
+                    url,
+                    timeout=180,
+                    headers={"User-Agent": "omniroute-monetizer/1.0"},
+                )
+                out["fetch_status"] = r.status_code
+                if r.status_code != 200:
+                    return out
+                data = r.content
         out["fetched"] = True
         out["bytes"] = len(data)
-        out["content_type"] = r.headers.get("Content-Type")
+        if asset.get("kind") != "base64" and "r" in locals():
+            out["content_type"] = r.headers.get("Content-Type")
         out["is_mp4"] = data[4:8] == b"ftyp"
         out["brand"] = data[8:12].decode("ascii", "replace")
+        out["sha256"] = hashlib.sha256(data).hexdigest()
+        if not out["is_mp4"]:
+            return out
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
         out["saved_to"] = str(dest)
@@ -239,16 +320,104 @@ def verify_video_bytes(url: str, dest: Path) -> Dict[str, Any]:
     return out
 
 
+def _read_report() -> Dict[str, Any]:
+    try:
+        value = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _plan_key(plan: List[Dict[str, Any]]) -> List[str]:
+    return [str(row["qualified"]) for row in plan]
+
+
+def _write_progress(
+    *,
+    plan: List[Dict[str, Any]],
+    results: List[Dict[str, Any]],
+    started_at: str,
+    state: str = "RUNNING",
+) -> None:
+    # Persist only redacted terminal rows.  The live asset values are removed
+    # before this function is called, and presigned query strings never reach disk.
+    working = [
+        row["model"]
+        for row in results
+        if row.get("verification", {}).get("is_mp4") is True
+    ]
+    providers: Dict[str, int] = {}
+    for model in working:
+        provider = model.split("/", 1)[0]
+        providers[provider] = providers.get(provider, 0) + 1
+    report = {
+        "schemaVersion": REPORT_SCHEMA,
+        "state": state,
+        "startedAt": started_at,
+        "updatedAt": now(),
+        "buildDist": str(DEFAULT_OMNIROUTE_DIST),
+        "base_url": OMNI_BASE,
+        "endpoint": "/v1/videos/generations",
+        "planModels": _plan_key(plan),
+        "probed": len(results),
+        "working": working,
+        "providerModelCapacity": dict(sorted(providers.items())),
+        "results": results,
+    }
+    atomic_json(REPORT_PATH, report)
+    atomic_json(
+        ADMISSION_PATH,
+        {
+            "schemaVersion": 1,
+            "generatedAt": now(),
+            "sourceReport": str(REPORT_PATH),
+            "endpoint": f"{OMNI_BASE}/v1/videos/generations",
+            "entries": [
+                {
+                    "provider": row["model"].split("/", 1)[0],
+                    "model": row["model"],
+                    "modality": "video",
+                    "state": "ADMITTED",
+                    "proof": "DIRECT_VIDEO_MP4_OK",
+                    "verifiedAt": row.get("verifiedAt") or now(),
+                    "verification": row["verification"],
+                }
+                for row in results
+                if row.get("verification", {}).get("is_mp4") is True
+            ],
+        },
+    )
+
+
+def _duration_error(result: Dict[str, Any]) -> bool:
+    text = f"{result.get('error') or ''} {result.get('body_preview') or ''}".lower()
+    return "duration" in text and any(word in text for word in ("between", "valid", "allowed", "range"))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--all", action="store_true", help="probe every registry model, not the shortlist")
+    ap.add_argument(
+        "--runnable-all",
+        action="store_true",
+        help="probe every current-build implemented text-to-video model",
+    )
+    ap.add_argument(
+        "--one-per-provider",
+        action="store_true",
+        help="probe one current-build text-to-video model per provider",
+    )
     ap.add_argument("--plan-only", action="store_true", help="print the ranked plan and exit")
     ap.add_argument("--model", action="append", default=[], help="probe an explicit qualified model id")
     ap.add_argument("--duration", type=int, default=5, help="requested clip duration in seconds")
     ap.add_argument("--max", type=int, default=0, help="stop after N probes (0 = no limit)")
     ap.add_argument("--timeout", type=int, default=GEN_TIMEOUT, help="per-request timeout in seconds")
     ap.add_argument("--no-verify", action="store_true", help="skip downloading and ffprobing the result")
+    ap.add_argument("--fresh", action="store_true", help="ignore a prior resumable report")
     args = ap.parse_args()
+
+    if not args.plan_only and not args.model and os.environ.get("OMNI_VIDEO_CONFIRM_SPEND") != "1":
+        ap.error("video generation is spend-gated; set OMNI_VIDEO_CONFIRM_SPEND=1")
 
     registry = annotate_supported(load_registry("VIDEO_PROVIDERS"))
     unwired = sorted(p for p, d in registry.items() if not d.get("handlerImplemented", True))
@@ -256,7 +425,8 @@ def main() -> int:
     if unwired:
         print(f"[!] {len(unwired)} registered providers have NO handler and always 400: {', '.join(unwired)}")
 
-    api = OmniRouteAPI()
+    api = OmniRouteAPI(base_url=OMNI_BASE)
+    api.session.trust_env = False
     # Deliberately not using api.login(): its 15s timeout flakes against ~9.5s bcrypt.
     resp = api.session.post(
         f"{api.api}/auth/login", json={"password": api._password}, timeout=LOGIN_TIMEOUT
@@ -267,16 +437,24 @@ def main() -> int:
     api._logged_in = True
     print("[+] management login OK")
 
-    connections = api.get_connections()
-    print(f"[+] {len(connections)} provider connections")
-
     if args.model:
         plan = [
             {"qualified": m, "provider": m.split("/", 1)[0], "model": m.split("/", 1)[-1],
              "rank": -1, "reason": "explicitly requested", "authType": "", "format": ""}
             for m in args.model
         ]
+    elif args.runnable_all or args.one_per_provider:
+        # The broad media proof does not need `/api/providers`.  That endpoint
+        # refreshes every chat-provider model cache and was the reason the old
+        # all-model worker could sit indefinitely before its first video call.
+        plan = runnable_t2v_plan(registry, one_per_provider=args.one_per_provider)
     else:
+        try:
+            connections = api.get_connections()
+        except Exception as exc:
+            print(f"[-] provider inventory unavailable: {type(exc).__name__}: {exc}")
+            return 2
+        print(f"[+] {len(connections)} provider connections")
         plan = build_plan(registry, connections, shortlist=not args.all)
 
     if args.max:
@@ -287,55 +465,100 @@ def main() -> int:
         print(f"    rank{m['rank']}  {m['qualified']:52} {m['reason']}")
 
     if args.plan_only:
-        save_json("video_probe_plan.json", plan)
+        atomic_json(
+            PLAN_PATH,
+            {
+                "schemaVersion": 1,
+                "generatedAt": now(),
+                "buildDist": str(DEFAULT_OMNIROUTE_DIST),
+                "strategy": "runnable_t2v" if (args.runnable_all or args.one_per_provider) else "ranked_registry",
+                "count": len(plan),
+                "models": plan,
+            },
+        )
         return 0
 
-    print(f"\n[*] probing POST {BASE_URL}/v1/videos/generations (timeout {args.timeout}s) ...\n")
-    results: List[Dict[str, Any]] = []
+    print(f"\n[*] probing POST {OMNI_BASE}/v1/videos/generations (timeout {args.timeout}s) ...\n", flush=True)
+    prior = {} if args.fresh else _read_report()
+    if prior.get("schemaVersion") == REPORT_SCHEMA and prior.get("planModels") == _plan_key(plan):
+        prior_results = {
+            str(row.get("model")): row
+            for row in prior.get("results", [])
+            if isinstance(row, dict) and row.get("model")
+        }
+    else:
+        prior_results = {}
+    # Seed the in-memory result set with current-plan terminal rows before the
+    # first progress write.  If the process is interrupted after startup, the
+    # durable file still contains all prior completed work.
+    results: List[Dict[str, Any]] = [
+        prior_results[m["qualified"]]
+        for m in plan
+        if prior_results.get(m["qualified"], {}).get("terminal") is True
+    ]
+    started_at = now()
+    _write_progress(plan=plan, results=[], started_at=started_at, state="RUNNING")
     for m in plan:
-        res = probe_model(api.session, m["qualified"], args.duration, args.timeout)
+        old = prior_results.get(m["qualified"])
+        if old and old.get("terminal") is True:
+            results.append(old)
+            print(f"  [RESUME] {m['qualified']:48} {old.get('state')}", flush=True)
+            continue
+
+        durations = [args.duration]
+        res = probe_model(api.session, m["qualified"], durations[0], args.timeout)
+        attempts = [{"duration": durations[0], "http_status": res.get("http_status"), "error": res.get("error")}]
+        if _duration_error(res):
+            durations.extend(d for d in DURATION_FALLBACKS if d not in durations)
+            for duration in durations[1:]:
+                retry = probe_model(api.session, m["qualified"], duration, args.timeout)
+                attempts.append({"duration": duration, "http_status": retry.get("http_status"), "error": retry.get("error")})
+                res = retry
+                if res.get("ok") or not _duration_error(res):
+                    break
+        res["attempts"] = attempts
         res["rank"] = m["rank"]
         res["reason"] = m["reason"]
+        res["terminal"] = True
         results.append(res)
         mark = "PASS" if res["ok"] else "FAIL"
         detail = res["video_refs"][0][:90] if res["video_refs"] else (res["error"] or "")[:150]
-        print(f"  [{mark}] {m['qualified']:48} HTTP {str(res['http_status']):5} {res['elapsed']:>6}s  {detail}")
+        print(f"  [{mark}] {m['qualified']:48} HTTP {str(res['http_status']):5} {res['elapsed']:>6}s  {detail}", flush=True)
 
         # A 200 is not proof. Fetch the asset and confirm real MP4 bytes.
         if res["ok"] and not args.no_verify:
             dest = STATE_DIR / "clips" / (m["qualified"].replace("/", "_") + ".mp4")
-            v = verify_video_bytes(res.pop("video_refs_live")[0], dest)
+            v = verify_video_asset(res.pop("video_assets_live")[0], dest)
             res["verification"] = v
             if v.get("is_mp4"):
+                res["state"] = "DIRECT_VIDEO_MP4_OK"
+                res["verifiedAt"] = now()
                 print(
                     f"         verified: {v.get('bytes'):,} bytes, {v.get('duration')}s, "
                     f"{v.get('video')}, audio={v.get('audio')}"
-                )
+                , flush=True)
             else:
                 res["ok"] = False
-                print(f"         NOT a valid MP4: {v}")
+                res["state"] = "ASSET_NOT_MP4"
+                print(f"         NOT a valid MP4: {v}", flush=True)
+        elif res["ok"]:
+            res["ok"] = False
+            res["state"] = "UNVERIFIED_HTTP_200"
+        else:
+            res["state"] = "HTTP_OR_PROVIDER_FAILURE"
 
-    # Never persist live presigned URLs (see redact_url).
-    for res in results:
-        res.pop("video_refs_live", None)
+        res.pop("video_assets_live", None)
+        _write_progress(plan=plan, results=results, started_at=started_at, state="RUNNING")
 
-    working = [r for r in results if r["ok"]]
-    path = save_json(
-        "video_provider_probe.json",
-        {
-            "base_url": BASE_URL,
-            "endpoint": "/v1/videos/generations",
-            "probed": len(results),
-            "working": [r["model"] for r in working],
-            "results": results,
-        },
-    )
+    _write_progress(plan=plan, results=results, started_at=started_at, state="COMPLETE")
+    working = [r for r in results if r.get("verification", {}).get("is_mp4") is True]
+    path = REPORT_PATH
     print(f"\n[*] {len(working)}/{len(results)} candidates returned a usable video payload")
     print(f"[*] full results -> {path}")
     if working:
         print("[+] WORKING VIDEO MODELS:")
         for r in working:
-            print(f"      {r['model']}  ({r['elapsed']}s)  {r['video_refs'][0][:100]}")
+            print(f"      {r['model']}  ({r['elapsed']}s)  {r['video_refs'][0][:100]}", flush=True)
         return 0
     print("[-] no working video model yet")
     return 1

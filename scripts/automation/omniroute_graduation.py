@@ -475,7 +475,7 @@ def run_video_e2e(confirm: bool, timeout: int, max_routes: int) -> dict[str, Any
     if not confirm:
         return {"phase": "native_video", "state": "NOT_RUN",
                 "reason": "requires --confirm-video-spend"}
-    command = [sys.executable, str(HERE / "video_provider_probe.py"), "--all",
+    command = [sys.executable, str(HERE / "video_provider_probe.py"), "--runnable-all",
                "--timeout", str(timeout)]
     if max_routes:
         command += ["--max", str(max_routes)]
