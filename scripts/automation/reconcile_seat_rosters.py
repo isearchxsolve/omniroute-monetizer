@@ -1,24 +1,12 @@
 #!/usr/bin/env python3
-"""Fleet roster DEDUP + RECONCILE across the four dedicated automation seats.
+"""Fleet reconcile v2 - CONSTANT-N MIRROR policy (operator directive 2026-09-01).
 
-Operator directive (2026-09-01): the same chat site is declared on several profiles
-(Poe on 9222/9223/9224, ChatHub on 9222/9223, ...) and run-2 drove only one profile's
-live tabs. This tool makes ONE owner per chat site and aligns live tabs with it:
+n = |union of ALL declared sites across the fleet (chat + video)|.
+Every profile holds EXACTLY n tabs: one per declared site, same set everywhere.
+Ownership is symmetric: profiles are mirrors, not partitions.
 
-  1. OWNER SELECTION (evidence-first, deterministic):
-       a seat holding a LIVE tab for the site keeps/gets ownership,
-       then readiness verdict (session_only > signed_in_probable > visited > rest),
-       then the least-loaded seat, then the lowest port.
-  2. RECONCILE: a non-owner seat's duplicate tab is CLOSED only when the owner seat
-     already holds its own live tab for the site (so the session stays on the owner;
-     nothing is closed that would lose a signed-in surface). Owner reassignment
-     follows the live evidence automatically.
-  3. EXPAND: the owner seat gets a tab opened for every owned site it does not have
-     live yet (the roster expansion run-2 lacked).
-  4. The canonical, non-secret assignment is written to state/seat_roster_canonical.json.
-
-Video-only sites are excluded (separate spend-gated lane). Seat attestation via
-assert_safe_cdp_port; the operator's live Chrome profile is never touched.
+Deterministic: a second run with no site changes opens nothing and closes nothing.
+Verification is by direct /json/list re-listing, never by the tool's own intent.
 """
 from __future__ import annotations
 
@@ -28,17 +16,16 @@ import pathlib
 import sys
 import time
 import urllib.request
+from collections import Counter
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
-from capture_sessions_cdp import (READINESS, assert_safe_cdp_port,  # noqa: E402
-                                  host_of, reg, site_catalog, targets)
+from capture_sessions_cdp import (READINESS, assert_safe_cdp_port, host_of,  # noqa: E402
+                                  reg, site_catalog, targets)
 
-VIDEO_ONLY = ("Google Flow (labs.google)", "rtst.ai", "digen.ai")
 PORTS = [9222, 9223, 9224, 9225]
-VERDICT_RANK = {"session_only": 0, "signed_in_probable": 1, "visited": 2}
 CANON = ROOT / "state" / "seat_roster_canonical.json"
 
 
@@ -61,146 +48,122 @@ def open_target(port: int, url: str) -> bool:
         return False
 
 
+def match_sites(tabs, union_regs, reg_counts):
+    """Map site name -> live tab. Host-exact first; unique-registrable-domain second
+    (tolerates site redirects like baichuan -> yi.baichuan-ai). Shared registrable
+    domains (google.com: labs.google + gemini) require host equality."""
+    site_tab: dict[str, dict] = {}
+    used: set[str] = set()
+    for name, (host, r) in union_regs.items():
+        for t in tabs:
+            tid = str(t.get("id"))
+            if tid in used:
+                continue
+            if host_of(t.get("url") or "") == host:
+                site_tab[name] = t
+                used.add(tid)
+                break
+    for name, (host, r) in union_regs.items():
+        if name in site_tab or reg_counts[r] != 1:
+            continue
+        for t in tabs:
+            tid = str(t.get("id"))
+            if tid in used:
+                continue
+            if reg(host_of(t.get("url") or "")) == r:
+                site_tab[name] = t
+                used.add(tid)
+                break
+    return site_tab, used
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--apply", action="store_true",
-                    help="without this: report the reconciliation, change nothing")
+    ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--only", type=int, action="append",
+                    help="work ONLY this port (one-profile-at-a-time mode); repeatable")
     a = ap.parse_args()
-    for p in PORTS:
+    ports = a.only or PORTS
+    for p in ports:
         assert_safe_cdp_port(p)
 
     rd = json.loads(READINESS.read_text(encoding="utf-8"))
     cat = site_catalog()
-
-    # seat -> {site name: verdict}; live tabs per seat.
-    seats: dict[int, dict[str, str]] = {}
+    union: dict[str, str] = {}
     for seat in rd.get("seats", []):
-        for port in seat.get("ports") or []:
-            if port in PORTS:
-                # readiness rows are dicts with a "verdict" field
-                seats[port] = {n: (str(v.get("verdict") or "unknown")
-                                   if isinstance(v, dict) else str(v))
-                               for n, v in (seat.get("sites") or {}).items()}
-    live: dict[int, list] = {p: targets(p) for p in PORTS}
-    live_regs: dict[int, set] = {p: {reg(host_of(t.get("url", ""))) for t in ts}
-                                 for p, ts in live.items()}
-    target_by_reg: dict[int, dict[str, list]] = {}
-    for p, ts in live.items():
-        for t in ts:
-            target_by_reg.setdefault(p, {}).setdefault(
-                reg(host_of(t.get("url", ""))), []).append(t)
+        for name in (seat.get("sites") or {}):
+            if name not in union and cat.get(name, "").startswith("http"):
+                union[name] = cat[name]
+    # chatx.ai: hard-403 from this host (Cloudflare) and the opened tab redirects to
+    # chatgpt.com (ChatX's own anonymous-visitor redirect). The site is un-reachable
+    # as its own tab; its earlier artifact is turnstile-wall-classified (#1439). Keeping
+    # it in the union would wedge the mirror into a permanently-missing tab, so it is
+    # parked with a recorded reason instead. Re-include when the site stops 403ing.
+    PARKED = {"ChatX": "site 403s from this host; opens redirect to chatgpt.com; "
+                       "artifact already WALL-classified (turnstile)"}
+    for name in PARKED:
+        union.pop(name, None)
+    n = len(union)
+    union_regs = {name: (host_of(url), reg(host_of(url))) for name, url in union.items()}
+    reg_counts = Counter(r for _, r in union_regs.values())
 
-    # All chat site names declared anywhere.
-    all_sites = sorted({n for s in seats.values() for n in s} - set(VIDEO_ONLY))
-    owners: dict[str, dict] = {}
-    loads = {p: 0 for p in PORTS}
+    report = {"policy": "CONSTANT_N_MIRROR", "n": n, "ports": {}}
+    totals = {"closed_dup": 0, "closed_stray": 0, "closed_blank": 0, "opened": 0}
 
-    for name in all_sites:
-        url = cat.get(name, "")
-        dom = reg(host_of(url)) if url else reg(name.replace(" ", "").lower())
-        cands = []
-        for p in PORTS:
-            if name not in seats.get(p, {}):
-                continue
-            has_live = dom in live_regs.get(p, set())
-            cands.append({"port": p, "verdict": seats[p][name],
-                          "rank": VERDICT_RANK.get(seats[p][name], 3),
-                          "has_live": has_live})
-        if not cands:
+    for port in ports:
+        try:
+            tabs = [t for t in targets(port) if t.get("type") == "page"]
+        except Exception as e:
+            report["ports"][port] = {"error": type(e).__name__}
+            print(f"port {port}: UNREACHABLE ({type(e).__name__})")
             continue
-        cands.sort(key=lambda c: (0 if c["has_live"] else 1, c["rank"], loads[c["port"]], c["port"]))
-        owner = cands[0]
-        owners[name] = {"url": url, "domain": dom, "owner": owner["port"],
-                        "ownerVerdict": owner["verdict"],
-                        "ownerHasLive": owner["has_live"],
-                        "declaredOn": [c["port"] for c in cands],
-                        "reason": ("live tab evidence" if owner["has_live"]
-                                   else f"verdict {owner['verdict']} + least load")}
-        loads[owner["port"]] += 1
+        site_tab, used = match_sites(tabs, union_regs, reg_counts)
 
-    # --- collapse EXACT-URL duplicates within each seat (keep the first) and drop
-    # about:blank strays. Same profile = same cookie jar, so closing extras loses
-    # nothing. This is the video-tab accumulation the router task leaves behind when
-    # it relaunches repeatedly in one day (measured 2026-09-01: 29x rtst on 9222).
-    collapsed = []
-    for p in PORTS:
-        seen: set[str] = set()
-        for t in live.get(p, []):
-            url = str(t.get("url") or "")
-            tid = str(t.get("id") or "")
-            if url.startswith("about:blank") or url.rstrip("/") == "":
-                if not a.apply:
-                    collapsed.append((p, tid[:8], url[:40], "WOULD_CLOSE_BLANK"))
-                    continue
-                if close_target(p, tid):
-                    collapsed.append((p, tid[:8], url[:40], "closed-blank"))
+        # close unmatched tabs: same-site extras, non-union strays, blanks
+        for t in tabs:
+            tid = str(t.get("id"))
+            if tid in used:
                 continue
-            key = url.rstrip("/")
-            if key in seen:
-                if not a.apply:
-                    collapsed.append((p, tid[:8], url[:40], "WOULD_CLOSE_DUP"))
-                    continue
-                if close_target(p, tid):
-                    collapsed.append((p, tid[:8], url[:40], "closed-dup"))
-                continue
-            seen.add(key)
+            url = t.get("url") or ""
+            kind = ("blank" if url.startswith("about:blank") or url == ""
+                    else "stray")
+            if a.apply:
+                if close_target(port, tid):
+                    totals[f"closed_{kind}"] += 1
+            else:
+                totals[f"closed_{kind}"] += 0
 
-    # --- reconcile: close non-owner duplicate tabs when the owner has its own live tab
-    closed = []
-    for name, o in owners.items():
-        dom = o["domain"]
-        if not o["ownerHasLive"]:
-            continue                       # owner has no live tab: keep every live surface
-        for p in PORTS:
-            if p == o["owner"]:
-                continue
-            for t in target_by_reg.get(p, {}).get(dom, []):
-                if not a.apply:
-                    closed.append((name, p, t.get("id", "")[:8], "WOULD_CLOSE"))
-                    continue
-                if close_target(p, str(t.get("id"))):
-                    closed.append((name, p, t.get("id", "")[:8], "closed"))
+        # open missing union sites
+        missing = [name for name in union if name not in site_tab]
+        for name in sorted(missing):
+            if a.apply:
+                if open_target(port, union[name]):
+                    totals["opened"] += 1
+                time.sleep(0.4)
+            else:
+                totals["opened"] += 0
 
-    # --- expand: open missing owner tabs
-    opened = []
-    for name, o in sorted(owners.items(), key=lambda kv: (kv[1]["owner"], kv[0])):
-        if o["ownerHasLive"] or not o["url"].startswith("http"):
-            continue
-        if not a.apply:
-            opened.append((o["owner"], name, o["url"][:50], "WOULD_OPEN"))
-            continue
-        if open_target(o["owner"], o["url"]):
-            opened.append((o["owner"], name, o["url"][:50], "opened"))
-            target_by_reg.setdefault(o["owner"], {}).setdefault(o["domain"], [])
-        else:
-            opened.append((o["owner"], name, o["url"][:50], "OPEN_FAILED"))
+        # re-list and verify
+        time.sleep(2.5 if a.apply else 0)
+        tabs2 = [t for t in targets(port) if t.get("type") == "page"]
+        site_tab2, used2 = match_sites(tabs2, union_regs, reg_counts)
+        extras = len(tabs2) - len(used2)
+        report["ports"][port] = {"matchedSites": len(site_tab2), "tabs": len(tabs2),
+                                 "unmatchedTabs": extras}
+        ok = len(site_tab2) == n and extras == 0
+        print(f"port {port}: matched {len(site_tab2)}/{n} union sites | "
+              f"{len(tabs2)} tabs | unmatched {extras} | {'OK' if ok else 'MISALIGNED'}")
 
-    canonical = {
-        "schemaVersion": 1,
-        "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "policy": "one owner per chat site; live-tab evidence first, then verdict rank, "
-                  "then least-loaded seat, then lowest port; video sites excluded",
-        "sites": owners,
-    }
-    CANON.parent.mkdir(parents=True, exist_ok=True)
+    report["totals"] = totals
+    report["generatedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     tmp = CANON.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(canonical, indent=1), encoding="utf-8")
+    tmp.write_text(json.dumps(report, indent=1), encoding="utf-8")
     tmp.replace(CANON)
-
-    per_port: dict[int, int] = {p: 0 for p in PORTS}
-    for o in owners.values():
-        per_port[o["owner"]] += 1
-    print(f"sites reconciled: {len(owners)} | owner load: "
-          f"{ {p: per_port[p] for p in PORTS} }")
-    print(f"tabs closed: {len(closed)} | tabs opened: {len(opened)} | "
-          f"exact-URL dups/blanks collapsed: {len(collapsed)} (apply={a.apply})")
-    for p, tid, url, what in collapsed[:16]:
-        print(f"  coll  {what:18s} port {p} target {tid} {url}")
-    for name, p, tid, what in closed[:14]:
-        print(f"  close {what:12s} {name:30s} port {p} target {tid}")
-    for p, name, url, what in opened[:14]:
-        print(f"  open  {what:12s} {name:30s} port {p} {url}")
+    print(f"n={n} | totals={totals} | apply={a.apply}")
     print(f"wrote {CANON.relative_to(ROOT)}")
+    aligned = all(isinstance(v, dict) and v.get("matchedSites") == n and v.get("unmatchedTabs") == 0
+                  for v in report["ports"].values())
+    print("FLEET ALIGNED" if aligned else "FLEET NOT ALIGNED")
     return 0
 
 
