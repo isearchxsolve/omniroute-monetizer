@@ -16,6 +16,7 @@ def test_runnable_plan_excludes_unwired_and_image_to_video() -> None:
     registry = {
         "good": {
             "handlerImplemented": True,
+            "baseUrl": "https://video.example",
             "models": [
                 {"id": "t2v", "name": "T2V"},
                 {"id": "i2v", "name": "I2V"},
@@ -30,6 +31,21 @@ def test_runnable_plan_excludes_unwired_and_image_to_video() -> None:
     rows = probe.runnable_t2v_plan(registry)
 
     assert [row["qualified"] for row in rows] == ["good/t2v"]
+
+
+def test_local_engines_are_opt_in_for_remote_fleet_plan() -> None:
+    registry = {
+        "local": {
+            "handlerImplemented": True,
+            "baseUrl": "http://127.0.0.1:8188",
+            "models": [{"id": "t2v", "name": "local T2V"}],
+        }
+    }
+
+    assert probe.runnable_t2v_plan(registry) == []
+    assert [row["qualified"] for row in probe.runnable_t2v_plan(registry, include_local=True)] == [
+        "local/t2v"
+    ]
 
 
 def test_inline_mp4_asset_is_verified_and_saved_without_network(tmp_path: Path) -> None:

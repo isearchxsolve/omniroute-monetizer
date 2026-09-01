@@ -154,7 +154,7 @@ def build_plan(registry: Dict[str, Any], connections: List[dict], shortlist: boo
 
 
 def runnable_t2v_plan(
-    registry: Dict[str, Any], *, one_per_provider: bool = False
+    registry: Dict[str, Any], *, one_per_provider: bool = False, include_local: bool = False
 ) -> List[Dict[str, Any]]:
     """Return only current-build routes capable of accepting a text prompt."""
     out: List[Dict[str, Any]] = []
@@ -164,6 +164,12 @@ def runnable_t2v_plan(
         if not definition.get("handlerImplemented", True):
             continue
         if not is_text_to_video(model["qualified"]):
+            continue
+        if not include_local and urlparse(str(model.get("baseUrl") or "")).hostname in {
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        }:
             continue
         if one_per_provider and model["provider"] in seen:
             continue
@@ -438,6 +444,11 @@ def main() -> int:
         action="store_true",
         help="probe one current-build text-to-video model per provider",
     )
+    ap.add_argument(
+        "--include-local",
+        action="store_true",
+        help="include localhost media engines (otherwise remote fleet only)",
+    )
     ap.add_argument("--plan-only", action="store_true", help="print the ranked plan and exit")
     ap.add_argument("--model", action="append", default=[], help="probe an explicit qualified model id")
     ap.add_argument("--duration", type=int, default=5, help="requested clip duration in seconds")
@@ -478,7 +489,11 @@ def main() -> int:
         # The broad media proof does not need `/api/providers`.  That endpoint
         # refreshes every chat-provider model cache and was the reason the old
         # all-model worker could sit indefinitely before its first video call.
-        plan = runnable_t2v_plan(registry, one_per_provider=args.one_per_provider)
+        plan = runnable_t2v_plan(
+            registry,
+            one_per_provider=args.one_per_provider,
+            include_local=args.include_local,
+        )
     else:
         try:
             connections = api.get_connections()
@@ -511,7 +526,14 @@ def main() -> int:
 
     print(f"\n[*] probing POST {OMNI_BASE}/v1/videos/generations (timeout {args.timeout}s) ...\n", flush=True)
     prior = {} if args.fresh else _read_report()
-    if prior.get("schemaVersion") == REPORT_SCHEMA and prior.get("planModels") == _plan_key(plan):
+    current_plan_models = set(_plan_key(plan))
+    prior_plan_models = set(str(item) for item in prior.get("planModels", []))
+    same_build_subset = (
+        prior.get("schemaVersion") == REPORT_SCHEMA
+        and prior.get("buildDist") == str(DEFAULT_OMNIROUTE_DIST)
+        and prior_plan_models.issubset(current_plan_models)
+    )
+    if same_build_subset:
         prior_results = {
             str(row.get("model")): row
             for row in prior.get("results", [])
