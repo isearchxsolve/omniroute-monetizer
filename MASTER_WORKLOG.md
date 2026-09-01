@@ -12516,3 +12516,11 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Important boundary.** Native Omni video and Chrome/seat-pool video remain distinct lanes. The native Omni lane is currently zero because the live provider credentials/balances/transport proof did not yield an MP4. The seat-pool video lane is also zero admitted jobs in the current registry; its eight declared video files remain unadmitted evidence, not capacity. Chat-provider model inventory was not relabeled as video supply.
 
 **Preservation and verification.** No Chrome profile, provider credential, OmniRoute service, database, combo, or consumer setting was changed by the proof pass. Existing direct chat admission (24 routes) and the 8190 merged publication fix remain intact. The report and both ledgers are atomic and resumable. The final audit command completed successfully; no additional restart is required.
+
+### [2026-09-01 20:55] #1503 - 9224 cycle started: aligned 50/50, audit v2 raw ledger recorded
+
+**Align (scripts/automation/reconcile_seat_rosters.py --only 9224 --apply).** CONSTANT-N MIRROR policy: 9224 was 50/50 matched with 2 stray tabs; apply closed the 2 strays; verification re-listing confirmed matched 50/50 union sites, 50 tabs, unmatched 0 - FLEET ALIGNED. Deterministic re-run opened nothing, closed nothing.
+
+**Audit v2 (scripts/automation/audit_9224_v2.py, wake-first, state/surface_audit_9224_full.json).** 50 rows: 2 APP_SURFACE (labs.google flow project, huggingface chat - screenshots on disk), 3 LOGIN_WALL (you.com, poe.com/login, meta.ai), 1 PAY_WALL (magichour), 29 NEEDS_DRIVE, 15 CDP_FAIL. The idle-hours profile shows the suspension problem at full scale: together.ai tab bounced to /signin (session gone on this seat), deepseek/deepinfra/creen/hailuoai/veoaifree x2 CDP_FAIL (renderer suspension root cause again).
+
+**Next:** 9224 deep-drive pass (wake -> reload -> classify with SITE_HOME + wall naming) to resolve the 44 non-APP rows, same evidence discipline as the 9222 batches.
