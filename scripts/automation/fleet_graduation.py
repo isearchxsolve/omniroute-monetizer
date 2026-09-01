@@ -312,6 +312,33 @@ def _is_video_url(value: Any) -> bool:
     return isinstance(value, str) and value.startswith(("https://", "http://"))
 
 
+def run_bounded_child(command: list[str], timeout: float) -> int | None:
+    """Run one generated child command; on timeout stop *only that child tree*.
+
+    ``fleet_sso_blueprint`` has its own deadline, but the parent is the final
+    safety owner.  Without this second deadline a wedged CDP child can strand
+    the all-profile master before it has persisted a terminal seat row.
+    """
+    proc = subprocess.Popen(command, cwd=ROOT)
+    try:
+        return proc.wait(timeout=max(1.0, timeout))
+    except subprocess.TimeoutExpired:
+        if os.name == "nt":
+            # The command is constructed in this module and is either the
+            # bounded SSO blueprint or the bounded video capture helper.
+            # /T is essential because a venv launcher owns the actual Python
+            # interpreter; it never targets Chrome or an unrelated process.
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], check=False,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            proc.kill()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+        return None
+
+
 def _video_python_client(path: pathlib.Path, raw: dict[str, Any]) -> Any:
     """Select a browser-independent runtime for one freshly captured video file."""
     # A captured submit->poll->result sequence is the most exact source of
@@ -373,9 +400,14 @@ def capture_and_graduate_video(account: dict[str, Any], job_wait: float, sso_bud
     """One seat: exact-host SSO -> project -> capture -> Python render -> admission."""
     host, label = str(account["host"]), str(account["label"])
     path = _video_session_path(host, label)
-    sso_rc = subprocess.run([sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port",
-                             str(account["port"]), "--drive", "--include-video", "--host-exact", host,
-                             "--budget", str(sso_budget)], cwd=ROOT, check=False).returncode
+    sso_command = [sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port",
+                   str(account["port"]), "--drive", "--include-video", "--host-exact", host,
+                   "--budget", str(sso_budget)]
+    sso_rc = run_bounded_child(sso_command, timeout=max(30.0, sso_budget + 30.0))
+    if sso_rc is None:
+        return {"profile": account["profile"], "port": account["port"], "label": label,
+                "provider": account["provider"], "host": host, "ssoRc": "PARENT_TIMEOUT",
+                "state": "NOT_ADMITTED", "detail": "parent deadline stopped a wedged video SSO child"}
     if sso_rc:
         return {"profile": account["profile"], "port": account["port"], "label": label,
                 "provider": account["provider"], "host": host, "ssoRc": sso_rc,
@@ -384,10 +416,14 @@ def capture_and_graduate_video(account: dict[str, Any], job_wait: float, sso_bud
     cmd = [sys.executable, str(HERE / "capture_video_job_cdp.py"), "--port", str(account["port"]),
            "--match", str(account["url"]), "--url", str(account["url"]), "--host", host,
            "--seat", label, "--job-wait", str(job_wait)]
-    rc = subprocess.run(cmd, cwd=ROOT, check=False).returncode
+    rc = run_bounded_child(cmd, timeout=max(60.0, job_wait + 90.0))
     row: dict[str, Any] = {"profile": account["profile"], "port": account["port"], "label": label,
                            "provider": account["provider"], "host": host, "ssoRc": sso_rc, "captureRc": rc,
                            "state": "NOT_ADMITTED"}
+    if rc is None:
+        row["captureRc"] = "PARENT_TIMEOUT"
+        row["detail"] = "parent deadline stopped a wedged video capture child"
+        return row
     if rc != 0 or not path.is_file() or path.stat().st_mtime < started - 2:
         row["detail"] = "video capture left no fresh correlated session artifact"
         return row

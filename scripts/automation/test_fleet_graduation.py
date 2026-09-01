@@ -122,8 +122,7 @@ def test_video_lane_resumes_without_repeating_terminal_seat() -> None:
 def test_video_capture_command_targets_exact_declared_seat() -> None:
     account = {"profile": "seat2", "port": 9224, "label": "flow-seat2", "provider": "flow",
                "host": "labs.google", "url": "https://labs.google/fx/tools/flow/project/project-id"}
-    with patch.object(fleet.subprocess, "run", side_effect=[SimpleNamespace(returncode=0),
-                                                              SimpleNamespace(returncode=1)]) as run:
+    with patch.object(fleet, "run_bounded_child", side_effect=[0, 1]) as run:
         row = fleet.capture_and_graduate_video(account, 99.0, 77.0)
     sso_command, command = [call.args[0] for call in run.call_args_list]
     assert "--include-video" in sso_command
@@ -133,6 +132,17 @@ def test_video_capture_command_targets_exact_declared_seat() -> None:
     assert command[command.index("--host") + 1] == "labs.google"
     assert command[command.index("--seat") + 1] == "flow-seat2"
     assert row["state"] == "NOT_ADMITTED"
+
+
+def test_video_parent_timeout_persists_terminal_sso_failure_without_capture() -> None:
+    account = {"profile": "niloy", "port": 9223, "label": "niloy-1", "provider": "flow",
+               "host": "labs.google", "url": "https://labs.google/fx/tools/flow/project/project-id"}
+    with patch.object(fleet, "run_bounded_child", return_value=None) as run:
+        row = fleet.capture_and_graduate_video(account, 99.0, 77.0)
+    assert run.call_count == 1
+    assert row["ssoRc"] == "PARENT_TIMEOUT"
+    assert row["state"] == "NOT_ADMITTED"
+    assert "parent deadline" in row["detail"]
 
 
 def main() -> None:
