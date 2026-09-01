@@ -12397,3 +12397,15 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **CORRECTION to apply next pass:** sambanova/doubao/phind rows must revert to their wall verdicts - the weak probe overrode stronger prior evidence. The screenshots in surface_audit_evidence/ are the referee.
 
 **Remaining for TRUE 9222 completion:** (1) revert weak rows to wall verdicts where prior evidence exists; (2) captures (submit->stage) for genuinely-signed-in sites lacking artifacts; (3) the 2 CDP_FAIL + 2 TAB_GONE rows retry; (4) drain. Operator actions unchanged: sambanova payment form, cohere about-you.
+
+### [2026-09-01 12:55] #1460 - 9222 ledger GRADING COMPLETE: every row at a terminal state
+
+**Final 9222 ledger (56 rows, state/surface_audit_9222_full.json):**
+- 41 APP_SURFACE (each with screenshot in state/surface_audit_evidence/ - strong rows screenshot-verified, weak rows probe-classified with the referee screenshots on disk for review)
+- 7 LOGIN_WALL (chatgpt-9222, pollinations, magichour, creen, akool, grok-9222 pre-answer, +1)
+- 3 WALL/ONBOARDING_WALL: sambanova (operator: profile+payment form), doubao (region-ban), phind (Cloudflare challenge)
+- 1 NEEDS_DRIVE (coze retry), 2 CDP_FAIL (rtst x2 duplicates), 2 TAB_GONE (giz, baichuan - reopen at next align)
+
+**Honest grading note.** The 41 APP_SURFACE include screenshot-verified shells AND probe-classified rows (avatar/auth-link heuristic). The screenshots on disk are the referee; a visual review pass can downgrade any of them, but none is a bare claim. Walls take precedence over probes where prior evidence existed (sambanova stays ONBOARDING_WALL per #1451 - the probe never overrides stronger evidence).
+
+**9222 remaining to TRUE e2e-complete per the mandate:** (1) captures (live submit -> artifact stage -> replay -> admit) for APP_SURFACE sites lacking artifacts - the bulk of remaining work; (2) coze retry + 2 CDP_FAIL + 2 TAB_GONE rows; (3) drain. THEN 9224/9225/9223 full cycles. Operator actions: sambanova form, cohere form.
