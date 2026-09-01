@@ -575,6 +575,25 @@ class ShimHandler(BaseHTTPRequestHandler):
                     merged.setdefault("owned_by", "omniroute")
                     merged["x_gateway_source"] = "omniroute"
                     models.append(merged)
+            # The direct Omni catalog is management-session protected.  The
+            # bridge deliberately does not hold that management session, so an
+            # optional upstream metadata refresh can be empty even while a
+            # route has passed both direct and final-gateway Law-3 proof.  The
+            # local verified ledger is the authoritative publication source in
+            # that case.  Add only admitted IDs, never the raw catalog.
+            published_ids = {str(m.get("id") or "") for m in models}
+            if allowed_omni is not None:
+                for model_id in sorted(allowed_omni):
+                    if model_id in seat_ids or model_id in published_ids:
+                        continue
+                    models.append({
+                        "id": model_id,
+                        "object": "model",
+                        "created": int(time.time()),
+                        "owned_by": "omniroute",
+                        "x_gateway_source": "omniroute_verified_ledger",
+                    })
+                    published_ids.add(model_id)
             resp = {"object": "list", "data": models,
                     "x_gateway": {"seatPool": {"chat": len(pool.live("chat")),
                                                   "video": len(pool.live("video"))},
