@@ -14,6 +14,16 @@ healthy route; it never bulk-probes the catalog or retries a wall/rate-limit rou
 Default selection is deliberately narrow: the public ``frontier`` Omni cascade plus
 the unpinned ``session-pool/auto`` route.  Supply-specific checks can be requested
 with ``--model`` (repeatable) after a provider/account has been selected as healthy.
+The final report deliberately preserves the units that must not be added together:
+
+* ``verifiedOmniModels``: concrete provider/model pairs with direct and consumer
+  Law-3 admission.  This is the only model-count capacity figure.
+* ``verifiedSeatSessions``: exact browser-session files admitted after a replay
+  proof.  A host/auto seat does not enumerate the models behind its web UI, so it
+  is never silently counted as one model.
+* ``verifiedVideoSeats``: exact video session files with submit-poll-result
+  admission.  A video model name is not a completed-job proof.
+
 Video is reported as inventory versus proven durable-job capacity only; submitting a
 new video job is intentionally outside this audit because it can spend credits.
 """
@@ -34,16 +44,94 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "state" / "merged_healthy_capacity_audit.json"
 CONSUMER = "http://127.0.0.1:8190/v1"
 OMNI = "http://127.0.0.1:20128"
+OMNI_ADMISSIONS = ROOT / "state" / "omniroute_verified_routes.json"
+SEAT_REGISTRY = ROOT / "state" / "pure_python_replay_registry.json"
+SEAT_VIDEO_RUN = ROOT / "state" / "fleet_e2e_video_graduation_run.json"
 COMPUTED_PROMPT = "Reply with only the number: 41 + 17"
 EXPECTED = "58"
 
 
 def get_json(url: str, timeout: int = 15) -> tuple[dict[str, Any], int | None, str | None]:
+    session = requests.Session()
+    session.trust_env = False  # 127.0.0.1 must not be sent through the system proxy.
     try:
-        r = requests.get(url, timeout=timeout)
+        r = session.get(url, timeout=timeout)
         return (r.json() if r.ok else {}), r.status_code, None
     except (requests.RequestException, ValueError) as exc:
         return {}, None, f"{type(exc).__name__}: {exc}"[:240]
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    """Load a non-secret evidence artifact; malformed or absent evidence is empty."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def verified_omni_entries(raw: dict[str, Any]) -> list[dict[str, str]]:
+    """Return only concrete provider/model admissions, never catalog inventory."""
+    rows: list[dict[str, str]] = []
+    for entry in raw.get("entries") or []:
+        if not isinstance(entry, dict):
+            continue
+        if not (
+            entry.get("state") == "ADMITTED"
+            and entry.get("directProof") == "DIRECT_LAW3_OK"
+            and entry.get("consumerProof") == "CONSUMER_LAW3_OK"
+        ):
+            continue
+        provider, model = str(entry.get("provider") or ""), str(entry.get("model") or "")
+        if provider and model:
+            rows.append({"provider": provider, "model": model,
+                         "modality": str(entry.get("modality") or "chat")})
+    return rows
+
+
+def verified_seat_entries(raw: dict[str, Any]) -> list[dict[str, str]]:
+    """Return exact admitted seat files.  A seat is a session unit, not a model count."""
+    rows: list[dict[str, str]] = []
+    for entry in raw.get("entries") or []:
+        if not isinstance(entry, dict) or entry.get("state") != "ADMITTED":
+            continue
+        host, session_file = str(entry.get("host") or ""), str(entry.get("sessionFile") or "")
+        modality = str(entry.get("modality") or "chat")
+        if host and session_file:
+            rows.append({"provider": host, "sessionFile": session_file, "modality": modality,
+                         "adapter": str(entry.get("adapter") or "")})
+    return rows
+
+
+def model_capacity_rows(entries: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """Group verified Omni admissions as provider × concrete models × modality."""
+    grouped: dict[tuple[str, str], set[str]] = {}
+    for entry in entries:
+        grouped.setdefault((entry["provider"], entry["modality"]), set()).add(entry["model"])
+    return [
+        {"harness": "omniroute", "provider": provider, "modality": modality,
+         "capacityUnit": "verified_provider_model", "verifiedModelCount": len(models),
+         "models": sorted(models)}
+        for (provider, modality), models in sorted(grouped.items())
+    ]
+
+
+def seat_capacity_rows(entries: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """Group verified seat artifacts without inventing hidden UI model identities."""
+    grouped: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for entry in entries:
+        grouped.setdefault((entry["provider"], entry["modality"]), []).append(entry)
+    rows: list[dict[str, Any]] = []
+    for (provider, modality), seats in sorted(grouped.items()):
+        rows.append({
+            "harness": "seat_pool", "provider": provider, "modality": modality,
+            "capacityUnit": "verified_exact_session",
+            "verifiedSessionCount": len({seat["sessionFile"] for seat in seats}),
+            "sessionFiles": sorted({seat["sessionFile"] for seat in seats}),
+            "models": [],
+            "modelIdentity": "UNENUMERATED_BY_SESSION_ARTIFACT_NOT_COUNTED_AS_ONE_MODEL",
+        })
+    return rows
 
 
 def assistant_text(body: dict[str, Any]) -> str:
@@ -61,8 +149,10 @@ def assistant_text(body: dict[str, Any]) -> str:
 def probe(model: str, timeout: int) -> dict[str, Any]:
     started = time.perf_counter()
     row: dict[str, Any] = {"model": model}
+    session = requests.Session()
+    session.trust_env = False  # local contract is explicitly 127.0.0.1, never localhost/proxy.
     try:
-        response = requests.post(
+        response = session.post(
             f"{CONSUMER}/chat/completions",
             json={"model": model, "messages": [{"role": "user", "content": COMPUTED_PROMPT}],
                   "temperature": 0, "max_tokens": 20},
@@ -115,6 +205,16 @@ def main() -> int:
         except ValueError:
             video_inventory = {"readError": "invalid JSON"}
 
+    omni_admitted = verified_omni_entries(load_json(OMNI_ADMISSIONS))
+    seat_admitted = verified_seat_entries(load_json(SEAT_REGISTRY))
+    seat_video_run = load_json(SEAT_VIDEO_RUN)
+    completed_video_jobs = [row for row in seat_video_run.get("consumerProofs") or []
+                            if isinstance(row, dict) and row.get("state") == "CONSUMER_E2E_PROVEN"
+                            and row.get("resultUrlObserved") is True]
+    capacity_rows = [*model_capacity_rows(omni_admitted), *seat_capacity_rows(seat_admitted)]
+    seat_chat = [entry for entry in seat_admitted if entry["modality"] == "chat"]
+    seat_video = [entry for entry in seat_admitted if entry["modality"] == "video"]
+
     report: dict[str, Any] = {
         "generatedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
         "consumer": {"base": CONSUMER, "modelsHttpStatus": consumer_status, "error": consumer_error,
@@ -131,9 +231,27 @@ def main() -> int:
             "videoRouteIds": sorted(str(m.get("id")) for m in video_seats),
             "meaning": "currently dispatchable local routes; final health requires a fresh computed response or completed video job",
         },
+        "verifiedHealthyCapacity": {
+            "unitsMustNotBeAdded": [
+                "verified_provider_model", "verified_exact_session", "verified_completed_video_job"
+            ],
+            "verifiedOmniModels": len({(row["provider"], row["model"], row["modality"])
+                                         for row in omni_admitted}),
+            "verifiedSeatSessions": len({row["sessionFile"] for row in seat_admitted}),
+            "verifiedSeatChatSessions": len({row["sessionFile"] for row in seat_chat}),
+            "verifiedSeatVideoSessions": len({row["sessionFile"] for row in seat_video}),
+            "verifiedConsumerVideoJobs": len(completed_video_jobs),
+            "rows": capacity_rows,
+            "meaning": (
+                "Omni counts concrete admitted provider/model pairs. Seat-pool counts exact admitted "
+                "sessions. A seat host that exposes an auto route does not disclose its internal model "
+                "set in the session artifact and is therefore never misreported as one model."
+            ),
+        },
         "video": {
             "omniAdvertisedVideoInventory": video_inventory.get("total_video_routes"),
-            "seatPoolProvenModelCount": (video_inventory.get("provenModelCount") if video_inventory else None),
+            "seatPoolProvenModelCount": None,
+            "seatPoolVerifiedCompletedJobs": len(completed_video_jobs),
             "meaning": "video model names are not chat-completion proof. Count completed durable jobs separately.",
         },
         "probes": [],
@@ -148,7 +266,10 @@ def main() -> int:
     print(f"output={OUT}")
     print(f"merged_advertised={len(merged_models)} omni_inventory={len(omni_models)} "
           f"seat_chat={len(chat_seats)} seat_video={len(video_seats)} "
-          f"verified={report['verifiedHealthyRouteCount']}")
+          f"verified_probes={report['verifiedHealthyRouteCount']} "
+          f"verified_omni_models={report['verifiedHealthyCapacity']['verifiedOmniModels']} "
+          f"verified_seat_sessions={report['verifiedHealthyCapacity']['verifiedSeatSessions']} "
+          f"verified_video_jobs={report['verifiedHealthyCapacity']['verifiedConsumerVideoJobs']}")
     for row in report["probes"]:
         print(f"probe model={row['model']} verdict={row.get('verdict')} healthy={row.get('healthy')} "
               f"source={row.get('gatewaySource')} provider={row.get('provider')} latencyMs={row.get('latencyMs')}")
