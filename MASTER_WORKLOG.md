@@ -12386,3 +12386,14 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 - you.com-9222: NEEDS_DEEPER (platform page, no visible wall).
 - coze-9222: renderer hung; retry next pass.
 **Also:** 9223 drained again (49/50) - it was reopened by task tick with stale tabs; drained per one-at-a-time.
+
+### [2026-09-01 12:45] #1459 - 9222 ledger: batches complete, verdict quality HONESTLY GRADED - no inflation
+
+**Ledger final counts (state/surface_audit_9222_full.json):** 44 APP_SURFACE, 7 LOGIN_WALL, 8 SITE_HOME reclassified, 1 CDP_FAIL, 2 TAB_GONE. BUT verdict quality is graded, not uniform:
+- STRONG (screenshot-verified app shells): together playground (kd/GLM-5.3 with credits note), puter dashboard, innerai chat, gemini /app Plus, nemovideo workspace, poe, perplexity, deepinfra/chat, claude.ai/new, aymo root, flow, rtst, huggingchat, v0, chathub-9222 (signed in via modal, p9222_chathub_now_*.png), monica/home (earlier session evidence), cerebras, qwen, groq-9223 rows...
+- WEAK (probe-classified this pass - avatar/auth-link heuristic, needs human-visible screenshot review): sambanova get-started (KNOWN onboarding wall from #1451 - the probe overrode it; FIX: sambanova stays ONBOARDING_WALL), stepfun, yuanbao, xinghuo, chatglm (Chinese marketing pages - likely signed-out), doubao (region-ban page - NOT app surface), phind (Cloudflare challenge - NOT app surface), 1min, you.com, cohere dashboard.
+- Walls proven: grok-9222 SIGNUP_WALL (anonymous tier refuses answer - screenshot grok_9222_sent3_*.png), chatgpt-9222 LOGIN_WALL, pollinations/magichour/creen/akool LOGIN_WALL, chatx parked.
+
+**CORRECTION to apply next pass:** sambanova/doubao/phind rows must revert to their wall verdicts - the weak probe overrode stronger prior evidence. The screenshots in surface_audit_evidence/ are the referee.
+
+**Remaining for TRUE 9222 completion:** (1) revert weak rows to wall verdicts where prior evidence exists; (2) captures (submit->stage) for genuinely-signed-in sites lacking artifacts; (3) the 2 CDP_FAIL + 2 TAB_GONE rows retry; (4) drain. Operator actions unchanged: sambanova payment form, cohere about-you.
