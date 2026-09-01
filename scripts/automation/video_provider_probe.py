@@ -32,12 +32,14 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -203,7 +205,26 @@ def _public_asset_ref(asset: Dict[str, str]) -> str:
     return redact_url(asset["value"])
 
 
-def probe_model(session: requests.Session, qualified: str, duration: int, timeout: int) -> Dict[str, Any]:
+def local_backend_unavailable(base_url: str) -> bool:
+    """Fail fast for a declared local engine that is not listening."""
+    parsed = urlparse(base_url)
+    if parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        return False
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.create_connection((parsed.hostname, port), timeout=2):
+            return False
+    except OSError:
+        return True
+
+
+def probe_model(
+    session: requests.Session,
+    qualified: str,
+    duration: int,
+    timeout: int,
+    base_url: str = "",
+) -> Dict[str, Any]:
     payload = {
         "model": qualified,
         "prompt": PROMPT,
@@ -212,6 +233,16 @@ def probe_model(session: requests.Session, qualified: str, duration: int, timeou
         "n": 1,
     }
     started = time.monotonic()
+    if base_url and local_backend_unavailable(base_url):
+        return {
+            "model": qualified,
+            "http_status": None,
+            "elapsed": round(time.monotonic() - started, 1),
+            "ok": False,
+            "video_refs": [],
+            "error": "LOCAL_BACKEND_UNAVAILABLE",
+            "state": "LOCAL_BACKEND_UNAVAILABLE",
+        }
     try:
         r = session.post(
             f"{OMNI_BASE}/v1/videos/generations",
@@ -506,12 +537,16 @@ def main() -> int:
             continue
 
         durations = [args.duration]
-        res = probe_model(api.session, m["qualified"], durations[0], args.timeout)
+        res = probe_model(
+            api.session, m["qualified"], durations[0], args.timeout, m.get("baseUrl", "")
+        )
         attempts = [{"duration": durations[0], "http_status": res.get("http_status"), "error": res.get("error")}]
         if _duration_error(res):
             durations.extend(d for d in DURATION_FALLBACKS if d not in durations)
             for duration in durations[1:]:
-                retry = probe_model(api.session, m["qualified"], duration, args.timeout)
+                retry = probe_model(
+                    api.session, m["qualified"], duration, args.timeout, m.get("baseUrl", "")
+                )
                 attempts.append({"duration": duration, "http_status": retry.get("http_status"), "error": retry.get("error")})
                 res = retry
                 if res.get("ok") or not _duration_error(res):

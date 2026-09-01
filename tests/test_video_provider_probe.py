@@ -73,3 +73,8 @@ def test_progress_writer_is_atomic_and_publishes_only_mp4_rows(tmp_path: Path, m
     assert saved["working"] == ["good/t2v"]
     assert [row["model"] for row in ledger["entries"]] == ["good/t2v"]
     assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_local_backend_preflight_does_not_wait_for_gateway_timeout() -> None:
+    assert probe.local_backend_unavailable("http://127.0.0.1:1") is True
+    assert probe.local_backend_unavailable("https://example.invalid/video") is False
