@@ -12698,6 +12698,14 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Safety decision.** No narrow KIE/Vertex video request was sent against the stale runtime, so no provider credit was spent and no old-handler result was misclassified as a patch outcome. The exact next action is an elevated restart through the existing `OmniRoute` Windows service owner, then verify a new process creation timestamp/PID and health before the four narrow MP4-byte probes. No service operation was performed by this inspection component.
 
+### [2026-09-02 10:12] #1518 - Registered OmniRoute restart confirmed; post-restart HTTP liveness is currently not established
+
+**Restart-path result.** The operator performed the registered-service restart. Read-only inspection confirms it took effect: the NSSM-owned `OmniRoute` process changed from PID 3864 / Node 5080 (created 2026-09-01 23:08) to NSSM PID 17028 and child Node PID 20428, both created 2026-09-02 02:30:22. The service remains `Running`/`Automatic`, so this was the correct registered-owner path rather than a second Node process or a task/shim restart.
+
+**Liveness result.** The first post-restart `GET /api/health` timed out. A subsequent direct `curl.exe --noproxy '*' --connect-timeout 3 --max-time 8 http://127.0.0.1:20128/api/health` also timed out after 8.03 seconds with HTTP 000 and zero response bytes, while the Windows service still reported `Running` on PID 17028. This is TCP/listener/nonresponsive-HTTP behavior, not proof that the video patch failed or loaded. A later bounded stabilization recheck produced no successful health response before this checkpoint.
+
+**Safety boundary.** No chat, audio, video, catalog, provider, or consumer inference request was sent after restart. In particular, no spend-bearing KIE/Vertex video probe was launched: a responsive direct Omni HTTP health surface is the precondition for any patch validation. No service was stopped, restarted, reconfigured, or otherwise mutated by this check; the result is a truthful post-restart liveness observation to guide the next Omni-only diagnosis.
+
 ### [2026-09-01 20:59] #1514 - Mandate re-locked: full E2E+SSO all seats; 9222 found SSO-bounced, realigned 50/50
 
 **Scope correction (operator, 20:44Z).** The standing mandate is FULL E2E with SSO on ALL FOUR profiles (9222/9223/9224/9225). The #1513 "Omni-only" narrowing is superseded; seat lane resumed. Operator directive 20:53Z: "you handle seat, omni taken up via another agent" - seat lane is this agent's lane. Memory corrected (mandate.no_skip_full_e2e_all_profiles).
