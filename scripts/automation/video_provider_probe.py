@@ -67,6 +67,7 @@ ADMISSION_PATH = STATE_DIR / "omniroute_verified_video_routes.json"
 REPORT_SCHEMA = 2
 OMNI_BASE = BASE_URL.replace("localhost", "127.0.0.1")
 DURATION_FALLBACKS = (4, 6, 8)
+WEB_PROVIDER_TIMEOUT = 90
 
 # Models that cannot be driven by a text prompt alone. The router rejects these with
 # "Image input is required" / "Video input is required", which is a correct response to
@@ -558,15 +559,21 @@ def main() -> int:
             continue
 
         durations = [args.duration]
+        route_timeout = args.timeout
+        if m.get("format") == "veoaifree-web":
+            # This browser-backed web adapter has no bounded server-side job
+            # receipt. Keep it from blocking the whole native API fleet while
+            # preserving the long timeout for real asynchronous providers.
+            route_timeout = min(args.timeout, WEB_PROVIDER_TIMEOUT)
         res = probe_model(
-            api.session, m["qualified"], durations[0], args.timeout, m.get("baseUrl", "")
+            api.session, m["qualified"], durations[0], route_timeout, m.get("baseUrl", "")
         )
         attempts = [{"duration": durations[0], "http_status": res.get("http_status"), "error": res.get("error")}]
         if _duration_error(res):
             durations.extend(d for d in DURATION_FALLBACKS if d not in durations)
             for duration in durations[1:]:
                 retry = probe_model(
-                    api.session, m["qualified"], duration, args.timeout, m.get("baseUrl", "")
+                    api.session, m["qualified"], duration, route_timeout, m.get("baseUrl", "")
                 )
                 attempts.append({"duration": duration, "http_status": retry.get("http_status"), "error": retry.get("error")})
                 res = retry
@@ -600,6 +607,8 @@ def main() -> int:
         elif res["ok"]:
             res["ok"] = False
             res["state"] = "UNVERIFIED_HTTP_200"
+        elif res.get("http_status") is None and "Timeout" in str(res.get("error") or ""):
+            res["state"] = "TRANSPORT_TIMEOUT"
         else:
             res["state"] = "HTTP_OR_PROVIDER_FAILURE"
 

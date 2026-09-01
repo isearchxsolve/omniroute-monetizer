@@ -12482,3 +12482,10 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **What is NOT claimed:** no new captures admitted; meta/puter/xinghuo transports are build targets, not dead ends; together/cerebras/chatglm/promptql remain artifact-less; walls (you.com payment) untouched.
 
 **Next:** replay/admit lane for staged artifacts on 9222, final re-audit -> drain; then 9224/9225/9223 cycles.
+### [2026-09-01 21:52] #1504 - Bounded the stalled browser-backed native video adapter
+
+**Evidence.** The remote production pass had completed 33 of its 39 candidates with durable terminal rows. It then held an established loopback connection on `veoaifree-web/seedance` for more than five minutes without a report update or corresponding current service result, while `GET http://127.0.0.1:20128/api/health` continued returning HTTP 200 in milliseconds. The evidence identifies an adapter/provider transport stall, not a gateway-wide failure. The exact probe launcher/interpreter pair was stopped; no OmniRoute service or shim was restarted.
+
+**Repair.** `veoaifree-web` now receives a maximum 90-second client budget because it is a browser-backed web adapter without a bounded job receipt. It will finish as an explicit `TRANSPORT_TIMEOUT` or provider response, allowing the remaining Vertex and XAI routes to run. Genuine asynchronous API-backed providers retain the user-authorized 900-second generation budget. The report classifies transport timeouts separately from ordinary provider errors.
+
+**Verification.** Focused video/registry tests passed **7/7**; Python compilation and `git diff --check` passed. No generation was sent during this repair. The current report remains diagnostic partial evidence until the restarted exact-plan pass completes.
