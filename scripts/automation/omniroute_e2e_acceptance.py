@@ -107,8 +107,8 @@ def consumer_auth_gate(timeout: float) -> dict[str, Any]:
         result.update(state="GATEWAY_UNAVAILABLE", error=error_name(exc))
         return result
     if not gate_enabled:
-        result.update(state="AUTH_GATE_OPEN_BLOCKER",
-                      reason="state/secrets/tenant_map.json is absent; shim intentionally permits open local mode")
+        result.update(state="LOCAL_CONTRACT_OPEN_BY_DESIGN",
+                      reason=":8190 is the private loopback transport; public authentication belongs at the consumer applications")
         return result
     if result["anonymousHttp"] != 401:
         result.update(state="AUTH_GATE_BROKEN", reason="tenant map exists but anonymous /v1/models was not rejected")
@@ -296,7 +296,10 @@ def run_emergent_customer_path(timeout: float, poll_timeout: float) -> dict[str,
 def release_state(report: dict[str, Any], full_execution: bool) -> str:
     if report["directPlane"].get("state") != "STABLE_CATALOG":
         return "MONETIZER_BLOCKED_OMNI_UNSTABLE"
-    if report["gatewayAuth"].get("state") != "AUTH_GATE_PROVEN":
+    gateway_state = report["gatewayAuth"].get("state")
+    if gateway_state == "GATEWAY_UNAVAILABLE":
+        return "MONETIZER_BLOCKED_GATEWAY_UNAVAILABLE"
+    if gateway_state == "AUTH_GATE_BROKEN":
         return "MONETIZER_BLOCKED_GATEWAY_AUTH"
     if not full_execution:
         return "PREFLIGHT_ONLY_NOT_CERTIFIABLE"

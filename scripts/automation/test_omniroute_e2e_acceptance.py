@@ -19,6 +19,22 @@ def test_release_never_certifies_preflight() -> None:
     assert e2e.release_state(report, False) == "PREFLIGHT_ONLY_NOT_CERTIFIABLE"
 
 
+def test_private_loopback_gateway_without_tenant_map_is_not_auth_blocker() -> None:
+    report = {
+        "directPlane": {"state": "STABLE_CATALOG"},
+        "gatewayAuth": {"state": "LOCAL_CONTRACT_OPEN_BY_DESIGN"},
+    }
+    assert e2e.release_state(report, True) == "MONETIZER_BLOCKED_NO_VERIFIED_OMNI_MODEL"
+
+
+def test_unavailable_gateway_still_blocks_functional_e2e() -> None:
+    report = {
+        "directPlane": {"state": "STABLE_CATALOG"},
+        "gatewayAuth": {"state": "GATEWAY_UNAVAILABLE"},
+    }
+    assert e2e.release_state(report, True) == "MONETIZER_BLOCKED_GATEWAY_UNAVAILABLE"
+
+
 def test_release_requires_direct_stability_before_everything_else() -> None:
     report = {"directPlane": {"state": "UNSTABLE_OR_UNAVAILABLE"}, "gatewayAuth": {"state": "AUTH_GATE_PROVEN"}}
     assert e2e.release_state(report, True) == "MONETIZER_BLOCKED_OMNI_UNSTABLE"

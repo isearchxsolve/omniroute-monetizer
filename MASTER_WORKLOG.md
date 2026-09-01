@@ -12007,6 +12007,16 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Boundary.** Continuing requires a deliberate production-auth provisioning decision: the gateway owner must create/populate the tenant map with a real tenant credential and make the corresponding bearer available to the acceptance process and both consumers, or explicitly authorize a documented local-only test credential. This agent will not invent a bearer, log one, or silently create a tenant identity because that changes the production access-control boundary.
 
+### [2026-09-01 08:45] #1465 - Corrected auth boundary: public consumer lineages gated; private loopback gateway remains the contract transport
+
+**Operator correction.** The operator clarified that “all execution lineages must be auth-gated” means the internet-facing provider and consumer application lineages, not the private `127.0.0.1:8190` transport endpoint. Treating absent `tenant_map.json` as a prerequisite for the local gateway would have changed the endpoint contract and could have denied valid OiiOii/Emergent traffic across the ecosystem.
+
+**Implementation correction.** Updated `omniroute_e2e_acceptance.py` so absence of the optional tenant map is reported as `LOCAL_CONTRACT_OPEN_BY_DESIGN`, with the explicit explanation that customer authentication belongs at OiiOii/Emergent public APIs. The coordinator still blocks a genuinely unavailable gateway and still reports a broken configured gateway-auth layer separately. OiiOii and Emergent live paths continue to require their own runtime bearer credentials and use only the canonical `http://127.0.0.1:8190/v1` inference origin.
+
+**Validation.** Added tests proving a private loopback gateway without a tenant map is not treated as an auth blocker, while an unavailable gateway remains a functional-E2E blocker. `python -m pytest -q scripts\\automation\\test_omniroute_e2e_acceptance.py` passed **6/6**; compilation and `git diff --check` passed. No provider inference, video spend, consumer job, Chrome/CDP action, seat-pool action, credential, database, service, or endpoint mutation occurred in this correction.
+
+**Correct release model.** Functional Omni E2E may proceed through the local gateway in its documented mode. Final customer release additionally requires authentication evidence at the public provider/consumer boundaries. Gateway tenant auth is an optional separate hardening dimension unless the operator explicitly changes the local endpoint contract.
+
 ### [2026-09-01 06:10] #1451 - sambanova: OAuth signed in, surface = ONBOARDING_VERIFICATION_REQUIRED (never first-run-completed); monica remains the model claim
 
 **Evidence-first unit.** Sequence: fresh tab (old auth0 renderers hung - closed) -> cloud.sambanova.ai -> /chat is a dead route -> /dashboard shell ambiguous ("Login/Signup" nav) -> /playground rendered a composer (auth0+auth0_compat cookies present) -> live send bounced to auth0 = browser session was DEAD -> auth0 screen shows "Continue with Google" (screenshot sambanova_auth0_fresh_*.png) -> clicked -> Google chooser showed the seat account (monica_goog_chooser_*.png) -> account row click -> CONSENT "Continue" clicked -> landed back on cloud.sambanova.ai (sambanova_oauth_done_*.png). OAuth SUCCEEDED.
