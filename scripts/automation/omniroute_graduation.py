@@ -152,6 +152,18 @@ def is_non_chat(row: dict[str, Any]) -> bool:
             ("/veo", "/wan", "/kling", "/luma", "text-to-video", "image-generation")))
 
 
+def catalog_modality(row: dict[str, Any]) -> str:
+    """Classify a catalog row without erasing models from the capacity ledger.
+
+    OmniRoute providers routinely expose chat and video-capable models together.  The
+    chat completion master must not send a text chat payload to a native video model,
+    but it must also never make that model disappear merely because its provider is
+    primarily a chat provider.  ``video_candidate`` therefore remains an inventory
+    row until the native video contract proves (or rejects) it.
+    """
+    return "video_candidate" if is_non_chat(row) else "chat"
+
+
 def plan_from_catalog(catalog: list[dict[str, Any]], max_models: int = 0) -> list[dict[str, Any]]:
     rows = []
     for item in catalog:
@@ -171,6 +183,29 @@ def plan_from_catalog(catalog: list[dict[str, Any]], max_models: int = 0) -> lis
         if max_models:
             grouped[owner] = grouped[owner][:max_models]
     return [row for owner in sorted(grouped) for row in grouped[owner]]
+
+
+def capability_inventory(catalog: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep every concrete Omni provider/model row visible for final capacity truth.
+
+    This is intentionally separate from ``plan_from_catalog``: the latter is a
+    chat-completions execution plan, while this ledger is the provider-by-model
+    inventory used to decide which native modality runner must be built or invoked.
+    """
+    rows: list[dict[str, Any]] = []
+    for item in catalog:
+        model = str(item.get("id") or "")
+        owner = provider_name(item)
+        if not model or owner in {"combo", "session_pool", "unknown"}:
+            continue
+        modality = catalog_modality(item)
+        rows.append({"provider": owner, "model": model, "modelFamily": model_family(model),
+                     "modality": modality, "catalogOwnedBy": owner,
+                     "executionState": (
+                         "CHAT_COMPLETIONS_CANDIDATE" if modality == "chat"
+                         else "NATIVE_VIDEO_CONTRACT_REQUIRED"
+                     )})
+    return sorted(rows, key=lambda r: (r["provider"], r["model"]))
 
 
 def model_family(model: str) -> str:
@@ -260,21 +295,45 @@ def build_plan(*, include_management: bool = True) -> dict[str, Any]:
     management = management_snapshot() if include_management else {
         "auth": "SKIPPED_E2E_OPTIONAL_METADATA", "connections": []}
     routes = plan_from_catalog(catalog)
+    capability_rows = capability_inventory(catalog)
     return {"schemaVersion": 1, "generatedAt": now(),
             "mode": "omniroute_all_catalog_plan_no_inference", "endpoint": OMNI,
             "consumerContract": CONSUMER, "catalog": catalog_meta,
             "management": {k: v for k, v in management.items() if k != "connections"},
             "providers": dict(Counter(r["provider"] for r in routes)),
             "routes": routes,
+            "providerModelCapabilityInventory": capability_rows,
+            "capabilityCounts": dict(Counter(r["modality"] for r in capability_rows)),
             "whatThisDoesNotProve": ["current provider health", "credentials", "quota",
-                                      "consumer reachability", "video render success", "capacity"]}
+                                      "consumer reachability", "video render success", "capacity"],
+            "videoInterpretation": (
+                "video_candidate rows are concrete provider/model inventory, not excluded chat-provider "
+                "noise and not completed-video capacity. They require the native video contract runner."
+            )}
+
+
+def prior_route_results(payload: Any) -> list[dict[str, Any]]:
+    """Read either durable run schema written by this master.
+
+    During a long direct sweep the temporary form has ``results`` at top level.
+    At completion ``main`` persists the same evidence under ``chat.direct``.  Both
+    are durable states of one execution, so treating the latter as empty caused a
+    later resume to repeat already-terminal provider/model requests.
+    """
+    if not isinstance(payload, dict):
+        return []
+    direct = payload.get("results")
+    if not isinstance(direct, list):
+        chat = payload.get("chat")
+        direct = chat.get("direct") if isinstance(chat, dict) else []
+    return [row for row in direct if isinstance(row, dict)] if isinstance(direct, list) else []
 
 
 def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float,
                  lanes: int = 2, max_inflight: int = 2,
                  min_interval: float = 1.0, resume: bool = True) -> dict[str, Any]:
     prior_payload = read_json(RUN, {}) if resume else {}
-    prior_rows = prior_payload.get("results", []) if isinstance(prior_payload, dict) else []
+    prior_rows = prior_route_results(prior_payload)
     prior = {(str(r.get("provider")), str(r.get("model"))): r for r in prior_rows
              if isinstance(r, dict) and r.get("provider") and r.get("model")}
     results: list[dict[str, Any]] = list(prior.values())

@@ -20,6 +20,23 @@ def test_plan_excludes_non_chat_and_internal_rows() -> None:
     assert [(r["provider"], r["model"]) for r in routes] == [("openai", "gpt-5")]
 
 
+def test_capability_inventory_retains_video_models_from_chat_provider() -> None:
+    rows = master.capability_inventory([
+        {"id": "chat-suite/gpt-5", "owned_by": "chat-suite"},
+        {"id": "chat-suite/veo-3.1-generate-preview", "owned_by": "chat-suite"},
+    ])
+    assert [(row["model"], row["modality"], row["executionState"]) for row in rows] == [
+        ("chat-suite/gpt-5", "chat", "CHAT_COMPLETIONS_CANDIDATE"),
+        ("chat-suite/veo-3.1-generate-preview", "video_candidate", "NATIVE_VIDEO_CONTRACT_REQUIRED"),
+    ]
+
+
+def test_prior_route_results_reads_completed_nested_run() -> None:
+    row = {"provider": "openai", "model": "gpt-5", "directProof": "DIRECT_LAW3_OK"}
+    assert master.prior_route_results({"chat": {"direct": [row]}}) == [row]
+    assert master.prior_route_results({"results": [row]}) == [row]
+
+
 def test_direct_probe_requires_computed_answer() -> None:
     class FakeResponse:
         status_code = 200
