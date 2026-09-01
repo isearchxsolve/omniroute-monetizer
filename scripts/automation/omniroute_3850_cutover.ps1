@@ -96,14 +96,22 @@ function Invoke-Robocopy([string]$From, [string]$To, [switch]$Mirror) {
     if ($LASTEXITCODE -gt 7) { throw "robocopy failed with exit code $LASTEXITCODE" }
 }
 
-function Write-HashManifest([string]$Root, [string]$OutputFile) {
-    # Hashes prove copied bytes without writing any secret material into logs.
-    Get-ChildItem -LiteralPath $Root -File -Force -Recurse |
-        Sort-Object FullName |
-        ForEach-Object {
-            $relative = $_.FullName.Substring($Root.Length).TrimStart('\\')
-            [pscustomobject]@{ path = $relative; bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
-        } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $OutputFile -Encoding UTF8
+function Write-CriticalStateManifest([string]$Root, [string]$OutputFile) {
+    # The complete stopped-state tree is copied.  Hash the four state-bearing
+    # files needed to restore encrypted provider state, not every historical
+    # call/Qoder log that happens to live under DATA_DIR.  This keeps the
+    # recovery gate bounded and avoids one archival file preventing a rollback.
+    $critical = @('.env', 'storage.sqlite', 'storage.sqlite-wal', 'storage.sqlite-shm')
+    $rows = foreach ($relative in $critical) {
+        $path = Join-Path $Root $relative
+        if (-not (Test-Path -LiteralPath $path)) { throw "Critical state file missing from stopped snapshot: $relative" }
+        $item = Get-Item -LiteralPath $path -Force
+        [pscustomobject]@{ path = $relative; bytes = $item.Length; sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash }
+    }
+    [pscustomobject]@{
+        criticalFiles = $rows
+        totalFiles = (Get-ChildItem -LiteralPath $Root -File -Force -Recurse | Measure-Object).Count
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $OutputFile -Encoding UTF8
 }
 
 function Restore-Production([string]$BackupDir, [string]$ServiceRegBackup) {
@@ -157,6 +165,7 @@ $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $runDir = Join-Path $CutoverRoot "3.8.50-$stamp"
 $backupDir = Join-Path $runDir 'backup'
 $reportFile = Join-Path $runDir 'cutover-report.json'
+$transcriptFile = Join-Path $runDir 'cutover-transcript.txt'
 $serviceRegBackup = Join-Path $backupDir 'OmniRoute-service-before.reg'
 New-Item -ItemType Directory -Path (Join-Path $backupDir 'data') -Force | Out-Null
 
@@ -167,11 +176,13 @@ $report = [ordered]@{
     toVersion = '3.8.50'
     stateBackup = $backupDir
     serviceRegistryBackup = $serviceRegBackup
+    transcript = $transcriptFile
     probes = @()
     result = 'RUNNING'
 }
 
 try {
+    Start-Transcript -LiteralPath $transcriptFile -Append | Out-Null
     # Preserve the exact NSSM configuration before changing one parameter. The
     # export also preserves the encrypted-key environment lineage, but it is
     # retained only inside the gitignored recovery directory.
@@ -181,8 +192,8 @@ try {
     Stop-Service -Name $ServiceName
     Wait-ServiceStopped
     Invoke-Robocopy -From $LiveDataDir -To (Join-Path $backupDir 'data')
-    Write-HashManifest -Root $LiveDataDir -OutputFile (Join-Path $backupDir 'live-state-sha256.json')
-    Write-HashManifest -Root (Join-Path $backupDir 'data') -OutputFile (Join-Path $backupDir 'backup-state-sha256.json')
+    Write-CriticalStateManifest -Root $LiveDataDir -OutputFile (Join-Path $backupDir 'live-state-sha256.json')
+    Write-CriticalStateManifest -Root (Join-Path $backupDir 'data') -OutputFile (Join-Path $backupDir 'backup-state-sha256.json')
 
     # Change only executable arguments and application directory. Existing
     # service environment (DATA_DIR and encryption lineage) is deliberately
@@ -219,6 +230,7 @@ try {
     $report.result = 'PROMOTED_AND_VALIDATED'
     $report.finishedAt = (Get-Date).ToUniversalTime().ToString('o')
     $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportFile -Encoding UTF8
+    Stop-Transcript | Out-Null
     Write-Output "SUCCESS: OmniRoute 3.8.50 promoted and validated. Redacted report: $reportFile"
 } catch {
     $failure = $_.Exception.Message
@@ -233,5 +245,6 @@ try {
         $report.rollbackFailure = $_.Exception.Message
     }
     $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportFile -Encoding UTF8
+    try { Stop-Transcript | Out-Null } catch {}
     throw "CUTOVER FAILED: $failure. See redacted report: $reportFile"
 }
