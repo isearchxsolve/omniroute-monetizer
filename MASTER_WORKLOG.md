@@ -12211,3 +12211,9 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Runtime details worth retaining.** Full sandbox bootstrap logs show expected embedded-service initialization and one non-fatal fresh-database cleanup warning (`compression_run_telemetry` table absent); it did not prevent health or catalog serving. External optional synchronizers (Arena ELO/OpenRouter statistics) timed out, but those are not required for a local empty-catalog health check and did not stall the serving endpoints. The direct production :20128 incident remains separate and unresolved.
 
 **Decision.** Do not install 3.8.50 in place or point it at production state yet. The safe next gate is owner-approved production-state discovery and a byte-for-byte, rollback-tested backup of the exact live data directory (including SQLite, WAL, SHM, `.env`, and launch environment), followed by a controlled cutover and direct post-start validation of health, full models, management login, a real direct chat proof, and a direct native-video proof. This staging result supports that plan; it is not authorization to skip it.
+
+### [2026-09-01 14:36] #1483 - Closed completed 3.8.50 sandbox listener to release staging memory
+
+**Cleanup.** After the completed loopback health/catalog checks, verified the active staging CLI PID 7328 and child server PID 24728 by their sandbox-rooted command lines and port 20129 identity. Stopped only that exact staging CLI process. Verification three seconds later found zero remaining staging parent/child processes and zero listener on port 20129. The isolated staged package, empty sandbox database, and logs remain on disk for the later controlled cutover rehearsal.
+
+**What this did not touch.** No production OmniRoute :20128 process, production data directory, credentials/OAuth, SQLite/WAL, :8190 shim, Chrome/CDP profile, provider connection, seat, or consumer was stopped, restarted, edited, or deleted.
