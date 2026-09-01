@@ -118,38 +118,59 @@ class OmniRouteBridge:
         self.base = base
         self._models: list[dict[str, Any]] = []
         self._models_at = 0.0
+        self._refresh_at = 0.0
+        self._refreshing = False
+        self._models_lock = threading.Lock()
         self._last_error: Optional[str] = None
 
     def models(self) -> list[dict[str, Any]]:
-        # Avoid making every consumer's model discovery wait on a repeatedly wedged
-        # upstream.  A successful list is cached briefly; a failed attempt is also
-        # rate-limited so the healthy local catalog stays fast.
+        # Never make the consumer's discovery request wait on the upstream catalog.
+        # The direct catalog is large and its refresh can transiently exceed the
+        # task watchdog's three-second probe.  Return the last known snapshot (or
+        # an honest empty paid snapshot on cold start) and refresh asynchronously.
+        # One lock prevents a thundering herd of refresh threads at a stale boundary.
         now = time.monotonic()
-        if now - self._models_at < 15.0:
-            return list(self._models)
-        self._models_at = now
-        cached = list(self._models)
+        with self._models_lock:
+            cached = list(self._models)
+            fresh = now - self._models_at < 15.0
+            retry_due = now - self._refresh_at >= 15.0
+            if not fresh and retry_due and not self._refreshing:
+                self._refreshing = True
+                self._refresh_at = now
+                threading.Thread(target=self._refresh_models, name="omni-model-refresh",
+                                 daemon=True).start()
+            return cached
+
+    def _refresh_models(self) -> None:
+        """Refresh the paid catalog off the HTTP request thread."""
         try:
-            r = requests.get(f"{self.base}/v1/models", timeout=OMNIROUTE_MODEL_TIMEOUT_S)
-            data = r.json() if r.ok else {}
+            upstream = requests.Session()
+            upstream.trust_env = False
+            response = upstream.get(f"{self.base}/v1/models", timeout=OMNIROUTE_MODEL_TIMEOUT_S)
+            data = response.json() if response.ok else {}
             rows = data.get("data") if isinstance(data, dict) else None
             if not isinstance(rows, list):
                 raise ValueError("invalid model-list shape")
-            self._models = [row for row in rows if isinstance(row, dict) and row.get("id")]
-            self._last_error = None
+            models = [row for row in rows if isinstance(row, dict) and row.get("id")]
+            with self._models_lock:
+                self._models = models
+                self._models_at = time.monotonic()
+                self._last_error = None
         except Exception as exc:
-            # Discovery must not claim capacity disappeared merely because this
-            # refresh timed out.  Preserve the last good catalog; status exposes
-            # the failed refresh so callers can distinguish cached inventory from
-            # a current upstream response.  On a cold start there is no cache, so
-            # returning an empty paid catalog remains honest.
-            self._models = cached
-            self._last_error = type(exc).__name__
-        return list(self._models)
+            # Preserve the last good catalog; the status endpoint exposes the
+            # failed refresh.  A cold failure honestly leaves paid rows empty.
+            with self._models_lock:
+                self._last_error = type(exc).__name__
+        finally:
+            with self._models_lock:
+                self._refreshing = False
 
     def status(self) -> dict[str, Any]:
-        return {"base": self.base, "reachable": self._last_error is None,
-                "lastError": self._last_error, "cachedModels": len(self._models)}
+        with self._models_lock:
+            return {"base": self.base, "reachable": self._last_error is None,
+                    "lastError": self._last_error, "cachedModels": len(self._models),
+                    "refreshing": self._refreshing,
+                    "catalogStale": bool(self._models and time.monotonic() - self._models_at >= 15.0)}
 
     def chat(self, raw: bytes, auth: str) -> tuple[Optional[dict[str, Any]], Optional[str]]:
         allowed = _omni_verified_model_ids()
