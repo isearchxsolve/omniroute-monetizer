@@ -19,6 +19,11 @@ def test_extract_text_requires_a_real_text_field_or_plain_text():
     assert MOD.extract_text({}, " verified translation ") == "verified translation"
 
 
+def test_translation_requires_english_semantics_from_the_spanish_fixture():
+    assert MOD.translation_looks_english("OmniRoute audio verification is ready")
+    assert not MOD.translation_looks_english("La verificacion de audio esta lista")
+
+
 def test_admission_rows_only_admits_modality_specific_proofs():
     rows = MOD.admission_rows([
         {"model": "gtts/default", "modality": "speech", "state": "SPEECH_BYTES_OK", "verifiedAt": "now"},

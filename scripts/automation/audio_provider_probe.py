@@ -88,12 +88,12 @@ def extract_text(payload: Any, raw: str) -> str:
     return raw.strip()
 
 
-def speech_probe(session: requests.Session, model: str, text: str, timeout: float) -> tuple[dict[str, Any], bytes]:
+def speech_probe(session: requests.Session, model: str, text: str, voice: str, timeout: float) -> tuple[dict[str, Any], bytes]:
     started = dt.datetime.now(dt.timezone.utc)
     result: dict[str, Any] = {"modality": "speech", "model": model, "state": "NOT_PROVEN"}
     try:
         response = session.post(f"{OMNI}/v1/audio/speech", json={
-            "model": model, "input": text, "voice": "alloy", "response_format": "mp3",
+            "model": model, "input": text, "voice": voice, "response_format": "mp3",
         }, headers={"Content-Type": "application/json"}, timeout=timeout)
         data = response.content
         kind = audio_signature(data)
@@ -113,6 +113,12 @@ def speech_probe(session: requests.Session, model: str, text: str, timeout: floa
         result["latencyMs"] = int((dt.datetime.now(dt.timezone.utc) - started).total_seconds() * 1000)
 
 
+def translation_looks_english(text: str) -> bool:
+    """The Spanish fixture must come back as English, not merely as text."""
+    normalized = " ".join(text.lower().split())
+    return "verification" in normalized and "verificacion" not in normalized
+
+
 def text_probe(session: requests.Session, endpoint: str, modality: str, model: str, audio: bytes,
                timeout: float) -> dict[str, Any]:
     result: dict[str, Any] = {"modality": modality, "model": model, "state": "NOT_PROVEN"}
@@ -125,9 +131,11 @@ def text_probe(session: requests.Session, endpoint: str, modality: str, model: s
         except ValueError:
             body = {}
         text = extract_text(body, response.text)
+        valid_text = response.status_code == 200 and len(text) >= 3
+        if modality == "translation":
+            valid_text = valid_text and translation_looks_english(text)
         result.update(http=response.status_code, text=text[:300], textSha256=hashlib.sha256(text.encode()).hexdigest(),
-                      state=f"{modality.upper()}_TEXT_OK" if response.status_code == 200 and len(text) >= 3
-                      else f"{modality.upper()}_NO_TEXT")
+                      state=f"{modality.upper()}_TEXT_OK" if valid_text else f"{modality.upper()}_NO_TEXT")
         if result["state"].endswith("NO_TEXT"):
             result["error"] = redacted_body(response.text)
     except Exception as exc:
@@ -183,7 +191,7 @@ def main() -> int:
     # It prevents an endpoint 200 over a silent/tone fixture from manufacturing
     # text capacity and keeps the whole proof direct through OmniRoute.
     for model in selected["speech"] if "speech" in requested or any(k in requested for k in ("transcription", "translation")) else []:
-        row, data = speech_probe(session, model, SPEECH_TEXT, args.timeout)
+        row, data = speech_probe(session, model, SPEECH_TEXT, "alloy", args.timeout)
         results.append(row)
         if data and not fixture:
             fixture = data
@@ -195,12 +203,19 @@ def main() -> int:
             for model in selected["transcription"]:
                 results.append(text_probe(session, "/v1/audio/transcriptions", "transcription", model, fixture, args.timeout))
     if "translation" in requested:
-        if not fixture:
+        # Translation needs an actual non-English source. gTTS exposes its
+        # language as the OpenAI-shaped voice field, so this is a direct Omni
+        # Spanish-TTS -> multipart-translation proof rather than an English
+        # transcription accidentally passing as a translation.
+        spanish_row, spanish_fixture = speech_probe(session, "gtts/default", SPANISH_TEXT, "es", args.timeout)
+        spanish_row["proofPurpose"] = "translation_fixture"
+        results.append(spanish_row)
+        if not spanish_fixture:
             results.append({"modality": "translation", "model": "<no-speech-fixture>",
                             "state": "SKIPPED_NO_VERIFIED_SPEECH_FIXTURE", "verifiedAt": now()})
         else:
             for model in selected["translation"]:
-                results.append(text_probe(session, "/v1/audio/translations", "translation", model, fixture, args.timeout))
+                results.append(text_probe(session, "/v1/audio/translations", "translation", model, spanish_fixture, args.timeout))
     report = {**plan, "state": "COMPLETE", "completedAt": now(), "results": results}
     atomic_json(REPORT, report)
     atomic_json(ADMISSIONS, {"schemaVersion": 1, "generatedAt": now(), "endpoint": OMNI,
