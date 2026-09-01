@@ -12462,3 +12462,23 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Measured plan.** The active 3.8.50 build now yields **40 remote text-to-video candidates across 17 remote providers** for the production queue (42 before excluding the three local ComfyUI/SDWebUI rows; the plan-only count was checked from the live build). No inference was sent by this repair or plan-only run.
 
 **Verification.** Focused probe/registry tests passed **7/7**; Python compilation and `git diff --check` passed. No service, shim, provider configuration, chat ledger, Chrome process, or consumer was changed. Next action is the live 40-route remote MP4 pass with exact prior remote terminal evidence retained.
+
+### [2026-09-01 19:25] #1501 - Captures lane pass 1 on 9222: 9 missing sites targeted; paste-path 5th strategy added; you.com payment wall; gemini artifact confirmed valid
+
+**Gap diff.** Compared the 36 APP_SURFACE hosts on 9222 against state/secrets artifacts: 18 hosts lacked an artifact under their tab host, but 9 are covered by api.* artifact hosts (1min->api.1min.ai, groq->api.groq.com, monica->api.monica.im, deepinfra->api.deepinfra.com, innerai->chat-api-v3.innerai.com, together->none, etc.). True chat-lane capture queue: Together AI Chat, Cerebras (chat.cerebras.ai), Zhipu GLM Chat (chatglm.cn), PromptQL, Puter Chat, Meta AI Web, StepFun, iFlytek SparkDesk, You.com Chat. Video sites (heygen, digen, nemovideo) deferred to the spend-gated video lane.
+
+**Capture run 1+2 (logs/capture_batch4_9222.log, capture_batch4b_9222.log, state/capture_report_9222.json):**
+- You.com Chat: WALL 'add a payment method' - left untouched (Law 5). Named wall.
+- StepFun Web: NO_COMPOSER on the stepfun.com tab; the --open fallback landed on yuewen.cn where the wall-text heuristic flagged 'credit card' (marketing-page false positive; the ledger keeps stepfun as weak/likely signed-out - honest downgrade documented, not counted as supply).
+- Together: TEXT_REJECTED on a freshly opened tab (its old playground tab is gone from 9222; opens signed-out and the playground editor refused Input.insertText).
+- Cerebras, chatglm.cn, PromptQL, Meta AI: NO_COMPOSER on existing tabs even with 40s ready polling (renderer thaw problem recurs; NOT reclassified - audit had composers visible earlier).
+- Puter Chat: NO_REQUEST twice (37 req / 2 posts / 71 ws frames seen; no sentinel in any) - Chrome-gap doctrine 3a build target, transport RCA pending.
+- iFlytek SparkDesk: NO_REQUEST (29 req / 1 post / 173 ws frames) - same doctrine classification.
+
+**Paste-path implementation (todo: gemini composer paste-path).** Added 5th submit strategy 'paste_clipboard' to capture_sessions_cdp.py: saves user clipboard text via Get-Clipboard, sets sentinel via Set-Clipboard, clicks composer, dispatches real Ctrl+V (modifiers=2) through the input pipeline, verifies via JS_READ_ACTIVE, restores previous clipboard in finally. Wired into the strategy loop after retype_keys; NO_REQUEST note now reports the true strategies count. py_compile passed.
+
+**Gemini result.** Ran the new paste path against the gemini.google.com/app tab (Plus signed-in): NO_REQUEST - the editor still refuses every pipeline including paste, and NO sentinel POST was emitted. HOWEVER state/secrets/session_google_gemini_web.json already holds a valid artifact (harvested 2026-08-31T21:40Z, gemini.google.com StreamGenerate POST, 2769B sentinel body, 3036-char cookie jar, alive=true) - the todo's capture outcome is satisfied by the existing artifact; the paste-path requirement is implemented as durable tooling for the whole fleet.
+
+**What is NOT claimed:** no new captures admitted; meta/puter/xinghuo transports are build targets, not dead ends; together/cerebras/chatglm/promptql remain artifact-less; walls (you.com payment) untouched.
+
+**Next:** replay/admit lane for staged artifacts on 9222, final re-audit -> drain; then 9224/9225/9223 cycles.

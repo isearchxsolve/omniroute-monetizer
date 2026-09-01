@@ -868,6 +868,42 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
             time.sleep(0.3)
             press_enter()
 
+        def strat_paste() -> None:
+            # Clipboard paste path (gemini + editors that refused every delivery pipeline above):
+            # the seat Chrome runs in the interactive session and shares the user clipboard, so
+            # the sentinel is placed there, the composer is clicked for focus, and a real Ctrl+V
+            # is dispatched through the browser input pipeline. The user's previous clipboard
+            # text is saved and restored afterwards.
+            import subprocess
+            prev = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", "Get-Clipboard"],
+                capture_output=True, text=True, timeout=15).stdout
+            subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 "Set-Clipboard -Value " + json.dumps(SENTINEL)],
+                capture_output=True, text=True, timeout=15)
+            try:
+                f3 = c.evaluate(JS_FOCUS_COMPOSER) or {}
+                if not f3.get("ok") or f3.get("x") is None:
+                    raise CDPError("composer vanished before paste")
+                for kind in ("mousePressed", "mouseReleased"):
+                    c.call("Input.dispatchMouseEvent",
+                           {"type": kind, "x": f3["x"], "y": f3["y"],
+                            "button": "left", "clickCount": 1})
+                time.sleep(0.4)
+                _key("v", "KeyV", 86, modifiers=2)          # Ctrl+V
+                time.sleep(0.4)
+                back3 = c.evaluate(JS_READ_ACTIVE) or {}
+                row["pasteLanded"] = SENTINEL.split(":")[0] in (back3.get("text") or "")
+                time.sleep(0.3)
+                press_enter()
+            finally:
+                if prev.strip():
+                    subprocess.run(
+                        ["powershell", "-NoProfile", "-Command",
+                         "Set-Clipboard -Value " + json.dumps(prev.rstrip("\r\n"))],
+                        capture_output=True, text=True, timeout=15)
+
 
         per = max(6.0, wait / 4.0)
         row["strategiesTried"] = []
@@ -895,7 +931,8 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
             return row
 
         for label, fn in (("enter", strat_enter), ("js_click_send", strat_js_click),
-                          ("mouse_send", strat_mouse_send), ("retype_keys", strat_retype)):
+                          ("mouse_send", strat_mouse_send), ("retype_keys", strat_retype),
+                          ("paste_clipboard", strat_paste)):
             try:
                 fn()
             except CDPError as e:
@@ -942,7 +979,8 @@ def capture(t: dict, name: str, verdict: str, wait: float, ready_wait: float = 2
                             "buffered -- not captured")
             return row
         row.update(status="NO_REQUEST",
-                   note=f"all 4 submit strategies failed; {seen['requests']} requests / "
+                   note=f"all {len(row['strategiesTried'])} submit strategies failed; "
+                        f"{seen['requests']} requests / "
                         f"{seen['posts']} posts / {seen['wsFrames']} ws frames seen")
         return row
     except CDPError as e:
