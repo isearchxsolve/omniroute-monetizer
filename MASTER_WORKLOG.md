@@ -12217,3 +12217,11 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Cleanup.** After the completed loopback health/catalog checks, verified the active staging CLI PID 7328 and child server PID 24728 by their sandbox-rooted command lines and port 20129 identity. Stopped only that exact staging CLI process. Verification three seconds later found zero remaining staging parent/child processes and zero listener on port 20129. The isolated staged package, empty sandbox database, and logs remain on disk for the later controlled cutover rehearsal.
 
 **What this did not touch.** No production OmniRoute :20128 process, production data directory, credentials/OAuth, SQLite/WAL, :8190 shim, Chrome/CDP profile, provider connection, seat, or consumer was stopped, restarted, edited, or deleted.
+
+### [2026-09-01 14:38] #1484 - Direct OmniRoute :20128 recovered without an intervention; full catalog verified
+
+**Live recheck.** A final read-only production health check found the existing direct OmniRoute PID 46464 responsive again without any restart or state mutation from this session: `GET http://127.0.0.1:20128/api/monitoring/health` returned HTTP 200 in 197 ms. The response reports OmniRoute 3.8.49, `setupComplete=true`, cryptography healthy, 99 configured connections, 85 active connections, and a 299-entry provider summary. This corrects the prior incident status from `LISTENING_BUT_UNHEALTHY` to **management-health responsive at this timestamp**.
+
+**Catalog gate.** Immediately followed with the actual discovery contract rather than relying on health alone: `GET http://127.0.0.1:20128/v1/models` returned HTTP 200 in 63 ms, 3,482,856 bytes, OpenAI `object=list`, and 9,596 models. This is the direct catalog required before resuming direct Omni chat/video graduation work.
+
+**Boundary of the claim.** This proves recovery of the direct server's health and full catalog endpoint, not a final direct-chat or native-video graduation pass. No direct completion request was sent in this recheck, so no provider spend or video job was incurred. The 3.8.50 sandbox remains a successful isolated compatibility/staging result, but production is still on 3.8.49; no upgrade, restart, data copy, credential modification, provider/seat change, Chrome/CDP action, or consumer mutation occurred.
