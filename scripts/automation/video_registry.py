@@ -34,12 +34,38 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-DEFAULT_OMNIROUTE_DIST = Path(
-    os.environ.get(
-        "OMNIROUTE_DIST",
-        r"C:\Users\Admin\AppData\Local\hermes\node\node_modules\omniroute\dist",
-    )
+LEGACY_OMNIROUTE_DIST = Path(
+    r"C:\Users\Admin\AppData\Local\hermes\node\node_modules\omniroute\dist"
 )
+
+
+def active_omniroute_dist() -> Path:
+    """Resolve the build used by the registered production service.
+
+    OmniRoute upgrades are staged outside the Hermes package tree.  Reading the
+    legacy tree after a promotion silently produces a registry from the wrong
+    version, so the Windows service's AppDirectory is authoritative.  The
+    environment override remains first for sandbox/tests and non-Windows hosts.
+    """
+    override = os.environ.get("OMNIROUTE_DIST", "").strip()
+    if override:
+        return Path(override)
+    if os.name == "nt":
+        try:
+            import winreg
+
+            key_path = r"SYSTEM\CurrentControlSet\Services\OmniRoute\Parameters"
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+                app_dir = str(winreg.QueryValueEx(key, "AppDirectory")[0]).strip()
+            candidate = Path(app_dir) / "dist"
+            if candidate.is_dir():
+                return candidate
+        except (OSError, ImportError, ValueError):
+            pass
+    return LEGACY_OMNIROUTE_DIST
+
+
+DEFAULT_OMNIROUTE_DIST = active_omniroute_dist()
 
 # Registries we know how to extract, keyed by the exported symbol name.
 REGISTRY_EXPORTS = (
@@ -62,6 +88,31 @@ def _chunks_dir(dist: Path) -> Path:
     return d
 
 
+def _video_route_chunks(dist: Path) -> List[Path]:
+    """Return only chunks loaded by the native video-generation route."""
+    route = (
+        dist
+        / ".build"
+        / "next"
+        / "server"
+        / "app"
+        / "api"
+        / "v1"
+        / "videos"
+        / "generations"
+        / "route.js"
+    )
+    if not route.is_file():
+        return []
+    src = route.read_text(encoding="utf-8", errors="replace")
+    out: List[Path] = []
+    for rel in re.findall(r'R\.c\("server/chunks/([^\"]+)"\)', src):
+        p = _chunks_dir(dist) / rel
+        if p.is_file():
+            out.append(p)
+    return out
+
+
 def _candidate_chunks(dist: Path, export_name: str) -> List[Path]:
     """Chunk files that declare ``export_name``, smallest first.
 
@@ -69,11 +120,25 @@ def _candidate_chunks(dist: Path, export_name: str) -> List[Path]:
     registry, while the fat route bundles inline the same literal alongside a
     megabyte of unrelated code. Both parse, but the small one is far faster.
     """
-    needle = f'"{export_name}"'.encode()
+    needles = [f'"{export_name}"'.encode()]
+    if export_name == "VIDEO_PROVIDERS":
+        # 3.8.50 stopped exporting the object itself.  The same registry is the
+        # local captured by getVideoProvider/getAllVideoModels.
+        needles.append(b'"getVideoProvider"')
     hits: List[Path] = []
-    for p in _chunks_dir(dist).rglob("*.js"):
+
+    # Media route manifests list the ~100 chunks actually loaded by the route.
+    # Search those first instead of reading 8,000+ unrelated Next.js chunks.
+    candidates: List[Path] = []
+    if export_name == "VIDEO_PROVIDERS":
+        candidates = _video_route_chunks(dist)
+    if not candidates:
+        candidates = list(_chunks_dir(dist).rglob("*.js"))
+
+    for p in candidates:
         try:
-            if needle in p.read_bytes():
+            raw = p.read_bytes()
+            if any(needle in raw for needle in needles):
                 hits.append(p)
         except OSError:
             continue
@@ -93,16 +158,31 @@ def _extract_object_literal(src: str, export_name: str) -> str:
     find that local's assignment, and brace-match forward.
     """
     export_at = src.find(f'"{export_name}"')
+    local: Optional[str] = None
+    if export_at != -1:
+        # "VIDEO_PROVIDERS",0,i  -> capture the local identifier (`i`).
+        m = re.compile(
+            r'"' + re.escape(export_name) + r'"\s*,\s*\d+\s*,\s*([A-Za-z_$][\w$]*)'
+        ).search(src, export_at)
+        if m:
+            local = m.group(1)
+    elif export_name == "VIDEO_PROVIDERS":
+        # 3.8.50 exports accessors rather than the object.  Pin the local from
+        # getVideoProvider's measured body: function(e){return t[e]||null}.
+        export_at = src.find('"getVideoProvider"')
+        if export_at != -1:
+            before = src[max(0, export_at - 1000) : export_at + 1000]
+            m = re.search(
+                r'"getVideoProvider"\s*,\s*\d+\s*,\s*function\([^)]*\)\s*\{'
+                r'\s*return\s+([A-Za-z_$][\w$]*)\[',
+                before,
+            )
+            if m:
+                local = m.group(1)
     if export_at == -1:
-        raise RegistryNotFound(f"{export_name} not present in chunk")
-
-    # "VIDEO_PROVIDERS",0,i  -> capture the local identifier (`i`)
-    m = re.compile(
-        r'"' + re.escape(export_name) + r'"\s*,\s*\d+\s*,\s*([A-Za-z_$][\w$]*)'
-    ).search(src, export_at)
-    if not m:
+        raise RegistryNotFound(f"{export_name} accessors not present in chunk")
+    if not local:
         raise RegistryNotFound(f"Could not identify the local bound to {export_name}")
-    local = m.group(1)
 
     # Find that local's object assignment, searching backwards from the export.
     assign = None
@@ -156,6 +236,20 @@ def _eval_literal_to_json(literal: str) -> Dict[str, Any]:
     empty list and flag the provider as ``modelsUnresolved`` afterwards.
     """
     neutralised = re.sub(r"e\.i\(\s*\d+\s*\)\s*\.\s*[A-Za-z_$][\w$]*", "[]", literal)
+    neutralised = re.sub(
+        r"(?<=models:)[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*",
+        "[]",
+        neutralised,
+    )
+    # 3.8.50's Adobe entry calls an imported model-list helper inside the
+    # otherwise static object: models:(0,r.toRegistryVideoModels)().  The helper
+    # is outside the extracted literal, so preserve the provider and mark its
+    # model list unresolved instead of making the entire registry unreadable.
+    neutralised = re.sub(
+        r"\(\s*0\s*,\s*[A-Za-z_$][\w$]*\.[A-Za-z_$][\w$]*\s*\)\s*\(\s*\)",
+        "[]",
+        neutralised,
+    )
     with tempfile.TemporaryDirectory() as td:
         script = Path(td) / "dump.js"
         script.write_text(
@@ -170,7 +264,7 @@ def _eval_literal_to_json(literal: str) -> Dict[str, Any]:
             timeout=60,
         )
     if proc.returncode != 0:
-        raise RegistryNotFound(f"Node failed to evaluate registry: {proc.stderr[:400]}")
+        raise RegistryNotFound(f"Node failed to evaluate registry: {proc.stderr[-800:]}")
     return json.loads(proc.stdout)
 
 
@@ -243,7 +337,10 @@ def supported_video_formats(dist: Path = DEFAULT_OMNIROUTE_DIST) -> List[str]:
     hardcoded, so an OmniRoute upgrade that adds handlers is picked up automatically.
     """
     marker = "Unsupported video format"
-    for path in _chunks_dir(dist).rglob("*.js"):
+    candidates = _video_route_chunks(dist)
+    if not candidates:
+        candidates = list(_chunks_dir(dist).rglob("*.js"))
+    for path in candidates:
         try:
             src = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -253,7 +350,7 @@ def supported_video_formats(dist: Path = DEFAULT_OMNIROUTE_DIST) -> List[str]:
             continue
         # The dispatch chain immediately precedes the fallthrough:
         #   "deepinfra-video"===f.format?(0,n.handleDeepinfra...):...
-        window = src[max(0, at - 6000) : at]
+        window = src[max(0, at - 12000) : at]
         formats = re.findall(r'"([a-z0-9][a-z0-9\-]*)"\s*===\s*[A-Za-z_$][\w$]*\.format', window)
         if formats:
             return sorted(set(formats))
