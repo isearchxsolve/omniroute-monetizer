@@ -528,11 +528,10 @@ def main() -> int:
         if prior_results.get(m["qualified"], {}).get("terminal") is True
     ]
     started_at = now()
-    _write_progress(plan=plan, results=[], started_at=started_at, state="RUNNING")
+    _write_progress(plan=plan, results=results, started_at=started_at, state="RUNNING")
     for m in plan:
         old = prior_results.get(m["qualified"])
         if old and old.get("terminal") is True:
-            results.append(old)
             print(f"  [RESUME] {m['qualified']:48} {old.get('state')}", flush=True)
             continue
 
