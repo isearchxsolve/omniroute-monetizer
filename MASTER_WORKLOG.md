@@ -11999,6 +11999,14 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Result.** The intermittent `:8190/v1/models` timeout is repaired and live-verified. Production E2E cannot proceed to certification until the gateway owner enables the tenant map and supplies an authorized test bearer for the auth proof. After that, the Omni master can run its provider/model and routing checks and then the explicitly authorized real consumer journeys.
 
+### [2026-09-01 08:30] #1464 - Omni E2E resumed after shim repair; auth provisioning remains an explicit external-input blocker
+
+**Action.** Re-read the mandatory technology-transfer and worklog context, then checked the current auth inputs without reading any secret values. `state/secrets/tenant_map.json` is absent and this execution environment has no `OMNI_CONSUMER_API_KEY` variable. Ran `python scripts\\automation\\omniroute_e2e_acceptance.py --samples 3 --timeout 20` against the live planes.
+
+**Result.** The patched `:8190` gateway remained responsive and the direct Omni plane remained stable; the acceptance artifact was regenerated with `direct=STABLE_CATALOG`, `capabilityRows=9574`, and `releaseState=MONETIZER_BLOCKED_GATEWAY_AUTH` / `AUTH_GATE_OPEN_BLOCKER`. No provider/model inference, video spend, consumer job, Chrome/CDP action, seat-pool action, or service mutation occurred.
+
+**Boundary.** Continuing requires a deliberate production-auth provisioning decision: the gateway owner must create/populate the tenant map with a real tenant credential and make the corresponding bearer available to the acceptance process and both consumers, or explicitly authorize a documented local-only test credential. This agent will not invent a bearer, log one, or silently create a tenant identity because that changes the production access-control boundary.
+
 ### [2026-09-01 06:10] #1451 - sambanova: OAuth signed in, surface = ONBOARDING_VERIFICATION_REQUIRED (never first-run-completed); monica remains the model claim
 
 **Evidence-first unit.** Sequence: fresh tab (old auth0 renderers hung - closed) -> cloud.sambanova.ai -> /chat is a dead route -> /dashboard shell ambiguous ("Login/Signup" nav) -> /playground rendered a composer (auth0+auth0_compat cookies present) -> live send bounced to auth0 = browser session was DEAD -> auth0 screen shows "Continue with Google" (screenshot sambanova_auth0_fresh_*.png) -> clicked -> Google chooser showed the seat account (monica_goog_chooser_*.png) -> account row click -> CONSENT "Continue" clicked -> landed back on cloud.sambanova.ai (sambanova_oauth_done_*.png). OAuth SUCCEEDED.
