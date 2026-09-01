@@ -134,10 +134,37 @@ def live_catalog(session: requests.Session) -> tuple[list[dict[str, Any]], dict[
         response = session.get(f"{OMNI}/v1/models", timeout=30)
         payload = response.json() if response.ok else {}
         rows = [r for r in payload.get("data", []) if isinstance(r, dict) and r.get("id")]
-        return rows, {"http": response.status_code, "count": len(rows),
-                      "latencyMs": round((time.perf_counter() - started) * 1000)}
+        meta = {"http": response.status_code, "count": len(rows),
+                "latencyMs": round((time.perf_counter() - started) * 1000)}
+        if not response.ok:
+            # A protected catalog returning 401 is an authentication/configuration
+            # failure, not an empty fleet.  Keeping it explicit prevents a master
+            # graduation run from silently claiming there are zero routes.
+            meta["error"] = f"HTTP_{response.status_code}"
+        return rows, meta
     except Exception as exc:
         return [], {"http": None, "count": 0, "error": f"{type(exc).__name__}: {exc}"[:220]}
+
+
+def authenticated_live_catalog() -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Read the protected direct catalog using the normal local management session.
+
+    OmniRoute 3.8.50 correctly requires its local management cookie for
+    ``/v1/models``.  A bare request produces 401 and used to abort the master
+    before any provider proof.  This helper is discovery-only: it never changes
+    a provider, combo, key, database, or consumer setting.
+    """
+    api = OmniRouteAPI(base_url=OMNI, password=get_password())
+    api.session.trust_env = False
+    try:
+        if not api.login():
+            return [], {"http": None, "count": 0, "error": "MANAGEMENT_LOGIN_FAILED"}
+        rows, meta = live_catalog(api.session)
+        meta["authenticated"] = True
+        return rows, meta
+    except Exception as exc:
+        return [], {"http": None, "count": 0,
+                    "error": f"AUTHENTICATED_CATALOG_{type(exc).__name__}: {exc}"[:220]}
 
 
 def provider_name(row: dict[str, Any]) -> str:
@@ -286,8 +313,7 @@ def management_snapshot() -> dict[str, Any]:
 
 
 def build_plan(*, include_management: bool = True) -> dict[str, Any]:
-    session = no_proxy_session()
-    catalog, catalog_meta = live_catalog(session)
+    catalog, catalog_meta = authenticated_live_catalog()
     # Connection metadata is useful for a read-only plan, but it is not a
     # prerequisite for route graduation.  A wedged /api/providers endpoint
     # must not hold the production inference pass hostage after catalog
@@ -464,7 +490,7 @@ def main() -> int:
         ap.error("OmniRoute catalog returned no chat routes; service/catalog is unavailable, no probes started")
     if args.max_models_per_provider:
         plan["routes"] = plan_from_catalog(
-            live_catalog(no_proxy_session())[0], args.max_models_per_provider)
+            authenticated_live_catalog()[0], args.max_models_per_provider)
         plan["mode"] = "omniroute_capped_diagnostic_plan"
     atomic_json(STATE / "omniroute_graduation_plan.json", plan)
     if not args.e2e:
