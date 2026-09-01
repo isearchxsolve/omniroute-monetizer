@@ -12085,6 +12085,12 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Certification rule.** Video capacity is counted only for a provider/model that returns an asset and passes MP4 byte verification. Catalog presence, an HTTP 200 without an asset, or a video name carried by a chat provider do not count as graduated video capacity.
 
+### [2026-09-01 13:03] #1473 - Removed orphaned read-only video-plan process
+
+**Action.** The earlier `video_provider_probe.py --all --plan-only` process pair remained in its management refresh after it had outlived the normal read-only planning window. It had no generation action and was superseded by the independently launched explicit-spend native-video worker. Stopped only the exact `--plan-only` process pair identified by its command line.
+
+**Impact.** The active chat E2E worker and the active `video_provider_probe.py --all --timeout 900` worker were not targeted. No video job, seat-pool task, Chrome/CDP activity, credential, database, service, or endpoint contract was modified by this cleanup.
+
 **Discipline note.** Old artifact stays NOT admitted (401 dead bearer - honest). No claims beyond what the screenshots show. The hung auth0 tabs were closed and replaced with fresh ones (renderer hygiene, no session loss: auth0 state is server-side).
 
 ### [2026-09-01 06:30] #1452 - Reconcile v2 CONSTANT-N MIRROR + one-profile-at-a-time cycle started (operator solution to the 4x51 wedge)
