@@ -12787,3 +12787,21 @@ Both Vertex rows reached the repaired Vertex handler and returned HTTP 400 with 
 **What is NOT claimed:** no admissions this unit; deepinfra is a WALL-classified staged artifact; together/meta remain capture build targets; groq/hailuoai/cerebras surfaces are login/error-gated, listed not solved.
 
 **Next:** 9224 audit v2 + deep-drive pass 2 (seat fresh from #1504 recovery) -> 9225 align -> 9223 cycle 2. Then cross-seat capture re-pass on named targets (together via element-scoped trusted Enter or replay-class triage).
+
+### [2026-09-02 23:30] #1517 - 9224 cycle: audit v2 + deep-drive passes -> 50/50 rows terminal
+
+**Post-#1504-relaunch reality.** The 9224 roster had collapsed to 2 tabs (router relaunch reopens only registered video tabs). reconcile --apply re-opened 49 union sites -> 50/50 FLEET ALIGNED.
+
+**Audit v2 + deep-drive chain (all paced, single-tab, walls named):**
+- audit v2 (wake-first): 12 APP_SURFACE / 20 NEEDS_DRIVE / 16 LOGIN_WALL / 1 PAY_WALL / 1 CDP_FAIL.
+- drive pass 2 (wake+reload+classify): together-9224 LOGIN_WALL (signin redirect - seat-level session gone), prompt.ql LOGIN_WALL, genspark SIGNUP_WALL, cerebras-9224 APP_SURFACE (signed in here).
+- drive pass 2b (longer settle + app-shell + CN walls): +8 APP_SURFACE (yuanbao, sambanova-dashboard, phind, nemovideo, heygen, groq, coze, doubao-region-ban surface), xinghuo/chatglm/stepfun LOGIN_WALL, creen SIGNUP_WALL, 1min PAY_WALL.
+- pass 3 stragglers: baichuan APP_SURFACE (signed-in medical surface); grok composer+SIGNUP (anonymous tier, matches proven batch1 class); rtst -> API_SEAT by design (#1151); giz -> WALL (surface-gone class, matches 9222 pass3 proof).
+
+**Final 9224 ledger (state/surface_audit_9224_full.json): 22 APP_SURFACE, 21 LOGIN_WALL, 3 SIGNUP_WALL, 2 PAY_WALL, 1 API_SEAT, 1 WALL = 50/50, zero rows outside terminal states.**
+
+**Named walls (Law 5, reported):** 21 LOGIN_WALL rows = seat 9224 session layer largely signed-out (qwen/perplexity/deepseek/mistral/monica/meta/cohere/chathub/chatgpt/you/puter/pollinations/akool/innerai/v0/xinghuo/chatglm/stepfun/together-signin/promptql/magichour-pay); SIGNUP grok/genspark/creen; PAY magichour/1min.
+
+**What is NOT claimed:** no captures/admissions on 9224 yet; LOGIN_WALL re-SSO is the next lane (Google-layer on this seat is signed-out at the chooser per the 9222 pattern - operator-visible).
+
+**Next:** 9224 captures for artifact-less APP_SURFACE set, then 9225 align+audit, then 9223 cycle 2, then cross-seat LOGIN_WALL re-SSO pass.
