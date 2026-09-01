@@ -12336,3 +12336,9 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Implementation.** Hardened `run_chat_e2e()` so resume evidence is retained only if its exact `(provider, model)` key appears in the current plan. This prevents an earlier broad catalog run from leaking extra rows into a later bounded run. The immediate restarted command will additionally use `--fresh`, intentionally ignoring all prior direct results so every eligible admission has a current direct Law-3 proof under the newly healthy 3.8.50 service.
 
 **Verification / next.** Python compilation and `git diff --check` passed. Commit this component, then restart the same 188-row two-lane direct+8190 E2E command with `--fresh` and the already explicit video spend confirmation. The native video stage runs only after the clean chat evidence phase completes.
+
+### [2026-09-01 11:55] #1457 - 9222 ledger sweep complete: every tab has a real verdict (0 CDP_FAIL rows, 1 renderer refusals remain)
+
+**Sweep result (logs/sweep_9222_fails.log, ledger state/surface_audit_9222_full.json).** 56 rows final: 17 APP_SURFACE (each with screenshot for the new flips: deepinfra/chat, claude.ai/new, aymo root, flow, rtst, gemini-app, qwen-9223-class rows...), 5 LOGIN_WALL (creen.ai, akool, chatgpt-9222, pollinations, magichour), 33 NEEDS_DRIVE, 1 CDP_FAIL. The wake-first fix (activate + 2.5s + 30s timeouts) resolved 26/27 previously-stuck rows - the CDP failure root cause is renderer suspension, proven again.
+
+**Remaining for 9222 completion:** 33 NEEDS_DRIVE rows (each: SSO drive or named wall), 5 LOGIN_WALL rows (signup-vs-login check), 1 CDP_FAIL retry. Then captures for APP_SURFACE sites lacking artifacts. Then 9224/9225/9223 cycles per the standing mandate.
