@@ -12051,6 +12051,14 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Report interpretation.** `state\\omniroute_e2e_acceptance.json` still contains the prior completed preflight (`STABLE_CATALOG`, `LOCAL_CONTRACT_OPEN_BY_DESIGN`, `NOT_RUN`) because the coordinator has not completed its final write. No global capacity, graduation, or release claim is made. No seat-pool, Chrome/CDP, consumer-job, native-video, credential, database, service, or contract mutation occurred during this check.
 
+### [2026-09-01 10:16] #1469 - Omni E2E master still active during long provider sweep
+
+**Runtime verification.** The acceptance coordinator remains alive as parent PID 10044 with Python worker PID 39880. The stdout log reached approximately 114 KB and was updated at 10:16; stderr remains zero bytes, so the run has not exhibited a process-level failure.
+
+**Current lane evidence.** The live tail shows GitHub at 134/138 rows and GitHub Models at 16/40 rows. Outcomes include `ERROR`, `TRANSPORT`, and `RATE`; they remain per-model provisional results until the coordinator finishes its durable aggregation and transport/RCA review. The acceptance report remains the previous preflight snapshot while the active run is unfinished.
+
+**No premature certification.** No fleet capacity, route graduation, provider death, or release claim is made from this partial output. No seat-pool, Chrome/CDP, consumer-job, native-video, credential, database, service, or contract mutation occurred during this inspection.
+
 **Discipline note.** Old artifact stays NOT admitted (401 dead bearer - honest). No claims beyond what the screenshots show. The hung auth0 tabs were closed and replaced with fresh ones (renderer hygiene, no session loss: auth0 state is server-side).
 
 ### [2026-09-01 06:30] #1452 - Reconcile v2 CONSTANT-N MIRROR + one-profile-at-a-time cycle started (operator solution to the 4x51 wedge)
