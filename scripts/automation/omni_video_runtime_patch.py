@@ -91,6 +91,104 @@ KIE_SOURCE_TYPE_NEW = '''    aspect_ratio?: unknown;
 KIE_RUNTIME_OLD = 'let m={model:e,input:{prompt:p,duration:a.duration?String(a.duration):"5",aspect_ratio:"string"==typeof a.aspect_ratio?a.aspect_ratio:"16:9",sound:!0===a.sound}};'
 KIE_RUNTIME_NEW = '''let m={model:e,input:{prompt:p,duration:a.duration?String(a.duration):"5",aspect_ratio:"string"==typeof a.aspect_ratio?a.aspect_ratio:"16:9",sound:!0===a.sound}};"kling-3.0/video"===e&&(m.input.mode="string"==typeof a.mode?a.mode:"std",m.input.multi_shots="boolean"==typeof a.multi_shots?a.multi_shots:!1),"grok-imagine/text-to-video"===e&&(m.input.mode="string"==typeof a.mode?a.mode:"normal",m.input.duration=a.duration?String(a.duration):"6",m.input.resolution="string"==typeof a.resolution?a.resolution:"480p");'''
 
+KIE_SOURCE_VEO_MARKER = '''  if (log) {
+    const promptPreview = String(body.prompt ?? "").slice(0, 60);
+    log.info("VIDEO", `${provider}/${model} (kie-video) | prompt: "${promptPreview}..."`);
+  }'''
+KIE_SOURCE_VEO_BRANCH = '''  if (model === "veo/veo-3-1" || model === "veo/veo-3-1-fast") {
+    const kieModel = model === "veo/veo-3-1-fast" ? "veo3_fast" : "veo3";
+    const veoPayload: Record<string, unknown> = {
+      prompt,
+      model: kieModel,
+      aspect_ratio: typeof body.aspect_ratio === "string" ? body.aspect_ratio : "16:9",
+      generationType: "TEXT_2_VIDEO",
+      enableFallback: false,
+      enableTranslation: true,
+    };
+    if (Array.isArray(body.imageUrls)) {
+      veoPayload.imageUrls = body.imageUrls
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+        .slice(0, 1);
+    }
+    if (typeof body.resolution === "string") veoPayload.resolution = body.resolution;
+    if (typeof body.callBackUrl === "string") veoPayload.callBackUrl = body.callBackUrl;
+
+    try {
+      const createResponse = await fetch(`${baseUrl}/api/v1/veo/generate`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(veoPayload),
+      });
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        return { success: false, status: createResponse.status, error: errorText.slice(0, 500) };
+      }
+      const createRaw = await createResponse.json();
+      const createData = isJsonObject(createRaw) ? createRaw : {};
+      const taskId = getKieTaskId(createData);
+      if (!taskId) {
+        return { success: false, status: 502, error: "KIE Veo did not return taskId" };
+      }
+
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const statusResponse = await fetch(
+          `${baseUrl}/api/v1/veo/record-info?taskId=${encodeURIComponent(String(taskId))}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!statusResponse.ok) {
+          const errorText = await statusResponse.text();
+          return { success: false, status: statusResponse.status, error: errorText.slice(0, 500) };
+        }
+        const statusRaw = await statusResponse.json();
+        const statusRecord = isJsonObject(statusRaw) ? statusRaw : {};
+        const statusData = isJsonObject(statusRecord.data) ? statusRecord.data : statusRecord;
+        const successFlag = Number(statusData.successFlag);
+        const responseData = isJsonObject(statusData.response) ? statusData.response : {};
+        const resultUrls = Array.isArray(responseData.resultUrls)
+          ? responseData.resultUrls.filter(
+              (value): value is string => typeof value === "string" && value.length > 0
+            )
+          : [];
+
+        if (successFlag === 1) {
+          const videos = resultUrls.map((url) => ({ url, format: "mp4" }));
+          if (!videos.length) {
+            return { success: false, status: 502, error: "KIE Veo succeeded without result URL" };
+          }
+          saveCallLog({
+            method: "POST",
+            path: "/v1/videos/generations",
+            status: 200,
+            model: `${provider}/${model}`,
+            provider,
+            duration: Date.now() - startTime,
+            responseBody: { videos_count: videos.length, taskId: String(taskId), mode: "veo-api" },
+          }).catch(() => {});
+          return { success: true, data: { created: Math.floor(Date.now() / 1000), data: videos } };
+        }
+        if (successFlag === 2) {
+          const errorMessage =
+            responseData.failMsg || statusData.failMsg || statusRecord.msg || "KIE Veo task failed";
+          return { success: false, status: 502, error: String(errorMessage) };
+        }
+        await sleep(pollIntervalMs);
+      }
+
+      return { success: false, status: 504, error: `KIE Veo task timed out (taskId=${String(taskId)})` };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        status: isJsonObject(err) && Number.isFinite(Number(err.status)) ? Number(err.status) : 502,
+        error: sanitizeErrorMessage(err) || "KIE Veo provider error",
+      };
+    }
+  }
+
+'''
+KIE_RUNTIME_VEO_MARKER = 'if(s){let r=String(a.prompt??"").slice(0,60);s.info("VIDEO",`${t}/${e} (kie-video) | prompt: "${r}..."`)}'
+KIE_RUNTIME_VEO_BRANCH = '''if("veo/veo-3-1"===e||"veo/veo-3-1-fast"===e){let k="veo/veo-3-1-fast"===e?"veo3_fast":"veo3",q={prompt:p,model:k,aspect_ratio:"string"==typeof a.aspect_ratio?a.aspect_ratio:"16:9",generationType:"TEXT_2_VIDEO",enableFallback:!1,enableTranslation:!0};Array.isArray(a.imageUrls)&&(q.imageUrls=a.imageUrls.filter(e=>"string"==typeof e&&e.length>0).slice(0,1)),"string"==typeof a.resolution&&(q.resolution=a.resolution),"string"==typeof a.callBackUrl&&(q.callBackUrl=a.callBackUrl);try{let createResp=await fetch(`${c}/api/v1/veo/generate`,{method:"POST",headers:{Authorization:`Bearer ${d}`,"Content-Type":"application/json"},body:JSON.stringify(q)});if(!createResp.ok){let errText=await createResp.text();return{success:!1,status:createResp.status,error:errText.slice(0,500)}}let createRaw=await createResp.json(),createRec=(0,v.isJsonObject)(createRaw)?createRaw:{},task=(0,v.getKieTaskId)(createRec);if(!task)return{success:!1,status:502,error:"KIE Veo did not return taskId"};let deadline=Date.now()+u;for(;Date.now()<deadline;){let statusResp=await fetch(`${c}/api/v1/veo/record-info?taskId=${encodeURIComponent(String(task))}`,{headers:{Authorization:`Bearer ${d}`}});if(!statusResp.ok){let errText=await statusResp.text();return{success:!1,status:statusResp.status,error:errText.slice(0,500)}}let statusRaw=await statusResp.json(),statusRec=(0,v.isJsonObject)(statusRaw)?statusRaw:{},statusData=(0,v.isJsonObject)(statusRec.data)?statusRec.data:statusRec,flag=Number(statusData.successFlag),responseData=(0,v.isJsonObject)(statusData.response)?statusData.response:{},urls=Array.isArray(responseData.resultUrls)?responseData.resultUrls.filter(url=>"string"==typeof url&&url.length>0):[];if(1===flag){let vids=urls.map(url=>({url,format:"mp4"}));if(!vids.length)return{success:!1,status:502,error:"KIE Veo succeeded without result URL"};return(0,_.saveCallLog)({method:"POST",path:"/v1/videos/generations",status:200,model:`${t}/${e}`,provider:t,duration:Date.now()-n,responseBody:{videos_count:vids.length,taskId:String(task),mode:"veo-api"}}).catch(()=>{}),{success:!0,data:{created:Math.floor(Date.now()/1e3),data:vids}}}if(2===flag){let errorMsg=responseData.failMsg||statusData.failMsg||statusRec.msg||"KIE Veo task failed";return{success:!1,status:502,error:String(errorMsg)}}await V(l)}return{success:!1,status:504,error:`KIE Veo task timed out (taskId=${String(task)})`}}catch(err){return{success:!1,status:(0,v.isJsonObject)(err)&&Number.isFinite(Number(err.status))?Number(err.status):502,error:(0,D.sanitizeErrorMessage)(err)||"KIE Veo provider error"}}}'''
+
 
 @dataclass(frozen=True)
 class Replacement:
@@ -186,8 +284,10 @@ def replacement_plan(root: Path) -> list[Replacement]:
         Replacement("Vertex source registry", "open-sse/config/videoRegistry.ts", VERTEX_SOURCE_OLD, VERTEX_SOURCE_NEW),
         Replacement("KIE source request fields", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_TYPE_OLD, KIE_SOURCE_TYPE_NEW),
         Replacement("KIE source model defaults", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_OLD, KIE_SOURCE_NEW),
+        Replacement("KIE source Veo API branch", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_VEO_MARKER, KIE_SOURCE_VEO_BRANCH + KIE_SOURCE_VEO_MARKER),
         Replacement("Vertex compiled registry", str(config_chunk.relative_to(root)), VERTEX_RUNTIME_OLD, VERTEX_RUNTIME_NEW),
         Replacement("KIE compiled model defaults", str(handler_chunk.relative_to(root)), KIE_RUNTIME_OLD, KIE_RUNTIME_NEW),
+        Replacement("KIE compiled Veo API branch", str(handler_chunk.relative_to(root)), KIE_RUNTIME_VEO_MARKER, KIE_RUNTIME_VEO_BRANCH + KIE_RUNTIME_VEO_MARKER),
     ]
 
 

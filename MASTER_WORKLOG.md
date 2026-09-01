@@ -12447,6 +12447,20 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Important runtime boundary.** The Windows service was deliberately not restarted. Its already-loaded process therefore continues to serve the pre-patch code until the task-owned/approved Omni reload occurs. This entry does **not** claim a live video route has graduated, and the native video ledger remains 0/39 until a controlled reload followed by narrow MP4-byte proof. The old 0/39 proof remains valid as the pre-patch baseline.
 
 **Next Omni-only action.** Review and implement the remaining KIE Veo 3.1 endpoint mismatch (`/api/v1/veo/generate` plus `/api/v1/veo/record-info`) in source and loaded runtime, or explicitly defer it, before spending a narrow post-reload probe. Existing credential, credit, balance, browser-session, and provider transport walls remain separate from these code repairs.
+
+### [2026-09-01 23:06] #1509 - Added the Omni KIE Veo 3.1 dedicated endpoint adapter to the deterministic runtime patch
+
+**RCA.** The active Omni KIE registry advertises `veo/veo-3-1` and `veo/veo-3-1-fast` as generic KIE Market models. Before this component, both entered the generic `/api/v1/jobs/createTask` + `/api/v1/jobs/recordInfo` handler. KIE's official Veo API is a separate contract: generation is submitted to `/api/v1/veo/generate` with upstream model names `veo3` or `veo3_fast`, and status/result retrieval uses `/api/v1/veo/record-info?taskId=...`. The previous native probe's two unsupported-model rows were therefore a handler-shape/build gap, not proof that KIE Veo supply was dead.
+
+**Implementation.** Extended `scripts/automation/omni_video_runtime_patch.py` with two additional exact, backup-first replacements in the active 3.8.50 video handler:
+1. Source branch before the generic KIE logging/submit path. It selects `veo3` versus `veo3_fast`, sends the documented top-level text-to-video fields, preserves optional image URLs/resolution/callback values when explicitly supplied, polls the dedicated record endpoint within the existing request timeout, handles success/failure/pending flags, and returns only result URLs as MP4 candidates.
+2. The equivalent compiled branch in the exact Turbopack chunk loaded by `/v1/videos/generations`, using the active chunk's existing fetch, error, helper, and usage-log bindings. The compiled patch avoids a source-only false green.
+
+**Safety and admission boundary.** The adapter does not download media, bypass KIE credit/wallet walls, alter provider credentials, or mark a route graduated. The existing graduation runner remains responsible for fetching the returned asset and requiring valid MP4 `ftyp` bytes before ledger admission. No service reload and no video request occurred in this component.
+
+**Verification.** `python -m unittest discover -s tests -p 'test_omni_video_runtime_patch.py' -v` passed **4/4**, including dedicated endpoint markers, upstream model mapping, exact reversible replacements, and the Turbopack route-root test. `python -m py_compile scripts/automation/omni_video_runtime_patch.py` passed. A plan against the active package reported the prior five replacements as `status=applied` and the two new KIE Veo branches as `status=pending`; the live package was not modified by this component.
+
+**Next.** Commit the adapter/tool tests, apply the two pending exact replacements with a new rollback manifest, run `node --check` against the modified compiled chunk, and keep the Omni service running until an explicitly controlled reload is chosen. Only then should the two KIE Veo rows receive a narrow, single-candidate proof request.
 ### [2026-09-01 21:04] #1500 - Rebuilt native-video graduation as a durable current-build MP4 admission pass
 
 **Failure removed.** The prior all-model worker could spend up to 900 seconds behind one request, buffered all output, and wrote `video_provider_probe.json` only after the entire queue. A crash or upstream stall therefore looked like no evidence and could discard the whole run. It also treated any HTTP 200 with a URL-like field as provisional success and did not verify inline base64 media.

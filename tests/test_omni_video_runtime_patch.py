@@ -37,13 +37,24 @@ class OmniVideoRuntimePatchTests(unittest.TestCase):
         self.assertIn("multi_shots?: unknown;", PATCH.KIE_SOURCE_TYPE_NEW)
         self.assertIn("resolution?: unknown;", PATCH.KIE_SOURCE_TYPE_NEW)
 
+    def test_kie_veo_uses_dedicated_generate_and_status_endpoints(self) -> None:
+        self.assertIn('/api/v1/veo/generate', PATCH.KIE_SOURCE_VEO_BRANCH)
+        self.assertIn('/api/v1/veo/record-info', PATCH.KIE_SOURCE_VEO_BRANCH)
+        self.assertIn('model: kieModel', PATCH.KIE_SOURCE_VEO_BRANCH)
+        self.assertIn('generationType: "TEXT_2_VIDEO"', PATCH.KIE_SOURCE_VEO_BRANCH)
+        self.assertIn('/api/v1/veo/generate', PATCH.KIE_RUNTIME_VEO_BRANCH)
+        self.assertIn('/api/v1/veo/record-info', PATCH.KIE_RUNTIME_VEO_BRANCH)
+        self.assertIn('model:`${t}/${e}`', PATCH.KIE_RUNTIME_VEO_BRANCH)
+
     def test_each_replacement_is_exactly_reversible(self) -> None:
         replacements = [
             PATCH.Replacement("vertex", "vertex.txt", PATCH.VERTEX_SOURCE_OLD, PATCH.VERTEX_SOURCE_NEW),
             PATCH.Replacement("kie-type", "kie-type.txt", PATCH.KIE_SOURCE_TYPE_OLD, PATCH.KIE_SOURCE_TYPE_NEW),
             PATCH.Replacement("kie-source", "kie-source.txt", PATCH.KIE_SOURCE_OLD, PATCH.KIE_SOURCE_NEW),
+            PATCH.Replacement("kie-veo-source", "kie-veo-source.txt", PATCH.KIE_SOURCE_VEO_MARKER, PATCH.KIE_SOURCE_VEO_BRANCH + PATCH.KIE_SOURCE_VEO_MARKER),
             PATCH.Replacement("vertex-runtime", "vertex-runtime.txt", PATCH.VERTEX_RUNTIME_OLD, PATCH.VERTEX_RUNTIME_NEW),
             PATCH.Replacement("kie-runtime", "kie-runtime.txt", PATCH.KIE_RUNTIME_OLD, PATCH.KIE_RUNTIME_NEW),
+            PATCH.Replacement("kie-veo-runtime", "kie-veo-runtime.txt", PATCH.KIE_RUNTIME_VEO_MARKER, PATCH.KIE_RUNTIME_VEO_BRANCH + PATCH.KIE_RUNTIME_VEO_MARKER),
         ]
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
