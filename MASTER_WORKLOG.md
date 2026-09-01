@@ -12473,6 +12473,16 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Runtime truth.** The OmniRoute Windows service was not restarted, so the currently running process has not loaded these on-disk changes yet. No KIE request, Vertex request, audio request, credential mutation, database mutation, or route admission occurred. Native video capacity therefore remains **0 graduated routes** until a controlled service reload and narrow MP4-byte proof; the patches are code remediation, not graduation evidence.
 
 **Remaining Omni-only work.** The next action is a controlled reload of the task-owned Omni service followed by narrow probes of `kie/veo/veo-3-1`, `kie/veo/veo-3-1-fast`, and the repaired Vertex 3.1 rows—not another blind 39-route sweep. KIE credit/balance walls and Vertex credential/project authorization must still be reported honestly if they persist. Audio remains a separate native modality with no proof run because the current contract is chat/video-oriented.
+
+### [2026-09-01 23:17] #1511 - Omni reload attempted once and blocked by Windows service permissions
+
+**Precondition.** The on-disk 3.8.50 compiled handler contained the seven verified repairs from #1508 and #1510, while the running process had not loaded them. A controlled reload was required before any affected-model proof; no fleet-wide retry was planned.
+
+**Attempt.** Issued one task-scoped `Restart-Service -Name OmniRoute` after recording the pre-state: service `Running`, process ID `57752`, `/api/health` HTTP `200`. Windows rejected the stop operation with the exact error: `Service 'OmniRoute (OmniRoute)' cannot be stopped due to the following error: Cannot open OmniRoute service on computer '.'` (`Restart-ServiceCommand`, `CloseError`). No alternate hand-launched process, `sc.exe` force operation, shim restart, or provider request was attempted.
+
+**Post-check.** The service remains `Running` on process ID `57752`; `GET http://127.0.0.1:20128/api/health` remains HTTP `200` with `{"status":"ok"}` at `2026-09-01T17:11:36.175Z`. This confirms the failed permissioned restart did not interrupt Omni or lose state.
+
+**Boundary.** The four affected KIE/Vertex probes were not sent, because the live process is still pre-patch. Native Omni video graduation remains **0** until a reload is performed and MP4 bytes are verified. The only operator action needed is an elevated restart of the existing `OmniRoute` Windows service through its registered owner; no reinstall, database change, credential change, or new service is required.
 ### [2026-09-01 21:04] #1500 - Rebuilt native-video graduation as a durable current-build MP4 admission pass
 
 **Failure removed.** The prior all-model worker could spend up to 900 seconds behind one request, buffered all output, and wrote `video_provider_probe.json` only after the entire queue. A crash or upstream stall therefore looked like no evidence and could discard the whole run. It also treated any HTTP 200 with a URL-like field as provisional success and did not verify inline base64 media.

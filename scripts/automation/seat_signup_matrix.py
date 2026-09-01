@@ -6,7 +6,8 @@ Usage:
 
 One bounded attempt per invocation -> one terminal artifact
 state/signup_resolution_<seat>_<provider>.json with terminal_state in
-SIGNUP_COMPLETED / EXISTING_ACCOUNT / LOGIN_REQUIRED / WALL.
+SSO_PROVIDER_SESSION_OBSERVED / SIGNUP_COMPLETED / EXISTING_ACCOUNT /
+LOGIN_REQUIRED / WALL / SSO_INITIATED / ONBOARDING_VERIFICATION_REQUIRED.
 
 Safety: attach-only via chrome_live_guard.assert_cdp_safe; never navigates an
 existing tab whose URL does not already belong to the candidate host (video-seat
@@ -462,6 +463,20 @@ def main():
                 record(args.seat, args.provider, "SIGNUP_COMPLETED",
                         identity if identity != "not_disclosed"
                         else f"{args.seat}_google_sso_account", evidence, steps)
+                return 0
+            if final_state == "SSO_PROVIDER_SESSION_OBSERVED":
+                # Auth-like session cookies were observed on the post-SSO
+                # provider surface, but no provider-specific account-creation
+                # evidence and no successful harmless provider action were proven.
+                # This is a provisional observation, NOT a counted signup.
+                record(args.seat, args.provider, "SSO_PROVIDER_SESSION_OBSERVED",
+                        identity if identity != "not_disclosed"
+                        else f"{args.seat}_google_sso_account", evidence, steps,
+                        wall="SSO redirect reached a provider surface with auth-like "
+                             "session cookies, but no provider-specific account-creation "
+                             "evidence and no successful harmless provider action were "
+                             "observed. Provisional SSO/provider-session observation only "
+                             "-- NOT a new signup (no capacity claim).")
                 return 0
             record(args.seat, args.provider, "LOGIN_REQUIRED", identity, evidence,
                     steps, wall="SSO redirect completed but no authenticated provider "

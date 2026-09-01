@@ -96,7 +96,7 @@ CLICK_JS = {
         " const s = ((el.innerText || '') + ' ' + (el.getAttribute('aria-label') || '')"
         " + ' ' + (el.getAttribute('href') || '')).toLowerCase();"
         " return (/continue with google|sign in with google|sign up with google|"
-        "log in with google/i.test(s)); });"
+        "log ?in with google|login with google/i.test(s)); });"
         "if (!g) return 'none'; g.click();"
         "return 'clicked:' + (g.innerText || '').slice(0, 40); })()"),
     "vercel": (
