@@ -12712,6 +12712,18 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Consequence.** The prerequisite for spend-bearing native video validation is now met: health is not being inferred from Windows service state alone. The next component may safely execute only the repaired KIE Veo 3.1 and Vertex 3.1 direct video candidates, validating returned MP4 bytes and preserving any provider wall/credential/transport result. No provider workload was sent during this poll component.
 
+### [2026-09-02 10:26] #1520 - Post-restart narrow Omni video proof executed against repaired KIE and Vertex routes
+
+**Preflight and preservation.** Confirmed the restarted NSSM/Node process was still active and `/api/health` returned HTTP 200 before generation. Preserved the prior 39-route negative proof at `state/video_provider_probe_pre_reload_39_20260902_023857.json` before starting the new exact-candidate report. No session-pool, Chrome/CDP, consumer, database, combo, or service configuration action occurred.
+
+**Execution.** Ran `OMNI_VIDEO_CONFIRM_SPEND=1 python scripts/automation/video_provider_probe.py --model kie/veo/veo-3-1 --model kie/veo/veo-3-1-fast --model vertex/veo-3.1-generate-001 --model vertex/veo-3.1-fast-generate-001 --timeout 300 --fresh`. The runner completed all four terminal rows in `state/video_provider_probe.json`; no request hung and no MP4 asset was returned, so `state/omniroute_verified_video_routes.json` remains empty.
+
+**Results and classification.** Both KIE Veo rows reached the new dedicated `/api/v1/veo/generate` branch and returned HTTP 502 after the upstream create response contained no task ID usable by the handler. The result is `KIE Veo did not return taskId`; it is not a liveness failure and not an MP4 proof. The official KIE Veo 3.1 documentation was consulted after the result: its documented success envelope is HTTP 200 with `code=200` and `data.taskId`, followed by `GET /api/v1/veo/record-info?taskId=...`; therefore the observed response is an upstream credential/quota/contract result whose redacted detail needs to be surfaced in a future diagnostic patch, not a reason to claim KIE video capacity.
+
+Both Vertex rows reached the repaired Vertex handler and returned HTTP 400 with the provider message `Invalid resource field value in the request.` This is a concrete Vertex project/resource/authorization failure from the active credential configuration, not a timeout and not evidence that the new Veo model IDs were rejected by Omni's dispatch layer. No MP4 bytes were returned and no route was admitted.
+
+**Safety and next action.** The old broad 39-row report was not overwritten without an archive; the new four-row report is a separate post-reload diagnostic baseline. No additional retries were sent after the first terminal result per provider family. The next Omni-only repair is to expose KIE's redacted upstream `code/msg` when the dedicated create response lacks `data.taskId`, then separately validate the active Vertex project/region/resource configuration in a read-only management path. Native video capacity remains 0 until an actual returned asset passes MP4 `ftyp` validation.
+
 ### [2026-09-01 20:59] #1514 - Mandate re-locked: full E2E+SSO all seats; 9222 found SSO-bounced, realigned 50/50
 
 **Scope correction (operator, 20:44Z).** The standing mandate is FULL E2E with SSO on ALL FOUR profiles (9222/9223/9224/9225). The #1513 "Omni-only" narrowing is superseded; seat lane resumed. Operator directive 20:53Z: "you handle seat, omni taken up via another agent" - seat lane is this agent's lane. Memory corrected (mandate.no_skip_full_e2e_all_profiles).
