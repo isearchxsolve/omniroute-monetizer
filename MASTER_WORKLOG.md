@@ -11839,6 +11839,16 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **What is not claimed.** The background process has not yet been launched in this entry. No second capture attempt, provider request, replay, consumer video submit, or additional spend occurred during the two cut-off foreground attempts after the Digen terminal row.
 
+### [2026-09-01 06:10] #1455 - Duplicate spend-gated video masters detected and contained; exactly one resumable master remains
+
+**Detection.** The foreground execution wrapper had closed while its child Python process continued. A read-only process-tree check found two independent `fleet_graduation.py --apply --e2e-video --confirm-video-spend` trees: older 05:44 tree `45348 -> 42384 -> 21236/20120` was in an RTST capture; newer 05:47 tree `45840 -> 47956` was the resumable continuation. Concurrent video masters violate the declared serial per-seat/no-repeat rule and could duplicate paid/free-tier renders.
+
+**Containment action.** Re-validated the complete older tree command lines immediately before action: every process was Python and matched only the known video master or `capture_video_job_cdp.py --port 9222 --host rtst.ai --seat rtst-1`. No Chrome process appeared in the target tree. Ran `taskkill /T /F /PID 45348` only against that exact older Python tree. Windows confirmed its Python master/interpreter and capture child tree terminated (some child already exited during the operation). The newer 05:47 resumable master `45840 -> 47956` remained; no second launch was performed.
+
+**Current durable evidence.** `fleet_e2e_video_graduation_run.json` contains Digen `NOT_ADMITTED` (capture artifact absent) and Flow `pro-1` `NOT_ADMITTED` (capture artifact absent). Neither row was admitted; neither has Python replay or `:8190` consumer proof. They are terminal evidence and the retained master must skip them on any later continuation.
+
+**What is not claimed.** Stopping the duplicate does not tell us whether RTST completed or spent before termination; it is therefore not counted as success, capacity, or a clean no-spend event. No Chrome process, operator profile, provider credential, database, service, or shim was stopped or changed. The program now has exactly one video-master owner/process to monitor.
+
 ### [2026-09-01 05:20] #1447 - Fleet roster DEDUP + RECONCILE applied; chathub consumer-proven (9th admission)
 
 **chathub end-to-end (operator call-out closed).** Sign-in on niloy via the real "Google / last used" control (screenshot-verified authenticated app), real send-button submit (icon-only button below the composer was the miss in all previous attempts; residue proved 9 typed-but-unsubmitted sentinels), artifact staged with the real transport (/api/v5/chat/completions x2 dual-model + title POST), 409 stream_request_conflict fixed via _chathub_preflight (all four UUIDs client-minted per send - conversationId/streamId/threadId/messages[].id), ADMITTED as 9th chat file, consumer proof through :8190 answered computed 58. Also fixed in the same unit: promotion left staged status.alive=False in place, which the pool reads as flagged_dead -> an admitted file could never dispatch; promotion now lifts the staging quarantine on proof.
