@@ -23,6 +23,7 @@ $NodeExe = 'C:\Users\Admin\AppData\Local\hermes\node\node.exe'
 $NssmExe = 'C:\Users\Admin\AppData\Local\Microsoft\WinGet\Packages\NSSM.NSSM_Microsoft.Winget.Source_8wekyb3d8bbwe\nssm-2.24-101-g897c7ad\win64\nssm.exe'
 $CutoverRoot = Join-Path $RepoRoot 'state\omniroute-cutovers'
 $PythonExe = (Get-Command python -ErrorAction Stop).Source
+$AuthenticatedCatalogProbe = Join-Path $RepoRoot 'scripts\automation\omniroute_auth_catalog_probe.py'
 
 function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -126,33 +127,12 @@ function Get-AuthenticatedModelProbe([int]$TimeoutSeconds = 60) {
     # Python client obtains the existing local DPAPI-protected management
     # password, establishes an auth_token cookie, then returns redacted
     # structural facts only.  It never logs the password or cookie.
-    $probe = @'
-import json, sys, time
-import requests
-from pathlib import Path
-root = Path(r"D:\omniroute-monetizer")
-sys.path.insert(0, str(root / "scripts" / "automation"))
-from password_vault import retrieve_password
-base = "http://127.0.0.1:20128"
-s = requests.Session()
-s.trust_env = False
-started = time.perf_counter()
-try:
-    login = s.post(base + "/api/auth/login", json={"password": retrieve_password().strip()}, timeout=120)
-    if login.status_code != 200:
-        raise RuntimeError("management login HTTP %s" % login.status_code)
-    response = s.get(base + "/v1/models", timeout=int(sys.argv[1]))
-    payload = response.json() if response.ok else {}
-    rows = payload.get("data", []) if isinstance(payload, dict) else []
-    print(json.dumps({"ok": response.status_code == 200 and isinstance(rows, list), "status": response.status_code, "count": len(rows), "elapsedMs": round((time.perf_counter() - started) * 1000, 1)}))
-except Exception as exc:
-    print(json.dumps({"ok": False, "status": None, "count": 0, "elapsedMs": round((time.perf_counter() - started) * 1000, 1), "error": "%s: %s" % (type(exc).__name__, str(exc)[:220])}))
-'@
-    $raw = @(& $PythonExe -c $probe $TimeoutSeconds)
-    if ($LASTEXITCODE -ne 0 -or -not $raw) {
+    $raw = @(& $PythonExe $AuthenticatedCatalogProbe --base 'http://127.0.0.1:20128' --timeout $TimeoutSeconds 2>&1)
+    $json = @($raw | Where-Object { $_.ToString().TrimStart().StartsWith('{') } | Select-Object -Last 1)
+    if ($LASTEXITCODE -ne 0 -or -not $json) {
         throw 'Authenticated model probe process failed before producing a result.'
     }
-    try { return (($raw | Select-Object -Last 1) | ConvertFrom-Json) }
+    try { return ($json[0].ToString() | ConvertFrom-Json) }
     catch { throw 'Authenticated model probe returned invalid JSON.' }
 }
 
@@ -204,6 +184,7 @@ Assert-Path $CandidateEntry 'Staged OmniRoute 3.8.50 entry point'
 Assert-Path $CandidateAppDir 'Staged OmniRoute 3.8.50 application directory'
 Assert-Path $NodeExe 'Pinned Node runtime'
 Assert-Path $NssmExe 'NSSM service manager'
+Assert-Path $AuthenticatedCatalogProbe 'Authenticated catalog probe'
 $null = $PythonExe
 
 $package = Get-Content -LiteralPath (Join-Path $CandidateAppDir 'package.json') -Raw | ConvertFrom-Json
