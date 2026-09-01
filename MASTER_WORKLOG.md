@@ -12125,6 +12125,14 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Correction.** Updated the task-owned matcher to accept the optional command-line quote using the PowerShell regex escape `\x22?`, avoiding an embedded double quote that would corrupt cmd.exe's `-Command` argument. The guard still requires both the listening PID on port 8190 and the script/port identity before `Stop-Process` is permitted. Focused tests again passed **19/19** and `git diff --check` passed. The corrected controlled task reload remains pending at the next action.
 
+### [2026-09-01 13:26] #1478 - Deployed and verified permanent :8190 liveness repair
+
+**Controlled task-owned deployment.** Invoked the existing shim keepalive task once. The old listener did not implement `/healthz`, so the task correctly entered recovery, verified port-8190 owner PID 43372 by its exact shim command line, and stopped only that task-owned listener. The normal fixed-log launch encountered the pre-existing exclusive log-file handle, so the task followed its existing unique fallback-log branch and successfully started exactly one replacement listener: parent PID 47876, Python listener PID 20628. OmniRoute :20128 was neither stopped nor restarted.
+
+**Live verification.** `GET http://127.0.0.1:8190/healthz` returned HTTP 200 in 5.6 ms with `{"ok": true, "service": "session-pool-shim", "version": "2026-09-01-liveness-v1", "pid": 20628}`. `GET /v1/models` then returned HTTP 200 in 189.6 ms (4,082,378 bytes / 9,611 merged rows), while explicitly reporting `omniReachable=false`, `omniError=ReadTimeout`, `omniCached=9,596`, and `omniRefreshing=true`. This proves the critical separation: a direct Omni outage no longer makes the :8190 liveness or discovery request hang.
+
+**Status.** The recurring :8190 watchdog loop is repaired: future task cycles use `/healthz`, and a truly wedged verified task-owned listener now has a controlled one-owner recovery path. Direct OmniRoute :20128 remains a separate `LISTENING_BUT_UNHEALTHY` incident and is now the only blocker for direct Omni video/provider work. No Chrome/CDP, seat-pool supply, consumer, credential, database, or endpoint-contract mutation occurred.
+
 **Discipline note.** Old artifact stays NOT admitted (401 dead bearer - honest). No claims beyond what the screenshots show. The hung auth0 tabs were closed and replaced with fresh ones (renderer hygiene, no session loss: auth0 state is server-side).
 
 ### [2026-09-01 06:30] #1452 - Reconcile v2 CONSTANT-N MIRROR + one-profile-at-a-time cycle started (operator solution to the 4x51 wedge)
