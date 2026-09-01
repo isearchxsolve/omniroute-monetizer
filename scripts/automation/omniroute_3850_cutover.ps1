@@ -22,6 +22,7 @@ $CandidateAppDir = Join-Path $StagedRoot 'node_modules\omniroute'
 $NodeExe = 'C:\Users\Admin\AppData\Local\hermes\node\node.exe'
 $NssmExe = 'C:\Users\Admin\AppData\Local\Microsoft\WinGet\Packages\NSSM.NSSM_Microsoft.Winget.Source_8wekyb3d8bbwe\nssm-2.24-101-g897c7ad\win64\nssm.exe'
 $CutoverRoot = Join-Path $RepoRoot 'state\omniroute-cutovers'
+$PythonExe = (Get-Command python -ErrorAction Stop).Source
 
 function Assert-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -89,6 +90,63 @@ function Wait-CandidateHealthy {
     throw "Candidate did not return HTTP 200 health inside $StartupTimeoutSeconds seconds."
 }
 
+function Get-NssmSetting([string]$Name) {
+    # NSSM is the registered service owner.  Read the exact string it will use,
+    # so a rollback restores the real launch definition instead of hoping a
+    # registry import is immediately reflected in the service manager cache.
+    $value = @(& $NssmExe get $ServiceName $Name)
+    if ($LASTEXITCODE -ne 0 -or -not $value) {
+        throw "Could not read NSSM setting $Name for $ServiceName."
+    }
+    return (($value | Select-Object -Last 1).ToString()).Trim()
+}
+
+function Set-And-VerifyNssmSetting([string]$Name, [string]$Value) {
+    & $NssmExe set $ServiceName $Name $Value | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not set NSSM $Name for $ServiceName." }
+    $actual = Get-NssmSetting $Name
+    if ($actual -ne $Value) {
+        throw "NSSM $Name verification failed after update."
+    }
+}
+
+function Get-AuthenticatedModelProbe([int]$TimeoutSeconds = 60) {
+    # /v1/models is intentionally management-auth protected on the production
+    # state.  A bare HTTP request therefore proves only that auth is enabled
+    # (401), not that the candidate catalog failed.  This isolated short-lived
+    # Python client obtains the existing local DPAPI-protected management
+    # password, establishes an auth_token cookie, then returns redacted
+    # structural facts only.  It never logs the password or cookie.
+    $probe = @'
+import json, sys, time
+import requests
+from pathlib import Path
+root = Path(r"D:\omniroute-monetizer")
+sys.path.insert(0, str(root / "scripts" / "automation"))
+from password_vault import retrieve_password
+base = "http://127.0.0.1:20128"
+s = requests.Session()
+s.trust_env = False
+started = time.perf_counter()
+try:
+    login = s.post(base + "/api/auth/login", json={"password": retrieve_password().strip()}, timeout=120)
+    if login.status_code != 200:
+        raise RuntimeError("management login HTTP %s" % login.status_code)
+    response = s.get(base + "/v1/models", timeout=int(sys.argv[1]))
+    payload = response.json() if response.ok else {}
+    rows = payload.get("data", []) if isinstance(payload, dict) else []
+    print(json.dumps({"ok": response.status_code == 200 and isinstance(rows, list), "status": response.status_code, "count": len(rows), "elapsedMs": round((time.perf_counter() - started) * 1000, 1)}))
+except Exception as exc:
+    print(json.dumps({"ok": False, "status": None, "count": 0, "elapsedMs": round((time.perf_counter() - started) * 1000, 1), "error": "%s: %s" % (type(exc).__name__, str(exc)[:220])}))
+'@
+    $raw = @(& $PythonExe -c $probe $TimeoutSeconds)
+    if ($LASTEXITCODE -ne 0 -or -not $raw) {
+        throw 'Authenticated model probe process failed before producing a result.'
+    }
+    try { return (($raw | Select-Object -Last 1) | ConvertFrom-Json) }
+    catch { throw 'Authenticated model probe returned invalid JSON.' }
+}
+
 function Invoke-Robocopy([string]$From, [string]$To, [switch]$Mirror) {
     $args = @($From, $To, '/E', '/COPY:DAT', '/DCOPY:T', '/R:2', '/W:1', '/XJ', '/NFL', '/NDL', '/NP')
     if ($Mirror) { $args = @($From, $To, '/MIR', '/COPY:DAT', '/DCOPY:T', '/R:2', '/W:1', '/XJ', '/NFL', '/NDL', '/NP') }
@@ -114,7 +172,7 @@ function Write-CriticalStateManifest([string]$Root, [string]$OutputFile) {
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $OutputFile -Encoding UTF8
 }
 
-function Restore-Production([string]$BackupDir, [string]$ServiceRegBackup) {
+function Restore-Production([string]$BackupDir, [string]$ServiceRegBackup, [string]$OriginalAppDirectory, [string]$OriginalAppParameters) {
     Write-Warning 'Candidate validation failed. Restoring service configuration and byte-for-byte state snapshot.'
     Stop-Service -Name $ServiceName -ErrorAction SilentlyContinue
     Wait-ServiceStopped
@@ -123,6 +181,12 @@ function Restore-Production([string]$BackupDir, [string]$ServiceRegBackup) {
     Invoke-Robocopy -From (Join-Path $BackupDir 'data') -To $LiveDataDir -Mirror
     & reg.exe import $ServiceRegBackup | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Rollback could not restore the saved OmniRoute service registry configuration.' }
+    # Registry import preserves every service setting, including the encrypted
+    # environment lineage.  Explicitly reapply and verify the two values this
+    # cutover changes because SCM/NSSM can retain a stale in-memory view after
+    # an import.  This closes the first-run rollback ambiguity.
+    Set-And-VerifyNssmSetting -Name 'AppDirectory' -Value $OriginalAppDirectory
+    Set-And-VerifyNssmSetting -Name 'AppParameters' -Value $OriginalAppParameters
     Start-Service -Name $ServiceName
 }
 
@@ -131,6 +195,7 @@ Assert-Path $CandidateEntry 'Staged OmniRoute 3.8.50 entry point'
 Assert-Path $CandidateAppDir 'Staged OmniRoute 3.8.50 application directory'
 Assert-Path $NodeExe 'Pinned Node runtime'
 Assert-Path $NssmExe 'NSSM service manager'
+$null = $PythonExe
 
 $package = Get-Content -LiteralPath (Join-Path $CandidateAppDir 'package.json') -Raw | ConvertFrom-Json
 if ($package.version -ne '3.8.50') { throw "Expected staged OmniRoute 3.8.50, found $($package.version)." }
@@ -180,6 +245,8 @@ $report = [ordered]@{
     probes = @()
     result = 'RUNNING'
 }
+$originalAppDirectory = $null
+$originalAppParameters = $null
 
 try {
     Start-Transcript -LiteralPath $transcriptFile -Append | Out-Null
@@ -188,6 +255,8 @@ try {
     # retained only inside the gitignored recovery directory.
     & reg.exe export 'HKLM\SYSTEM\CurrentControlSet\Services\OmniRoute' $serviceRegBackup /y | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not export the current OmniRoute service registry configuration.' }
+    $originalAppDirectory = Get-NssmSetting 'AppDirectory'
+    $originalAppParameters = Get-NssmSetting 'AppParameters'
 
     Stop-Service -Name $ServiceName
     Wait-ServiceStopped
@@ -198,11 +267,9 @@ try {
     # Change only executable arguments and application directory. Existing
     # service environment (DATA_DIR and encryption lineage) is deliberately
     # preserved verbatim by not rewriting AppEnvironmentExtra.
-    & $NssmExe set $ServiceName AppDirectory $CandidateAppDir | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Could not point NSSM AppDirectory to the staged candidate.' }
+    Set-And-VerifyNssmSetting -Name 'AppDirectory' -Value $CandidateAppDir
     $params = "--max-old-space-size=4096 `"$CandidateEntry`" serve --port 20128 --no-open --no-tray --no-recovery --log"
-    & $NssmExe set $ServiceName AppParameters $params | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Could not point NSSM AppParameters to the staged candidate.' }
+    Set-And-VerifyNssmSetting -Name 'AppParameters' -Value $params
 
     Start-Service -Name $ServiceName
     $initialHealth = Wait-CandidateHealthy
@@ -210,16 +277,14 @@ try {
 
     for ($round = 1; $round -le $ProbeRounds; $round++) {
         $health = Get-HttpJson '/api/monitoring/health' 15
-        $models = Get-HttpJson '/v1/models' 45
-        $modelCount = $null
-        if ($models.ok) {
-            try { $modelCount = @((ConvertFrom-Json $models.body).data).Count } catch { throw 'Candidate returned a non-OpenAI models payload.' }
-        }
+        $models = Get-AuthenticatedModelProbe 60
+        $modelCount = $models.count
+        $modelError = if ($models.PSObject.Properties.Name -contains 'error') { $models.error } else { $null }
         $row = [ordered]@{
             round = $round
             at = (Get-Date).ToUniversalTime().ToString('o')
             health = [ordered]@{ ok = $health.ok; status = $health.status; elapsedMs = $health.elapsedMs }
-            models = [ordered]@{ ok = $models.ok; status = $models.status; elapsedMs = $models.elapsedMs; bytes = $models.bytes; count = $modelCount }
+            models = [ordered]@{ ok = $models.ok; status = $models.status; elapsedMs = $models.elapsedMs; count = $modelCount; error = $modelError }
         }
         $report.probes += $row
         if (-not $health.ok -or $health.status -ne 200 -or -not $models.ok -or $models.status -ne 200 -or $modelCount -lt 9000) {
@@ -238,7 +303,10 @@ try {
     $report.failure = $failure
     $report.failedAt = (Get-Date).ToUniversalTime().ToString('o')
     try {
-        Restore-Production -BackupDir $backupDir -ServiceRegBackup $serviceRegBackup
+        if (-not $originalAppDirectory -or -not $originalAppParameters) {
+            throw 'Rollback launch settings were not captured before the failure.'
+        }
+        Restore-Production -BackupDir $backupDir -ServiceRegBackup $serviceRegBackup -OriginalAppDirectory $originalAppDirectory -OriginalAppParameters $originalAppParameters
         $report.result = 'CANDIDATE_FAILED_ROLLED_BACK'
     } catch {
         $report.result = 'CANDIDATE_FAILED_ROLLBACK_FAILED'
