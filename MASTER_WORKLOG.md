@@ -12059,6 +12059,14 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **No premature certification.** No fleet capacity, route graduation, provider death, or release claim is made from this partial output. No seat-pool, Chrome/CDP, consumer-job, native-video, credential, database, service, or contract mutation occurred during this inspection.
 
+### [2026-09-01 12:43] #1470 - Omni E2E master still active; final report pending
+
+**Runtime verification.** The Omni acceptance worker remains active as parent PID 10044 with Python child PID 39880. The durable stdout log is approximately 220 KB and was updated at 12:43; stderr remains zero bytes.
+
+**Current progress.** The live tail shows Nscale reached 23/23 with 0 direct proofs, Novita reached at least 117/149, and Nvidia reached 10/93. Results include `AUTH`, `ERROR`, `NOT_ROUTED`, and `TRANSPORT`. These are interim model-level observations only; the final aggregation and transport classification have not completed.
+
+**Status truth.** `state\\omniroute_e2e_acceptance.json` remains the prior preflight snapshot (`STABLE_CATALOG`, `LOCAL_CONTRACT_OPEN_BY_DESIGN`, provider sweep `NOT_RUN`) because the active run has not reached final report write. No fleet capacity, graduation, provider-death, or release claim is made. No seat-pool, Chrome/CDP, consumer-job, native-video, credential, database, service, or contract mutation occurred during this check.
+
 **Discipline note.** Old artifact stays NOT admitted (401 dead bearer - honest). No claims beyond what the screenshots show. The hung auth0 tabs were closed and replaced with fresh ones (renderer hygiene, no session loss: auth0 state is server-side).
 
 ### [2026-09-01 06:30] #1452 - Reconcile v2 CONSTANT-N MIRROR + one-profile-at-a-time cycle started (operator solution to the 4x51 wedge)
