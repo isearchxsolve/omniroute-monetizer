@@ -12187,3 +12187,13 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 7. Video lane: spend-gated.
 
 **Honest scope statement.** Full e2e = every declared site (50) with verdict: currently ~13 sites APP_SURFACE-verified across 9222/9223 (each with screenshot), 2 hard-wall proven (chathub-9223 capture admitted, 9 consumer-proven artifact layer), 2 onboarding-walls waiting on operator, 5 hard walls, remainder = unverified-per-tab (suspended or not yet driven). No batch claims; each site flips its own row or stays put.
+
+### [2026-09-01 08:55] #1454 - 9222 deep wedge: DevTools HTTP stuck while GUI alive; task-owned kill+relaunch recovered; drive queue paused for pacing fix
+
+**Incident.** During the 9222 NEEDS_DRIVE queue run, the sequential drive loop (targets() re-listing per row + activate + attach) re-triggered the DevTools wedge: browser main PID 38732 alive/Responding, debug socket LISTENING, but /json/* never served. Router keepalive probe guard could not see it (port up), two heal ticks passed without recovery. Recovered by the proven task-owned pattern: taskkill /T on the verified 9222 PID -> task relaunch -> 9222 OK on new PID 43348 (~2.5 min outage). 9223 remains down (drained earlier; relaunches on next tick). 9224/9225 healthy.
+
+**Root pattern acknowledged.** The wedge is load-shaped: bursts of tab operations (48-open reconcile, 50-row audit, 25-row drive with per-row re-listing) each wedge the three younger instances after some minutes. Pacing is the workaround; the reconciler/audit already got wake-first fixes, but the drive loop still re-lists targets() per row - that is the next fix (cache the tab list, activate-before-connect, backoff on first timeout instead of continuing).
+
+**Paused state.** Drive queue (25 NEEDS_DRIVE rows on 9222) paused mid-run - no results file written yet. Audit v2 ledger (58 rows: 23 APP_SURFACE, 25 NEEDS_DRIVE, 4 LOGIN_WALL, 2 CDP_FAIL, 3 BLANK, 1 UNREACHABLE) remains the authoritative per-tab state. 9222 needs re-align (relaunch wiped tabs to video-only).
+
+**Next.** Patch drive loop pacing (cached tab list + backoff) -> re-align 9222 -> resume queue -> then 9224 (gemini capture), 9225, 9223 cycle 2.
