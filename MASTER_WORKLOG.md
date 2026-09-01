@@ -12376,3 +12376,13 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Measured current inventory.** Against the exact active 3.8.50 build, extraction now completes in about two seconds and reports 25 declared native-video providers, 78 resolved model IDs, and 17 implemented format handlers. The explicit non-handler rows remain inventory only and cannot be graduated. The active build includes newer handlers such as `fal-ai-video` and `openai-video`; these were absent from the stale interpretation.
 
 **Verification.** Added focused regression coverage for the 3.8.50 accessor-export shape, imported-model neutralisation, and route-dependency-only format discovery. `python -m pytest -q tests\test_video_registry.py` passed 2/2; Python compilation passed; `git diff --check` passed. No video generation/spend occurred in this component. Next component is to make the actual probe incremental/resumable and execute only current implemented text-to-video candidates with durable MP4-only admission evidence.
+
+### [2026-09-01 12:20] #1458 - 9222 deep-drive batch 1: grok SIGNUP_WALL proven; chatgpt LOGIN_WALL; gemini APP_SURFACE; 9223 drained
+
+**Batch results (state/drive_batch1_9222.json + screenshots in surface_audit_evidence/):**
+- grok.com-9222: composer text landed (screenshot pre), submit clicked (aria-label submit at 1040,349), message posted -> SIGNUP_WALL: "Continue your conversation - Sign up to continue seamlessly" (grok_9222_sent3_*.png). Anonymous tier cannot answer. Grok's working session is on 9223 (already admitted). Verdict: SIGNUP_WALL - no auto account creation.
+- chatgpt.com-9222: LOGIN_WALL (no Google control on wall; signed-out surface).
+- gemini.google.com-9222: APP_SURFACE (Plus account confirmed again).
+- you.com-9222: NEEDS_DEEPER (platform page, no visible wall).
+- coze-9222: renderer hung; retry next pass.
+**Also:** 9223 drained again (49/50) - it was reopened by task tick with stale tabs; drained per one-at-a-time.
