@@ -105,7 +105,16 @@ function Set-And-VerifyNssmSetting([string]$Name, [string]$Value) {
     & $NssmExe set $ServiceName $Name $Value | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not set NSSM $Name for $ServiceName." }
     $actual = Get-NssmSetting $Name
-    if ($actual -ne $Value) {
+    # NSSM removes optional surrounding quotes from its displayed command-line
+    # value.  Compare normalized argument text for AppParameters, while still
+    # requiring exact AppDirectory equality.  This verifies the launch target
+    # without treating quote presentation as a failed service change.
+    $matches = if ($Name -eq 'AppParameters') {
+        $expectedNormalized = [regex]::Replace($Value.Replace('"', '').Trim(), '\s+', ' ')
+        $actualNormalized = [regex]::Replace($actual.Replace('"', '').Trim(), '\s+', ' ')
+        $actualNormalized -eq $expectedNormalized
+    } else { $actual -eq $Value }
+    if (-not $matches) {
         throw "NSSM $Name verification failed after update."
     }
 }
