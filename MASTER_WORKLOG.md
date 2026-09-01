@@ -12539,3 +12539,17 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **Audio boundary.** The same Omni build exposes separate native audio speech, transcription, and translation routes, and the authenticated catalog includes approximately **109 audio-looking IDs**. Those rows are catalog inventory only; no audio generation/transcription spend was issued, and they are not counted as video capacity. The current consumer contract is chat/video-oriented, so audio remains a separate, opt-in work item until a concrete Omni audio contract and safe proof runner are defined.
 
 **Omni-only conclusion.** Omni has a broad catalog and a real native video implementation, but its currently verified native video capacity is **0 graduated provider×model routes**. The next component to inspect is the active source for the KIE payload path and Vertex model/resource construction, followed by a sandbox-only build/test decision. No production restart is justified by this inventory.
+
+### [2026-09-01 22:20] #1504 - 9224 wedged seat recovered via the task-owned chain; roster re-aligned 50/50
+
+**Deep-drive pass 1 outcome (state/drive_9224_pass1.json).** 43 of 44 queue tabs driven; every result durable mid-run. Verdicts: 2 APP_SURFACE (veoaifree, felo), 4 LOGIN_WALL (poe, meta, you.com, +1), 1 PAY_WALL (magichour), 3 NEEDS_DRIVE, 33 CDP_FAIL. The CDP_FAILs were uniform websocket timeouts - the classic wedged-seat signature (TCP listening, /json/list answering, but no CDP websocket service), 15 of them already at audit v2.
+
+**Wedge proven before any kill (TOCTOU discipline from #1443).** Listener PID re-checked via netstat (48384, unchanged); a fresh short-timeout CDP attach to the first page timed out on Page.enable - wedge confirmed, not a transient. Only then was the seat tree stopped.
+
+**Recovery execution.** taskkill /T on the 48384 tree killed 40+ children (one child refused: 'no running instance of the task' - already dead); the browser root process itself survived as a zombie holding the socket until a direct force-kill removed it (verified: PID gone, port free). Triggered the single owner 'OmniRoute Video Router (keepalive)' scheduled task; new tree PID 44620 came up (start 22:15:49); /json/list + Page.enable answered on attempt 1 - CDP HEALTHY. No hand-rolled launcher, no operator profile contact.
+
+**Roster re-align.** The task-owned relaunch reopens registered video tabs only (2 pages, known #1176 behavior), so reconcile_seat_rosters.py --only 9224 --apply opened the 49 missing union sites: matched 50/50, unmatched 0, verified FLEET ALIGNED by re-listing.
+
+**Boundaries.** Only the wedged seat tree was killed and only through the established single-owner recovery; 9222/9225/9223 untouched; :8189/:8190/:20128 untouched; no provider requests, no captures, no admissions in this unit.
+
+**Next:** re-run 9224 audit v2 + deep-drive pass 2 on the fresh seat (tabs newly opened need sign-in state discovery), then captures.
