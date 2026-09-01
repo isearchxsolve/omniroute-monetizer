@@ -12724,6 +12724,12 @@ Both Vertex rows reached the repaired Vertex handler and returned HTTP 400 with 
 
 **Safety and next action.** The old broad 39-row report was not overwritten without an archive; the new four-row report is a separate post-reload diagnostic baseline. No additional retries were sent after the first terminal result per provider family. The next Omni-only repair is to expose KIE's redacted upstream `code/msg` when the dedicated create response lacks `data.taskId`, then separately validate the active Vertex project/region/resource configuration in a read-only management path. Native video capacity remains 0 until an actual returned asset passes MP4 `ftyp` validation.
 
+### [2026-09-02 10:31] #1521 - Confirmed KIE and Vertex native connections are active credentialed rows
+
+**Read-only management check.** Authenticated through the normal OmniRoute management API after the post-restart video result. The active connection metadata contains one `kie` row and one `vertex` row; both report `isActive=true`, `authType=apikey`, and a non-empty configured credential field. Only redacted booleans and provider names were inspected; no credential value was read or logged.
+
+**Interpretation.** The four video failures cannot be reduced to an absent/inactive provider connection. KIE's missing-task response is likely an upstream response-code/quota/contract condition that the new branch currently compresses to `KIE Veo did not return taskId`; Vertex's HTTP 400 is a resource/project/authorization condition after dispatch. This evidence narrows the next code work to redacted upstream-response diagnostics and read-only Vertex resource configuration validation. No further provider request or retry was sent in this component.
+
 ### [2026-09-01 20:59] #1514 - Mandate re-locked: full E2E+SSO all seats; 9222 found SSO-bounced, realigned 50/50
 
 **Scope correction (operator, 20:44Z).** The standing mandate is FULL E2E with SSO on ALL FOUR profiles (9222/9223/9224/9225). The #1513 "Omni-only" narrowing is superseded; seat lane resumed. Operator directive 20:53Z: "you handle seat, omni taken up via another agent" - seat lane is this agent's lane. Memory corrected (mandate.no_skip_full_e2e_all_profiles).
