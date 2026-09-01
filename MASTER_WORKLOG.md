@@ -12428,6 +12428,25 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 **What is NOT claimed:** no captures, no replays, no admissions in this entry; walls are named, not worked around; baichuan/creen verdicts are network evidence, not permanent death certificates.
 
 **Next:** captures lane (APP_SURFACE tabs lacking artifacts -> submit -> stage -> replay -> admit), then final re-audit -> drain; then 9224/9225/9223 cycles.
+
+### [2026-09-01 22:48] #1508 - Applied the backup-first Omni native video runtime repair without restarting production
+
+**Scope.** OmniRoute only. The operation did not touch seat-pool state, Chrome/CDP, the `:8190` shim, consumers, provider credentials, the database, or combos. No video generation request or audio request was sent.
+
+**Apply.** Executed `python scripts/automation/omni_video_runtime_patch.py --apply` against the package root resolved from the registered Windows `OmniRoute` service. The tool verified package version `3.8.50`, took byte-for-byte backups, and applied exactly five count-checked replacements:
+1. Vertex source registry: deprecated `veo-3.0-*`/`veo-2.0-*` IDs -> `veo-3.1-generate-001` and `veo-3.1-fast-generate-001`.
+2. KIE source request type: added the optional model-specific `mode`, `multi_shots`, and `resolution` fields.
+3. KIE source request builder: adds the documented Kling 3.0 defaults (`mode=std`, `multi_shots=false`) and Grok Imagine T2V defaults (`mode=normal`, `duration=6`, `resolution=480p`) while preserving caller values.
+4. Vertex compiled registry chunk: the same current model IDs in the chunk actually loaded by the video route.
+5. KIE compiled handler chunk: the same model-specific fields in the runtime code actually loaded by the video route.
+
+**Rollback record.** Backups and SHA-256 manifest are at `state\\omni_video_runtime_backups\\20260901T170209Z\\manifest.json`. The manifest records the exact before/after hashes and every replacement. This is a reversible package-file change; no database or secret state is involved.
+
+**Post-apply verification.** `python scripts/automation/omni_video_runtime_patch.py --plan` reported all five replacements as `status=applied`. A second `--apply` returned `mode=already_applied` and created no second backup, proving the tool is idempotent. The service remained `RUNNING`, and `GET http://127.0.0.1:20128/api/health` returned HTTP `200` with `status=ok` at `2026-09-01T17:02:31.555Z`. Static marker verification found the new Vertex 3.1 IDs and the compiled Kling branch.
+
+**Important runtime boundary.** The Windows service was deliberately not restarted. Its already-loaded process therefore continues to serve the pre-patch code until the task-owned/approved Omni reload occurs. This entry does **not** claim a live video route has graduated, and the native video ledger remains 0/39 until a controlled reload followed by narrow MP4-byte proof. The old 0/39 proof remains valid as the pre-patch baseline.
+
+**Next Omni-only action.** Review and implement the remaining KIE Veo 3.1 endpoint mismatch (`/api/v1/veo/generate` plus `/api/v1/veo/record-info`) in source and loaded runtime, or explicitly defer it, before spending a narrow post-reload probe. Existing credential, credit, balance, browser-session, and provider transport walls remain separate from these code repairs.
 ### [2026-09-01 21:04] #1500 - Rebuilt native-video graduation as a durable current-build MP4 admission pass
 
 **Failure removed.** The prior all-model worker could spend up to 900 seconds behind one request, buffered all output, and wrote `video_provider_probe.json` only after the entire queue. A crash or upstream stall therefore looked like no evidence and could discard the whole run. It also treated any HTTP 200 with a URL-like field as provisional success and did not verify inline base64 media.
