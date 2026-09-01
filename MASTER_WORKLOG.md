@@ -12033,4 +12033,14 @@ Affirmed and started per operator: closing all 13 non-admitted causes. Edit poin
 
 **Net state for sambanova.** Google auth chain: WORKING (chooser+consent completed on camera). Surface: onboarding wall. Replay: pending until the human completes first-run (operator action, ~2 minutes on the niloy seat: fill profile, skip payment where possible). After that the playground flow here (clear-first clean send) is one command from a fresh artifact.
 
+### [2026-09-01 07:35] #1467 - Launched Omni E2E acceptance master through repaired local merge gateway
+
+**Scope and ownership.** After verifying the task-owned shim was listening on `127.0.0.1:8190` (PID 43372), launched the Omni-only end-to-end acceptance coordinator with `--apply --e2e`. This execution covers the Omni management/catalog/routing/provider-model chat path and uses the resumable evidence artifacts. It does not operate the seat-pool harness, Chrome/CDP, consumer application jobs, or native video-spend path.
+
+**Launch evidence.** The worker was started as a durable background process (PID 10044, child Python PID 39880) from `D:\omniroute-monetizer`. stdout is redirected to `logs\omni_e2e_master_20260901.out.log`; stderr is redirected to `logs\omni_e2e_master_20260901.err.log`. Initial output confirmed management login and the first provider lane (`agy`) began; the run reported `0 direct proofs / 21 rows` for that first completed lane, so no global success claim is made.
+
+**Preflight evidence.** The last completed durable preflight reported `direct=STABLE_CATALOG`, `gateway=LOCAL_CONTRACT_OPEN_BY_DESIGN`, and `sweep=NOT_RUN`. The private loopback gateway remains open by design; public consumer authentication is a separate gate and was not manufactured into the local contract.
+
+**Safety and truthfulness.** No credentials, database, service configuration, Chrome profile, seat-pool state, or endpoint contract was changed. Native Omni video remains `NOT_RUN_REQUIRES_EXPLICIT_SPEND_CONSENT`, and real OiiOii/Emergent jobs remain unrun until their explicit runtime gates are supplied. Provider/model capacity will be reported only from concrete direct evidence/admissions, not catalog inventory.
+
 **Discipline note.** Old artifact stays NOT admitted (401 dead bearer - honest). No claims beyond what the screenshots show. The hung auth0 tabs were closed and replaced with fresh ones (renderer hygiene, no session loss: auth0 state is server-side).
