@@ -146,9 +146,16 @@ def text_probe(session: requests.Session, endpoint: str, modality: str, model: s
 
 def admission_rows(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     accepted = {"SPEECH_BYTES_OK", "TRANSCRIPTION_TEXT_OK", "TRANSLATION_TEXT_OK"}
-    return [{"model": r["model"], "modality": r["modality"], "state": "ADMITTED",
-             "proof": r["state"], "verifiedAt": r["verifiedAt"]}
-            for r in results if r.get("state") in accepted]
+    # A Spanish TTS fixture is itself a valid speech proof, but it must not
+    # duplicate the same provider/model admission already earned by English TTS.
+    unique: dict[tuple[str, str], dict[str, Any]] = {}
+    for r in results:
+        if r.get("state") not in accepted:
+            continue
+        key = (str(r["modality"]), str(r["model"]))
+        unique[key] = {"model": r["model"], "modality": r["modality"], "state": "ADMITTED",
+                       "proof": r["state"], "verifiedAt": r["verifiedAt"]}
+    return list(unique.values())
 
 
 def main() -> int:

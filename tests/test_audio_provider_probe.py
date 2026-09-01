@@ -31,3 +31,12 @@ def test_admission_rows_only_admits_modality_specific_proofs():
     ])
     assert rows == [{"model": "gtts/default", "modality": "speech", "state": "ADMITTED",
                      "proof": "SPEECH_BYTES_OK", "verifiedAt": "now"}]
+
+
+def test_admission_rows_deduplicates_a_translation_fixture_speech_route():
+    rows = MOD.admission_rows([
+        {"model": "gtts/default", "modality": "speech", "state": "SPEECH_BYTES_OK", "verifiedAt": "one"},
+        {"model": "gtts/default", "modality": "speech", "state": "SPEECH_BYTES_OK", "verifiedAt": "two"},
+    ])
+    assert len(rows) == 1
+    assert rows[0]["verifiedAt"] == "two"
