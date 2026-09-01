@@ -12745,3 +12745,24 @@ Both Vertex rows reached the repaired Vertex handler and returned HTTP 400 with 
 **What is NOT claimed:** fresh tabs are NOT verified signed-in; the 9222 Google layer (isearch.xsolve) being "Signed out" at the chooser is operator-verifiable and predicts LOGIN_REQUIRED verdicts on the fresh roster until re-SSO. No captures, no admissions, no provider requests in this unit.
 
 **Next:** 9222 signed-in-state audit v2 of the fresh 50 (wake -> classify with wall naming, same discipline as #1503), then SSO drives for LOGIN_REQUIRED rows, then captures stage 3-5 (together/cerebras/chatglm/promptql/meta/puter/xinghuo), then drain; then 9224 audit v2 + deep-drive pass 2 -> 9225 -> 9223 cycle 2.
+
+### [2026-09-02 21:45] #1515 - 9222 realign + full deep-drive: 50/50 rows terminal
+
+**Context (from #1514).** 9222 was found SSO-bounced (57 labs.google consent tabs displaced the roster) and realigned 50/50 via reconcile --apply. The fresh tabs needed full surface re-verification per the all-seats mandate.
+
+**DevTools stall incident + root-cause note.** Mid-pass, 9222 twice stalled (TCP accepts, /json/list hangs). First incident proved via TOCTOU (PID 8784 stable, HTTP plane dead 6-8s): chrome tree killed via taskkill /T; resident video_router.py serve (PID 10412) untouched; router's own 5-min cycle relaunched the seat (PID 20880, DevTools healthy attempt 1). Second stall self-recovered within minutes while probing. Refined diagnosis: NOT a hard wedge - the DevTools broker stalls for minutes under tab-open bursts (48 tabs at 0.4s interval + reload navigations), then recovers. Drive scripts hardened accordingly: CDP construction moved inside try, per-row checkpoint writes, /json/version health backoff between tabs (up to 240s), reload only when readyState != complete.
+
+**Deep-drive passes (all on 9222, paced single-tab, no hammering):**
+- audit v2 (scripts/automation/audit_9222_v2.py, wake-first, screenshots for APP_SURFACE): 18 APP_SURFACE / 28 NEEDS_DRIVE / 3 LOGIN_WALL / 1 PAY_WALL.
+- pass 2 (scripts/automation/drive_9222_pass2.py, wake + reload + classify): +1 APP_SURFACE (together playground), 8 PAY_WALL (veoaifree x2, digen, you.com/platform, puter, prompt.ql, chathub, 1min), pollinations SIGNUP_WALL, chatglm LOGIN_WALL.
+- pass 2b (scripts/automation/drive_9222_pass2b.py, longer settle + app-shell detection + CN-text walls): +14 APP_SURFACE incl. together, yuanbao, sambanova-dashboard, phind, monica, mistral, heygen, groq, genspark, cerebras, coze, creen, digen, veoaifree; grok SIGNUP_WALL (anonymous tier, matches batch1); xinghuo LOGIN_WALL (login text).
+- pass 3 stragglers: together APP_SURFACE re-verified fresh (composer + default-project chat); giz SURFACE_GONE_404 terminal (site's own 404, matches #1502); baichuan APP_SURFACE (signed-in medical-consultation surface).
+- Ledger reconciliation: per-host freshest-evidence merge (redirected URLs had left stale duplicate rows).
+
+**Final v2 ledger (state/surface_audit_9222_full_v2.json): 35 APP_SURFACE, 6 PAY_WALL, 5 LOGIN_WALL, 3 SIGNUP_WALL, 1 WALL = 50/50, zero rows outside terminal states.**
+
+**Named walls (reported, never solved, Law 5):** PAY_WALL veoaifree/digen/you.com-platform/puter/prompt.ql/chathub/1min/magichour; LOGIN_WALL chatglm/xinghuo/akool/chatgpt/accounts.google-videos; SIGNUP_WALL grok-9222 (anonymous tier)/pollinations/stepfun; WALL giz (chat surface gone).
+
+**What is NOT claimed:** no captures, no replays, no admissions yet this session; APP_SURFACE verdicts prove surface+session state, not replayable supply.
+
+**Next:** captures stage 3-5 on the artifact-less APP_SURFACE set (together/cerebras + re-check meta/puter/giz artifacts), then replay -> admit -> drain; then 9224 audit v2 + deep-drive pass 2 -> 9225 -> 9223 cycle 2.
