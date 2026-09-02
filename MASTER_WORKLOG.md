@@ -12898,6 +12898,16 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 
 **Next.** Commit this safety fix, then apply only the two Vertex preview registry replacements from the clean plan.
 
+### [2026-09-02 07:58] #1527 - Applied live Vertex Veo preview registry expansion with backup
+
+**Apply gate.** After the idempotency fix, re-ran the deterministic plan and confirmed exactly two pending rows: the Vertex source preview registry and the Vertex compiled preview registry. The original KIE dedicated branch and KIE diagnostic rows were both reported `status=applied`; no duplicate branch would be written.
+
+**On-disk apply.** Ran `python scripts/automation/omni_video_runtime_patch.py --apply`. The tool created `state/omni_video_runtime_backups/20260902T015629Z/` and copied both registry targets before writing. The source registry hash changed from `a9a8c90de5293a72bcdb2783584705f32a3585f7c3f6222cc5855a698367bef3` to `6d8abf56acca77c43f85496d1518582098571b668fb4b074f645f08acb743faa`; the compiled registry hash changed from `99f8704186f74acd863814d19311cf50f8a0bbafd0b8e0ebe1c216b3084d7cf7` to `e3957c8f622cf8c89ee528875e6232004a682fb841b0c8b5a087dfc8c773e5ce`. The resulting registry now carries the two GA IDs plus `veo-3.1-generate-preview`, `veo-3.1-fast-generate-preview`, and `veo-3.1-lite-generate-preview`, matching the active Vertex connection's model list.
+
+**Safety boundary.** The manifest records `restartPerformed=false` and `videoSpendPerformed=false`. This component changed only the Omni package files and backup artifacts; it did not touch credentials, database state, service configuration, Chrome, seats, or provider endpoints. The registered NSSM service must be restarted through its existing pathway before the compiled registry is loaded.
+
+**Next.** Verify the backup/plan is now idempotent, restart OmniRoute using the registered service pathway, wait for `/api/health`, and run one bounded Vertex preview candidate (plus the KIE diagnostic candidate only if the service is healthy) with the existing spend-confirmation gate. Admit nothing without an actual MP4 `ftyp` asset.
+
 ### [2026-09-02 01:55] #1520 - Captures stage 3-5 pass 2 (9223 + 9224): remaining targets are named walls; re-SSO lane gated on operator
 
 **Scope decision (operator "ok" 01:33Z).** Cross-seat re-SSO is operator-gated (Google chooser on 9224/9225 requires the operator's own sign-in; passwords are never typed by automation). Proceeded with the automation lane: captures for artifact-less APP_SURFACE hosts.
