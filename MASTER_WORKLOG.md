@@ -12948,6 +12948,14 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 
 **Next / operator handoff.** Perform the same registered NSSM-owned `OmniRoute` restart pathway the operator used earlier (the agent deliberately does not restart/stop OmniRoute under the transfer's single-owner prohibition). After `/api/health` returns HTTP 200, run one KIE fast Veo probe to capture the redacted upstream `code/msg`; do not run additional video candidates unless that result shows a genuine task ID path.
 
+### [2026-09-02 09:10] #1532 - Final Omni health and tracked-worktree check before operator restart
+
+**Health poll.** Used `curl.exe --noproxy '*' --connect-timeout 3 --max-time 6` against `http://127.0.0.1:20128/api/health`. The live service returned `{"status":"ok","timestamp":"2026-09-02T02:08:05.987Z"}` with HTTP 200 in 0.019832 seconds. This confirms the current process is healthy, but it intentionally does not imply that the on-disk compiled KIE diagnostic patch is loaded.
+
+**Repository check.** `git diff --name-only` and `git diff --cached --name-only` returned no tracked or staged paths. All Omni source/tool/test/worklog changes are committed through the incremental commits recorded above; only pre-existing untracked user artifacts remain outside this work. No provider request, credential operation, service action, database access, Chrome action, or consumer-lane change occurred in this final check.
+
+**State at handoff.** Native Omni chat and audio admissions remain intact from the earlier verified ledgers; native video admissions remain zero. The Vertex project wall and KIE pre-restart diagnostic boundary are the only unresolved Omni video items. The next operation is the operator-owned registered OmniRoute restart followed by one KIE diagnostic probe, then external Vertex project enablement/credential correction as authorized.
+
 ### [2026-09-02 01:55] #1520 - Captures stage 3-5 pass 2 (9223 + 9224): remaining targets are named walls; re-SSO lane gated on operator
 
 **Scope decision (operator "ok" 01:33Z).** Cross-seat re-SSO is operator-gated (Google chooser on 9224/9225 requires the operator's own sign-in; passwords are never typed by automation). Proceeded with the automation lane: captures for artifact-less APP_SURFACE hosts.
