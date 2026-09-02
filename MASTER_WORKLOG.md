@@ -12938,6 +12938,16 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 
 **Next.** Exercise the KIE diagnostic patch once with `kie/veo/veo-3-1-fast` under the existing spend gate, preserving any upstream `code/msg` without persisting secrets. Then stop all Omni video traffic and report the exact external action needed for Vertex.
 
+### [2026-09-02 09:02] #1531 - KIE pre-restart probe confirms compiled diagnostic awaits service reload
+
+**Execution.** With `OMNI_VIDEO_CONFIRM_SPEND=1`, ran exactly one bounded KIE candidate: `python scripts/automation/video_provider_probe.py --model kie/veo/veo-3-1-fast --timeout 300 --fresh`. The request completed in 0.8 seconds with HTTP 502 and the response body `{"error":{"message":"KIE Veo did not return taskId","type":"upstream_error","code":"upstream_error"}}`. No task ID, URL, base64 payload, or MP4 bytes were returned; the verified video ledger remains empty.
+
+**Runtime-state finding.** The response still contains the pre-patch generic message, proving that the long-lived registered OmniRoute process has not loaded the on-disk KIE diagnostic replacement yet. This is consistent with the service process creation timestamp predating the package apply. The authenticated `/v1/models` catalog can expose the registry expansion independently, but the video-generation route's compiled handler requires a process reload. The report was preserved at `state/video_provider_probe_kie_diagnostic_pre_restart_20260902_0857.json` before any subsequent run.
+
+**Safety and classification.** This was the final planned provider request in this cycle; no retry loop or broad sweep followed it. KIE remains an unresolved upstream/provider-contract result, not a dead-site verdict, because the diagnostic response is not live until reload. Vertex remains an external project wall documented in #1530. No credentials, database, seats, Chrome, consumer endpoint, or service process were modified.
+
+**Next / operator handoff.** Perform the same registered NSSM-owned `OmniRoute` restart pathway the operator used earlier (the agent deliberately does not restart/stop OmniRoute under the transfer's single-owner prohibition). After `/api/health` returns HTTP 200, run one KIE fast Veo probe to capture the redacted upstream `code/msg`; do not run additional video candidates unless that result shows a genuine task ID path.
+
 ### [2026-09-02 01:55] #1520 - Captures stage 3-5 pass 2 (9223 + 9224): remaining targets are named walls; re-SSO lane gated on operator
 
 **Scope decision (operator "ok" 01:33Z).** Cross-seat re-SSO is operator-gated (Google chooser on 9224/9225 requires the operator's own sign-in; passwords are never typed by automation). Proceeded with the automation lane: captures for artifact-less APP_SURFACE hosts.
