@@ -12928,6 +12928,16 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 
 **Next.** Run one valid, non-video Vertex chat request through Omni to distinguish a provider-wide resource/auth issue from a Veo-specific contract issue. Preserve the terminal result, then stop provider traffic until the missing project/credential configuration can be supplied through the supported management path.
 
+### [2026-09-02 08:55] #1530 - Vertex chat differentiator confirms project-level Agent Platform disablement
+
+**Execution.** Through an authenticated `OmniRouteAPI` session, sent one valid OpenAI-shaped request to `vertex/gemini-2.5-flash`: a normal user message requesting `OK`, `max_tokens=16`, `temperature=0`, and `stream=false`. This was a single text inference check, not a video generation or broad sweep.
+
+**Result.** The request completed in 42.75 seconds with HTTP 403. The redacted response preserved the provider diagnosis: `Agent Platform API has not been used in project 761774886307 before or it is disabled. Enable it ... then retry.` No assistant content was returned. The project number is configuration metadata, not a credential; no token or key was logged. The prior Vertex native connection test remains HTTP 200/`valid=true`, so the stored credential reaches Google but the project’s Agent Platform API is disabled or not yet activated.
+
+**Classification.** This is a real external project-configuration wall, not a dead host and not a stale replay artifact. It explains why the Veo preview and GA requests surfaced a generic 400 resource error: the same Vertex project/auth path cannot execute until `aiplatform.googleapis.com` is enabled (and, if required, billing/IAM is configured). The fix requires an authorized Google Cloud project action or a supported Omni credential replacement; this agent will not enable billing/APIs, invent a project, or inject a placeholder key. No video route was admitted and the verified video ledger remains empty.
+
+**Next.** Exercise the KIE diagnostic patch once with `kie/veo/veo-3-1-fast` under the existing spend gate, preserving any upstream `code/msg` without persisting secrets. Then stop all Omni video traffic and report the exact external action needed for Vertex.
+
 ### [2026-09-02 01:55] #1520 - Captures stage 3-5 pass 2 (9223 + 9224): remaining targets are named walls; re-SSO lane gated on operator
 
 **Scope decision (operator "ok" 01:33Z).** Cross-seat re-SSO is operator-gated (Google chooser on 9224/9225 requires the operator's own sign-in; passwords are never typed by automation). Proceeded with the automation lane: captures for artifact-less APP_SURFACE hosts.
