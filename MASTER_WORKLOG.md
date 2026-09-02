@@ -13010,3 +13010,13 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 **Admission state.** 'state/omniroute_verified_video_routes.json' remains an empty ledger ('entries=[]'). No route is admitted because no real MP4 payload was returned and the mandatory 'ftyp' byte check could not run. The pre-probe report remains preserved at 'state/video_provider_probe_pre_kie_restart_20260902_091304.json'.
 
 **Next.** The KIE diagnostic objective is complete for this cycle and no further KIE/Vertex video requests should be sent. Vertex remains blocked by the previously recorded Google project-level Agent Platform API disablement; the authorized external action is to enable 'aiplatform.googleapis.com' with billing/IAM/model access for project '761774886307', or replace the Vertex connection through Omni's supported UI with a valid credential. Native Omni chat/audio evidence remains intact; native video remains 0 MP4 admissions.
+
+### [2026-09-02 09:46] #1537 - Final post-probe Omni health and ledger boundary confirmed
+
+**Runtime health.** Performed one final read-only check after the KIE response. The registered service remains 'Running' with NSSM PID '19444' and Node child PID '20536'. A direct proxy-bypassed GET to 'http://127.0.0.1:20128/api/health' returned HTTP 200 and '{"status":"ok","timestamp":"2026-09-02T03:46:17.534Z"}'. The KIE diagnostic did not destabilize the gateway.
+
+**Durable evidence boundary.** The fresh report is 'state=COMPLETE', 'probed=1', 'working=0', and 'results=1'; the verified native video ledger has 'VIDEO_LEDGER_ENTRIES=0'. The single terminal result is the already-recorded KIE HTTP 502 / upstream code 402 credit wall. No additional provider request was issued during this final check.
+
+**Repository boundary.** The latest Omni documentation commit is 'e16ec73'. 'git diff --name-only' shows only the pre-existing user/other-agent modification 'scripts/automation/cdp_drive.py'; it was not staged, edited, or reverted. The ignored archive 'state/video_provider_probe_pre_kie_restart_20260902_091304.json' remains on disk. No Chrome, seat/session-pool, database, credential, combo, or non-Omni action occurred.
+
+**Final next step.** Stop native video traffic at this honest boundary. Resume Omni video E2E only after KIE credits are restored or a supported valid KIE credential is supplied, and after the Vertex project '761774886307' enables 'aiplatform.googleapis.com' with the required billing/IAM/model access (or its connection is replaced through Omni's supported UI). Then run a fresh single-candidate MP4-byte proof; do not treat catalog visibility as capacity.
