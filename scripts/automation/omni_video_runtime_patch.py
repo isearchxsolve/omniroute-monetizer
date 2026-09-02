@@ -395,6 +395,564 @@ POLLINATIONS_RUNTIME_FUNCTION_MARKER = 'async function N({model:e,body:t,credent
 POLLINATIONS_RUNTIME_FUNCTION = r'''async function __omniPollinationsVideo({model:e,provider:t,providerConfig:r,body:a,credentials:o,log:s}){let n=a&&"object"==typeof a?a:{},u=String(n.prompt??"").trim();if(!u)return{success:!1,status:400,error:"Pollinations video prompt is required"};let l=o&&"object"==typeof o?o:{},d=l.providerSpecificData&&"object"==typeof l.providerSpecificData?l.providerSpecificData:{},c="string"==typeof d.baseUrl&&d.baseUrl.trim()?d.baseUrl.trim():"string"==typeof l.baseUrl&&l.baseUrl.trim()?l.baseUrl.trim():r&&r.baseUrl||"https://gen.pollinations.ai/video",f=new URL(`${c.replace(/\/+$/,"")}/${encodeURIComponent(u)}`),p=String(e||"").split("/").pop()||"",m="default"===p?"veo":p,h=(e,t)=>{if(void 0!==t&&null!==t&&""!==t){let r=Array.isArray(t)?t.filter(e=>null!=e&&String(e).length>0).join("|"):String(t);r&&f.searchParams.set(e,r)}};h("model",m||void 0);let g=n.duration??n.durationSeconds;"number"==typeof g&&Number.isFinite(g)&&h("duration",g),h("aspectRatio",n.aspectRatio??n.aspect_ratio),h("width",n.width),h("height",n.height),h("resolution",n.resolution),h("seed",n.seed),h("audio",n.audio),h("enhance",n.enhance),h("safe",n.safe),h("image",n.image??n.image_url??n.imageUrls),h("reference_images",n.reference_images??n.referenceImages),h("reference_videos",n.reference_videos??n.referenceVideos),h("reference_audios",n.reference_audios??n.referenceAudios);let v={Accept:"video/mp4"},w=l.apiKey||l.accessToken;typeof w==="string"&&w.trim()&&(v.Authorization=`Bearer ${w.trim()}`),s?.info?.("VIDEO",`Pollinations video generation: ${t}/${m}`);let b=new AbortController,y=setTimeout(()=>b.abort(),9e5);try{let e=await fetch(f.toString(),{method:"GET",headers:v,signal:b.signal}),t=new Uint8Array(await e.arrayBuffer());if(!e.ok){let r=new TextDecoder().decode(t).slice(0,2e3);return s?.error?.("VIDEO",`Pollinations returned HTTP ${e.status}: ${r}`),{success:!1,status:e.status||502,error:r||`Pollinations video request failed (${e.status})`}}if(t.length<8||"ftyp"!==String.fromCharCode(t[4],t[5],t[6],t[7]))return s?.error?.("VIDEO","Pollinations returned a non-MP4 success body"),{success:!1,status:502,error:{error:{message:"Pollinations did not return a valid MP4 artifact",type:"upstream_error",code:"VIDEO_ARTIFACT_UNAVAILABLE"}}};return{success:!0,data:{created:Math.floor(Date.now()/1e3),data:[{b64_json:Buffer.from(t).toString("base64"),format:"mp4"}]}}}catch(e){let t="AbortError"===e?.name,r=String(e?.message||e).slice(0,500);return s?.error?.("VIDEO",`Pollinations ${t?"timeout":"request error"}: ${r}`),{success:!1,status:t?504:502,error:`Pollinations video ${t?"timed out":"request failed"}: ${r}`}}finally{clearTimeout(y)}}'''
 POLLINATIONS_RUNTIME_FUNCTION_NEW = POLLINATIONS_RUNTIME_FUNCTION + POLLINATIONS_RUNTIME_FUNCTION_MARKER
 
+# Hugging Face Inference Providers routes text-to-video through Fal AI's queue
+# transport. The installed huggingface_hub client measured the exact contract:
+# POST /fal-ai/<mapped-model>?_subdomain=queue with a Bearer hf_ token, then
+# poll the response_url-derived /status endpoint, fetch the completed result
+# JSON, download its video.url, and admit only real MP4 bytes. Keep this
+# provider separate from the direct Fal handler: HF routing bills the HF
+# account and requires an HF token, while direct Fal keys use a different
+# authentication contract.
+HUGGINGFACE_SOURCE_REGISTRY_OLD = '''  pollinations: {
+    id: "pollinations",
+    baseUrl: "https://gen.pollinations.ai/video",
+    authType: "apikey",
+    authHeader: "bearer",
+    format: "pollinations-video",
+    models: [{ id: "default", name: "Pollinations Video (Free)" }],
+  },
+
+  minimax: {'''
+HUGGINGFACE_SOURCE_REGISTRY_NEW = '''  pollinations: {
+    id: "pollinations",
+    baseUrl: "https://gen.pollinations.ai/video",
+    authType: "apikey",
+    authHeader: "bearer",
+    format: "pollinations-video",
+    models: [{ id: "default", name: "Pollinations Video (Free)" }],
+  },
+
+  // Hugging Face Inference Providers routes these public text-to-video model
+  // IDs through Fal AI. The route mapping is intentionally explicit: do not
+  // guess a provider path for an unverified model and accidentally spend a
+  // credit on the wrong upstream.
+  huggingface: {
+    id: "huggingface",
+    baseUrl: "https://router.huggingface.co",
+    authType: "apikey",
+    authHeader: "bearer",
+    format: "huggingface-video",
+    models: [
+      { id: "tencent/HunyuanVideo", name: "HunyuanVideo (HF/Fal)" },
+      { id: "Wan-AI/Wan2.2-TI2V-5B", name: "Wan 2.2 TI2V 5B (HF/Fal)" },
+      { id: "meituan-longcat/LongCat-Video", name: "LongCat Video (HF/Fal)" },
+    ],
+  },
+
+  minimax: {'''
+
+HUGGINGFACE_RUNTIME_REGISTRY_OLD = 'pollinations:{id:"pollinations",baseUrl:"https://gen.pollinations.ai/video",authType:"apikey",authHeader:"bearer",format:"pollinations-video",models:[{id:"default",name:"Pollinations Video (Free)"}]},minimax:{'
+HUGGINGFACE_RUNTIME_REGISTRY_NEW = 'pollinations:{id:"pollinations",baseUrl:"https://gen.pollinations.ai/video",authType:"apikey",authHeader:"bearer",format:"pollinations-video",models:[{id:"default",name:"Pollinations Video (Free)"}]},huggingface:{id:"huggingface",baseUrl:"https://router.huggingface.co",authType:"apikey",authHeader:"bearer",format:"huggingface-video",models:[{id:"tencent/HunyuanVideo",name:"HunyuanVideo (HF/Fal)"},{id:"Wan-AI/Wan2.2-TI2V-5B",name:"Wan 2.2 TI2V 5B (HF/Fal)"},{id:"meituan-longcat/LongCat-Video",name:"LongCat Video (HF/Fal)"}]},minimax:{'
+
+HUGGINGFACE_SOURCE_BRANCH_OLD = POLLINATIONS_SOURCE_BRANCH_NEW
+HUGGINGFACE_SOURCE_BRANCH_NEW = HUGGINGFACE_SOURCE_BRANCH_OLD + '''
+  if (providerConfig.format === "huggingface-video") {
+    return handleHuggingFaceVideoGeneration({
+      model,
+      provider,
+      providerConfig,
+      body,
+      credentials,
+      log,
+    });
+  }
+'''
+
+HUGGINGFACE_SOURCE_FUNCTION_MARKER = POLLINATIONS_SOURCE_FUNCTION_MARKER
+HUGGINGFACE_SOURCE_FUNCTION = r'''
+const HUGGINGFACE_VIDEO_TIMEOUT_MS = 900_000;
+const HUGGINGFACE_VIDEO_MODEL_ROUTES: Record<string, string> = {
+  "tencent/HunyuanVideo": "fal-ai/hunyuan-video",
+  "Wan-AI/Wan2.2-TI2V-5B": "fal-ai/wan/v2.2-5b/text-to-video",
+  "meituan-longcat/LongCat-Video": "fal-ai/longcat-video/text-to-video/480p",
+};
+
+type HuggingFaceRecord = Record<string, unknown>;
+
+function isHuggingFaceRecord(value: unknown): value is HuggingFaceRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function huggingFaceString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function huggingFaceDiagnostic(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim()) return value.trim().slice(0, 2000);
+  if (isHuggingFaceRecord(value)) {
+    for (const key of ["error", "message", "detail"]) {
+      const candidate = huggingFaceString(value[key]);
+      if (candidate) return candidate.slice(0, 2000);
+    }
+  }
+  return fallback;
+}
+
+function huggingFaceMp4(bytes: Uint8Array): boolean {
+  return bytes.length >= 8 && String.fromCharCode(...bytes.slice(4, 8)) === "ftyp";
+}
+
+function huggingFaceHeaderToken(credentials: unknown): string | undefined {
+  if (!isHuggingFaceRecord(credentials)) return undefined;
+  return huggingFaceString(credentials.apiKey) || huggingFaceString(credentials.accessToken);
+}
+
+function huggingFaceNumeric(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function huggingFaceEndpoint(baseUrl: string, route: string): URL | null {
+  try {
+    return new URL(`${baseUrl.replace(/\/+$/, "")}/fal-ai/${route}?_subdomain=queue`);
+  } catch {
+    return null;
+  }
+}
+
+function huggingFaceResultUrls(submitUrl: URL, responseUrl: string | undefined, requestId: string | undefined) {
+  try {
+    const resultUrl = new URL(
+      responseUrl || `${submitUrl.toString().replace(/\?[^?]*$/, "")}/requests/${encodeURIComponent(requestId || "")}`,
+      submitUrl,
+    );
+    const path = resultUrl.pathname.replace(/\/status\/?$/, "").replace(/\/+$/, "");
+    const statusUrl = new URL(`${path}/status`, resultUrl.origin);
+    resultUrl.searchParams.forEach((value, key) => statusUrl.searchParams.set(key, value));
+    return { resultUrl, statusUrl };
+  } catch {
+    return null;
+  }
+}
+
+async function huggingFaceResponse(response: Response): Promise<{ text: string; json: unknown }> {
+  const text = await response.text();
+  try {
+    return { text, json: JSON.parse(text) };
+  } catch {
+    return { text, json: null };
+  }
+}
+
+async function handleHuggingFaceVideoGeneration({
+  model,
+  provider,
+  providerConfig,
+  body,
+  credentials,
+  log,
+}) {
+  const startedAt = Date.now();
+  const bodyObj = body && typeof body === "object" ? (body as HuggingFaceRecord) : {};
+  const prompt = huggingFaceString(bodyObj.prompt);
+  if (!prompt) {
+    return { success: false, status: 400, error: "Hugging Face video prompt is required" };
+  }
+
+  const route = HUGGINGFACE_VIDEO_MODEL_ROUTES[model];
+  if (!route) {
+    return {
+      success: false,
+      status: 400,
+      error: `Unsupported Hugging Face video model: ${model}`,
+    };
+  }
+
+  const token = huggingFaceHeaderToken(credentials);
+  if (!token) {
+    return { success: false, status: 401, error: "Hugging Face requires an hf_ access token" };
+  }
+  if (!token.startsWith("hf_")) {
+    return {
+      success: false,
+      status: 401,
+      error: "Hugging Face Inference Providers requires an hf_ access token",
+    };
+  }
+
+  const configuredBase =
+    providerConfig && typeof providerConfig.baseUrl === "string" && providerConfig.baseUrl.trim()
+      ? providerConfig.baseUrl.trim()
+      : "https://router.huggingface.co";
+  const submitUrl = huggingFaceEndpoint(configuredBase, route);
+  if (!submitUrl) {
+    return { success: false, status: 502, error: "Invalid Hugging Face video endpoint" };
+  }
+
+  const payload: HuggingFaceRecord = { prompt };
+  for (const field of ["guidance_scale", "num_frames", "num_inference_steps", "seed"]) {
+    const value = huggingFaceNumeric(bodyObj[field]);
+    if (value !== undefined) payload[field] = field === "num_inference_steps" ? Math.floor(value) : value;
+  }
+  const negativePrompt = bodyObj.negative_prompt;
+  if (Array.isArray(negativePrompt)) {
+    const values = negativePrompt.filter((value): value is string => typeof value === "string" && value.trim());
+    if (values.length) payload.negative_prompt = values;
+  } else {
+    const value = huggingFaceString(negativePrompt);
+    if (value) payload.negative_prompt = [value];
+  }
+  if (isHuggingFaceRecord(bodyObj.extra_body)) {
+    for (const [key, value] of Object.entries(bodyObj.extra_body)) {
+      if (key !== "prompt" && key !== "model" && value !== undefined && value !== null) payload[key] = value;
+    }
+  }
+
+  const requestedTimeout = huggingFaceNumeric(bodyObj.timeout_ms);
+  const timeoutMs =
+    requestedTimeout === undefined
+      ? HUGGINGFACE_VIDEO_TIMEOUT_MS
+      : Math.min(HUGGINGFACE_VIDEO_TIMEOUT_MS, Math.max(1000, requestedTimeout));
+  const requestedPoll = huggingFaceNumeric(bodyObj.poll_interval_ms);
+  const pollIntervalMs =
+    requestedPoll === undefined ? 2500 : Math.min(30_000, Math.max(0, requestedPoll));
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+
+  log?.info?.("VIDEO", `Hugging Face video generation: ${provider}/${model}`);
+  try {
+    const createResponse = await fetchWithTimeout(submitUrl.toString(), {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      timeoutMs,
+    });
+    const create = await huggingFaceResponse(createResponse);
+    if (!createResponse.ok) {
+      const diagnostic = huggingFaceDiagnostic(create.json, create.text || `Hugging Face submit failed (${createResponse.status})`);
+      log?.error?.("VIDEO", `Hugging Face submit HTTP ${createResponse.status}: ${diagnostic}`);
+      return { success: false, status: createResponse.status, error: diagnostic };
+    }
+    const createRecord = isHuggingFaceRecord(create.json) ? create.json : {};
+    const requestId = huggingFaceString(createRecord.request_id);
+    const responseUrl = huggingFaceString(createRecord.response_url);
+    const urls = huggingFaceResultUrls(submitUrl, responseUrl, requestId);
+    if (!urls) {
+      return { success: false, status: 502, error: "Hugging Face submit returned invalid response_url" };
+    }
+    if (!requestId && !responseUrl) {
+      return { success: false, status: 502, error: "Hugging Face submit returned no request_id" };
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    let completed = false;
+    while (Date.now() < deadline) {
+      const remaining = deadline - Date.now();
+      const statusResponse = await fetchWithTimeout(urls.statusUrl.toString(), {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        timeoutMs: Math.min(timeoutMs, Math.max(1000, remaining)),
+      });
+      const status = await huggingFaceResponse(statusResponse);
+      if (!statusResponse.ok) {
+        const diagnostic = huggingFaceDiagnostic(status.json, status.text || `Hugging Face status failed (${statusResponse.status})`);
+        return { success: false, status: statusResponse.status, error: diagnostic };
+      }
+      const statusRecord = isHuggingFaceRecord(status.json) ? status.json : {};
+      const state = String(statusRecord.status ?? "").toUpperCase();
+      if (state === "COMPLETED") {
+        completed = true;
+        break;
+      }
+      if (["FAILED", "CANCELLED", "CANCELED", "ERROR"].includes(state)) {
+        return {
+          success: false,
+          status: 502,
+          error: `Hugging Face video job ${state.toLowerCase()}: ${huggingFaceDiagnostic(status.json, state)}`,
+        };
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, Math.max(0, deadline - Date.now()))));
+    }
+    if (!completed) {
+      return { success: false, status: 504, error: `Hugging Face video timed out after ${timeoutMs}ms` };
+    }
+
+    const resultResponse = await fetchWithTimeout(urls.resultUrl.toString(), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      timeoutMs: Math.min(timeoutMs, Math.max(1000, deadline - Date.now())),
+    });
+    const result = await huggingFaceResponse(resultResponse);
+    if (!resultResponse.ok) {
+      const diagnostic = huggingFaceDiagnostic(result.json, result.text || `Hugging Face result failed (${resultResponse.status})`);
+      return { success: false, status: resultResponse.status, error: diagnostic };
+    }
+    const resultRecord = isHuggingFaceRecord(result.json) ? result.json : {};
+    const videoRecord = isHuggingFaceRecord(resultRecord.video) ? resultRecord.video : {};
+    const videoUrl = huggingFaceString(videoRecord.url) || huggingFaceString(resultRecord.video) || huggingFaceString(resultRecord.url);
+    if (!videoUrl) {
+      return { success: false, status: 502, error: "Hugging Face completed without a video URL" };
+    }
+
+    const mediaResponse = await fetchWithTimeout(new URL(videoUrl, urls.resultUrl).toString(), {
+      method: "GET",
+      headers: { Accept: "video/mp4" },
+      timeoutMs: Math.min(timeoutMs, Math.max(1000, deadline - Date.now())),
+    });
+    const mediaBytes = new Uint8Array(await mediaResponse.arrayBuffer());
+    if (!mediaResponse.ok) {
+      const diagnostic = new TextDecoder().decode(mediaBytes).slice(0, 2000);
+      return { success: false, status: mediaResponse.status, error: diagnostic || `Hugging Face media download failed (${mediaResponse.status})` };
+    }
+    if (!huggingFaceMp4(mediaBytes)) {
+      log?.error?.("VIDEO", "Hugging Face returned a non-MP4 success body");
+      return {
+        success: false,
+        status: 502,
+        error: {
+          error: {
+            message: "Hugging Face did not return a valid MP4 artifact",
+            type: "upstream_error",
+            code: "VIDEO_ARTIFACT_UNAVAILABLE",
+          },
+        },
+      };
+    }
+
+    saveCallLog({
+      method: "POST",
+      path: "/v1/videos/generations",
+      status: 200,
+      model: `${provider}/${model}`,
+      provider,
+      duration: Date.now() - startedAt,
+      responseBody: { videos_count: 1, mode: "huggingface-fal", requestId: requestId || "response_url" },
+    }).catch(() => {});
+    return {
+      success: true,
+      data: {
+        created: Math.floor(Date.now() / 1000),
+        data: [{ b64_json: Buffer.from(mediaBytes).toString("base64"), format: "mp4" }],
+      },
+    };
+  } catch (err: unknown) {
+    const message = sanitizeErrorMessage(err instanceof Error ? err.message : String(err));
+    const timedOut = err instanceof FetchTimeoutError || (err as any)?.name === "AbortError";
+    log?.error?.("VIDEO", `Hugging Face ${timedOut ? "timeout" : "request error"}: ${message}`);
+    return {
+      success: false,
+      status: timedOut ? 504 : 502,
+      error: `Hugging Face video ${timedOut ? "timed out" : "request failed"}: ${message}`,
+    };
+  }
+}
+'''
+HUGGINGFACE_SOURCE_FUNCTION_NEW = HUGGINGFACE_SOURCE_FUNCTION + HUGGINGFACE_SOURCE_FUNCTION_MARKER
+
+HUGGINGFACE_RUNTIME_BRANCH_OLD = POLLINATIONS_RUNTIME_BRANCH_NEW
+HUGGINGFACE_RUNTIME_BRANCH_NEW = POLLINATIONS_RUNTIME_BRANCH_NEW.replace(
+    ':o?(0,f.handleOpenAIVideoGeneration)',
+    ':"huggingface-video"===y.format?__omniHuggingFaceVideo({model:h,provider:i,providerConfig:y,body:e,credentials:t,log:r}):o?(0,f.handleOpenAIVideoGeneration)',
+)
+HUGGINGFACE_RUNTIME_FUNCTION_MARKER = POLLINATIONS_RUNTIME_FUNCTION_MARKER
+HUGGINGFACE_RUNTIME_FUNCTION = r'''
+const __omniHfRoutes = {
+  "tencent/HunyuanVideo": "fal-ai/hunyuan-video",
+  "Wan-AI/Wan2.2-TI2V-5B": "fal-ai/wan/v2.2-5b/text-to-video",
+  "meituan-longcat/LongCat-Video": "fal-ai/longcat-video/text-to-video/480p",
+};
+const __omniHfTimeoutMs = 900_000;
+
+function __omniHfText(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function __omniHfRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function __omniHfDiagnostic(value, fallback) {
+  if (typeof value === "string" && value.trim()) return value.trim().slice(0, 2000);
+  if (__omniHfRecord(value)) {
+    for (const key of ["error", "message", "detail"]) {
+      const candidate = __omniHfText(value[key]);
+      if (candidate) return candidate.slice(0, 2000);
+    }
+  }
+  return fallback;
+}
+
+function __omniHfMp4(bytes) {
+  return bytes.length >= 8 && String.fromCharCode(...bytes.slice(4, 8)) === "ftyp";
+}
+
+function __omniHfUrls(submitUrl, responseUrl, requestId) {
+  try {
+    const fallback = `${submitUrl.origin}${submitUrl.pathname.replace(/\/+$/, "")}/requests/${encodeURIComponent(requestId || "")}${submitUrl.search}`;
+    const resultUrl = new URL(responseUrl || fallback, submitUrl);
+    const path = resultUrl.pathname.replace(/\/status\/?$/, "").replace(/\/+$/, "");
+    const statusUrl = new URL(`${path}/status`, resultUrl.origin);
+    resultUrl.searchParams.forEach((value, key) => statusUrl.searchParams.set(key, value));
+    return { resultUrl, statusUrl };
+  } catch {
+    return null;
+  }
+}
+
+async function __omniHfRead(response) {
+  const text = await response.text();
+  try {
+    return { text, json: JSON.parse(text) };
+  } catch {
+    return { text, json: null };
+  }
+}
+
+async function __omniHuggingFaceVideo({ model, provider, providerConfig, body, credentials, log }) {
+  const startedAt = Date.now();
+  const bodyObj = body && typeof body === "object" ? body : {};
+  const prompt = __omniHfText(bodyObj.prompt);
+  if (!prompt) return { success: false, status: 400, error: "Hugging Face video prompt is required" };
+
+  const route = __omniHfRoutes[model];
+  if (!route) return { success: false, status: 400, error: `Unsupported Hugging Face video model: ${model}` };
+  const creds = credentials && typeof credentials === "object" ? credentials : {};
+  const token = __omniHfText(creds.apiKey) || __omniHfText(creds.accessToken);
+  if (!token) return { success: false, status: 401, error: "Hugging Face requires an hf_ access token" };
+  if (!token.startsWith("hf_")) {
+    return { success: false, status: 401, error: "Hugging Face Inference Providers requires an hf_ access token" };
+  }
+
+  const configuredBase = providerConfig && typeof providerConfig.baseUrl === "string" && providerConfig.baseUrl.trim()
+    ? providerConfig.baseUrl.trim()
+    : "https://router.huggingface.co";
+  let submitUrl;
+  try {
+    submitUrl = new URL(`${configuredBase.replace(/\/+$/, "")}/fal-ai/${route}?_subdomain=queue`);
+  } catch {
+    return { success: false, status: 502, error: "Invalid Hugging Face video endpoint" };
+  }
+
+  const payload = { prompt };
+  for (const field of ["guidance_scale", "num_frames", "num_inference_steps", "seed"]) {
+    const value = bodyObj[field];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      payload[field] = field === "num_inference_steps" ? Math.floor(value) : value;
+    }
+  }
+  const negativePrompt = bodyObj.negative_prompt;
+  if (Array.isArray(negativePrompt)) {
+    const values = negativePrompt.filter((value) => typeof value === "string" && value.trim());
+    if (values.length) payload.negative_prompt = values;
+  } else {
+    const value = __omniHfText(negativePrompt);
+    if (value) payload.negative_prompt = [value];
+  }
+  if (__omniHfRecord(bodyObj.extra_body)) {
+    for (const [key, value] of Object.entries(bodyObj.extra_body)) {
+      if (key !== "prompt" && key !== "model" && value !== undefined && value !== null) payload[key] = value;
+    }
+  }
+
+  const requestedTimeout = bodyObj.timeout_ms;
+  const timeoutMs = typeof requestedTimeout === "number" && Number.isFinite(requestedTimeout)
+    ? Math.min(__omniHfTimeoutMs, Math.max(1000, requestedTimeout))
+    : __omniHfTimeoutMs;
+  const requestedPoll = bodyObj.poll_interval_ms;
+  const pollIntervalMs = typeof requestedPoll === "number" && Number.isFinite(requestedPoll)
+    ? Math.min(30_000, Math.max(0, requestedPoll))
+    : 2500;
+  const authHeaders = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+  const abortController = new AbortController();
+  const timer = setTimeout(() => abortController.abort(), timeoutMs);
+  log?.info?.("VIDEO", `Hugging Face video generation: ${provider}/${model}`);
+  try {
+    const createResponse = await fetch(submitUrl.toString(), {
+      method: "POST",
+      headers: { ...authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: abortController.signal,
+    });
+    const create = await __omniHfRead(createResponse);
+    if (!createResponse.ok) {
+      const diagnostic = __omniHfDiagnostic(create.json, create.text || `Hugging Face submit failed (${createResponse.status})`);
+      return { success: false, status: createResponse.status, error: diagnostic };
+    }
+    const createRecord = __omniHfRecord(create.json) ? create.json : {};
+    const requestId = __omniHfText(createRecord.request_id);
+    const responseUrl = __omniHfText(createRecord.response_url);
+    const urls = __omniHfUrls(submitUrl, responseUrl, requestId);
+    if (!urls) return { success: false, status: 502, error: "Hugging Face submit returned invalid response_url" };
+    if (!requestId && !responseUrl) return { success: false, status: 502, error: "Hugging Face submit returned no request_id" };
+
+    const deadline = Date.now() + timeoutMs;
+    let completed = false;
+    while (Date.now() < deadline) {
+      const statusResponse = await fetch(urls.statusUrl.toString(), {
+        method: "GET",
+        headers: authHeaders,
+        signal: abortController.signal,
+      });
+      const status = await __omniHfRead(statusResponse);
+      if (!statusResponse.ok) {
+        const diagnostic = __omniHfDiagnostic(status.json, status.text || `Hugging Face status failed (${statusResponse.status})`);
+        return { success: false, status: statusResponse.status, error: diagnostic };
+      }
+      const statusRecord = __omniHfRecord(status.json) ? status.json : {};
+      const state = String(statusRecord.status ?? "").toUpperCase();
+      if (state === "COMPLETED") {
+        completed = true;
+        break;
+      }
+      if (["FAILED", "CANCELLED", "CANCELED", "ERROR"].includes(state)) {
+        return { success: false, status: 502, error: `Hugging Face video job ${state.toLowerCase()}: ${__omniHfDiagnostic(status.json, state)}` };
+      }
+      await new Promise((resolve) => setTimeout(resolve, Math.min(pollIntervalMs, Math.max(0, deadline - Date.now()))));
+    }
+    if (!completed) return { success: false, status: 504, error: `Hugging Face video timed out after ${timeoutMs}ms` };
+
+    const resultResponse = await fetch(urls.resultUrl.toString(), {
+      method: "GET",
+      headers: authHeaders,
+      signal: abortController.signal,
+    });
+    const result = await __omniHfRead(resultResponse);
+    if (!resultResponse.ok) {
+      const diagnostic = __omniHfDiagnostic(result.json, result.text || `Hugging Face result failed (${resultResponse.status})`);
+      return { success: false, status: resultResponse.status, error: diagnostic };
+    }
+    const resultRecord = __omniHfRecord(result.json) ? result.json : {};
+    const videoRecord = __omniHfRecord(resultRecord.video) ? resultRecord.video : {};
+    const videoUrl = __omniHfText(videoRecord.url) || __omniHfText(resultRecord.video) || __omniHfText(resultRecord.url);
+    if (!videoUrl) return { success: false, status: 502, error: "Hugging Face completed without a video URL" };
+
+    const mediaResponse = await fetch(new URL(videoUrl, urls.resultUrl).toString(), {
+      method: "GET",
+      headers: { Accept: "video/mp4" },
+      signal: abortController.signal,
+    });
+    const mediaBytes = new Uint8Array(await mediaResponse.arrayBuffer());
+    if (!mediaResponse.ok) {
+      return { success: false, status: mediaResponse.status, error: new TextDecoder().decode(mediaBytes).slice(0, 2000) || `Hugging Face media download failed (${mediaResponse.status})` };
+    }
+    if (!__omniHfMp4(mediaBytes)) {
+      log?.error?.("VIDEO", "Hugging Face returned a non-MP4 success body");
+      return { success: false, status: 502, error: { error: { message: "Hugging Face did not return a valid MP4 artifact", type: "upstream_error", code: "VIDEO_ARTIFACT_UNAVAILABLE" } } };
+    }
+    (0,o.saveCallLog)({
+      method: "POST",
+      path: "/v1/videos/generations",
+      status: 200,
+      model: `${provider}/${model}`,
+      provider,
+      duration: Date.now() - startedAt,
+      responseBody: { videos_count: 1, mode: "huggingface-fal", requestId: requestId || "response_url" },
+    }).catch(() => {});
+    return { success: true, data: { created: Math.floor(Date.now() / 1000), data: [{ b64_json: Buffer.from(mediaBytes).toString("base64"), format: "mp4" }] } };
+  } catch (err) {
+    const message = (0,s.sanitizeErrorMessage)(err instanceof Error ? err.message : String(err));
+    const timedOut = err?.name === "AbortError";
+    log?.error?.("VIDEO", `Hugging Face ${timedOut ? "timeout" : "request error"}: ${message}`);
+    return { success: false, status: timedOut ? 504 : 502, error: `Hugging Face video ${timedOut ? "timed out" : "request failed"}: ${message}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+'''
+HUGGINGFACE_RUNTIME_FUNCTION_NEW = HUGGINGFACE_RUNTIME_FUNCTION + HUGGINGFACE_RUNTIME_FUNCTION_MARKER
+
 
 @dataclass(frozen=True)
 class Replacement:
@@ -501,12 +1059,14 @@ def replacement_plan(root: Path) -> list[Replacement]:
     return [
         Replacement("Vertex source registry", "open-sse/config/videoRegistry.ts", VERTEX_SOURCE_OLD, VERTEX_SOURCE_NEW),
         Replacement("Vertex source preview registry", "open-sse/config/videoRegistry.ts", VERTEX_SOURCE_PREVIEW_OLD, VERTEX_SOURCE_PREVIEW_NEW),
+        Replacement("Hugging Face source video registry", "open-sse/config/videoRegistry.ts", HUGGINGFACE_SOURCE_REGISTRY_OLD, HUGGINGFACE_SOURCE_REGISTRY_NEW),
         Replacement("KIE source request fields", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_TYPE_OLD, KIE_SOURCE_TYPE_NEW),
         Replacement("KIE source model defaults", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_OLD, KIE_SOURCE_NEW),
         Replacement("KIE source Veo API branch", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_VEO_MARKER, KIE_SOURCE_VEO_BRANCH + KIE_SOURCE_VEO_MARKER),
         Replacement("KIE source Veo response diagnostics", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_VEO_DIAGNOSTIC_OLD, KIE_SOURCE_VEO_DIAGNOSTIC_NEW),
         Replacement("Vertex compiled registry", str(config_chunk.relative_to(root)), VERTEX_RUNTIME_OLD, VERTEX_RUNTIME_NEW),
         Replacement("Vertex compiled preview registry", str(config_chunk.relative_to(root)), VERTEX_RUNTIME_PREVIEW_OLD, VERTEX_RUNTIME_PREVIEW_NEW),
+        Replacement("Hugging Face compiled video registry", str(config_chunk.relative_to(root)), HUGGINGFACE_RUNTIME_REGISTRY_OLD, HUGGINGFACE_RUNTIME_REGISTRY_NEW),
         Replacement("KIE compiled model defaults", str(handler_chunk.relative_to(root)), KIE_RUNTIME_OLD, KIE_RUNTIME_NEW),
         Replacement("KIE compiled Veo API branch", str(handler_chunk.relative_to(root)), KIE_RUNTIME_VEO_MARKER, KIE_RUNTIME_VEO_BRANCH + KIE_RUNTIME_VEO_MARKER),
         Replacement("KIE compiled Veo response diagnostics", str(handler_chunk.relative_to(root)), KIE_RUNTIME_VEO_DIAGNOSTIC_OLD, KIE_RUNTIME_VEO_DIAGNOSTIC_NEW),
@@ -535,6 +1095,30 @@ def replacement_plan(root: Path) -> list[Replacement]:
             str(handler_chunk.relative_to(root)),
             POLLINATIONS_RUNTIME_FUNCTION_MARKER,
             POLLINATIONS_RUNTIME_FUNCTION_NEW,
+        ),
+        Replacement(
+            "Hugging Face source video branch",
+            "open-sse/handlers/videoGeneration.ts",
+            HUGGINGFACE_SOURCE_BRANCH_OLD,
+            HUGGINGFACE_SOURCE_BRANCH_NEW,
+        ),
+        Replacement(
+            "Hugging Face source video handler",
+            "open-sse/handlers/videoGeneration.ts",
+            HUGGINGFACE_SOURCE_FUNCTION_MARKER,
+            HUGGINGFACE_SOURCE_FUNCTION_NEW,
+        ),
+        Replacement(
+            "Hugging Face compiled video branch",
+            str(handler_chunk.relative_to(root)),
+            HUGGINGFACE_RUNTIME_BRANCH_OLD,
+            HUGGINGFACE_RUNTIME_BRANCH_NEW,
+        ),
+        Replacement(
+            "Hugging Face compiled video handler",
+            str(handler_chunk.relative_to(root)),
+            HUGGINGFACE_RUNTIME_FUNCTION_MARKER,
+            HUGGINGFACE_RUNTIME_FUNCTION_NEW,
         ),
     ]
 
@@ -575,6 +1159,21 @@ def check_replacement(replacement: Replacement, root: Path) -> tuple[Path, int, 
         and VERTEX_RUNTIME_PREVIEW_NEW in text
     )
     if preview_registry_applied:
+        return path, old_count, sha256(path), "applied"
+    # Follow-up provider helpers/branches are inserted immediately before the
+    # shared fallback marker. Once a later helper is present, the earlier
+    # helper+marker pair is no longer contiguous even though the earlier
+    # provider is already wired. Recognize those exact markers so rerunning the
+    # deterministic patch cannot duplicate top-level functions or branches.
+    if replacement.name == "Pollinations source video handler" and POLLINATIONS_SOURCE_FUNCTION in text:
+        return path, old_count, sha256(path), "applied"
+    if replacement.name == "Pollinations compiled video handler" and POLLINATIONS_RUNTIME_FUNCTION in text:
+        return path, old_count, sha256(path), "applied"
+    if replacement.name == "Pollinations compiled video branch" and '"pollinations-video"===y.format?__omniPollinationsVideo' in text:
+        return path, old_count, sha256(path), "applied"
+    if replacement.name == "Hugging Face source video handler" and HUGGINGFACE_SOURCE_FUNCTION in text:
+        return path, old_count, sha256(path), "applied"
+    if replacement.name == "Hugging Face compiled video handler" and HUGGINGFACE_RUNTIME_FUNCTION in text:
         return path, old_count, sha256(path), "applied"
     # A replacement's new text may contain the old text as a prefix (the
     # minified KIE patch does this).  Presence of the complete new text is the

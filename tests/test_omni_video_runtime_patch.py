@@ -65,6 +65,36 @@ class OmniVideoRuntimePatchTests(unittest.TestCase):
         self.assertIn('veo-3.1-generate-preview', PATCH.VERTEX_RUNTIME_PREVIEW_NEW)
         self.assertIn('veo-3.1-fast-generate-preview', PATCH.VERTEX_RUNTIME_PREVIEW_NEW)
 
+    def test_huggingface_video_contract_is_explicit_and_mp4_gated(self) -> None:
+        self.assertIn('format: "huggingface-video"', PATCH.HUGGINGFACE_SOURCE_REGISTRY_NEW)
+        self.assertIn('tencent/HunyuanVideo', PATCH.HUGGINGFACE_SOURCE_REGISTRY_NEW)
+        self.assertIn('Wan-AI/Wan2.2-TI2V-5B', PATCH.HUGGINGFACE_SOURCE_REGISTRY_NEW)
+        self.assertIn('meituan-longcat/LongCat-Video', PATCH.HUGGINGFACE_SOURCE_REGISTRY_NEW)
+        self.assertIn('/fal-ai/${route}?_subdomain=queue', PATCH.HUGGINGFACE_SOURCE_FUNCTION)
+        self.assertIn('response_url', PATCH.HUGGINGFACE_SOURCE_FUNCTION)
+        self.assertIn('VIDEO_ARTIFACT_UNAVAILABLE', PATCH.HUGGINGFACE_SOURCE_FUNCTION)
+        self.assertIn('token.startsWith("hf_")', PATCH.HUGGINGFACE_SOURCE_FUNCTION)
+        self.assertIn('__omniHuggingFaceVideo', PATCH.HUGGINGFACE_RUNTIME_BRANCH_NEW)
+
+    def test_huggingface_replacements_are_exactly_reversible(self) -> None:
+        replacements = [
+            PATCH.Replacement("hf-source-registry", "registry.ts", PATCH.HUGGINGFACE_SOURCE_REGISTRY_OLD, PATCH.HUGGINGFACE_SOURCE_REGISTRY_NEW),
+            PATCH.Replacement("hf-runtime-registry", "registry.js", PATCH.HUGGINGFACE_RUNTIME_REGISTRY_OLD, PATCH.HUGGINGFACE_RUNTIME_REGISTRY_NEW),
+            PATCH.Replacement("hf-source-branch", "handler.ts", PATCH.HUGGINGFACE_SOURCE_BRANCH_OLD, PATCH.HUGGINGFACE_SOURCE_BRANCH_NEW),
+            PATCH.Replacement("hf-source-handler", "handler.ts", PATCH.HUGGINGFACE_SOURCE_FUNCTION_MARKER, PATCH.HUGGINGFACE_SOURCE_FUNCTION_NEW),
+            PATCH.Replacement("hf-runtime-branch", "handler.js", PATCH.HUGGINGFACE_RUNTIME_BRANCH_OLD, PATCH.HUGGINGFACE_RUNTIME_BRANCH_NEW),
+            PATCH.Replacement("hf-runtime-handler", "handler.js", PATCH.HUGGINGFACE_RUNTIME_FUNCTION_MARKER, PATCH.HUGGINGFACE_RUNTIME_FUNCTION_NEW),
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for replacement in replacements:
+                path = root / replacement.relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(replacement.old, encoding="utf-8")
+                self.assertEqual(PATCH.check_replacement(replacement, root)[3], "pending")
+                path.write_text(replacement.new, encoding="utf-8")
+                self.assertEqual(PATCH.check_replacement(replacement, root)[3], "applied")
+
     def test_kie_veo_uses_dedicated_generate_and_status_endpoints(self) -> None:
         self.assertIn('/api/v1/veo/generate', PATCH.KIE_SOURCE_VEO_BRANCH)
         self.assertIn('/api/v1/veo/record-info', PATCH.KIE_SOURCE_VEO_BRANCH)
