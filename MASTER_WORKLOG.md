@@ -13406,3 +13406,15 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Interpretation.** OiiOii's focused consumer-side contract behavior is green in the checked-out project. This does not prove the current live application is reachable, authenticated, routed through `http://127.0.0.1:8190/v1`, or able to render a video; those remain live E2E gates after a downloadable Omni/seat-pool video route exists. No source file was modified, no app process was started, no network inference request was sent, and no video credit was consumed.
 
 **Safety.** The OmniRoute service was not restarted or mutated, the video-router task stayed disabled, dedicated Chrome/CDP seats stayed down, and no credential, database, ledger, provider, or consumer runtime state was touched. The test result is preserved here before moving to the separate EmergentSH checkout diagnosis.
+
+### [2026-09-02 15:40] #1573 - EmergentSH focused OmniRoute client suite passes
+
+**Checkout correction.** The first path check used the wrong drive-root spelling (`D:\emergentsh-standalone-clean`) and correctly found no checkout there. A bounded read-only directory check then confirmed the authoritative project at `D:\god_ai\emergentsh-standalone-clean`; the stale `D:\emergentsh_latest` TypeScript workspace and the hollow `C:\god_ai\emergentsh` directory were explicitly excluded. No files in any checkout were edited.
+
+**Blueprint/test target.** Per `CONSUMER_EXECUTION_LINEAGE_AUDIT.md`, selected EmergentSH's approved FastAPI/OmniRoute client contract suite, `backend/tests/test_nim_client.py`. This suite exercises the client-side `/v1` base URL, `session-pool/auto` route behavior, catalog lookup, non-streaming and SSE completion handling, JSON envelopes, fallback/circuit behavior, and bounded request semantics. It is a hermetic/static client test and does not constitute a live app-builder pipeline run.
+
+**Execution.** From `D:\god_ai\emergentsh-standalone-clean`, ran exactly `python -m pytest -q backend\\tests\\test_nim_client.py`. Pytest completed successfully with `17 passed in 17.24s`.
+
+**Interpretation and boundary.** EmergentSH's focused OmniRoute client suite is green in the authoritative checkout. This does not prove the live FastAPI application is running, authenticated, configured with `INFERENCE_PROVIDER=omniroute`, rejecting mock/direct-provider modes, or completing `/api/pipeline/run`; those remain live contract/E2E gates. Full live consumer E2E is still blocked by the absence of an MP4-proven Omni/seat-pool video route after the HF 401 bearer wall.
+
+**Safety.** No app process was started, no consumer request or inference call was sent, no service/Chrome/router action occurred, and no credential, database, ledger, provider, or source file was changed. The video-router task and dedicated seats remain down under #1565.
