@@ -13575,6 +13575,27 @@ The source handler performs the documented multi-exchange pipeline: validates th
 
 **Next:** close 9223 → serialized 9224 sweep (21 LOGIN_WALL) → 9225 sweep (27 LOGIN_WALL) → post-sweep re-audit → captures stage 3-5 → replay → admit → drain. One profile open at a time throughout.
 
+### [2026-09-02 13:45] #1586 — Re-SSO sweep complete fleet-wide: 9224 + 9225 swept serialized; fleet 137 APP / 27 LOGIN (was 99/67)
+
+**Serialization discipline held.** Exactly one seat Chrome open at any moment for the whole session: 9222 → close (verified zero automation_profiles chrome.exe) → 9223 → close → 9224 → close → 9225 → close. Every launch via sanctioned `launch_single_seat.py`; every CDP verified via /json/version retry loop (launcher TIMEOUT line remains the known false-negative, #1375); every close verified to zero automation-profile chrome processes before the next launch. Video Router task stayed Disabled; no auto-relaunch race occurred.
+
+**9224 (seat2, 3 passes).** Pass 1 with all 14 LOGIN_WALL tabs pre-opened (first attempt without tabs was killed after 5 TAB_GONE rows — re-run discipline: tabs first, then sweep): chatglm + monica + mistral + chatgpt **EXISTING_ACCOUNT** (+4 APP_SURFACE), together/puter **SSO_INITIATED** (chooser), cohere **WALL** (hard wall at dashboard; PAY→WALL reclass), 7 LOGIN_REQUIRED (xinghuo/you/v0/meta/deepseek/deepinfra/chathub). Pass 2+3 confirmed TAB_GONE-free. Final ledger: **33 APP_SURFACE / 9 LOGIN_WALL / 2 PAY / 3 SIGNUP / 2 WALL / 1 API_SEAT** (was 22 APP / 21 LOGIN — wall count more than halved).
+
+**9225 (seat3, 3 passes).** Pass 1 (11 rows): together **SSO_PROVIDER_SESSION_OBSERVED** (genuine SSO success → APP_SURFACE), poe SSO_INITIATED (chooser), mistral ERROR. Pass 2 (mistral retry → TAB_GONE, its tab consumed by pass-1 wake-nav; +3 other TAB_GONE from consumed tabs). Pass 3 (4 tabs re-opened): qwen **EXISTING_ACCOUNT**, deepinfra **ALREADY_SIGNED_IN** (+2 APP_SURFACE), mistral LOGIN_REQUIRED confirmed (site login, no Google affordance), v0/poe/meta unchanged. Final ledger: **33 APP_SURFACE / 8 LOGIN_WALL / 3 PAY / 3 SIGNUP / 2 REGION / 1 WALL** (was 14 APP / 27 LOGIN at #1518 — the sweep's biggest beneficiary, confirmed).
+
+**FLEET RE-SSO RESULT (all four seats 50/50 terminal):**
+- 9222: 37 APP / 6 PAY / 3 LOGIN / 3 SIGNUP / 1 WALL
+- 9223: 34 APP / 7 LOGIN / 5 PAY / 1 API_SEAT / 1 PHONE / 2 WALL
+- 9224: 33 APP / 9 LOGIN / 2 PAY / 3 SIGNUP / 2 WALL / 1 API_SEAT
+- 9225: 33 APP / 8 LOGIN / 3 PAY / 3 SIGNUP / 2 REGION / 1 WALL
+- **Fleet: 137 APP_SURFACE / 27 LOGIN_WALL / 16 PAY / 9 SIGNUP / 2 REGION / 1 PHONE / 6 WALL / 2 API_SEAT = 200/200** (was 99 APP / 67 LOGIN pre-sweep — net +38 signed-in surfaces).
+
+**Named walls (Law 5):** 27 LOGIN_WALL = (a) chooser walls where the automation profile's Google layer is signed out (together-9224/puter-9224/poe-9225/prompt.ql-9223/veoaifree-9223/accounts.google-9222 — operator-visible Google sign-in on the respective automation profile is the unblock); (b) true site logins with no Google SSO affordance (xinghuo/yuanbao/you/v0/meta/deepseek/deepinfra/chathub/monica/mistral/claude/qwen-9225/chatglm-9222/chatgpt-9222/akool-9223) — automation never types passwords; cohere-9224 WALL (about-you/payment class, operator action). Every wall carries evidence in the sweep ledgers (state/sso_sweep_92xx.json).
+
+**What is NOT claimed:** APP_SURFACE/ALREADY_SIGNED_IN/EXISTING_ACCOUNT prove surface+session state only — no new captures, replays, or admissions this entry. The 6 chooser walls are SSO_INITIATED evidence, not sign-ins. 9225 mistral ERROR row from pass 1 was superseded by pass 3's LOGIN_REQUIRED (ledger holds the fresher evidence).
+
+**Next (mandate sequence):** (1) post-sweep re-audit per seat (wake → classify, confirm the +38 surfaces hold), (2) captures stage 3-5 for artifact-less APP_SURFACE sets fleet-wide, (3) replay → admit → drain. All serialized, one seat at a time. Operator actions still open: sambanova payment, cohere about-you, and optionally a Google sign-in pass on the four automation profiles to clear the 6 chooser walls.
+
 ### [2026-09-02 18:08] #1586 — Initial offline Gradio client test exposed a test assertion API mismatch
 
 **Component reviewed.** Reviewed the bounded ZeroGPU transport findings from the live read-only pass: both candidate Spaces expose Gradio queue endpoints, with LTX using `/text_to_video` and Wan using `/generate_video`; the transport requires JSON submission to `/gradio_api/call/<endpoint>`, SSE queue consumption, and separate MP4 byte admission. Added the first provider-neutral `scripts/automation/gradio_space_client.py` component and its offline fixture tests in `tests/test_gradio_space_client.py`. The component makes no live generation call and has no provider registration or route-admission side effect.
