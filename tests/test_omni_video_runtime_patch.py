@@ -45,6 +45,8 @@ class OmniVideoRuntimePatchTests(unittest.TestCase):
         self.assertIn('/api/v1/veo/generate', PATCH.KIE_RUNTIME_VEO_BRANCH)
         self.assertIn('/api/v1/veo/record-info', PATCH.KIE_RUNTIME_VEO_BRANCH)
         self.assertIn('model:`${t}/${e}`', PATCH.KIE_RUNTIME_VEO_BRANCH)
+        self.assertIn('KIE Veo create response missing taskId', PATCH.KIE_SOURCE_VEO_DIAGNOSTIC_NEW)
+        self.assertIn('createRec.data', PATCH.KIE_RUNTIME_VEO_DIAGNOSTIC_NEW)
 
     def test_each_replacement_is_exactly_reversible(self) -> None:
         replacements = [
@@ -52,9 +54,11 @@ class OmniVideoRuntimePatchTests(unittest.TestCase):
             PATCH.Replacement("kie-type", "kie-type.txt", PATCH.KIE_SOURCE_TYPE_OLD, PATCH.KIE_SOURCE_TYPE_NEW),
             PATCH.Replacement("kie-source", "kie-source.txt", PATCH.KIE_SOURCE_OLD, PATCH.KIE_SOURCE_NEW),
             PATCH.Replacement("kie-veo-source", "kie-veo-source.txt", PATCH.KIE_SOURCE_VEO_MARKER, PATCH.KIE_SOURCE_VEO_BRANCH + PATCH.KIE_SOURCE_VEO_MARKER),
+            PATCH.Replacement("kie-veo-source-diagnostic", "kie-veo-source-diagnostic.txt", PATCH.KIE_SOURCE_VEO_DIAGNOSTIC_OLD, PATCH.KIE_SOURCE_VEO_DIAGNOSTIC_NEW),
             PATCH.Replacement("vertex-runtime", "vertex-runtime.txt", PATCH.VERTEX_RUNTIME_OLD, PATCH.VERTEX_RUNTIME_NEW),
             PATCH.Replacement("kie-runtime", "kie-runtime.txt", PATCH.KIE_RUNTIME_OLD, PATCH.KIE_RUNTIME_NEW),
             PATCH.Replacement("kie-veo-runtime", "kie-veo-runtime.txt", PATCH.KIE_RUNTIME_VEO_MARKER, PATCH.KIE_RUNTIME_VEO_BRANCH + PATCH.KIE_RUNTIME_VEO_MARKER),
+            PATCH.Replacement("kie-veo-runtime-diagnostic", "kie-veo-runtime-diagnostic.txt", PATCH.KIE_RUNTIME_VEO_DIAGNOSTIC_OLD, PATCH.KIE_RUNTIME_VEO_DIAGNOSTIC_NEW),
         ]
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
