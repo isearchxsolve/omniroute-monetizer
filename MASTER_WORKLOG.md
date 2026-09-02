@@ -12867,3 +12867,22 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 **Safety boundary.** This was an on-disk Omni package change only. No database write, credential read/update, provider request, video spend, Chrome/CDP action, seat action, or consumer configuration occurred. Because the registered service executes the compiled chunk, a restart through the existing NSSM-owned `OmniRoute` pathway is required before this diagnostic code is live.
 
 **Next.** Before another spend-bearing video retry, inspect active Vertex connection metadata through the normal management API in a redacted, read-only way (field names, types, and non-secret region/resource indicators only). Use that evidence to classify the HTTP 400 rather than guessing at model IDs or credentials.
+
+### [2026-09-02 01:55] #1520 - Captures stage 3-5 pass 2 (9223 + 9224): remaining targets are named walls; re-SSO lane gated on operator
+
+**Scope decision (operator "ok" 01:33Z).** Cross-seat re-SSO is operator-gated (Google chooser on 9224/9225 requires the operator's own sign-in; passwords are never typed by automation). Proceeded with the automation lane: captures for artifact-less APP_SURFACE hosts.
+
+**9223 capture run (staged state/capture_staging_9223_c2):**
+- NemoVideo: WALL credit-card (paywall text; left untouched per policy).
+- MiniMax Hailuo AI: NO_COMPOSER - live tab shows transient client error page (voice-gen error banner); earlier audit APP_SURFACE evidence (screenshot) stands; retry next pass, no hammering.
+- Cerebras 9223: textarea never renders (0x0) - marketing landing only on this seat; not signed-in here.
+- digen (upgrade overlay over composer = PAY), together (build target from #1516), phind (deployment_not_found 404 - the deploy itself is gone), doubao/coze (region bans), baichuan (empty render), heygen (video seat, no chat composer): all already-named walls, no capture possible without solving them.
+
+**9224 capture run (state/capture_staging_9224_c2):**
+- Cerebras 9224 (the signed-in instance): recaptcha transport error ("Could not connect to the reCAPTCHA service") -> cookie consent accepted -> clean reload cleared the error but the chat shell then failed to hydrate twice (empty body, no composer). Honest verdict: chat-shell hydration failure at probe instants; earlier audit screenshot (signed-in surface) stands; retry next pass. No admissions claimed.
+
+**What is NOT claimed:** zero new admissions this unit; all remaining artifact-less targets are walls, operator-gated onboarding (cohere about-you), or transient render failures with prior screenshot evidence.
+
+**Standing conclusion for the captures lane:** every artifact-less APP_SURFACE host now has a named blocker (9 pay/region/transport walls, 2 build targets, 1 transient hydration, 1 operator onboarding). The captures lane is DRAINED to its honest limit until either (a) operator re-SSO unblocks the 67 LOGIN_WALL rows, or (b) the operator asks for the together/meta transport build targets to be pursued.
+
+**Next (operator-visible decision point):** (a) operator re-SSO pass on 9224/9225 Google chooser -> then audit -> captures -> admit cycle resumes; (b) together/meta replay-transport build (trusted-Enter recording via CDP on the exact element); (c) operator actions sambanova payment + cohere about-you remain open.
