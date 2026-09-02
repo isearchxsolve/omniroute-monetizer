@@ -12824,3 +12824,26 @@ Both Vertex rows reached the repaired Vertex handler and returned HTTP 400 with 
 **What is NOT claimed:** no captures/admissions on 9225 yet; LOGIN walls named not solved.
 
 **Next:** 9223 cycle 2 (the proven seat: 38-tab roster, live admissions), then cross-seat re-SSO pass on the 60+ LOGIN_WALL rows, then captures for artifact-less APP_SURFACE sets fleet-wide.
+
+### [2026-09-03 00:45] #1519 - 9223 cycle 2 + FLEET SUMMARY: all four seats 50/50 rows terminal
+
+**9223 cycle 2.**
+- Align: roster was 2 tabs (post-relaunch); reconcile --apply -> 50/50 FLEET ALIGNED.
+- Mid-cycle the seat DevTools WEDGED hard (TOCTOU proven: PID 4736 stable, HTTP dead across 60s); #1504 chain executed: taskkill /T tree, router task re-triggered manually (schtasks /Run - first auto-cycle missed the bind), new tree PID 36096 healthy; re-align + fresh audit.
+- audit v2 (fresh seat): 16 APP_SURFACE / 19 NEEDS_DRIVE / 7 LOGIN_WALL / 2 PAY_WALL / 6 CDP_FAIL.
+- drive pass 2/2b/3/4/5: +7 more APP_SURFACE (phind, nemovideo, monica, mistral, doubao, coze, baichuan, grok, gemini); LOGIN walls named (xinghuo, yuanbao, stepfun, promptql, chatglm, genspark, groq-landing); you.com/chathub/1min PAY; puter PHONE_WALL (verify your phone number - reported, never solved); giz WALL 404 (three-seat-consistent); rtst API_SEAT.
+
+**Final 9223 ledger: 28 APP_SURFACE, 14 LOGIN_WALL, 5 PAY_WALL, 1 API_SEAT, 1 PHONE_WALL, 1 WALL = 50/50 terminal.**
+
+**FLEET SUMMARY (mandate: full E2E+SSO all seats) - all four ledgers zero non-terminal rows:**
+- 9222: 35 APP_SURFACE / 6 PAY_WALL / 5 LOGIN_WALL / 3 SIGNUP_WALL / 1 WALL - surface+SSO drained (v1) + fresh v2 cycle
+- 9223: 28 APP_SURFACE / 14 LOGIN_WALL / 5 PAY_WALL / 1 API_SEAT / 1 PHONE_WALL / 1 WALL (the strongest seat; live admissions already in registry)
+- 9224: 22 APP_SURFACE / 21 LOGIN_WALL / 3 SIGNUP_WALL / 2 PAY_WALL / 1 API_SEAT / 1 WALL
+- 9225: 14 APP_SURFACE / 27 LOGIN_WALL / 3 PAY_WALL / 3 SIGNUP_WALL / 2 REGION_WALL / 1 WALL
+Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGION_WALL, 1 PHONE_WALL, 3 WALL, 2 API_SEAT = 200 terminal rows / 4 seats.
+
+**Evidence hygiene:** every terminal row has a named wall or a screenshot-bearing APP_SURFACE; walls are reported, never solved; no provider was hammered; every seat recovery used the single-owner task chain; the operator's live Chrome profile was never touched.
+
+**What is NOT claimed:** surface+SSO state is terminal, but 67 LOGIN_WALL rows mean large parts of 9224/9225 session layers need re-SSO before captures; captures/admissions on 9223/9224/9225 are not yet re-run this cycle; together/meta remain capture build targets.
+
+**Next:** (1) cross-seat LOGIN_WALL re-SSO pass (Google chooser layer is operator-visible; provider-direct logins are the automation lane), (2) captures for artifact-less APP_SURFACE sets per seat, (3) replay -> admit -> drain cycle per seat, (4) operator actions sambanova/cohere onboarding still open.
