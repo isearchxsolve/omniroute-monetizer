@@ -13050,3 +13050,11 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 **Separation from native Omni evidence.** The direct router '/v1/models' catalog contains historically proven Flow/rtst rows, but those are served by the separate ':8189' video router and are not native ':20128' OmniRoute admissions. No direct-router generation request was issued in this component, and no historical row was promoted into 'state/omniroute_verified_video_routes.json'.
 
 **Safety boundary and next.** No Chrome tab, seat process, credential, database, service, or paid KIE/Vertex route was touched. The remaining genuinely zero-auth native candidate is 'veoaifree-web'; test it once through '/v1/videos/generations' with the explicit gate, then preserve its exact terminal result before considering any handler work for Pollinations or other unwired providers.
+
+### [2026-09-02 10:19] #1541 - Preserved the ComfyUI free proof before veoaifree testing
+
+**Evidence preservation.** Before the next native video request, copied the current ComfyUI terminal report 'state/video_provider_probe.json' (1,102 bytes) to 'state/video_provider_probe_pre_veoaifree_seedance_20260902_094900.json'. Source and archive both verified with SHA-256 'BFC0BFA8815F33A0F89A932F0F3E2E677894D0B645C0693BC5A998B29896ED02'.
+
+**Safety boundary.** This was a local backup only. No provider request, service operation, Chrome/seat action, credential access, database write, or ledger admission occurred. The preserved row remains the isolated ComfyUI transport timeout and Flow-session wall recorded in the prior entries.
+
+**Next.** Run exactly one spend-gated native OmniRoute probe for 'veoaifree-web/seedance'. Preserve its terminal response and media validation outcome before deciding whether the companion 'veoaifree-web/veo' model merits a separate request.
