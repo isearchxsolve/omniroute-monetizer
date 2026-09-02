@@ -13068,3 +13068,11 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 **Isolation and classification.** An immediate read-only health poll returned HTTP 200 with 'status=ok', and the registered service stayed on NSSM PID '19444' / Node PID '20536'. The timeout is therefore isolated to the veoaifree-web adapter or its upstream web transport, not a gateway outage. It is not proof that the public provider is dead; it is a transport gap that needs a separate adapter-level investigation before more generation calls.
 
 **Next.** Preserve this row, then test the companion 'veoaifree-web/veo' once only if the service remains healthy. If it repeats the same timeout, stop native free-web traffic and inspect the handler's endpoint/timeout contract rather than hammering the site.
+
+### [2026-09-02 10:22] #1543 - Preserved the veoaifree Seedance timeout before companion proof
+
+**Evidence preservation.** Copied the current 'state/video_provider_probe.json' (the terminal 'veoaifree-web/seedance' timeout, 1,108 bytes) to 'state/video_provider_probe_pre_veoaifree_veo_20260902_095142.json' before invoking the companion model. Source and archive both verified with SHA-256 '54F0100230AA8CCF91013FEB7A3AD3ADCA3355D40E99E4F6E2863FD1741ABA11'.
+
+**Safety boundary.** This was a local report backup only. No provider request, Chrome/seat action, database change, credential read/update, service operation, or ledger admission occurred. The preserved Seedance timeout remains separately recoverable while the companion proof runs.
+
+**Next.** Run exactly one explicit-gated native request for 'veoaifree-web/veo' with the same 90-second bound. If its response is another transport timeout, stop free-web traffic and move to adapter-contract repair or a different free provider rather than repeating equivalent calls.
