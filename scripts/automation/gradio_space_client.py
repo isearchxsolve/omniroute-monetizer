@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urljoin
+from urllib.parse import quote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 
@@ -50,6 +50,7 @@ class GradioFileRef:
 
 
 TERMINAL_EVENTS = frozenset({"complete", "error", "cancelled"})
+MAX_FILE_BYTES = 256 * 1024 * 1024
 
 
 def _json_bytes(value: JsonValue) -> bytes:
@@ -255,12 +256,53 @@ class GradioSpaceClient:
         event_id = self.submit(api_name, data, token=token)
         return self.poll(api_name, event_id, token=token)
 
+    def download_file(
+        self,
+        ref: GradioFileRef,
+        *,
+        token: str | None = None,
+        max_bytes: int = MAX_FILE_BYTES,
+    ) -> bytes:
+        """Download one bounded result artifact without leaking auth cross-origin."""
+
+        if max_bytes < 8:
+            raise ValueError("max_bytes must be at least 8")
+        headers = {"Accept": "video/*,application/octet-stream;q=0.9"}
+        base = urlsplit(self.base_url)
+        target = urlsplit(ref.url)
+        if token and (target.scheme, target.netloc) == (base.scheme, base.netloc):
+            headers["Authorization"] = f"Bearer {token}"
+        request = Request(ref.url, headers=headers, method="GET")
+        try:
+            response = self._opener(request, timeout=self.timeout)
+            status = int(getattr(response, "status", getattr(response, "code", 200)))
+            raw = response.read(max_bytes + 1)
+        except HTTPError as exc:
+            raise GradioSpaceError(
+                f"Gradio file download returned HTTP {int(exc.code)}",
+                status=int(exc.code),
+            ) from exc
+        except URLError as exc:
+            raise GradioSpaceError(
+                f"Gradio file download transport failed: {exc.reason}"
+            ) from exc
+        if status != 200:
+            raise GradioSpaceError(
+                f"Gradio file download returned HTTP {status}", status=status
+            )
+        if len(raw) > max_bytes:
+            raise GradioSpaceError(
+                f"Gradio file exceeds the {max_bytes}-byte safety limit"
+            )
+        return raw
+
 
 __all__ = [
     "GradioEvent",
     "GradioFileRef",
     "GradioSpaceClient",
     "GradioSpaceError",
+    "MAX_FILE_BYTES",
     "find_file_ref",
     "is_mp4_bytes",
 ]
