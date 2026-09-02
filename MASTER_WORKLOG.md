@@ -13596,6 +13596,30 @@ The source handler performs the documented multi-exchange pipeline: validates th
 
 **Next (mandate sequence):** (1) post-sweep re-audit per seat (wake → classify, confirm the +38 surfaces hold), (2) captures stage 3-5 for artifact-less APP_SURFACE sets fleet-wide, (3) replay → admit → drain. All serialized, one seat at a time. Operator actions still open: sambanova payment, cohere about-you, and optionally a Google sign-in pass on the four automation profiles to clear the 6 chooser walls.
 
+### [2026-09-02 16:15] #1587 — RISK FLAG: Google SSO now challenges automation grants with ootp despite valid sessions; operator manual unlocks verified (+4 on 9225); automated SSO lane HALTED
+
+**Operator risk report (15:42-16:06Z).** "the pattern is red flag something in the system has changed need to investigate risk is great more failures will occur" — Google SSO asking for verification in spite of the profile itself being signed in. Investigation executed immediately; automated SSO lane halted on conclusion.
+
+**The challenge, captured.** The 9225 re-SSO sweep (15:36-15:43, run to classify the operator's unlocks) produced Google-side `accounts.google.com/v3/signin/challenge/ootp?TL=...` surfaces on monica.im and chat.mistral.ai SSO attempts (4 ootp challenge tabs observed live on the seat). `cdp_drive.py sso` playbook classified both WALL with detail "google OTP/MFA challenge - never handled" — the playbook stopped exactly as designed (never types OTP/email codes). Sweep ledger evidence retained in state/sso_sweep_9225.json (steps arrays).
+
+**Why the operator is right that something changed (timeline evidence):** earlier TODAY (12:31-12:55 passes) the same Google grant flows passed chooser→account→consent WITHOUT any challenge — together.ai reached SSO_PROVIDER_SESSION_OBSERVED (a full grant). By 15:36, every NEW automated grant is bounced to ootp. The escalation happened mid-day, correlating with grant volume: the fleet sweep drove dozens of chooser→consent flows across 4 automation profiles today.
+
+**Classification (three-cause doctrine):** (b) real server-side state — Google risk-engine throttling of the automation profiles' OAuth grant velocity. NOT (a): no missing send-time field; NOT (c): not a capture bug; NOT session death: the profile's Google session itself remains valid (operator's manual sign-ins minutes later succeeded; qwen/poe/digen/giz all work in the same profile).
+
+**Risk assessment (operator's "risk is great" accepted).** Google's escalation ladder: per-grant OTP → repeated challenges → possible account-level suspicious-activity lockout / forced sign-out of the four automation Google sessions (2026-08-22 incident class, different mechanism — volume-based risk instead of profile reuse). Continuing automated SSO now would feed the risk score.
+
+**ACTION TAKEN: automated SSO lane HALTED fleet-wide.** No further automated Google OAuth attempts on any seat until a cool-down window (recommend ≥24h) has passed, then low volume only (≤2-3 grants/day/profile). Walls remain walls (Law 5).
+
+**The correct unblock lane is the one the operator just proved:** MANUAL sign-in inside the visible automation windows. Operator unlocked 4 sites on 9225 (15:36-15:43) with zero challenge: poe.com (sweep re-check: ALREADY_SIGNED_IN → APP_SURFACE), claude.ai (sweep: EXISTING_ACCOUNT → APP_SURFACE), digen.ai (signed-in workspace with 150 daily credits deposited — CDP text evidence; PAY_WALL superseded), giz.ai (signed-in workspace "Kunal Das"/Free plan, the /chat SURFACE_GONE_404 is gone — site rebuilt; WALL superseded). All four merged into the 9225 ledger with CDP evidence details.
+
+**9225 ledger after unlocks:** 37 APP_SURFACE / 4 LOGIN_WALL (you/v0/meta/chathub) / 3 SIGNUP / 2 WALL (cohere dashboard + veoaifree chooser) / 2 PAY / 2 REGION = 50/50 terminal. Fleet APP_SURFACE now 139/200.
+
+**Held open for the operator:** the 4 ootp challenge tabs + 1 meta auth tab are still open on the 9225 window — completing those verifications manually (typing the email codes) is the operator's lane and would clear monica/mistral/meta-class SSO walls without any automation involvement.
+
+**What is NOT claimed:** the 4 operator unlocks are surface+session evidence, not captures/replays/admissions. The ootp escalation is correlated with grant volume, not proven causal (single-day observation). No claim that manual flows never get challenged — only that these four did not.
+
+**Next:** captures stage 3-5 proceed WITHOUT any Google SSO dependence (non-Google lanes only); the 4 remaining 9225 login walls + chooser walls on other seats go to the operator's manual lane; serialized one-seat-at-a-time discipline unchanged.
+
 ### [2026-09-02 18:08] #1586 — Initial offline Gradio client test exposed a test assertion API mismatch
 
 **Component reviewed.** Reviewed the bounded ZeroGPU transport findings from the live read-only pass: both candidate Spaces expose Gradio queue endpoints, with LTX using `/text_to_video` and Wan using `/generate_video`; the transport requires JSON submission to `/gradio_api/call/<endpoint>`, SSE queue consumption, and separate MP4 byte admission. Added the first provider-neutral `scripts/automation/gradio_space_client.py` component and its offline fixture tests in `tests/test_gradio_space_client.py`. The component makes no live generation call and has no provider registration or route-admission side effect.
