@@ -13574,3 +13574,13 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **What is NOT claimed:** APP_SURFACE/ALREADY_SIGNED_IN verdicts prove surface+session state only — no captures, no replays, no admissions this entry. 9224/9225 sweeps untouched (next, serialized). The sso_sweep_9223.json TAB_GONE row for prompt.ql is a checkpoint artifact of pass 3 (its real evidence is pass 2's SSO_INITIATED).
 
 **Next:** close 9223 → serialized 9224 sweep (21 LOGIN_WALL) → 9225 sweep (27 LOGIN_WALL) → post-sweep re-audit → captures stage 3-5 → replay → admit → drain. One profile open at a time throughout.
+
+### [2026-09-02 18:08] #1586 — Initial offline Gradio client test exposed a test assertion API mismatch
+
+**Component reviewed.** Reviewed the bounded ZeroGPU transport findings from the live read-only pass: both candidate Spaces expose Gradio queue endpoints, with LTX using `/text_to_video` and Wan using `/generate_video`; the transport requires JSON submission to `/gradio_api/call/<endpoint>`, SSE queue consumption, and separate MP4 byte admission. Added the first provider-neutral `scripts/automation/gradio_space_client.py` component and its offline fixture tests in `tests/test_gradio_space_client.py`. The component makes no live generation call and has no provider registration or route-admission side effect.
+
+**Test execution.** Ran `python -m pytest -q tests/test_gradio_space_client.py`. Result: `1 failed, 3 passed in 1.19s`. The failing test was `test_token_is_sent_only_as_auth_header_and_not_in_payload` at `tests/test_gradio_space_client.py:73`. Exact failure: `AttributeError: 'Request' object has no attribute 'getheader'` while asserting the captured Authorization header. The other three tests passed: queue discovery/submit/poll parsing, file-reference plus MP4-signature separation, and rejection of a stream without a terminal event.
+
+**Classification.** This is a test-only inspection error, not a client transport failure: the production code uses `urllib.request.Request` and sets the Authorization header; the fake request object exposes headers through the mapping API rather than a response-style `getheader()` method. The next bounded correction is to update only the test assertion to inspect the Request header mapping, then rerun the focused suite.
+
+**Safety.** No network request to a Space, GPU-minute consumption, token mutation, OmniRoute request, service action, Chrome action, database write, ledger admission, or runtime route change occurred. The failing result is recorded before the correction, and no unrelated worktree files were touched.
