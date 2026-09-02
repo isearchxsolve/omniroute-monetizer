@@ -67,7 +67,13 @@ ADMISSION_PATH = STATE_DIR / "omniroute_verified_video_routes.json"
 REPORT_SCHEMA = 2
 OMNI_BASE = BASE_URL.replace("localhost", "127.0.0.1")
 DURATION_FALLBACKS = (4, 6, 8)
-WEB_PROVIDER_TIMEOUT = 90
+# VeoAIFree's result poll is a long-held WordPress AJAX request: the measured
+# client-side cadence is roughly 85-100 seconds before a pending poll returns.
+# The native executor now bounds each exchange at 120s, so a 90s runner cap would
+# still terminate the request before that exchange can complete. Keep a finite
+# 15-minute outer bound for one explicitly gated proof; this is long enough to
+# cross several poll cycles without making the free-web path unbounded.
+WEB_PROVIDER_TIMEOUT = 900
 
 # Models that cannot be driven by a text prompt alone. The router rejects these with
 # "Image input is required" / "Video input is required", which is a correct response to
@@ -562,8 +568,8 @@ def main() -> int:
         route_timeout = args.timeout
         if m.get("format") == "veoaifree-web":
             # This browser-backed web adapter has no bounded server-side job
-            # receipt. Keep it from blocking the whole native API fleet while
-            # preserving the long timeout for real asynchronous providers.
+            # receipt. Keep it finite while allowing its measured long poll to
+            # complete; callers may still choose a shorter explicit timeout.
             route_timeout = min(args.timeout, WEB_PROVIDER_TIMEOUT)
         res = probe_model(
             api.session, m["qualified"], durations[0], route_timeout, m.get("baseUrl", "")
