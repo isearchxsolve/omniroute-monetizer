@@ -12918,6 +12918,16 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 
 **Next.** Commit the tooling fix, then perform the required registered-service restart so the already-applied compiled preview registry and KIE diagnostic block are loaded; poll health before one bounded preview-route proof.
 
+### [2026-09-02 08:34] #1529 - Bounded Vertex Veo preview proof reached upstream but still returned resource error
+
+**Preflight.** The authenticated local `/v1/models` read completed HTTP 200 in 29.906 seconds and returned 9,537 models, including all three Vertex preview IDs and both GA IDs. This verifies that the final registry is visible through the live Omni model surface; it is not an assertion that the provider can generate. The current registered service tree remained untouched in accordance with `TECHNOLOGY_TRANSFER.md`'s single-owner rule.
+
+**Spend-gated execution.** Ran exactly one candidate with the existing confirmation gate: `OMNI_VIDEO_CONFIRM_SPEND=1 python scripts/automation/video_provider_probe.py --model vertex/veo-3.1-fast-generate-preview --timeout 300 --fresh`. The runner completed one terminal row in 0.5 seconds, wrote the report, and returned HTTP 400 with the exact body `{"error":{"message":"Invalid resource field value in the request.","type":"upstream_error","code":"upstream_error"}}`. The report was preserved at `state/video_provider_probe_vertex_preview_20260902_0821.json` before any later probe can overwrite it. No URL/base64 asset was returned, no MP4 `ftyp` validation ran, and `state/omniroute_verified_video_routes.json` remains empty.
+
+**Classification.** Preview-ID expansion reached the upstream path but did not change the resource error, so the prior failure is not explained by the GA-vs-preview model name alone. Combined with the 200 `valid=true` native connection tests in #1524 and Google’s documented project-scoped publisher resource shape, this remains a fixable Omni send-time/configuration gap (likely project/resource or credential-mode representation), not proof that Vertex or the host is dead. No credential was extracted, guessed, rewritten, or logged; no broad retry was sent.
+
+**Next.** Run one valid, non-video Vertex chat request through Omni to distinguish a provider-wide resource/auth issue from a Veo-specific contract issue. Preserve the terminal result, then stop provider traffic until the missing project/credential configuration can be supplied through the supported management path.
+
 ### [2026-09-02 01:55] #1520 - Captures stage 3-5 pass 2 (9223 + 9224): remaining targets are named walls; re-SSO lane gated on operator
 
 **Scope decision (operator "ok" 01:33Z).** Cross-seat re-SSO is operator-gated (Google chooser on 9224/9225 requires the operator's own sign-in; passwords are never typed by automation). Proceeded with the automation lane: captures for artifact-less APP_SURFACE hosts.
