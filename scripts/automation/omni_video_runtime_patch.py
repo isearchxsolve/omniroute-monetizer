@@ -224,6 +224,177 @@ VEO_SOURCE_TIMEOUT_NEW = "const FETCH_TIMEOUT_MS = 120_000;"
 VEO_RUNTIME_TIMEOUT_OLD = 'i=setTimeout(()=>n.abort(Error("VeoAIFree request timed out")),3e4)'
 VEO_RUNTIME_TIMEOUT_NEW = 'i=setTimeout(()=>n.abort(Error("VeoAIFree request timed out")),12e4)'
 
+# Pollinations publishes a synchronous GET /video/{prompt} endpoint that returns
+# raw MP4 bytes. The 3.8.50 video registry already declares `pollinations-video`,
+# but the handler chain falls through to `Unsupported video format`; keep the
+# source and compiled additions exact and count-checked like the earlier repairs.
+POLLINATIONS_SOURCE_BRANCH_OLD = '''  if (providerConfig.format === "veoaifree-web") {
+    return handleVeoAiFreeVideoGeneration({ model, provider, body, credentials, log });
+  }
+'''
+POLLINATIONS_SOURCE_BRANCH_NEW = POLLINATIONS_SOURCE_BRANCH_OLD + '''
+  if (providerConfig.format === "pollinations-video") {
+    return handlePollinationsVideoGeneration({
+      model,
+      provider,
+      providerConfig,
+      body,
+      credentials,
+      log,
+    });
+  }
+'''
+POLLINATIONS_SOURCE_FUNCTION_MARKER = '''
+async function handleComfyUIVideoGeneration'''
+POLLINATIONS_SOURCE_FUNCTION = r'''
+function appendPollinationsQuery(url: URL, key: string, value: unknown): void {
+  if (value === undefined || value === null || value === "") return;
+  const normalized = Array.isArray(value)
+    ? value.filter((item) => item !== undefined && item !== null && String(item).length > 0).join("|")
+    : String(value);
+  if (normalized) url.searchParams.set(key, normalized);
+}
+
+function pollinationsVideoModel(model: string): string {
+  const shortModel = String(model || "").split("/").pop() || "";
+  // The native registry exposes `default`; the documented Pollinations video
+  // endpoint defaults to Veo, so make that mapping explicit at send time.
+  return shortModel === "default" ? "veo" : shortModel;
+}
+
+async function handlePollinationsVideoGeneration({
+  model,
+  provider,
+  providerConfig,
+  body,
+  credentials,
+  log,
+}) {
+  const bodyObj = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const prompt = String(bodyObj.prompt ?? "").trim();
+  if (!prompt) {
+    return { success: false, status: 400, error: "Pollinations video prompt is required" };
+  }
+
+  const creds = (credentials || {}) as Record<string, any>;
+  const providerSpecificData =
+    creds.providerSpecificData && typeof creds.providerSpecificData === "object"
+      ? creds.providerSpecificData
+      : {};
+  const configuredBase =
+    typeof providerSpecificData.baseUrl === "string" && providerSpecificData.baseUrl.trim()
+      ? providerSpecificData.baseUrl.trim()
+      : typeof creds.baseUrl === "string" && creds.baseUrl.trim()
+        ? creds.baseUrl.trim()
+        : providerConfig.baseUrl || "https://gen.pollinations.ai/video";
+
+  let endpoint: URL;
+  try {
+    endpoint = new URL(`${configuredBase.replace(/\/+$/, "")}/${encodeURIComponent(prompt)}`);
+  } catch {
+    return { success: false, status: 502, error: "Invalid Pollinations video endpoint" };
+  }
+
+  const upstreamModel = pollinationsVideoModel(model);
+  appendPollinationsQuery(endpoint, "model", upstreamModel || undefined);
+  const duration = bodyObj.duration ?? bodyObj.durationSeconds;
+  if (typeof duration === "number" && Number.isFinite(duration)) {
+    appendPollinationsQuery(endpoint, "duration", duration);
+  }
+  appendPollinationsQuery(endpoint, "aspectRatio", bodyObj.aspectRatio ?? bodyObj.aspect_ratio);
+  appendPollinationsQuery(endpoint, "width", bodyObj.width);
+  appendPollinationsQuery(endpoint, "height", bodyObj.height);
+  appendPollinationsQuery(endpoint, "resolution", bodyObj.resolution);
+  appendPollinationsQuery(endpoint, "seed", bodyObj.seed);
+  appendPollinationsQuery(endpoint, "audio", bodyObj.audio);
+  appendPollinationsQuery(endpoint, "enhance", bodyObj.enhance);
+  appendPollinationsQuery(endpoint, "safe", bodyObj.safe);
+  appendPollinationsQuery(endpoint, "image", bodyObj.image ?? bodyObj.image_url ?? bodyObj.imageUrls);
+  appendPollinationsQuery(
+    endpoint,
+    "reference_images",
+    bodyObj.reference_images ?? bodyObj.referenceImages
+  );
+  appendPollinationsQuery(
+    endpoint,
+    "reference_videos",
+    bodyObj.reference_videos ?? bodyObj.referenceVideos
+  );
+  appendPollinationsQuery(
+    endpoint,
+    "reference_audios",
+    bodyObj.reference_audios ?? bodyObj.referenceAudios
+  );
+
+  const apiToken = creds.apiKey || creds.accessToken;
+  const headers: Record<string, string> = { Accept: "video/mp4" };
+  if (typeof apiToken === "string" && apiToken.trim()) {
+    headers.Authorization = `Bearer ${apiToken.trim()}`;
+  }
+  log?.info?.("VIDEO", `Pollinations video generation: ${provider}/${upstreamModel}`);
+
+  const startedAt = Date.now();
+  try {
+    const response = await fetchWithTimeout(endpoint.toString(), {
+      method: "GET",
+      headers,
+      timeoutMs: POLLINATIONS_VIDEO_TIMEOUT_MS,
+    });
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!response.ok) {
+      const providerText = new TextDecoder().decode(bytes).slice(0, 2000);
+      log?.error?.("VIDEO", `Pollinations returned HTTP ${response.status}: ${providerText}`);
+      return {
+        success: false,
+        status: response.status || 502,
+        error: providerText || `Pollinations video request failed (${response.status})`,
+      };
+    }
+
+    const isMp4 = bytes.length >= 8 && String.fromCharCode(...bytes.slice(4, 8)) === "ftyp";
+    if (!isMp4) {
+      log?.error?.("VIDEO", "Pollinations returned a non-MP4 success body");
+      return {
+        success: false,
+        status: 502,
+        error: {
+          error: {
+            message: "Pollinations did not return a valid MP4 artifact",
+            type: "upstream_error",
+            code: "VIDEO_ARTIFACT_UNAVAILABLE",
+          },
+        },
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        created: Math.floor(Date.now() / 1000),
+        data: [{ b64_json: Buffer.from(bytes).toString("base64"), format: "mp4" }],
+      },
+      durationMs: Date.now() - startedAt,
+    };
+  } catch (err: unknown) {
+    const message = sanitizeErrorMessage(err instanceof Error ? err.message : String(err));
+    const timedOut = err instanceof FetchTimeoutError || (err as any)?.name === "AbortError";
+    log?.error?.("VIDEO", `Pollinations ${timedOut ? "timeout" : "request error"}: ${message}`);
+    return {
+      success: false,
+      status: timedOut ? 504 : 502,
+      error: `Pollinations video ${timedOut ? "timed out" : "request failed"}: ${message}`,
+    };
+  }
+}
+'''
+POLLINATIONS_SOURCE_FUNCTION_NEW = POLLINATIONS_SOURCE_FUNCTION + POLLINATIONS_SOURCE_FUNCTION_MARKER
+
+POLLINATIONS_RUNTIME_BRANCH_OLD = r''':"adobe-firefly-video"===y.format?(0,m.handleAdobeFireflyVideoGeneration)({model:h,provider:i,providerConfig:y,body:e,credentials:t,log:r}):o?(0,f.handleOpenAIVideoGeneration)({model:h,provider:i,providerConfig:y,body:e,credentials:t,log:r}):{success:!1,status:400,error:`Unsupported video format: ${y.format}`}'''
+POLLINATIONS_RUNTIME_BRANCH_NEW = r''':"adobe-firefly-video"===y.format?(0,m.handleAdobeFireflyVideoGeneration)({model:h,provider:i,providerConfig:y,body:e,credentials:t,log:r}):"pollinations-video"===y.format?__omniPollinationsVideo({model:h,provider:i,providerConfig:y,body:e,credentials:t,log:r}):o?(0,f.handleOpenAIVideoGeneration)({model:h,provider:i,providerConfig:y,body:e,credentials:t,log:r}):{success:!1,status:400,error:`Unsupported video format: ${y.format}`}'''
+POLLINATIONS_RUNTIME_FUNCTION_MARKER = 'async function N({model:e,body:t,credentials:r,log:a})'
+POLLINATIONS_RUNTIME_FUNCTION = r'''async function __omniPollinationsVideo({model:e,provider:t,providerConfig:r,body:a,credentials:o,log:s}){let n=a&&"object"==typeof a?a:{},u=String(n.prompt??"").trim();if(!u)return{success:!1,status:400,error:"Pollinations video prompt is required"};let l=o&&"object"==typeof o?o:{},d=l.providerSpecificData&&"object"==typeof l.providerSpecificData?l.providerSpecificData:{},c="string"==typeof d.baseUrl&&d.baseUrl.trim()?d.baseUrl.trim():"string"==typeof l.baseUrl&&l.baseUrl.trim()?l.baseUrl.trim():r&&r.baseUrl||"https://gen.pollinations.ai/video",f=new URL(`${c.replace(/\/+$/,"")}/${encodeURIComponent(u)}`),p=String(e||"").split("/").pop()||"",m="default"===p?"veo":p,h=(e,t)=>{if(void 0!==t&&null!==t&&""!==t){let r=Array.isArray(t)?t.filter(e=>null!=e&&String(e).length>0).join("|"):String(t);r&&f.searchParams.set(e,r)}};h("model",m||void 0);let g=n.duration??n.durationSeconds;"number"==typeof g&&Number.isFinite(g)&&h("duration",g),h("aspectRatio",n.aspectRatio??n.aspect_ratio),h("width",n.width),h("height",n.height),h("resolution",n.resolution),h("seed",n.seed),h("audio",n.audio),h("enhance",n.enhance),h("safe",n.safe),h("image",n.image??n.image_url??n.imageUrls),h("reference_images",n.reference_images??n.referenceImages),h("reference_videos",n.reference_videos??n.referenceVideos),h("reference_audios",n.reference_audios??n.referenceAudios);let v={Accept:"video/mp4"},w=l.apiKey||l.accessToken;typeof w==="string"&&w.trim()&&(v.Authorization=`Bearer ${w.trim()}`),s?.info?.("VIDEO",`Pollinations video generation: ${t}/${m}`);let b=new AbortController,y=setTimeout(()=>b.abort(),9e5);try{let e=await fetch(f.toString(),{method:"GET",headers:v,signal:b.signal}),t=new Uint8Array(await e.arrayBuffer());if(!e.ok){let r=new TextDecoder().decode(t).slice(0,2e3);return s?.error?.("VIDEO",`Pollinations returned HTTP ${e.status}: ${r}`),{success:!1,status:e.status||502,error:r||`Pollinations video request failed (${e.status})`}}if(t.length<8||"ftyp"!==String.fromCharCode(t[4],t[5],t[6],t[7]))return s?.error?.("VIDEO","Pollinations returned a non-MP4 success body"),{success:!1,status:502,error:{error:{message:"Pollinations did not return a valid MP4 artifact",type:"upstream_error",code:"VIDEO_ARTIFACT_UNAVAILABLE"}}};return{success:!0,data:{created:Math.floor(Date.now()/1e3),data:[{b64_json:Buffer.from(t).toString("base64"),format:"mp4"}]}}}catch(e){let t="AbortError"===e?.name,r=String(e?.message||e).slice(0,500);return s?.error?.("VIDEO",`Pollinations ${t?"timeout":"request error"}: ${r}`),{success:!1,status:t?504:502,error:`Pollinations video ${t?"timed out":"request failed"}: ${r}`}}finally{clearTimeout(y)}}'''
+POLLINATIONS_RUNTIME_FUNCTION_NEW = POLLINATIONS_RUNTIME_FUNCTION + POLLINATIONS_RUNTIME_FUNCTION_MARKER
+
 
 @dataclass(frozen=True)
 class Replacement:
@@ -341,6 +512,30 @@ def replacement_plan(root: Path) -> list[Replacement]:
         Replacement("KIE compiled Veo response diagnostics", str(handler_chunk.relative_to(root)), KIE_RUNTIME_VEO_DIAGNOSTIC_OLD, KIE_RUNTIME_VEO_DIAGNOSTIC_NEW),
         Replacement("VeoAIFree source AJAX timeout", "open-sse/executors/veoaifree-web.ts", VEO_SOURCE_TIMEOUT_OLD, VEO_SOURCE_TIMEOUT_NEW),
         Replacement("VeoAIFree compiled AJAX timeout", str(veoaifree_chunk.relative_to(root)), VEO_RUNTIME_TIMEOUT_OLD, VEO_RUNTIME_TIMEOUT_NEW),
+        Replacement(
+            "Pollinations source video branch",
+            "open-sse/handlers/videoGeneration.ts",
+            POLLINATIONS_SOURCE_BRANCH_OLD,
+            POLLINATIONS_SOURCE_BRANCH_NEW,
+        ),
+        Replacement(
+            "Pollinations source video handler",
+            "open-sse/handlers/videoGeneration.ts",
+            POLLINATIONS_SOURCE_FUNCTION_MARKER,
+            POLLINATIONS_SOURCE_FUNCTION_NEW,
+        ),
+        Replacement(
+            "Pollinations compiled video branch",
+            str(handler_chunk.relative_to(root)),
+            POLLINATIONS_RUNTIME_BRANCH_OLD,
+            POLLINATIONS_RUNTIME_BRANCH_NEW,
+        ),
+        Replacement(
+            "Pollinations compiled video handler",
+            str(handler_chunk.relative_to(root)),
+            POLLINATIONS_RUNTIME_FUNCTION_MARKER,
+            POLLINATIONS_RUNTIME_FUNCTION_NEW,
+        ),
     ]
 
 
@@ -427,6 +622,7 @@ def apply(root: Path, backup_root: Path) -> dict[str, object]:
     backup_dir.mkdir(parents=True, exist_ok=False)
     replacements = replacement_plan(root)
     manifest: list[dict[str, object]] = []
+    backed_up_paths: set[Path] = set()
 
     for replacement in replacements:
         path, count, before_hash, status = check_replacement(replacement, root)
@@ -440,8 +636,14 @@ def apply(root: Path, backup_root: Path) -> dict[str, object]:
             })
             continue
         backup_path = backup_dir / replacement.relative_path
-        backup_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, backup_path)
+        # Several exact replacements can target one file (the video handler
+        # branch plus its helper). Preserve the first pre-edit bytes once; a
+        # second `copy2` here would overwrite the recovery image with a
+        # partially patched file.
+        if path not in backed_up_paths:
+            backup_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, backup_path)
+            backed_up_paths.add(path)
         text = path.read_text(encoding="utf-8")
         path.write_text(text.replace(replacement.old, replacement.new, replacement.required_count), encoding="utf-8", newline="")
         after_hash = sha256(path)
