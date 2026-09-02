@@ -1003,7 +1003,7 @@ HUGGINGFACE_SPACE_SOURCE_DISPATCH_NEW = HUGGINGFACE_SPACE_SOURCE_DISPATCH_OLD.re
     return handleHuggingFaceLtxSpaceVideo({ model, provider, providerConfig, body, credentials, log });
   }''',
 )
-HUGGINGFACE_SPACE_RUNTIME_DISPATCH_OLD = '''async function __omniHuggingFaceVideo({model, provider, providerConfig, body, credentials, log}) {
+HUGGINGFACE_SPACE_RUNTIME_DISPATCH_OLD = '''async function __omniHuggingFaceVideo({ model, provider, providerConfig, body, credentials, log }) {
   const startedAt = Date.now();'''
 HUGGINGFACE_SPACE_RUNTIME_DISPATCH_NEW = HUGGINGFACE_SPACE_RUNTIME_DISPATCH_OLD.replace(
     "  const startedAt = Date.now();",
@@ -1479,6 +1479,19 @@ def check_replacement(replacement: Replacement, root: Path) -> tuple[Path, int, 
     )
     if preview_registry_applied:
         return path, old_count, sha256(path), "applied"
+    # The LTX ZeroGPU follow-up adds a fourth model inside the original HF
+    # registry, so the original three-model `new` text is no longer contiguous
+    # after the follow-up is applied. Recognize the complete four-model state
+    # so repeated plans remain idempotent.
+    huggingface_registry_followup_applied = (
+        replacement.name == "Hugging Face source video registry"
+        and HUGGINGFACE_SPACE_SOURCE_REGISTRY_NEW in text
+    ) or (
+        replacement.name == "Hugging Face compiled video registry"
+        and HUGGINGFACE_SPACE_RUNTIME_REGISTRY_NEW in text
+    )
+    if huggingface_registry_followup_applied:
+        return path, old_count, sha256(path), "applied"
     # Follow-up provider helpers/branches are inserted immediately before the
     # shared fallback marker. Once a later helper is present, the earlier
     # helper+marker pair is no longer contiguous even though the earlier
@@ -1490,9 +1503,15 @@ def check_replacement(replacement: Replacement, root: Path) -> tuple[Path, int, 
         return path, old_count, sha256(path), "applied"
     if replacement.name == "Pollinations compiled video branch" and '"pollinations-video"===y.format?__omniPollinationsVideo' in text:
         return path, old_count, sha256(path), "applied"
-    if replacement.name == "Hugging Face source video handler" and HUGGINGFACE_SOURCE_FUNCTION in text:
+    if replacement.name == "Hugging Face source video handler" and (
+        HUGGINGFACE_SOURCE_FUNCTION in text
+        or (HUGGINGFACE_SPACE_SOURCE_DISPATCH_NEW in text and GRADIO_SPACE_SOURCE_FUNCTION in text)
+    ):
         return path, old_count, sha256(path), "applied"
-    if replacement.name == "Hugging Face compiled video handler" and HUGGINGFACE_RUNTIME_FUNCTION in text:
+    if replacement.name == "Hugging Face compiled video handler" and (
+        HUGGINGFACE_RUNTIME_FUNCTION in text
+        or (HUGGINGFACE_SPACE_RUNTIME_DISPATCH_NEW in text and GRADIO_SPACE_RUNTIME_FUNCTION in text)
+    ):
         return path, old_count, sha256(path), "applied"
     # A replacement's new text may contain the old text as a prefix (the
     # minified KIE patch does this).  Presence of the complete new text is the
