@@ -213,6 +213,17 @@ KIE_RUNTIME_VEO_BRANCH = '''if("veo/veo-3-1"===e||"veo/veo-3-1-fast"===e){let k=
 KIE_RUNTIME_VEO_DIAGNOSTIC_OLD = 'if(!task)return{success:!1,status:502,error:"KIE Veo did not return taskId"};'
 KIE_RUNTIME_VEO_DIAGNOSTIC_NEW = 'if(!task){let detail=(0,v.isJsonObject)(createRec.data)?createRec.data:{},code=createRec.code??detail.code,msg=createRec.msg??createRec.message??detail.msg??detail.message;return{success:!1,status:502,error:"KIE Veo create response missing taskId (code="+String(code??"unknown")+")"+(msg?": "+String(msg).slice(0,300):"")}};'
 
+# VeoAIFree's WordPress AJAX poll is a long-held request: the measured local
+# client sees roughly 100 seconds before an ordinary pending poll returns. The
+# published executor used the same 30-second cap for every exchange, so it
+# aborted the poll before the provider could answer and then retried internally.
+# Keep this an exact source-plus-compiled replacement; do not broaden the patch
+# to unrelated providers or change the service process here.
+VEO_SOURCE_TIMEOUT_OLD = "const FETCH_TIMEOUT_MS = 30_000;"
+VEO_SOURCE_TIMEOUT_NEW = "const FETCH_TIMEOUT_MS = 120_000;"
+VEO_RUNTIME_TIMEOUT_OLD = 'i=setTimeout(()=>n.abort(Error("VeoAIFree request timed out")),3e4)'
+VEO_RUNTIME_TIMEOUT_NEW = 'i=setTimeout(()=>n.abort(Error("VeoAIFree request timed out")),12e4)'
+
 
 @dataclass(frozen=True)
 class Replacement:
@@ -310,6 +321,12 @@ def replacement_plan(root: Path) -> list[Replacement]:
         alternatives=(VERTEX_RUNTIME_PREVIEW_NEW,),
     )
     handler_chunk = find_runtime_chunk(root, KIE_RUNTIME_OLD, KIE_RUNTIME_NEW, "KIE handler")
+    veoaifree_chunk = find_runtime_chunk(
+        root,
+        VEO_RUNTIME_TIMEOUT_OLD,
+        VEO_RUNTIME_TIMEOUT_NEW,
+        "VeoAIFree executor",
+    )
     return [
         Replacement("Vertex source registry", "open-sse/config/videoRegistry.ts", VERTEX_SOURCE_OLD, VERTEX_SOURCE_NEW),
         Replacement("Vertex source preview registry", "open-sse/config/videoRegistry.ts", VERTEX_SOURCE_PREVIEW_OLD, VERTEX_SOURCE_PREVIEW_NEW),
@@ -322,6 +339,8 @@ def replacement_plan(root: Path) -> list[Replacement]:
         Replacement("KIE compiled model defaults", str(handler_chunk.relative_to(root)), KIE_RUNTIME_OLD, KIE_RUNTIME_NEW),
         Replacement("KIE compiled Veo API branch", str(handler_chunk.relative_to(root)), KIE_RUNTIME_VEO_MARKER, KIE_RUNTIME_VEO_BRANCH + KIE_RUNTIME_VEO_MARKER),
         Replacement("KIE compiled Veo response diagnostics", str(handler_chunk.relative_to(root)), KIE_RUNTIME_VEO_DIAGNOSTIC_OLD, KIE_RUNTIME_VEO_DIAGNOSTIC_NEW),
+        Replacement("VeoAIFree source AJAX timeout", "open-sse/executors/veoaifree-web.ts", VEO_SOURCE_TIMEOUT_OLD, VEO_SOURCE_TIMEOUT_NEW),
+        Replacement("VeoAIFree compiled AJAX timeout", str(veoaifree_chunk.relative_to(root)), VEO_RUNTIME_TIMEOUT_OLD, VEO_RUNTIME_TIMEOUT_NEW),
     ]
 
 
