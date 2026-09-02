@@ -12878,6 +12878,16 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 
 **Classification.** The active Vertex connection's direct model list contains 50 IDs and specifically advertises `veo-3.1-generate-preview`, `veo-3.1-fast-generate-preview`, and `veo-3.1-lite-generate-preview`; the two GA IDs attempted in #1520 are not in that connection-specific list. The prior HTTP 400 `Invalid resource field value in the request.` is therefore consistent with a resource/model availability mismatch (and remains unproven as a credential death because the native connection test passed). The next bounded Omni repair is to expose those connection-advertised preview IDs in the video registry and test at most one per family after the required service reload. No video request was issued in this evidence component.
 
+### [2026-09-02 07:27] #1525 - Added Vertex connection-advertised Veo preview routes to Omni registry patch
+
+**Blueprint review and rationale.** The read-only connection-model query in #1524 returned 50 models for the active Vertex row, including `veo-3.1-generate-preview`, `veo-3.1-fast-generate-preview`, and `veo-3.1-lite-generate-preview`. The two GA IDs currently exposed by Omni (`veo-3.1-generate-001` and `veo-3.1-fast-generate-001`) were not present in that connection-specific list and had both returned the provider's `Invalid resource field value in the request.` response. Google’s primary Veo documentation lists the preview IDs as valid model resources, so this component expands the registry to match the live connection contract rather than removing the existing GA fallback.
+
+**Implementation.** Added exact, count-checked source and compiled-registry replacements to `scripts/automation/omni_video_runtime_patch.py`. The final Vertex registry contains the two GA IDs plus the three live preview IDs, with descriptive names; no handler or credential logic was changed. Extended `tests/test_omni_video_runtime_patch.py` with assertions for all advertised preview IDs and reversible replacement coverage for source and minified registry strings.
+
+**Verification.** Ran `python -m pytest -q tests/test_omni_video_runtime_patch.py`; actual output was `..... [100%]` and `5 passed in 1.18s`. This component issued no provider request and performed no video spend. The registry change remains pending on the installed package and will require the deterministic apply tool followed by a registered NSSM service restart before the new model rows are routable.
+
+**Next.** Run the patch plan, apply only the two pending registry replacements with a new backup, then use the user-approved restart pathway and execute one bounded Vertex preview candidate plus one KIE diagnostic candidate—never a broad sweep—recording any provider response without claiming an asset until MP4 bytes pass validation.
+
 ### [2026-09-02 01:55] #1520 - Captures stage 3-5 pass 2 (9223 + 9224): remaining targets are named walls; re-SSO lane gated on operator
 
 **Scope decision (operator "ok" 01:33Z).** Cross-seat re-SSO is operator-gated (Google chooser on 9224/9225 requires the operator's own sign-in; passwords are never typed by automation). Proceeded with the automation lane: captures for artifact-less APP_SURFACE hosts.

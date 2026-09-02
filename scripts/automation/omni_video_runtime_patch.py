@@ -43,9 +43,17 @@ VERTEX_SOURCE_OLD = '''      { id: "veo-3.0-generate-001", name: "Veo 3.0 (Verte
       { id: "veo-2.0-generate-001", name: "Veo 2.0 (Vertex)" },'''
 VERTEX_SOURCE_NEW = '''      { id: "veo-3.1-generate-001", name: "Veo 3.1 (Vertex)" },
       { id: "veo-3.1-fast-generate-001", name: "Veo 3.1 Fast (Vertex)" },'''
+VERTEX_SOURCE_PREVIEW_OLD = VERTEX_SOURCE_NEW
+VERTEX_SOURCE_PREVIEW_NEW = '''      { id: "veo-3.1-generate-001", name: "Veo 3.1 (Vertex)" },
+      { id: "veo-3.1-fast-generate-001", name: "Veo 3.1 Fast (Vertex)" },
+      { id: "veo-3.1-generate-preview", name: "Veo 3.1 Preview (Vertex)" },
+      { id: "veo-3.1-fast-generate-preview", name: "Veo 3.1 Fast Preview (Vertex)" },
+      { id: "veo-3.1-lite-generate-preview", name: "Veo 3.1 Lite Preview (Vertex)" },'''
 
 VERTEX_RUNTIME_OLD = 'models:[{id:"veo-3.0-generate-001",name:"Veo 3.0 (Vertex)"},{id:"veo-3.0-fast-generate-001",name:"Veo 3.0 Fast (Vertex)"},{id:"veo-2.0-generate-001",name:"Veo 2.0 (Vertex)"}]'
 VERTEX_RUNTIME_NEW = 'models:[{id:"veo-3.1-generate-001",name:"Veo 3.1 (Vertex)"},{id:"veo-3.1-fast-generate-001",name:"Veo 3.1 Fast (Vertex)"}]'
+VERTEX_RUNTIME_PREVIEW_OLD = VERTEX_RUNTIME_NEW
+VERTEX_RUNTIME_PREVIEW_NEW = 'models:[{id:"veo-3.1-generate-001",name:"Veo 3.1 (Vertex)"},{id:"veo-3.1-fast-generate-001",name:"Veo 3.1 Fast (Vertex)"},{id:"veo-3.1-generate-preview",name:"Veo 3.1 Preview (Vertex)"},{id:"veo-3.1-fast-generate-preview",name:"Veo 3.1 Fast Preview (Vertex)"},{id:"veo-3.1-lite-generate-preview",name:"Veo 3.1 Lite Preview (Vertex)"}]'
 
 KIE_SOURCE_OLD = '''  const payload = {
     model,
@@ -298,11 +306,13 @@ def replacement_plan(root: Path) -> list[Replacement]:
     handler_chunk = find_runtime_chunk(root, KIE_RUNTIME_OLD, KIE_RUNTIME_NEW, "KIE handler")
     return [
         Replacement("Vertex source registry", "open-sse/config/videoRegistry.ts", VERTEX_SOURCE_OLD, VERTEX_SOURCE_NEW),
+        Replacement("Vertex source preview registry", "open-sse/config/videoRegistry.ts", VERTEX_SOURCE_PREVIEW_OLD, VERTEX_SOURCE_PREVIEW_NEW),
         Replacement("KIE source request fields", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_TYPE_OLD, KIE_SOURCE_TYPE_NEW),
         Replacement("KIE source model defaults", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_OLD, KIE_SOURCE_NEW),
         Replacement("KIE source Veo API branch", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_VEO_MARKER, KIE_SOURCE_VEO_BRANCH + KIE_SOURCE_VEO_MARKER),
         Replacement("KIE source Veo response diagnostics", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_VEO_DIAGNOSTIC_OLD, KIE_SOURCE_VEO_DIAGNOSTIC_NEW),
         Replacement("Vertex compiled registry", str(config_chunk.relative_to(root)), VERTEX_RUNTIME_OLD, VERTEX_RUNTIME_NEW),
+        Replacement("Vertex compiled preview registry", str(config_chunk.relative_to(root)), VERTEX_RUNTIME_PREVIEW_OLD, VERTEX_RUNTIME_PREVIEW_NEW),
         Replacement("KIE compiled model defaults", str(handler_chunk.relative_to(root)), KIE_RUNTIME_OLD, KIE_RUNTIME_NEW),
         Replacement("KIE compiled Veo API branch", str(handler_chunk.relative_to(root)), KIE_RUNTIME_VEO_MARKER, KIE_RUNTIME_VEO_BRANCH + KIE_RUNTIME_VEO_MARKER),
         Replacement("KIE compiled Veo response diagnostics", str(handler_chunk.relative_to(root)), KIE_RUNTIME_VEO_DIAGNOSTIC_OLD, KIE_RUNTIME_VEO_DIAGNOSTIC_NEW),
