@@ -23,15 +23,28 @@ rem -- that transient pair is exactly the "two duplicate processes popping every
 rem saw. curl.exe spawns nothing visible and exits non-zero on any failure, same semantics.
 curl.exe -s -f -o nul --max-time 3 "http://127.0.0.1:8190/healthz"
 
-if not errorlevel 1 exit /b 0
+if not errorlevel 1 (
+  rem Health proves the listener is ours. Preserve that exact interpreter and
+  rem its venv launcher, but prune any older exact shim pair that lost its socket.
+  "D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim_owner.py" --port 8190 --reason healthy-orphan --preserve-listener >> "D:\omniroute-monetizer\logs\shim_task_diag.log" 2>&1
+  if errorlevel 1 (
+    echo [%date% %time%] FAILED healthy orphan prune >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
+    exit /b 1
+  )
+  exit /b 0
+)
 
 echo [%date% %time%] PRE-START >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
 
-rem A live listener that fails /healthz is a wedged task-owned shim.  Before
-rem launching a replacement, stop ONLY the exact listener for this script; never
-rem kill a foreign owner of port 8190.  This is the missing recovery step that
-rem previously caused endless PRE-START / EADDRINUSE no-op loops.
-powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$p=Get-NetTCPConnection -LocalPort 8190 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess; if($p){$c=Get-CimInstance Win32_Process -Filter ('ProcessId='+$p); if($c -and $c.CommandLine -match 'session_pool_shim\.py\x22?\s+8190'){ Stop-Process -Id $p -Force; Write-Output ('stopped verified wedged shim pid='+$p) }}" >> "D:\omniroute-monetizer\logs\shim_task_diag.log" 2>&1
+rem /healthz already failed, so every process whose command line names THIS exact
+rem repository shim + port belongs to this task's unhealthy launcher/interpreter
+rem pair.  Stop the whole verified pair, including a launcher/orphan that no longer
+rem owns the socket.  Never match generic python.exe or a foreign port owner.
+"D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim_owner.py" --port 8190 --reason unhealthy >> "D:\omniroute-monetizer\logs\shim_task_diag.log" 2>&1
+if errorlevel 1 (
+  echo [%date% %time%] FAILED exact owner cleanup >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
+  exit /b 1
+)
 
 rem Not answering -> start it. The venv launcher spawns the base interpreter as a child process
 rem (normal Python 3.11 venv behavior on Windows), so ONE healthy shim always shows as two
@@ -56,10 +69,38 @@ rem and the shim never launches while the task keeps reporting 0. Probe the list
 rem if absent, retry once against the alternate log file before yielding to the next cycle.
 ping -n 4 127.0.0.1 >nul
 curl.exe -s -f -o nul --max-time 3 "http://127.0.0.1:8190/healthz"
-if not errorlevel 1 exit /b 0
+if not errorlevel 1 (
+  "D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim_owner.py" --port 8190 --reason healthy-orphan --preserve-listener >> "D:\omniroute-monetizer\logs\shim_task_diag.log" 2>&1
+  if errorlevel 1 exit /b 1
+  echo [%date% %time%] RECOVERED primary >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
+  exit /b 0
+)
+echo [%date% %time%] PRIMARY-UNHEALTHY cleanup-before-fallback >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
+rem The primary bound but did not answer.  Remove its exact task-owned process
+rem pair before the fallback; otherwise the fallback only sees EADDRINUSE and the
+rem scheduled task falsely reports success while the wedged primary survives.
+"D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim_owner.py" --port 8190 --reason failed-primary >> "D:\omniroute-monetizer\logs\shim_task_diag.log" 2>&1
+if errorlevel 1 (
+  echo [%date% %time%] FAILED primary cleanup >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
+  exit /b 1
+)
 echo [%date% %time%] FALLBACK-START alt-log >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
 rem A second fixed fallback file can itself be held exclusively.  Make the final
 rem task-owned launch log unique per attempt so an unrelated log handle cannot
 rem prevent the actual service process from starting.
 set "SHIM_FALLBACK_LOG=D:\omniroute-monetizer\logs\shim_stdout_fallback_%RANDOM%_%RANDOM%.log"
 start "" /b "D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim.py" 8190 >> "%SHIM_FALLBACK_LOG%" 2>&1
+
+rem Final verification makes Task Scheduler's Last Result honest.  Before this,
+rem the BAT ended with a successful START command even when the fallback never
+rem became healthy, so Last Result=0 concealed a dead consumer endpoint.
+ping -n 4 127.0.0.1 >nul
+curl.exe -s -f -o nul --max-time 3 "http://127.0.0.1:8190/healthz"
+if not errorlevel 1 (
+  "D:\omniroute-monetizer\.venv\Scripts\python.exe" -u "D:\omniroute-monetizer\scripts\automation\session_pool_shim_owner.py" --port 8190 --reason healthy-orphan --preserve-listener >> "D:\omniroute-monetizer\logs\shim_task_diag.log" 2>&1
+  if errorlevel 1 exit /b 1
+  echo [%date% %time%] RECOVERED fallback log=%SHIM_FALLBACK_LOG% >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
+  exit /b 0
+)
+echo [%date% %time%] FAILED no-healthy-shim log=%SHIM_FALLBACK_LOG% >> "D:\omniroute-monetizer\logs\shim_task_diag.log"
+exit /b 1

@@ -1040,23 +1040,34 @@ spec. Currently in open single-operator mode (no `tenant_map.json`); drop one in
 
 Four scheduled tasks + one Startup-folder launcher. All verified present and running.
 
-**How the tasks launch (worklog #1134, 2026-08-28 — the console-pop fix).** Three of the four
+**How the tasks launch (worklog #1134, 2026-08-28 — the console-pop fix).** Two of the four
 tasks run their `.bat` through a hidden `.vbs` wrapper (`wscript.exe <task>.vbs`,
 `WshShell.Run cmd, 0, False`). Task Scheduler running a `.bat` directly with
 `LogonType=Interactive` opens a visible console window every cycle — that was the 5-minute
 "pop" the operator saw. The `.vbs` wrapper suppresses it. **Do not re-point these tasks back
-at the `.bat` directly.**
+at the `.bat` directly.** The shim task is the deliberate exception described below: it now
+runs a console-free `pythonw.exe` owner directly and does not use either WSH or a BAT at runtime.
 
 | Task name | Task action (verified) | Runs | Schedule | Purpose |
 |---|---|---|---|---|
 | `OmniRoute Rig Supervisor (keepalive)` | `wscript.exe supervisor_task.vbs` → `supervisor_task.bat` → `omni_supervisor.py --watch` | every 5 min | Crash recovery for owned services; reports Chrome state; never touches OmniRoute, video router, or the shim |
-| `OmniRoute Session Pool Shim (keepalive)` | `wscript.exe session_pool_shim_task.vbs` → `session_pool_shim_task.bat` → `session_pool_shim.py 8190` | every 5 min | Keeps the :8190 consumer endpoint alive. Sets `OMNI_VIDEO_CONFIRM_SPEND=1` (credit-spending video submit gate) |
+| `OmniRoute Session Pool Shim (keepalive)` | `.venv\Scripts\pythonw.exe -u session_pool_shim_task.py` → `session_pool_shim.py 8190` | every 1 min (current task XML) | Keeps the :8190 consumer endpoint alive. The owner sets `OMNI_VIDEO_CONFIRM_SPEND=1`, probes constant-time `/healthz`, prunes exact non-listening orphan pairs, and returns an honest task result. |
 | `OmniRoute Video Router (keepalive)` | `wscript.exe video_router_task.vbs` → `video_router_task.bat` → `video_router.py` | every 5 min | Video router + **Chrome seat self-heal** (relaunches dead seat Chromes, re-opens tabs) |
 | `OmniRoute OAuth KeepAlive` | `oauth_keepalive_task.bat` (direct, no `.vbs`) → `oauth_keepalive.py` | hourly | Refreshes OmniRoute's own OAuth provider tokens via `POST /api/providers/{id}/refresh` |
 
 | Launcher | Location | Purpose |
 |---|---|---|
 | `omniroute_rig_supervisor.vbs` | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` | Starts the supervisor `--watch` loop at logon (no elevation needed) |
+
+**Shim native owner (worklog #1610, 2026-09-03).** `session_pool_shim_task.py` replaced the shim
+task's VBS→BAT runtime chain after a `Get-NetTCPConnection`/CIM child blocked for more than twenty
+minutes and left detached owner shells behind. The native owner uses `urllib` for the liveness
+probe, `psutil` for exact argv matching, and `subprocess` with `CREATE_NO_WINDOW` for launch. It
+never queries WMI/CIM. On a healthy cycle it preserves the one exact LISTEN interpreter plus its
+venv-launcher parent and kills only other exact `session_pool_shim.py 8190` pairs. On a failed
+cycle it removes every exact pair, launches once, and verifies `/healthz` before returning. The
+registered task remains the sole owner; the supervisor remains probe-only. The old BAT/VBS files
+remain as rollback artifacts but are not the registered task action.
 
 **Inside each service bat (worklog #1134 — the detached-launch + dedup pattern):**
 - **Health probe uses `curl.exe`, not python.** `curl.exe -s -o nul --max-time 3 http://127.0.0.1:8190/v1/models`.
@@ -1078,7 +1089,7 @@ at the `.bat` directly.**
 - **Session pool shim (:8190) belongs to its own scheduled task. Supervisor marks it
   `owned=False, required=False` and probes `/v1/models` only.** Worklog #1134: it was
   `owned=True` here AND owned by the bat task — that double ownership is exactly how duplicate
-  shim instances raced onto :8190. **Single owner now: the bat task.**
+  shim instances raced onto :8190. **Single owner now: the scheduled task.**
 - Restarts match on command line, not port. Foreign process on our port = `PORT_TAKEN_BY_OTHER`,
   left alone. Backoff `[5, 15, 60, 180]` then gives up and reports.
 
@@ -1098,8 +1109,9 @@ reboot/reset
           • session pool shim (:8190)  [owned by its own bat task]
           • video router (:8189)       [owned by its own bat task]
           • OmniRoute (:20128)         [never touched]
-      → session pool shim task (every 5 min, via session_pool_shim_task.vbs) restarts the
-        shim if :8190 is not answering (curl.exe probe; start "" /b detached launch)
+      → session pool shim task (currently every 1 min, direct console-free pythonw owner)
+        restarts the shim if :8190 is not answering (urllib /healthz probe; exact psutil
+        cleanup; CREATE_NO_WINDOW launch; final verified task exit code)
       → video router task (every 5 min, via video_router_task.vbs) self-heals Chrome seats:
           • detects dead seat Chrome (port not answering)
           • relaunches with correct profile + CDP flags + NO_DISCARD_FLAGS
