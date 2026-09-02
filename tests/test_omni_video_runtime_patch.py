@@ -81,6 +81,43 @@ class OmniVideoRuntimePatchTests(unittest.TestCase):
                 checked = PATCH.check_replacement(replacement, root)
                 self.assertEqual(checked[3], "applied")
 
+    def test_kie_branch_remains_applied_after_diagnostic_follow_up(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "source.ts"
+            source.write_text(
+                PATCH.KIE_SOURCE_VEO_BRANCH.replace(
+                    PATCH.KIE_SOURCE_VEO_DIAGNOSTIC_OLD,
+                    PATCH.KIE_SOURCE_VEO_DIAGNOSTIC_NEW,
+                )
+                + PATCH.KIE_SOURCE_VEO_MARKER,
+                encoding="utf-8",
+            )
+            replacement = PATCH.Replacement(
+                "KIE source Veo API branch",
+                "source.ts",
+                PATCH.KIE_SOURCE_VEO_MARKER,
+                PATCH.KIE_SOURCE_VEO_BRANCH + PATCH.KIE_SOURCE_VEO_MARKER,
+            )
+            self.assertEqual(PATCH.check_replacement(replacement, root)[3], "applied")
+
+            runtime = root / "runtime.js"
+            runtime.write_text(
+                PATCH.KIE_RUNTIME_VEO_BRANCH.replace(
+                    PATCH.KIE_RUNTIME_VEO_DIAGNOSTIC_OLD,
+                    PATCH.KIE_RUNTIME_VEO_DIAGNOSTIC_NEW,
+                )
+                + PATCH.KIE_RUNTIME_VEO_MARKER,
+                encoding="utf-8",
+            )
+            replacement = PATCH.Replacement(
+                "KIE compiled Veo API branch",
+                "runtime.js",
+                PATCH.KIE_RUNTIME_VEO_MARKER,
+                PATCH.KIE_RUNTIME_VEO_BRANCH + PATCH.KIE_RUNTIME_VEO_MARKER,
+            )
+            self.assertEqual(PATCH.check_replacement(replacement, root)[3], "applied")
+
 
 if __name__ == "__main__":
     unittest.main()

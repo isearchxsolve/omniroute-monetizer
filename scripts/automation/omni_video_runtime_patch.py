@@ -326,6 +326,23 @@ def check_replacement(replacement: Replacement, root: Path) -> tuple[Path, int, 
     text = path.read_text(encoding="utf-8")
     old_count = text.count(replacement.old)
     new_count = text.count(replacement.new)
+    # The KIE diagnostic follow-up intentionally changes one line inside the
+    # already-applied dedicated branch.  Its original whole-branch `new` text
+    # can therefore no longer match byte-for-byte, but the branch is still
+    # applied when its marker and the exact diagnostic block are both present.
+    # Treat that superseded state as applied so a later registry patch cannot
+    # accidentally reinsert a second KIE branch.
+    diagnostic_applied = (
+        replacement.name == "KIE source Veo API branch"
+        and old_count == replacement.required_count
+        and KIE_SOURCE_VEO_DIAGNOSTIC_NEW in text
+    ) or (
+        replacement.name == "KIE compiled Veo API branch"
+        and old_count == replacement.required_count
+        and KIE_RUNTIME_VEO_DIAGNOSTIC_NEW in text
+    )
+    if diagnostic_applied:
+        return path, old_count, sha256(path), "applied"
     # A replacement's new text may contain the old text as a prefix (the
     # minified KIE patch does this).  Presence of the complete new text is the
     # authoritative applied-state check; an extra standalone old occurrence

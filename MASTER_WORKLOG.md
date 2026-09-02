@@ -12888,6 +12888,16 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 
 **Next.** Run the patch plan, apply only the two pending registry replacements with a new backup, then use the user-approved restart pathway and execute one bounded Vertex preview candidate plus one KIE diagnostic candidate—never a broad sweep—recording any provider response without claiming an asset until MP4 bytes pass validation.
 
+### [2026-09-02 07:31] #1526 - Hardened Omni video patch idempotency after diagnostic follow-up
+
+**Finding.** The first registry `--plan` after #1525 incorrectly reported the already-applied KIE dedicated source/runtime branches as pending. The response-diagnostics follow-up changed one line inside those branches, so the original whole-branch replacement string no longer matched even though the branch marker and exact diagnostic block were present. Applying the registry patch in that state could have duplicated the KIE branch and broken dispatch.
+
+**Fix.** Updated `scripts/automation/omni_video_runtime_patch.py` so `check_replacement` recognizes the explicit superseded-but-applied state for the source and compiled KIE Veo branches (marker plus the exact diagnostic replacement), while retaining strict count checks for all other replacements. Added a regression test that constructs both branches with the diagnostic follow-up and asserts the original branch replacements remain `applied`.
+
+**Verification.** Ran `python -m pytest -q tests/test_omni_video_runtime_patch.py`; actual output was `...... [100%]` and `6 passed in 1.14s`. Re-ran `python scripts/automation/omni_video_runtime_patch.py --plan`; it now reports exactly two pending rows (Vertex source preview registry and Vertex compiled preview registry), with both original KIE branch rows correctly `status=applied`. No package write, service action, provider request, database action, or video spend occurred in this component.
+
+**Next.** Commit this safety fix, then apply only the two Vertex preview registry replacements from the clean plan.
+
 ### [2026-09-02 01:55] #1520 - Captures stage 3-5 pass 2 (9223 + 9224): remaining targets are named walls; re-SSO lane gated on operator
 
 **Scope decision (operator "ok" 01:33Z).** Cross-seat re-SSO is operator-gated (Google chooser on 9224/9225 requires the operator's own sign-in; passwords are never typed by automation). Proceeded with the automation lane: captures for artifact-less APP_SURFACE hosts.
