@@ -13058,3 +13058,13 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 **Safety boundary.** This was a local backup only. No provider request, service operation, Chrome/seat action, credential access, database write, or ledger admission occurred. The preserved row remains the isolated ComfyUI transport timeout and Flow-session wall recorded in the prior entries.
 
 **Next.** Run exactly one spend-gated native OmniRoute probe for 'veoaifree-web/seedance'. Preserve its terminal response and media validation outcome before deciding whether the companion 'veoaifree-web/veo' model merits a separate request.
+
+### [2026-09-02 10:21] #1542 - Free veoaifree Seedance adapter timed out without a provider response
+
+**Execution.** Ran one and only one explicit-gated native request for 'veoaifree-web/seedance' through 'POST http://127.0.0.1:20128/v1/videos/generations' with a 90-second bound and a fresh report. No retry, companion model, KIE/Vertex request, direct-router request, Chrome action, seat action, database operation, or credential operation was performed.
+
+**Result.** The request ended after exactly 90.0 seconds with no HTTP status, upstream body, task ID, URL, base64 payload, or media bytes: 'ReadTimeout: HTTPConnectionPool(host='127.0.0.1', port=20128): Read timed out. (read timeout=90)'. The durable report 'state/video_provider_probe.json' is 'state=COMPLETE', 'probed=1', 'working=[]', and the row is terminal 'state=TRANSPORT_TIMEOUT' with 'video_refs=[]'.
+
+**Isolation and classification.** An immediate read-only health poll returned HTTP 200 with 'status=ok', and the registered service stayed on NSSM PID '19444' / Node PID '20536'. The timeout is therefore isolated to the veoaifree-web adapter or its upstream web transport, not a gateway outage. It is not proof that the public provider is dead; it is a transport gap that needs a separate adapter-level investigation before more generation calls.
+
+**Next.** Preserve this row, then test the companion 'veoaifree-web/veo' once only if the service remains healthy. If it repeats the same timeout, stop native free-web traffic and inspect the handler's endpoint/timeout contract rather than hammering the site.
