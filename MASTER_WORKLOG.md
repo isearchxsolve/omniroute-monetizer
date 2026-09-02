@@ -12990,3 +12990,11 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 **Health proof.** A direct, proxy-bypassed request to 'http://127.0.0.1:20128/api/health' completed successfully and returned HTTP 200 with '{"status":"ok","timestamp":"2026-09-02T03:37:43.298Z"}'. This is the required precondition for the single post-reload KIE diagnostic probe. No service mutation was issued by the agent; no Chrome profile, seat/session-pool process, database, credential, catalog, combo, consumer endpoint, or provider generation call was touched in this verification component.
 
 **Next.** Preserve the previous video probe report, then run exactly one spend-gated 'kie/veo/veo-3-1-fast' request to exercise the newly loaded KIE response-diagnostic handler. Do not broaden the video sweep unless the response contains a genuine task ID.
+
+### [2026-09-02 09:13] #1535 - Archived the prior Omni video probe report before KIE reload proof
+
+**Preservation step.** Before issuing any post-restart video request, verified that the existing report 'state/video_provider_probe.json' was present at 1,306 bytes. Copied it without modification to 'state/video_provider_probe_pre_kie_restart_20260902_091304.json'.
+
+**Archive verification.** The source and archive both have SHA-256 'C8324C24844CFBD4BF45894DEE7A8E39E1574AD212E0E61183D05D7C9B12E3AC' and exactly 1,306 bytes, so the pre-restart evidence is preserved and cannot be overwritten by the next runner invocation. This was a local file-preservation action only: no service, provider, credential, database, Chrome, seat, session-pool, or consumer endpoint was touched.
+
+**Next.** Run one and only one explicit-spend-gated 'kie/veo/veo-3-1-fast' probe against the freshly restarted service and inspect the redacted diagnostic response. No second candidate or retry is authorized unless a genuine task ID is returned.
