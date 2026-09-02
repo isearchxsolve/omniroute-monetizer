@@ -13030,3 +13030,13 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 **Plan artifact and safety.** 'video_provider_probe.py --all --plan-only' completed management login and wrote the ranked plan to 'state/video_probe_plan.json' without calling '/v1/videos/generations'. The rank-0 rows are the only candidates selected for the first free proof batch. Each real generation remains behind 'OMNI_VIDEO_CONFIRM_SPEND=1', will be issued one at a time, and will be admitted only after a returned payload passes the MP4 'ftyp' byte check.
 
 **Next.** Probe the five zero-auth rows with a paced, bounded plan (or begin with one row if the provider format is local/web asynchronous), preserving each terminal result. Do not broaden into the 75 credentialed/unwired catalog rows and do not add Pollinations until a real native handler exists and is separately tested.
+
+### [2026-09-02 10:15] #1539 - Free local ComfyUI proof timed out while OmniRoute stayed healthy
+
+**Execution.** Ran exactly one free/no-auth candidate under the explicit video gate: 'OMNI_VIDEO_CONFIRM_SPEND=1 python scripts/automation/video_provider_probe.py --model comfyui/animatediff --timeout 90 --fresh'. The runner used 'POST http://127.0.0.1:20128/v1/videos/generations', completed one attempt, and wrote the durable row to 'state/video_provider_probe.json'.
+
+**Result.** The native request produced no HTTP status, provider body, task ID, URL, base64 payload, or media bytes. After the full 90.0-second bound it terminated as 'state=TRANSPORT_TIMEOUT' with 'ReadTimeout: HTTPConnectionPool(host=127.0.0.1, port=20128): Read timed out. (read timeout=90)'. The report is 'state=COMPLETE', 'probed=1', 'working=[]', and 'video_refs=[]'.
+
+**Isolation and classification.** A read-only health poll immediately afterward returned HTTP 200 with 'status=ok'; the registered service remained 'Running' on NSSM PID '19444' and Node PID '20536'. Therefore this is not a gateway-wide failure or evidence that OmniRoute is dead. It is an isolated local-engine/handler transport timeout, pending confirmation of whether the ComfyUI backend listener is present. No route is admitted, and no retry or second ComfyUI model was sent.
+
+**Safety boundary.** No Chrome profile, seat/session-pool process, database, credential, paid provider, KIE/Vertex request, or alternate service path was touched. The next component is read-only local listener/handler inspection followed by the remote free 'veoaifree-web' candidate if the gateway remains healthy.
