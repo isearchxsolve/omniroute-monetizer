@@ -12974,3 +12974,11 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 **Standing conclusion for the captures lane:** every artifact-less APP_SURFACE host now has a named blocker (9 pay/region/transport walls, 2 build targets, 1 transient hydration, 1 operator onboarding). The captures lane is DRAINED to its honest limit until either (a) operator re-SSO unblocks the 67 LOGIN_WALL rows, or (b) the operator asks for the together/meta transport build targets to be pursued.
 
 **Next (operator-visible decision point):** (a) operator re-SSO pass on 9224/9225 Google chooser -> then audit -> captures -> admit cycle resumes; (b) together/meta replay-transport build (trusted-Enter recording via CDP on the exact element); (c) operator actions sambanova payment + cohere about-you remain open.
+
+### [2026-09-02 10:20] #1533 - Gave operator the registered OmniRoute restart command
+
+**Scope and mandatory-read compliance.** Re-read `TECHNOLOGY_TRANSFER.md` before inspecting the restart pathway, then reviewed the current `MASTER_WORKLOG.md` handoff entries. This action remains Omni-only and is limited to the operator-owned reload required to load the already-applied compiled KIE/Vertex video changes. No Chrome profile, seat/session-pool process, database, credential, provider endpoint, or service process was touched by the agent.
+
+**Pathway confirmation.** The transfer and worklog establish that `OmniRoute` is the existing NSSM-registered Windows service serving `127.0.0.1:20128`. Its single-owner rule prohibits this agent from stopping, killing, or restarting it; the valid reload is elevated Windows service control of that same service. A second Node process, `sc.exe` force operation, unrelated scheduled task, shim restart, or manual launch would violate the registered-owner boundary.
+
+**Operator handoff.** Supplied the operator with the exact Administrator PowerShell command `Restart-Service -Name 'OmniRoute' -Force`, followed by read-only `Get-Service` and `/api/health` verification commands. The restart remains pending until the operator executes it through the elevated registered-service pathway and reports completion. No provider/video request is authorized before the post-restart health and new-process checks.
