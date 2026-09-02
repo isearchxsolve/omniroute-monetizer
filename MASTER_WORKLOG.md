@@ -13584,3 +13584,13 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Classification.** This is a test-only inspection error, not a client transport failure: the production code uses `urllib.request.Request` and sets the Authorization header; the fake request object exposes headers through the mapping API rather than a response-style `getheader()` method. The next bounded correction is to update only the test assertion to inspect the Request header mapping, then rerun the focused suite.
 
 **Safety.** No network request to a Space, GPU-minute consumption, token mutation, OmniRoute request, service action, Chrome action, database write, ledger admission, or runtime route change occurred. The failing result is recorded before the correction, and no unrelated worktree files were touched.
+
+### [2026-09-02 18:16] #1587 — Offline Gradio Space client component passes focused tests
+
+**Correction.** Updated only the failing fixture assertion in `tests/test_gradio_space_client.py` from the response-style `Request.getheader()` call to Python's supported `Request.get_header()` API. No production transport behavior was changed.
+
+**Verification.** Re-ran `python -m pytest -q tests/test_gradio_space_client.py`. Result: `4 passed in 0.38s`. The focused suite now verifies: OpenAPI discovery and the Gradio `/call/<endpoint>` submit contract; SSE progress plus terminal completion parsing; bearer-token placement in the Authorization header without putting the token in the JSON payload; Gradio file-reference normalization; the byte-level MP4 `ftyp` gate; and rejection of a queue stream that closes without a terminal event.
+
+**Component boundary.** The new `scripts/automation/gradio_space_client.py` remains intentionally provider-neutral. It has not been wired into the OmniRoute runtime, provider registry, consumer gateway, or verified-video ledger. It is ready for a later single-candidate integration component after endpoint/license policy decisions.
+
+**Safety.** No live Space submit, GPU-minute consumption, token read or mutation, OmniRoute request, service action, Chrome action, database write, ledger admission, or consumer E2E occurred. The unrelated worklog entry #1585 and pre-existing worktree changes were preserved.
