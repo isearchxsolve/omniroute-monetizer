@@ -282,6 +282,12 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
         # browser. Free-tier quota spends $0 if present; one bounded submit, never a retry.
         from aistudio_video_client import AistudioVideoClient
         return AistudioVideoClient
+    if kind == "hf_ltx_space":
+        # Public LTX distilled Gradio queue: one submit, one terminal SSE stream,
+        # one bounded MP4-gated download. Stateless and zero-dollar; optional hf_
+        # auth stays inside the seat file when one is explicitly configured.
+        from ltx_space_video_client import LtxSpaceVideoClient
+        return LtxSpaceVideoClient
     if kind == "omniroute_native":
         # Workstream A bridge (worklog #1372): OmniRoute's NATIVE /v1/videos/generations is a
         # fully synchronous contract — the POST holds the connection for the whole render and

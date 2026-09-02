@@ -24,7 +24,7 @@ STATE = ROOT / "state"
 REGISTRY = STATE / "pure_python_replay_registry.json"
 
 PURE_PYTHON_API_KINDS = frozenset({
-    "aistudio", "digen", "kie", "omniroute_native", "rtst", "youcom",
+    "aistudio", "digen", "hf_ltx_space", "kie", "omniroute_native", "rtst", "youcom",
 })
 
 

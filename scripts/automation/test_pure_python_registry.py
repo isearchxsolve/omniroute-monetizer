@@ -27,6 +27,16 @@ def test_reject_chrome_and_empty_artifacts() -> None:
     assert "no registered" in str(admission_problem({"host": "x", "modality": "chat"}))
 
 
+def test_public_ltx_space_is_a_registered_python_api_kind() -> None:
+    raw = {
+        "host": "lightricks-ltx-video-distilled.hf.space",
+        "modality": "video",
+        "api": {"kind": "hf_ltx_space"},
+    }
+    assert pure_python_adapter(raw) == "api:hf_ltx_space"
+    assert admission_problem(raw) is None
+
+
 def test_exact_file_admission_is_atomic_and_not_host_scoped() -> None:
     with tempfile.TemporaryDirectory() as td:
         path = pathlib.Path(td) / "registry.json"
