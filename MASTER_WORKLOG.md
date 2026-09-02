@@ -12908,6 +12908,16 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 
 **Next.** Verify the backup/plan is now idempotent, restart OmniRoute using the registered service pathway, wait for `/api/health`, and run one bounded Vertex preview candidate (plus the KIE diagnostic candidate only if the service is healthy) with the existing spend-confirmation gate. Admit nothing without an actual MP4 `ftyp` asset.
 
+### [2026-09-02 08:03] #1528 - Made Omni video patch plan idempotent across registry and KIE follow-ups
+
+**Finding and correction.** The first post-apply plan failed in two distinct, unsafe ways: the runtime chunk locator could not find a final five-model Vertex registry because the original two-model string ended with a closing `}]`, and the original Vertex compiled-registry replacement was incorrectly classified as unexpected after the preview models were appended. These were tooling-state errors discovered before restarting or sending any provider request.
+
+**Implementation.** Updated `find_runtime_chunk` to accept explicit alternate final strings and taught `check_replacement` to recognize the exact five-model Vertex registry as the applied successor of the original two-model replacement. The existing KIE diagnostic successor handling remains strict and unchanged. Added tests covering final-registry chunk resolution and applied-state recognition for both source and compiled registry replacements.
+
+**Verification.** Ran `python -m pytest -q tests/test_omni_video_runtime_patch.py`; actual output was `........ [100%]` and `8 passed in 1.06s`. Re-ran `python scripts/automation/omni_video_runtime_patch.py --plan`; it completed HTTP-independent with every registry, KIE branch, and diagnostic replacement reported `status=applied` and no pending rows. No package writes, service action, provider request, credential operation, database operation, or video spend occurred in this component.
+
+**Next.** Commit the tooling fix, then perform the required registered-service restart so the already-applied compiled preview registry and KIE diagnostic block are loaded; poll health before one bounded preview-route proof.
+
 ### [2026-09-02 01:55] #1520 - Captures stage 3-5 pass 2 (9223 + 9224): remaining targets are named walls; re-SSO lane gated on operator
 
 **Scope decision (operator "ok" 01:33Z).** Cross-seat re-SSO is operator-gated (Google chooser on 9224/9225 requires the operator's own sign-in; passwords are never typed by automation). Proceeded with the automation lane: captures for artifact-less APP_SURFACE hosts.

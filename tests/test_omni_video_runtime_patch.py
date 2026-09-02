@@ -29,6 +29,27 @@ class OmniVideoRuntimePatchTests(unittest.TestCase):
 
             self.assertEqual(PATCH.video_route_chunks(root), [chunk])
 
+    def test_runtime_chunk_locator_accepts_final_preview_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            route = root / "dist" / ".build" / "next" / "server" / "app" / "api" / "v1" / "videos" / "generations" / "route.js"
+            chunk = root / "dist" / ".build" / "next" / "server" / "chunks" / "video.js"
+            route.parent.mkdir(parents=True)
+            chunk.parent.mkdir(parents=True)
+            route.write_text('R.c("server/chunks/video.js")', encoding="utf-8")
+            chunk.write_text(PATCH.VERTEX_RUNTIME_PREVIEW_NEW, encoding="utf-8")
+
+            self.assertEqual(
+                PATCH.find_runtime_chunk(
+                    root,
+                    PATCH.VERTEX_RUNTIME_OLD,
+                    PATCH.VERTEX_RUNTIME_NEW,
+                    "Vertex registry",
+                    alternatives=(PATCH.VERTEX_RUNTIME_PREVIEW_NEW,),
+                ),
+                chunk,
+            )
+
     def test_model_specific_kie_fields_are_in_source_patch(self) -> None:
         self.assertIn('input.mode = typeof body.mode === "string" ? body.mode : "std";', PATCH.KIE_SOURCE_NEW)
         self.assertIn('input.multi_shots = typeof body.multi_shots === "boolean" ? body.multi_shots : false;', PATCH.KIE_SOURCE_NEW)
@@ -115,6 +136,29 @@ class OmniVideoRuntimePatchTests(unittest.TestCase):
                 "runtime.js",
                 PATCH.KIE_RUNTIME_VEO_MARKER,
                 PATCH.KIE_RUNTIME_VEO_BRANCH + PATCH.KIE_RUNTIME_VEO_MARKER,
+            )
+            self.assertEqual(PATCH.check_replacement(replacement, root)[3], "applied")
+
+    def test_original_registry_remains_applied_after_preview_follow_up(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "source.ts"
+            source.write_text(PATCH.VERTEX_SOURCE_PREVIEW_NEW, encoding="utf-8")
+            replacement = PATCH.Replacement(
+                "Vertex source registry",
+                "source.ts",
+                PATCH.VERTEX_SOURCE_OLD,
+                PATCH.VERTEX_SOURCE_NEW,
+            )
+            self.assertEqual(PATCH.check_replacement(replacement, root)[3], "applied")
+
+            runtime = root / "runtime.js"
+            runtime.write_text(PATCH.VERTEX_RUNTIME_PREVIEW_NEW, encoding="utf-8")
+            replacement = PATCH.Replacement(
+                "Vertex compiled registry",
+                "runtime.js",
+                PATCH.VERTEX_RUNTIME_OLD,
+                PATCH.VERTEX_RUNTIME_NEW,
             )
             self.assertEqual(PATCH.check_replacement(replacement, root)[3], "applied")
 

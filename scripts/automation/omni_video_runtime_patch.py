@@ -289,11 +289,11 @@ def video_route_chunks(root: Path) -> list[Path]:
     return [server_root.parent / ref for ref in refs if (server_root.parent / ref).is_file()]
 
 
-def find_runtime_chunk(root: Path, old: str, new: str, label: str) -> Path:
+def find_runtime_chunk(root: Path, old: str, new: str, label: str, alternatives: tuple[str, ...] = ()) -> Path:
     matches: list[Path] = []
     for path in video_route_chunks(root):
         text = path.read_text(encoding="utf-8")
-        if old in text or new in text:
+        if old in text or new in text or any(candidate in text for candidate in alternatives):
             matches.append(path)
     if len(matches) != 1:
         names = ", ".join(str(path) for path in matches) or "none"
@@ -302,7 +302,13 @@ def find_runtime_chunk(root: Path, old: str, new: str, label: str) -> Path:
 
 
 def replacement_plan(root: Path) -> list[Replacement]:
-    config_chunk = find_runtime_chunk(root, VERTEX_RUNTIME_OLD, VERTEX_RUNTIME_NEW, "Vertex registry")
+    config_chunk = find_runtime_chunk(
+        root,
+        VERTEX_RUNTIME_OLD,
+        VERTEX_RUNTIME_NEW,
+        "Vertex registry",
+        alternatives=(VERTEX_RUNTIME_PREVIEW_NEW,),
+    )
     handler_chunk = find_runtime_chunk(root, KIE_RUNTIME_OLD, KIE_RUNTIME_NEW, "KIE handler")
     return [
         Replacement("Vertex source registry", "open-sse/config/videoRegistry.ts", VERTEX_SOURCE_OLD, VERTEX_SOURCE_NEW),
@@ -342,6 +348,19 @@ def check_replacement(replacement: Replacement, root: Path) -> tuple[Path, int, 
         and KIE_RUNTIME_VEO_DIAGNOSTIC_NEW in text
     )
     if diagnostic_applied:
+        return path, old_count, sha256(path), "applied"
+    # The preview-registry follow-up appends three models, so the original
+    # minified two-model registry text (which ends in `}]`) is no longer a
+    # substring.  Recognize the exact final registry as applied to keep the
+    # patch plan idempotent across that expansion.
+    preview_registry_applied = (
+        replacement.name == "Vertex source registry"
+        and VERTEX_SOURCE_PREVIEW_NEW in text
+    ) or (
+        replacement.name == "Vertex compiled registry"
+        and VERTEX_RUNTIME_PREVIEW_NEW in text
+    )
+    if preview_registry_applied:
         return path, old_count, sha256(path), "applied"
     # A replacement's new text may contain the old text as a prefix (the
     # minified KIE patch does this).  Presence of the complete new text is the
