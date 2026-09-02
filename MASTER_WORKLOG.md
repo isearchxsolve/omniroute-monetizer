@@ -13140,3 +13140,13 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 **Runtime boundary.** Both free-tier expansion components are now durable on disk and in Git: `a04fba4` carries the source-plus-compiled VeoAIFree 120-second exchange patch, and `1b42fb9` carries the 900-second bounded runner cap. The registered `OmniRoute` Node process has not been restarted by the agent, so its in-memory executor remains the old version until the operator performs the registered service reload. No generation request or spend-gate slot was consumed by the commit verification.
 
 **Next.** Operator reload is required before the one-attempt long proof: `Restart-Service -Name 'OmniRoute' -Force`. After the user confirms completion, verify the service PID/health read-only, preserve the current report, and run only `OMNI_VIDEO_CONFIRM_SPEND=1 python scripts/automation/video_provider_probe.py --model veoaifree-web/veo --timeout 900 --fresh`. Admission remains conditional on a real returned MP4 whose bytes begin with `ftyp`.
+
+### [2026-09-02 10:24] #1550 - Confirmed the patched runtime is awaiting operator reload
+
+**Read-only service check.** Queried the registered `OmniRoute` Windows service, its NSSM parent/Node child, and the proxy-bypassed health endpoint without changing process state. The service reports `Running` with NSSM PID `19444` and Node child PID `20536`; `GET http://127.0.0.1:20128/api/health` returned HTTP 200 with `{"status":"ok","timestamp":"2026-09-02T04:53:56.572Z"}`. This confirms gateway health, not VeoAIFree patch residency.
+
+**Reload evidence.** The Node process creation time is `2026-09-02T03:29:30.344Z`, while the patched source file has a local mtime of `2026-09-02T10:09:44.3458307+05:30` (approximately `2026-09-02T04:39:44Z`), and the deterministic patch apply completed at `2026-09-02T04:39:46.170116Z`. Therefore the running process predates the patch by roughly 70 minutes and still contains the old 30-second VeoAIFree timeout. The source anchor on disk is `const FETCH_TIMEOUT_MS = 120_000;`, but no claim is made that the live executor has loaded it.
+
+**Safety boundary.** This was read-only verification. No service restart/stop/kill, generation request, spend-gate consumption, provider traffic, Chrome/seat/session-pool action, database operation, credential operation, direct-router call, or ledger admission occurred. The 200 health response is not used as evidence of video capacity.
+
+**Next.** The operator must run the registered-service reload `Restart-Service -Name 'OmniRoute' -Force` in elevated PowerShell. After that, a second read-only PID/creation-time/health check will establish that the process is newer than the patch before the single free VeoAIFree proof is issued.
