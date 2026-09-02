@@ -13615,3 +13615,15 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Component boundary.** The new `scripts/automation/gradio_space_client.py` remains intentionally provider-neutral. It has not been wired into the OmniRoute runtime, provider registry, consumer gateway, or verified-video ledger. It is ready for a later single-candidate integration component after endpoint/license policy decisions.
 
 **Safety.** No live Space submit, GPU-minute consumption, token read or mutation, OmniRoute request, service action, Chrome action, database write, ledger admission, or consumer E2E occurred. The unrelated worklog entry #1585 and pre-existing worktree changes were preserved.
+
+### [2026-09-02 18:27] #1588 — Confirmed ZeroGPU client did not increase registered provider or model counts
+
+**Read-only inventory.** After the offline Gradio client component was committed, checked the current inventory without generating media or mutating runtime state. The plan-only video inventory command `python scripts/automation/video_provider_probe.py --plan-only` completed successfully: `VIDEO_PROVIDERS registry: 26 providers, 83 models`; five registered providers have no handler and remain unwired; management login succeeded; and the supported provider inventory returned `115 provider connections`. The resulting ranked plan contained `22 candidates`.
+
+**Merged gateway count.** Queried the consumer-facing `http://127.0.0.1:8190/v1/models` endpoint read-only. It returned HTTP `200` with `39` model rows. Filtering the identifiers found exactly one video-like row, the generic `video/auto`, and `0` concrete `video/<provider>/auto` seats. The newly added ZeroGPU client is not registered in this catalog, so it did not increase any visible model or seat count.
+
+**Auth-boundary evidence.** A read-only request to the direct `http://127.0.0.1:20128/v1/models` endpoint returned HTTP `401 Unauthorized`; this is an authentication boundary and was not treated as an outage. The separate direct `/health` probe closed unexpectedly during this check, but OmniRoute was not restarted or touched; the successful management login and merged gateway HTTP `200` provide the relevant inventory evidence for this bounded question.
+
+**Decision.** Counts remain unchanged from the prior verified state: `26` video registry providers, `83` registered video models, `115` management provider connections, `22` plan candidates, and the merged gateway at `39` rows with only generic `video/auto` and no concrete video seat. The next numerical increase can occur only after a provider-specific ZeroGPU adapter is wired and a bounded live request returns a verified MP4; the offline client alone must not be counted as capacity.
+
+**Safety.** No Space submit, GPU-minute consumption, token read or mutation, provider/registry write, OmniRoute service action, Chrome action, database write, ledger admission, or consumer E2E occurred. Existing unrelated worklog entries #1585 and #1586 were preserved, including the concurrent duplicate numbering already present; this entry uses the next available number `#1588`.
