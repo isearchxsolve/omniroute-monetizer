@@ -13104,3 +13104,9 @@ Fleet totals: 99 APP_SURFACE, 67 LOGIN_WALL, 16 PAY_WALL, 6 SIGNUP_WALL, 2 REGIO
 **Safety boundary.** No Chrome profile, seat/session-pool process, database, credential, service, or direct-router endpoint was touched. No route was admitted, because no MP4 bytes have been returned and validated. Any future runtime change must be an exact, source-plus-compiled patch followed by the operator-owned registered service reload.
 
 **Next.** Preserve the companion report, then issue one bounded native veoaifree probe with a budget long enough to cross the first poll (at least 180 seconds, with no retry). Record whether it returns an explicit provider wall, a task/result URL, or a genuine MP4 artifact before considering any code modification.
+
+### [2026-09-02 10:06] #1546 - Preserved the veoaifree timeout before the long-poll proof
+
+**Evidence preservation.** Before issuing the longer native experiment, copied 'state/video_provider_probe.json' (the terminal 'veoaifree-web/veo' 90-second timeout, 1,098 bytes) to 'state/video_provider_probe_pre_veoaifree_long_20260902_100600.json'. The source and archive are both 1,098 bytes and have SHA-256 'F16F548C65A0864959B23B1A6C6ED7AA61B5EEE3D614095F450F11D3D9450F55'. The archive was created with a non-overwrite guard and is recoverable independently of the next probe report.
+
+**Safety boundary.** This was a local report backup only. No provider request, service operation, Chrome/seat/session-pool action, database write, credential access, or ledger admission occurred. The next component is one explicitly gated, one-attempt native request with a longer client budget; no retry or parallel candidate is authorized.
