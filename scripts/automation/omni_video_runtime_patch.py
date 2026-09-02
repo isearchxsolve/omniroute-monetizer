@@ -953,6 +953,299 @@ async function __omniHuggingFaceVideo({ model, provider, providerConfig, body, c
 '''
 HUGGINGFACE_RUNTIME_FUNCTION_NEW = HUGGINGFACE_RUNTIME_FUNCTION + HUGGINGFACE_RUNTIME_FUNCTION_MARKER
 
+# The LTX ZeroGPU Space is deliberately a follow-up model under the existing
+# Hugging Face connection.  This avoids creating a duplicate credential row
+# while keeping its Gradio transport separate from HF's Fal queue transport.
+# It is not admitted as healthy by this patch: the normal MP4 proof gate still
+# has to pass after the operator explicitly authorizes one live request.
+HUGGINGFACE_SPACE_MODEL = "Lightricks/LTX-Video-0.9.8-distilled"
+HUGGINGFACE_SPACE_SOURCE_REGISTRY_OLD = '''  huggingface: {
+    id: "huggingface",
+    baseUrl: "https://router.huggingface.co",
+    authType: "apikey",
+    authHeader: "bearer",
+    format: "huggingface-video",
+    models: [
+      { id: "tencent/HunyuanVideo", name: "HunyuanVideo (HF/Fal)" },
+      { id: "Wan-AI/Wan2.2-TI2V-5B", name: "Wan 2.2 TI2V 5B (HF/Fal)" },
+      { id: "meituan-longcat/LongCat-Video", name: "LongCat Video (HF/Fal)" },
+    ],
+  },'''
+HUGGINGFACE_SPACE_SOURCE_REGISTRY_NEW = '''  huggingface: {
+    id: "huggingface",
+    baseUrl: "https://router.huggingface.co",
+    authType: "apikey",
+    authHeader: "bearer",
+    format: "huggingface-video",
+    models: [
+      { id: "tencent/HunyuanVideo", name: "HunyuanVideo (HF/Fal)" },
+      { id: "Wan-AI/Wan2.2-TI2V-5B", name: "Wan 2.2 TI2V 5B (HF/Fal)" },
+      { id: "meituan-longcat/LongCat-Video", name: "LongCat Video (HF/Fal)" },
+      { id: "Lightricks/LTX-Video-0.9.8-distilled", name: "LTX Video 0.9.8 Distilled (ZeroGPU Space)" },
+    ],
+  },'''
+HUGGINGFACE_SPACE_RUNTIME_REGISTRY_OLD = 'models:[{id:"tencent/HunyuanVideo",name:"HunyuanVideo (HF/Fal)"},{id:"Wan-AI/Wan2.2-TI2V-5B",name:"Wan 2.2 TI2V 5B (HF/Fal)"},{id:"meituan-longcat/LongCat-Video",name:"LongCat Video (HF/Fal)"}]'
+HUGGINGFACE_SPACE_RUNTIME_REGISTRY_NEW = 'models:[{id:"tencent/HunyuanVideo",name:"HunyuanVideo (HF/Fal)"},{id:"Wan-AI/Wan2.2-TI2V-5B",name:"Wan 2.2 TI2V 5B (HF/Fal)"},{id:"meituan-longcat/LongCat-Video",name:"LongCat Video (HF/Fal)"},{id:"Lightricks/LTX-Video-0.9.8-distilled",name:"LTX Video 0.9.8 Distilled (ZeroGPU Space)"}]'
+
+HUGGINGFACE_SPACE_SOURCE_DISPATCH_OLD = '''async function handleHuggingFaceVideoGeneration({
+  model,
+  provider,
+  providerConfig,
+  body,
+  credentials,
+  log,
+}) {
+  const startedAt = Date.now();'''
+HUGGINGFACE_SPACE_SOURCE_DISPATCH_NEW = HUGGINGFACE_SPACE_SOURCE_DISPATCH_OLD.replace(
+    "  const startedAt = Date.now();",
+    '''  const startedAt = Date.now();
+  if (model === HUGGINGFACE_SPACE_MODEL) {
+    return handleHuggingFaceLtxSpaceVideo({ model, provider, providerConfig, body, credentials, log });
+  }''',
+)
+HUGGINGFACE_SPACE_RUNTIME_DISPATCH_OLD = '''async function __omniHuggingFaceVideo({model, provider, providerConfig, body, credentials, log}) {
+  const startedAt = Date.now();'''
+HUGGINGFACE_SPACE_RUNTIME_DISPATCH_NEW = HUGGINGFACE_SPACE_RUNTIME_DISPATCH_OLD.replace(
+    "  const startedAt = Date.now();",
+    '''  const startedAt = Date.now();
+  if (model === "Lightricks/LTX-Video-0.9.8-distilled") {
+    return __omniHuggingFaceLtxSpaceVideo({ model, provider, providerConfig, body, credentials, log });
+  }''',
+)
+
+GRADIO_SPACE_SOURCE_FUNCTION_MARKER = HUGGINGFACE_SOURCE_FUNCTION_MARKER
+GRADIO_SPACE_SOURCE_FUNCTION = r'''
+const HUGGINGFACE_SPACE_LTX_BASE_URL = "https://lightricks-ltx-video-distilled.hf.space";
+const HUGGINGFACE_SPACE_LTX_API_NAME = "text_to_video";
+const HUGGINGFACE_SPACE_TIMEOUT_MS = 900_000;
+
+type GradioSpaceRecord = Record<string, unknown>;
+
+function isGradioSpaceRecord(value: unknown): value is GradioSpaceRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function gradioSpaceText(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function gradioSpaceDiagnostic(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim()) return value.trim().slice(0, 2000);
+  if (isGradioSpaceRecord(value)) {
+    for (const key of ["error", "message", "detail"]) {
+      const candidate = gradioSpaceText(value[key]);
+      if (candidate) return candidate.slice(0, 2000);
+    }
+  }
+  return fallback;
+}
+
+function gradioSpaceNumber(value: unknown, fallback: number, minimum: number, maximum: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function gradioSpaceDimension(value: unknown, fallback: number): number {
+  const bounded = gradioSpaceNumber(value, fallback, 256, 1280);
+  return Math.round(bounded / 32) * 32;
+}
+
+function gradioSpaceFrames(value: unknown): number {
+  const bounded = Math.round(gradioSpaceNumber(value, 9, 9, 257));
+  return Math.min(257, Math.max(9, Math.round((bounded - 1) / 8) * 8 + 1));
+}
+
+function gradioSpaceBase(providerConfig: unknown): string {
+  const record = isGradioSpaceRecord(providerConfig) ? providerConfig : {};
+  const specific = isGradioSpaceRecord(record.providerSpecificData) ? record.providerSpecificData : {};
+  const override = gradioSpaceText(specific.spaceBaseUrl);
+  if (override && /^https:\/\/[A-Za-z0-9.-]+\.hf\.space$/.test(override)) return override.replace(/\/+$/, "");
+  return HUGGINGFACE_SPACE_LTX_BASE_URL;
+}
+
+function gradioSpaceMp4(bytes: Uint8Array): boolean {
+  return bytes.length >= 8 && String.fromCharCode(...bytes.slice(4, 8)) === "ftyp";
+}
+
+function gradioSpaceFileUrl(value: unknown, baseUrl: string): string | undefined {
+  if (isGradioSpaceRecord(value)) {
+    const url = gradioSpaceText(value.url);
+    const path = gradioSpaceText(value.path);
+    const mime = gradioSpaceText(value.mime_type) || "";
+    if (url && (mime.includes("video") || /\.(mp4|webm|mov)(?:$|[?#])/i.test(url))) {
+      try { return new URL(url, baseUrl).toString(); } catch { return undefined; }
+    }
+    if (path && (mime.includes("video") || /\.(mp4|webm|mov)$/i.test(path))) {
+      try { return new URL(`/gradio_api/file=${encodeURIComponent(path)}`, baseUrl).toString(); } catch { return undefined; }
+    }
+    for (const child of Object.values(value)) {
+      const found = gradioSpaceFileUrl(child, baseUrl);
+      if (found) return found;
+    }
+  } else if (Array.isArray(value)) {
+    for (const child of value) {
+      const found = gradioSpaceFileUrl(child, baseUrl);
+      if (found) return found;
+    }
+  } else if (typeof value === "string" && /\.(mp4|webm|mov)(?:$|[?#])/i.test(value)) {
+    try { return new URL(value, baseUrl).toString(); } catch { return undefined; }
+  }
+  return undefined;
+}
+
+function gradioSpaceEvents(stream: string): Array<{ name: string; data: unknown }> {
+  const events: Array<{ name: string; data: unknown }> = [];
+  let eventName = "message";
+  let dataLines: string[] = [];
+  const flush = () => {
+    if (!dataLines.length) { eventName = "message"; return; }
+    const dataText = dataLines.join("\n");
+    if (dataText !== "[DONE]") {
+      let data: unknown = dataText;
+      try { data = JSON.parse(dataText); } catch { /* retain diagnostic text */ }
+      events.push({ name: eventName, data });
+    }
+    eventName = "message";
+    dataLines = [];
+  };
+  for (const line of stream.split(/\r?\n/)) {
+    if (!line) flush();
+    else if (line.startsWith("event:")) eventName = line.slice(6).trim() || "message";
+    else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+  }
+  flush();
+  return events;
+}
+
+async function handleHuggingFaceLtxSpaceVideo({
+  model,
+  provider,
+  providerConfig,
+  body,
+  credentials,
+  log,
+}) {
+  const startedAt = Date.now();
+  const bodyObj = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const prompt = gradioSpaceText(bodyObj.prompt);
+  if (!prompt) return { success: false, status: 400, error: "LTX ZeroGPU Space video prompt is required" };
+  const creds = credentials && typeof credentials === "object" ? credentials : {};
+  const token = isGradioSpaceRecord(creds) ? gradioSpaceText(creds.apiKey) || gradioSpaceText(creds.accessToken) : undefined;
+  if (token && !token.startsWith("hf_")) return { success: false, status: 401, error: "Hugging Face requires an hf_ access token when one is configured" };
+
+  const baseUrl = gradioSpaceBase(providerConfig);
+  const duration = gradioSpaceNumber(bodyObj.duration ?? bodyObj.durationSeconds, 2, 0.3, 8.5);
+  const negativePrompt = gradioSpaceText(bodyObj.negative_prompt) || "worst quality, inconsistent motion, blurry, jittery, distorted";
+  const height = gradioSpaceDimension(bodyObj.height, 512);
+  const width = gradioSpaceDimension(bodyObj.width, 704);
+  const frames = gradioSpaceFrames(bodyObj.frames ?? bodyObj.ui_frames_to_use);
+  const seed = Math.round(gradioSpaceNumber(bodyObj.seed, 42, 0, 4_294_967_295));
+  const randomizeSeed = bodyObj.randomize_seed !== false;
+  const guidanceScale = gradioSpaceNumber(bodyObj.guidance_scale, 3, 1, 10);
+  const improveTexture = bodyObj.improve_texture !== false;
+  const data = [prompt, negativePrompt, null, null, height, width, "text-to-video", duration, frames, seed, randomizeSeed, guidanceScale, improveTexture];
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HUGGINGFACE_SPACE_TIMEOUT_MS);
+  log?.info?.("VIDEO", `Hugging Face ZeroGPU Space: ${provider}/${model}`);
+  try {
+    const submitResponse = await fetch(`${baseUrl}/gradio_api/call/${HUGGINGFACE_SPACE_LTX_API_NAME}`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ data }),
+      signal: controller.signal,
+    });
+    const submitText = await submitResponse.text();
+    let submitJson: unknown = null;
+    try { submitJson = JSON.parse(submitText); } catch { /* handled by diagnostic */ }
+    if (!submitResponse.ok) return { success: false, status: submitResponse.status, error: gradioSpaceDiagnostic(submitJson, submitText || `Gradio submit failed (${submitResponse.status})`) };
+    const eventId = isGradioSpaceRecord(submitJson) ? gradioSpaceText(submitJson.event_id) : undefined;
+    if (!eventId) return { success: false, status: 502, error: "LTX ZeroGPU Space submit returned no event_id" };
+
+    const pollResponse = await fetch(`${baseUrl}/gradio_api/call/${HUGGINGFACE_SPACE_LTX_API_NAME}/${encodeURIComponent(eventId)}`, {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+    });
+    const pollText = await pollResponse.text();
+    if (!pollResponse.ok) return { success: false, status: pollResponse.status, error: pollText.slice(0, 2000) || `Gradio poll failed (${pollResponse.status})` };
+    const events = gradioSpaceEvents(pollText);
+    const terminal = [...events].reverse().find((item) => item.name === "complete" || item.name === "error" || item.name === "cancelled");
+    if (!terminal) return { success: false, status: 502, error: "LTX ZeroGPU Space poll closed without a terminal event" };
+    if (terminal.name !== "complete") return { success: false, status: 502, error: `LTX ZeroGPU Space job ended with ${terminal.name}` };
+    const videoUrl = gradioSpaceFileUrl(terminal.data, baseUrl);
+    if (!videoUrl) return { success: false, status: 502, error: "LTX ZeroGPU Space completed without a video URL" };
+
+    const mediaResponse = await fetch(videoUrl, { method: "GET", headers: { Accept: "video/mp4" }, signal: controller.signal });
+    const mediaBytes = new Uint8Array(await mediaResponse.arrayBuffer());
+    if (!mediaResponse.ok) return { success: false, status: mediaResponse.status, error: new TextDecoder().decode(mediaBytes).slice(0, 2000) || `Gradio media download failed (${mediaResponse.status})` };
+    if (!gradioSpaceMp4(mediaBytes)) {
+      log?.error?.("VIDEO", "LTX ZeroGPU Space returned a non-MP4 success body");
+      return { success: false, status: 502, error: { error: { message: "LTX ZeroGPU Space did not return a valid MP4 artifact", type: "upstream_error", code: "VIDEO_ARTIFACT_UNAVAILABLE" } } };
+    }
+    saveCallLog({ method: "POST", path: "/v1/videos/generations", status: 200, model: `${provider}/${model}`, provider, duration: Date.now() - startedAt, responseBody: { videos_count: 1, mode: "huggingface-zerogpu", eventId } }).catch(() => {});
+    return { success: true, data: { created: Math.floor(Date.now() / 1000), data: [{ b64_json: Buffer.from(mediaBytes).toString("base64"), format: "mp4" }] } };
+  } catch (err) {
+    const message = sanitizeErrorMessage(err instanceof Error ? err.message : String(err));
+    const timedOut = err instanceof FetchTimeoutError || (err as any)?.name === "AbortError";
+    log?.error?.("VIDEO", `LTX ZeroGPU Space ${timedOut ? "timeout" : "request error"}: ${message}`);
+    return { success: false, status: timedOut ? 504 : 502, error: `LTX ZeroGPU Space ${timedOut ? "timed out" : "request failed"}: ${message}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+'''
+GRADIO_SPACE_SOURCE_FUNCTION_NEW = GRADIO_SPACE_SOURCE_FUNCTION + GRADIO_SPACE_SOURCE_FUNCTION_MARKER
+
+GRADIO_SPACE_RUNTIME_FUNCTION_MARKER = HUGGINGFACE_RUNTIME_FUNCTION_MARKER
+GRADIO_SPACE_RUNTIME_FUNCTION = r'''
+const __omniHfSpaceBase = "https://lightricks-ltx-video-distilled.hf.space";
+const __omniHfSpaceApi = "text_to_video";
+const __omniHfSpaceTimeout = 900000;
+function __omniHfSpaceText(value){return typeof value==="string"&&value.trim()?value.trim():undefined;}
+function __omniHfSpaceRecord(value){return Boolean(value)&&typeof value==="object"&&!Array.isArray(value);}
+function __omniHfSpaceNumber(value,fallback,min,max){return typeof value!=="number"||!Number.isFinite(value)?fallback:Math.min(max,Math.max(min,value));}
+function __omniHfSpaceDimension(value,fallback){return Math.round(__omniHfSpaceNumber(value,fallback,256,1280)/32)*32;}
+function __omniHfSpaceFrames(value){const n=Math.round(__omniHfSpaceNumber(value,9,9,257));return Math.min(257,Math.max(9,Math.round((n-1)/8)*8+1));}
+function __omniHfSpaceMp4(bytes){return bytes.length>=8&&String.fromCharCode(...bytes.slice(4,8))==="ftyp";}
+function __omniHfSpaceUrl(value,base){
+  if(__omniHfSpaceRecord(value)){
+    const url=__omniHfSpaceText(value.url),path=__omniHfSpaceText(value.path),mime=__omniHfSpaceText(value.mime_type)||"";
+    if(url&&(mime.includes("video")||/\.(mp4|webm|mov)(?:$|[?#])/i.test(url)))try{return new URL(url,base).toString();}catch{}
+    if(path&&(mime.includes("video")||/\.(mp4|webm|mov)$/i.test(path)))try{return new URL(`/gradio_api/file=${encodeURIComponent(path)}`,base).toString();}catch{}
+    for(const child of Object.values(value)){const found=__omniHfSpaceUrl(child,base);if(found)return found;}
+  }else if(Array.isArray(value)){for(const child of value){const found=__omniHfSpaceUrl(child,base);if(found)return found;}}
+  else if(typeof value==="string"&&/\.(mp4|webm|mov)(?:$|[?#])/i.test(value))try{return new URL(value,base).toString();}catch{}
+  return undefined;
+}
+function __omniHfSpaceEvents(stream){
+  const out=[],lines=String(stream||"").split(/\r?\n/);let name="message",data=[];
+  const flush=()=>{if(!data.length){name="message";return;}const text=data.join("\n");if(text!=="[DONE]"){let value=text;try{value=JSON.parse(text);}catch{}out.push({name,data:value});}name="message";data=[];};
+  for(const line of lines){if(!line)flush();else if(line.startsWith("event:"))name=line.slice(6).trim()||"message";else if(line.startsWith("data:"))data.push(line.slice(5).trimStart());}flush();return out;
+}
+async function __omniHuggingFaceLtxSpaceVideo({model,provider,providerConfig,body,credentials,log}){
+  const startedAt=Date.now(),bodyObj=body&&typeof body==="object"?body:{},prompt=__omniHfSpaceText(bodyObj.prompt);
+  if(!prompt)return{success:false,status:400,error:"LTX ZeroGPU Space video prompt is required"};
+  const creds=credentials&&typeof credentials==="object"?credentials:{},token=__omniHfSpaceRecord(creds)?__omniHfSpaceText(creds.apiKey)||__omniHfSpaceText(creds.accessToken):undefined;
+  if(token&&!token.startsWith("hf_"))return{success:false,status:401,error:"Hugging Face requires an hf_ access token when one is configured"};
+  const base=__omniHfSpaceBase,duration=__omniHfSpaceNumber(bodyObj.duration??bodyObj.durationSeconds,2,.3,8.5),negative=__omniHfSpaceText(bodyObj.negative_prompt)||"worst quality, inconsistent motion, blurry, jittery, distorted",height=__omniHfSpaceDimension(bodyObj.height,512),width=__omniHfSpaceDimension(bodyObj.width,704),frames=__omniHfSpaceFrames(bodyObj.frames??bodyObj.ui_frames_to_use),seed=Math.round(__omniHfSpaceNumber(bodyObj.seed,42,0,4294967295)),randomize=bodyObj.randomize_seed!==false,guidance=__omniHfSpaceNumber(bodyObj.guidance_scale,3,1,10),improve=bodyObj.improve_texture!==false,data=[prompt,negative,null,null,height,width,"text-to-video",duration,frames,seed,randomize,guidance,improve],headers={Accept:"application/json"};
+  if(token)headers.Authorization=`Bearer ${token}`;
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),__omniHfSpaceTimeout);log?.info?.("VIDEO",`Hugging Face ZeroGPU Space: ${provider}/${model}`);
+  try{
+    const submit=await fetch(`${base}/gradio_api/call/${__omniHfSpaceApi}`,{method:"POST",headers:{...headers,"Content-Type":"application/json"},body:JSON.stringify({data}),signal:controller.signal}),submitText=await submit.text();let submitJson=null;try{submitJson=JSON.parse(submitText);}catch{}
+    if(!submit.ok)return{success:false,status:submit.status,error:__omniHfDiagnostic(submitJson,submitText||`Gradio submit failed (${submit.status})`)};
+    const eventId=__omniHfSpaceRecord(submitJson)?__omniHfSpaceText(submitJson.event_id):undefined;if(!eventId)return{success:false,status:502,error:"LTX ZeroGPU Space submit returned no event_id"};
+    const poll=await fetch(`${base}/gradio_api/call/${__omniHfSpaceApi}/${encodeURIComponent(eventId)}`,{method:"GET",headers,signal:controller.signal}),pollText=await poll.text();if(!poll.ok)return{success:false,status:poll.status,error:pollText.slice(0,2000)||`Gradio poll failed (${poll.status})`};
+    const events=__omniHfSpaceEvents(pollText),terminal=[...events].reverse().find(item=>item.name==="complete"||item.name==="error"||item.name==="cancelled");if(!terminal)return{success:false,status:502,error:"LTX ZeroGPU Space poll closed without a terminal event"};if(terminal.name!=="complete")return{success:false,status:502,error:`LTX ZeroGPU Space job ended with ${terminal.name}`};
+    const videoUrl=__omniHfSpaceUrl(terminal.data,base);if(!videoUrl)return{success:false,status:502,error:"LTX ZeroGPU Space completed without a video URL"};
+    const media=await fetch(videoUrl,{method:"GET",headers:{Accept:"video/mp4"},signal:controller.signal}),bytes=new Uint8Array(await media.arrayBuffer());if(!media.ok)return{success:false,status:media.status,error:new TextDecoder().decode(bytes).slice(0,2000)||`Gradio media download failed (${media.status})`};if(!__omniHfSpaceMp4(bytes)){log?.error?.("VIDEO","LTX ZeroGPU Space returned a non-MP4 success body");return{success:false,status:502,error:{error:{message:"LTX ZeroGPU Space did not return a valid MP4 artifact",type:"upstream_error",code:"VIDEO_ARTIFACT_UNAVAILABLE"}}};}
+    (0,o.saveCallLog)({method:"POST",path:"/v1/videos/generations",status:200,model:`${provider}/${model}`,provider,duration:Date.now()-startedAt,responseBody:{videos_count:1,mode:"huggingface-zerogpu",eventId}}).catch(()=>{});return{success:true,data:{created:Math.floor(Date.now()/1000),data:[{b64_json:Buffer.from(bytes).toString("base64"),format:"mp4"}]}};
+  }catch(err){const message=(0,s.sanitizeErrorMessage)(err instanceof Error?err.message:String(err)),timedOut=err?.name==="AbortError";log?.error?.("VIDEO",`LTX ZeroGPU Space ${timedOut?"timeout":"request error"}: ${message}`);return{success:false,status:timedOut?504:502,error:`LTX ZeroGPU Space ${timedOut?"timed out":"request failed"}: ${message}`};}finally{clearTimeout(timer);}
+}
+'''
+GRADIO_SPACE_RUNTIME_FUNCTION_NEW = GRADIO_SPACE_RUNTIME_FUNCTION + GRADIO_SPACE_RUNTIME_FUNCTION_MARKER
+
 
 @dataclass(frozen=True)
 class Replacement:
@@ -1060,6 +1353,7 @@ def replacement_plan(root: Path) -> list[Replacement]:
         Replacement("Vertex source registry", "open-sse/config/videoRegistry.ts", VERTEX_SOURCE_OLD, VERTEX_SOURCE_NEW),
         Replacement("Vertex source preview registry", "open-sse/config/videoRegistry.ts", VERTEX_SOURCE_PREVIEW_OLD, VERTEX_SOURCE_PREVIEW_NEW),
         Replacement("Hugging Face source video registry", "open-sse/config/videoRegistry.ts", HUGGINGFACE_SOURCE_REGISTRY_OLD, HUGGINGFACE_SOURCE_REGISTRY_NEW),
+        Replacement("Hugging Face ZeroGPU source model registry", "open-sse/config/videoRegistry.ts", HUGGINGFACE_SPACE_SOURCE_REGISTRY_OLD, HUGGINGFACE_SPACE_SOURCE_REGISTRY_NEW),
         Replacement("KIE source request fields", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_TYPE_OLD, KIE_SOURCE_TYPE_NEW),
         Replacement("KIE source model defaults", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_OLD, KIE_SOURCE_NEW),
         Replacement("KIE source Veo API branch", "open-sse/handlers/videoGeneration.ts", KIE_SOURCE_VEO_MARKER, KIE_SOURCE_VEO_BRANCH + KIE_SOURCE_VEO_MARKER),
@@ -1067,6 +1361,7 @@ def replacement_plan(root: Path) -> list[Replacement]:
         Replacement("Vertex compiled registry", str(config_chunk.relative_to(root)), VERTEX_RUNTIME_OLD, VERTEX_RUNTIME_NEW),
         Replacement("Vertex compiled preview registry", str(config_chunk.relative_to(root)), VERTEX_RUNTIME_PREVIEW_OLD, VERTEX_RUNTIME_PREVIEW_NEW),
         Replacement("Hugging Face compiled video registry", str(config_chunk.relative_to(root)), HUGGINGFACE_RUNTIME_REGISTRY_OLD, HUGGINGFACE_RUNTIME_REGISTRY_NEW),
+        Replacement("Hugging Face ZeroGPU compiled model registry", str(config_chunk.relative_to(root)), HUGGINGFACE_SPACE_RUNTIME_REGISTRY_OLD, HUGGINGFACE_SPACE_RUNTIME_REGISTRY_NEW),
         Replacement("KIE compiled model defaults", str(handler_chunk.relative_to(root)), KIE_RUNTIME_OLD, KIE_RUNTIME_NEW),
         Replacement("KIE compiled Veo API branch", str(handler_chunk.relative_to(root)), KIE_RUNTIME_VEO_MARKER, KIE_RUNTIME_VEO_BRANCH + KIE_RUNTIME_VEO_MARKER),
         Replacement("KIE compiled Veo response diagnostics", str(handler_chunk.relative_to(root)), KIE_RUNTIME_VEO_DIAGNOSTIC_OLD, KIE_RUNTIME_VEO_DIAGNOSTIC_NEW),
@@ -1109,6 +1404,12 @@ def replacement_plan(root: Path) -> list[Replacement]:
             HUGGINGFACE_SOURCE_FUNCTION_NEW,
         ),
         Replacement(
+            "Hugging Face source ZeroGPU dispatch",
+            "open-sse/handlers/videoGeneration.ts",
+            HUGGINGFACE_SPACE_SOURCE_DISPATCH_OLD,
+            HUGGINGFACE_SPACE_SOURCE_DISPATCH_NEW,
+        ),
+        Replacement(
             "Hugging Face compiled video branch",
             str(handler_chunk.relative_to(root)),
             HUGGINGFACE_RUNTIME_BRANCH_OLD,
@@ -1119,6 +1420,24 @@ def replacement_plan(root: Path) -> list[Replacement]:
             str(handler_chunk.relative_to(root)),
             HUGGINGFACE_RUNTIME_FUNCTION_MARKER,
             HUGGINGFACE_RUNTIME_FUNCTION_NEW,
+        ),
+        Replacement(
+            "Hugging Face compiled ZeroGPU dispatch",
+            str(handler_chunk.relative_to(root)),
+            HUGGINGFACE_SPACE_RUNTIME_DISPATCH_OLD,
+            HUGGINGFACE_SPACE_RUNTIME_DISPATCH_NEW,
+        ),
+        Replacement(
+            "Hugging Face source ZeroGPU handler",
+            "open-sse/handlers/videoGeneration.ts",
+            GRADIO_SPACE_SOURCE_FUNCTION_MARKER,
+            GRADIO_SPACE_SOURCE_FUNCTION_NEW,
+        ),
+        Replacement(
+            "Hugging Face compiled ZeroGPU handler",
+            str(handler_chunk.relative_to(root)),
+            GRADIO_SPACE_RUNTIME_FUNCTION_MARKER,
+            GRADIO_SPACE_RUNTIME_FUNCTION_NEW,
         ),
     ]
 
