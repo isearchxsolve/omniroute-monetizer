@@ -13637,3 +13637,13 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Test execution.** Ran `python -m pytest -q tests/test_omni_video_runtime_patch.py`. Result: `10 passed in 1.22s`. The existing suite successfully imported the expanded patch module and preserved all prior exact-replacement, source/runtime reversibility, registry, and MP4-gated Hugging Face contract checks. New LTX-specific assertions are the next small test component.
 
 **Safety and status.** No OmniRoute restart, package edit, provider/registry runtime write, credential read or mutation, service action, Chrome action, ZeroGPU request, GPU-minute consumption, consumer E2E, database write, or ledger admission occurred. The LTX route remains unverified and unadmitted; only repository patch code changed in this component.
+
+### [2026-09-02 19:02] #1590 — LTX ZeroGPU source-plus-compiled contract assertions pass
+
+**Test component.** Added focused assertions to `tests/test_omni_video_runtime_patch.py` for the new LTX ZeroGPU follow-up: exact model ID and registry presence in source/runtime forms, official Space base URL, Gradio text-to-video endpoint, terminal-event handling, MP4 artifact gate, source/runtime dispatch fragments, and exact reversibility of all six follow-up replacements.
+
+**Verification.** Ran `python -m pytest -q tests/test_omni_video_runtime_patch.py`. Result: `12 passed in 1.17s`. The suite now covers the ten pre-existing runtime-patch contracts plus the two new LTX/ZeroGPU contract tests. No installed package was patched and no runtime service was reloaded.
+
+**Decision.** The source-plus-compiled LTX adapter is implementation-ready for an isolated sandbox apply/plan check. It remains unverified capacity: the registry model is not yet visible to the live catalog, no provider connection or route was admitted, and no live generation call is authorized by this test result.
+
+**Safety.** No ZeroGPU submit, GPU-minute consumption, HF token read or mutation, OmniRoute service action, Chrome action, database write, ledger admission, or consumer E2E occurred. Unrelated worktree changes and the existing duplicate worklog numbering were preserved.

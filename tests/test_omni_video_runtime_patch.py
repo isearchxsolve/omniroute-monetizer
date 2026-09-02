@@ -76,6 +76,37 @@ class OmniVideoRuntimePatchTests(unittest.TestCase):
         self.assertIn('token.startsWith("hf_")', PATCH.HUGGINGFACE_SOURCE_FUNCTION)
         self.assertIn('__omniHuggingFaceVideo', PATCH.HUGGINGFACE_RUNTIME_BRANCH_NEW)
 
+    def test_ltx_zerogpu_contract_is_explicit_and_not_admitted_by_default(self) -> None:
+        self.assertEqual(PATCH.HUGGINGFACE_SPACE_MODEL, "Lightricks/LTX-Video-0.9.8-distilled")
+        self.assertIn(PATCH.HUGGINGFACE_SPACE_MODEL, PATCH.HUGGINGFACE_SPACE_SOURCE_REGISTRY_NEW)
+        self.assertIn(PATCH.HUGGINGFACE_SPACE_MODEL, PATCH.HUGGINGFACE_SPACE_RUNTIME_REGISTRY_NEW)
+        self.assertIn('https://lightricks-ltx-video-distilled.hf.space', PATCH.GRADIO_SPACE_SOURCE_FUNCTION)
+        self.assertIn('/gradio_api/call/${HUGGINGFACE_SPACE_LTX_API_NAME}', PATCH.GRADIO_SPACE_SOURCE_FUNCTION)
+        self.assertIn('text-to-video', PATCH.GRADIO_SPACE_SOURCE_FUNCTION)
+        self.assertIn('VIDEO_ARTIFACT_UNAVAILABLE', PATCH.GRADIO_SPACE_SOURCE_FUNCTION)
+        self.assertIn('LTX ZeroGPU Space poll closed without a terminal event', PATCH.GRADIO_SPACE_SOURCE_FUNCTION)
+        self.assertIn('__omniHuggingFaceLtxSpaceVideo', PATCH.GRADIO_SPACE_RUNTIME_FUNCTION)
+        self.assertIn('huggingface-zerogpu', PATCH.GRADIO_SPACE_RUNTIME_FUNCTION)
+
+    def test_ltx_follow_up_replacements_are_exactly_reversible(self) -> None:
+        replacements = [
+            PATCH.Replacement("ltx-source-registry", "registry.ts", PATCH.HUGGINGFACE_SPACE_SOURCE_REGISTRY_OLD, PATCH.HUGGINGFACE_SPACE_SOURCE_REGISTRY_NEW),
+            PATCH.Replacement("ltx-runtime-registry", "registry.js", PATCH.HUGGINGFACE_SPACE_RUNTIME_REGISTRY_OLD, PATCH.HUGGINGFACE_SPACE_RUNTIME_REGISTRY_NEW),
+            PATCH.Replacement("ltx-source-dispatch", "handler.ts", PATCH.HUGGINGFACE_SPACE_SOURCE_DISPATCH_OLD, PATCH.HUGGINGFACE_SPACE_SOURCE_DISPATCH_NEW),
+            PATCH.Replacement("ltx-runtime-dispatch", "handler.js", PATCH.HUGGINGFACE_SPACE_RUNTIME_DISPATCH_OLD, PATCH.HUGGINGFACE_SPACE_RUNTIME_DISPATCH_NEW),
+            PATCH.Replacement("ltx-source-handler", "handler.ts", PATCH.GRADIO_SPACE_SOURCE_FUNCTION_MARKER, PATCH.GRADIO_SPACE_SOURCE_FUNCTION_NEW),
+            PATCH.Replacement("ltx-runtime-handler", "handler.js", PATCH.GRADIO_SPACE_RUNTIME_FUNCTION_MARKER, PATCH.GRADIO_SPACE_RUNTIME_FUNCTION_NEW),
+        ]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for replacement in replacements:
+                path = root / replacement.relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(replacement.old, encoding="utf-8")
+                self.assertEqual(PATCH.check_replacement(replacement, root)[3], "pending")
+                path.write_text(replacement.new, encoding="utf-8")
+                self.assertEqual(PATCH.check_replacement(replacement, root)[3], "applied")
+
     def test_huggingface_replacements_are_exactly_reversible(self) -> None:
         replacements = [
             PATCH.Replacement("hf-source-registry", "registry.ts", PATCH.HUGGINGFACE_SOURCE_REGISTRY_OLD, PATCH.HUGGINGFACE_SOURCE_REGISTRY_NEW),
