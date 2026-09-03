@@ -14014,3 +14014,17 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Safety.** No new provider exploration; no Chrome touched this session; no video spend (chat-only); all graduation traffic is free light chat probes through the operator's own OmniRoute (:20128) plus planned :8190 consumer probes; run file persisted per-route (resumable). Nothing inflated: counts above are probe verdicts, NOT consumer admissions until the consumer phase completes.
 
 **Next gate.** Wait for probe phase completion â†’ consumer admission phase â†? count admitted rows; then report the honest new Omni-lane capacity delta. The runtime will take hours at 2 lanes / 1s min-interval; check back by run-file updatedAt rather than by killing anything.
+
+### [2026-09-03 06:10] #1620 â€” Tenant gate catch: graduation consumer probes would have 401'd; fixed + committed; seat retry second sample recorded
+
+**Critical catch.** While running the deferred seat-lane retry (worklog #1617 follow-up), every failed seat returned HTTP 401 in 20â€"125 ms â€" not a provider verdict. Cause: the #1618 tenant gate now requires `Authorization: Bearer <key>` on ALL `:8190` consumer chat calls, and `omniroute_graduation.py consumer_probe` posts without auth. The running graduation master would therefore reach its consumer-admission phase, 401 every direct-OK route through `:8190/v1`, and write a zero-admission ledger â€" silently converting 147+ real direct proofs into a false empty tank.
+
+**Fixes (commit 2e1c865).** (1) `omniroute_graduation.py`: new `consumer_auth_header()` reads one `sk-` key from the hot-read `state/secrets/tenant_map.json` at call time (no value printed/logged), attached to every consumer probe; falls back to no header pre-tenancy. (2) New `scripts/automation/seat_chat_retry.py`: bounded single-request retry for named seats (default = the 5 failed in #1617), serial, tenant-authenticated, atomic report write. Both py_compile clean.
+
+**Admissions ledger protected.** Pre-change `state/omniroute_verified_routes.json` (24 entries, generated 2026-09-01) backed up to `state/admission-backups/pre-graduation-401-guard-20260903T0600Z-omniroute_verified_routes.json`.
+
+**Honest second sample for the 5 seats (tenant-authenticated, one request each):** api.1min.ai timeout (45 s), api.groq.com 429, app.chathub.gg 429, chat.deepseek.com timeout, felo.ai timeout. Interpretation: the two first-sweep 500s now surface as 429 â€" requests genuinely reach upstream and are rate-limited; the three timeouts remain transport-slow. Two samples each now; per the no-hammer law they are NOT retried further this session. Seat-lane live capacity stays 8 chat + 1 video. Report: `state/seat_chat_retry_latest.json`.
+
+**Graduation progress snapshot (06:03Z).** 4,035/9,690 probed (~42%), 165 DIRECT_LAW3_OK, remaining leaders: requesty 1,077, openrouter 1,048, nous-research 873, pollinations 559, kilocode 397. NOTE: the running master predates the consumer-auth fix in memory â€" its consumer phase will still 401. Remedy at completion: rerun `omniroute_graduation.py --apply --e2e --chat-only` (resume defaults ON; it reuses all prior non-ERROR/non-TRANSPORT direct results and only re-runs the consumer phase with the fixed code). No restart of anything needed; the fix is on disk for the next run.
+
+**Safety.** Consumer probes are light chat requests through the operator's own gateways; five one-shot seat retries; no Chrome; no video spend; secrets never printed; admissions backed up before any overwrite.
