@@ -13958,3 +13958,17 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **The replicable closure unit (the discipline, formalized).** This entire closure took ~35 minutes using the pattern that was missing for two weeks: (1) never hand-touch the production port â route every change through the registered owner; (2) one marker â one verified reload â visibility check; (3) one idempotent consumer request â poll â byte-level artifact verification; (4) log and commit at each gate. Every APP_SURFACE/LOGIN-terminated seat in the four-profile ledgers and every Omni-native route should now be driven through this same unit before any new provider is investigated: expansion converts to capacity only at the consumer.
 
 **Safety.** One public-Space generation (zero credits, no token, no paid API). No Chrome action, no database mutation, no provider-connection change, no OmniRoute restart. All changes flowed through the scheduled owner. The job is idempotent and retained in the durable ledger under its job_key.
+
+### [2026-09-03 02:55] #1616 â€” Acceptance suite re-certified: MONETIZER_READY 20/20 after T2/T14 auth fix
+
+**Trigger.** Post-closure re-verification of the LTX consumer route. The first suite run returned `MONETIZER_BLOCKED` with T2/T14 failing on `/v1/models` HTTP 401.
+
+**Root cause (suite staleness, not a system fault).** The promoted OmniRoute 3.8.50 production state protects its inference catalog by design: anonymous `GET /v1/models` correctly returns 401 (documented in worklog #12274/#12278 and encoded in `omniroute_graduation.authenticated_live_catalog`). The acceptance suite still probed the catalog unauthenticated â€” the same harness-validation defect that caused the first cutover rollback (#12276). Verified separately: canonical authenticated path (`OmniRouteAPI` login from the DPAPI vault, `trust_env=False`) returns HTTP 200 with 9,828 model rows in ~10s first-read. The bare-bearer probe also 401s because 3.8.50 expects the `auth_token` management cookie, not a static bearer.
+
+**Fix.** Added `AcceptanceTestSuite._authed_catalog_session()` to `acceptance_tests.py`: a `requests.Session` with `trust_env=False` that logs in via the existing T11-compliant `oauth_keepalive.resolve_password()` vault path (same pattern as T15). T2 and T14 now fetch `/v1/models` through it. No credential is read into the suite beyond the vault call; nothing is printed or logged.
+
+**Result.** Intermediate run: 19/20 with T6 failing transiently mid-suite (the documented catalog-rebuild stall; T6 passes in isolation). Full re-run: **20/20 â€” `[PASS] MONETIZER_READY`**.
+
+**Current certified state.** Core T1â€“T12, performance T13â€“T15, automation T16â€“T20 all green against live services (:20128 catalog serving 9,828 rows authenticated; :8190 seat-pool healthy with the first consumer-proven LTX video route from #1615). Focused component tests also green: 19 passed (shim owner, shim task, LTX client, Gradio client, pure-Python registry).
+
+**Commit.** Suite fix + this entry committed together. No secrets touched; vault password never printed; no service restart; no spend.

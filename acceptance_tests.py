@@ -87,16 +87,40 @@ class AcceptanceTestSuite:
         except Exception as e:
             self.log_fail("T1", f"Service unreachable: {e}")
     
+    def _authed_catalog_session(self):
+        """Authenticated session for the protected 3.8.50 catalog.
+
+        Since the 3.8.50 promotion (worklog #1491/#1493), GET /v1/models requires
+        the local management cookie; an anonymous request correctly returns 401
+        (worklog #12274/#12278).  Uses the same T11-compliant vault path as every
+        other management script (never hard-coded, never logged).  trust_env=False
+        matches the canonical graduation client so the system proxy cannot strip
+        the auth cookie on loopback.
+        """
+        sess = requests.Session()
+        sess.trust_env = False
+        try:
+            sys.path.insert(0, "scripts/automation")
+            from oauth_keepalive import resolve_password
+            pw = resolve_password()
+            if pw:
+                sess.post(f"{self.base_url}/api/auth/login", json={"password": pw}, timeout=120)
+        except Exception:
+            pass
+        return sess
+
     def test_t2_v1_models_endpoint(self):
         """T2: /v1/models endpoint returns complete model catalog.
 
         Hardened: one retry after 10s on timeout, since the periodic catalog
         rebuild stall (Blocker #3, fixed upstream in v3.8.50) is transient.
+        Authenticates first: the promoted 3.8.50 catalog is protected by design.
         """
         last_err = None
         for attempt in range(2):
             try:
-                response = requests.get(f"{self.base_url}/v1/models", timeout=30)
+                response = self._authed_catalog_session().get(
+                    f"{self.base_url}/v1/models", timeout=30)
                 assert response.status_code == 200, f"Expected 200, got {response.status_code}"
                 data = response.json()
                 assert "data" in data, "Missing 'data' field in response"
@@ -341,12 +365,16 @@ class AcceptanceTestSuite:
             self.log_fail("T13", f"Root latency check failed: {e}")
     
     def test_t14_models_latency(self):
-        """T14: /v1/models endpoint latency < 1s (median of 3 samples)."""
+        """T14: /v1/models endpoint latency < 1s (median of 3 samples).
+
+        Authenticates first: the promoted 3.8.50 catalog is protected by design.
+        """
         def measure():
+            sess = self._authed_catalog_session()
             samples = []
             for _ in range(3):
                 start = time.time()
-                response = requests.get(f"{self.base_url}/v1/models", timeout=30)
+                response = sess.get(f"{self.base_url}/v1/models", timeout=30)
                 assert response.status_code == 200, f"Models endpoint failed with status {response.status_code}"
                 samples.append((time.time() - start) * 1000)
             return sorted(samples)[1]  # median
