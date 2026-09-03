@@ -14073,3 +14073,20 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Seat-lane honest tally: 10 chat + 1 video** (added api.1min.ai). groq/chathub remain auth-expired (re-auth queue). felo = Cloudflare wall + signed-out (human queue).
 
 **Safety.** All Chrome work in automation's own profile with the guard verified before launch; one Law-3 request per seat per hypothesis; screenshots archived; no secrets printed; no operator-profile contact; no walls solved. Graduation background run untouched by seat work (separate process, :20128/:8190 services intact via owner chain).
+
+### [2026-09-04 02:55] #1624 — Video-lane expansion audit (operator question: can the seat-pool video lane be increased?): YES, 1 -> 4 with bounded spend-gated proofs; measured balances attached
+
+**Question.** "Can video lane be increased on seat pool?" — answered with a full offline inventory + free-read probes of every video-declared seat file (no spend, no walls hammered).
+
+**Inventory (state/fleet_graduation_ledger.json, regenerated).** 9 video-declared seat files; 1 admitted (`session_ltx_space_public`, consumer-proven #1615); 8 rows VIDEO_PROOF_REQUIRED. Dispatchable-video right now: exactly 1.
+
+**Seat-by-seat measured state (free reads only):**
+- `labs.google` (Flow/Veo 3.1): FlowSession.refresh on live :9222 tab SUCCEEDS — signed in isearch.xsolve, **960 credits, PAYGATE_TIER_ONE (Pro)**, captcha sitekey discovered. Blocker: `project_id=None` — the tab sits on the Flow landing page, refresh() mints project_id only from a `/project/<uuid>` URL. Path: click "New project" (free, UI-only), then one spend-gated graduation render (~20 credits) → ADMITTED. Adapter fully built (proven FlowSession/batchAsyncGenerateVideoText lineage).
+- `kie.ai` (Kling 3.0 std 5s): live balance **7.76 credits** via free `/api/v1/chat/credit`. Adapter complete with own spend gate; one graduation render ≈ the std-5s clip cost (tight vs 7.76 — verify task credits before submit) → +1 seat.
+- `rtst.ai` ×4 seats (vidu/veo3 quote API, free): LIVE balances via the quote/credit endpoints — seat(isearch) 1.0, niloy 0.0, **seat2 10.0, seat3 0.0**. Cheapest quote 6 credits (vidu, 3s, 540p) → seat2 can buy exactly 1 proof clip → +1 seat. Other three rtst seats are credit-dead (wall-class, honest).
+- `aistudio.google.com` (Veo): adapter exists (AistudioVideoClient) but seat file has no recording, no chrome declaration, no api block → needs a fresh capture first; not a quick win.
+- `veoaifree.com`, `www.giz.ai`: quarantined for OUR adapter defects (HTML-as-reply; challenge-aware websocket adapter missing) — stays quarantined until the adapters are rebuilt, per the quarantine file's own rules.
+
+**Verdict.** Video lane CAN go **1 -> 4** (LTX + Flow + kie + rtst-seat2) with three one-clip graduation renders gated by `OMNI_VIDEO_CONFIRM_SPEND=1` (~33 credits total exposure across three different providers). All three adapters are already built and proven; only the exact-file Law-3 video proof + registry admission step is missing. aistudio needs capture-first; two hosts stay quarantined.
+
+**Safety.** Zero spend this entry: every probe was a free read (credit/quote endpoints, session refresh, DOM text). No walls solved, no hammering. This entry only records measured balances and the exact admission path; the renders wait for explicit operator confirmation.
