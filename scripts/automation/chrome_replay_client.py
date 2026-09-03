@@ -87,6 +87,14 @@ RESPONSE_SELECTORS: Dict[str, str] = {
     # the reply in DOM order, so the poll returned the counter instead of the answer.
     # Target the markdown body specifically. worklog #1105.
     "grok.com": '[class*="response-content-markdown"]',
+    # 1min.ai reply body: <div class="sc-eQaGpr fcvDAV prose prose-sm prose-neutral
+    # dark:prose-invert">58</div> — the styled markdown body inside the reply card.
+    # The generic set has no match on 1min's styled-components DOM, so the listener
+    # polled forever while the answer was already rendered (measured 2026-09-04:
+    # screenshot shows "58" from Qwen3 VL 8B while LISTEN returned found=False).
+    # Also exclude the chat-composer landing surface: the real chat UI lives at
+    # /chat-with-ai (Multi AI Chat), reached by clicking the sidebar item.
+    "api.1min.ai": ".prose",
 }
 
 # Per-host tab URL substrings to EXCLUDE when focusing. Some hosts open several tab
