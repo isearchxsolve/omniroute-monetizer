@@ -13986,3 +13986,17 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **The pipeline this establishes.** Repeatable unit: enumerate consumer rows â one computed probe each â durable JSON verdicts â re-admit/repair/retry per taxonomy â recount. This is the discipline that converts the 137-seat terminal ledgers into a live number that can only move by closing routes, and the sweep itself is now a committed, rerunnable artifact.
 
 **Safety.** One light chat request per seat (13 total), zero video/spend-gate calls, no Chrome, no credential or database change, no service restart. Verdicts recorded exactly; nothing inflated.
+
+### [2026-09-03 03:40] #1618 â€” Multi-tenancy switched ON: wave-1 keys minted, gate proven live, tenant-keyed chat answers 58
+
+**Landing step 1 executed (operator green light).** Read the shim's tenant gate before touching anything: `/healthz` is the first branch and never reads the map (owner chain safe); consumer paths require `Authorization: Bearer <api_key>` mapped via `state/secrets/tenant_map.json` (`{"<api_key>": "<tenant_name>"}`), re-read per request, no restart.
+
+**Component.** Added `scripts/automation/tenant_onboarding.py` + `tests/test_tenant_onboarding.py` (4 passed): key generation via `secrets.token_urlsafe` with `sk-omni-` prefix, atomic map write (tmp + `os.replace`), `--verify-only` re-check mode, and secrets discipline per Law 5 â full keys written ONLY to gitignored `state/secrets/tenant_keys_<stamp>.json`; stdout shows tenant names and 12-char prefixes at most.
+
+**Wave 1.** 10 tenants minted (`tenant_001`â€¦`tenant_010`), map now holds 10 keys; distribution file recorded (redacted here). Gate verification (live, production shim): healthz open without key PASS; `/v1/models` 401 without key PASS; 401 with bogus key PASS; 200 with valid key PASS; tenant tagging proven via the documented free path (malformed chat POST â 400 echo containing `"tenant": "tenant_001"`) PASS. One iteration during build: the first verifier wrongly expected the tenant tag on the static models list; corrected to the request-scoped 400-echo path before any production conclusion was drawn.
+
+**Consumer E2E under tenancy.** With `tenant_001`'s key: `POST :8190/v1/chat/completions` model `session-pool/auto`, Law-3 prompt â routed to `api.cohere.com` (universal-adapter), answered computed `58`, response tagged `tenant=tenant_001`. (Two harness-only 400s from PowerShell quote-mangling occurred before the correct file-payload call; both were request-construction defects, not provider results, and the second still proved tenant resolution on the error echo.) Additionally, the earlier LTX replay contract remains valid under tenancy for any wave-1 key.
+
+**Landing status after this increment.** Step 1 DONE (tenant gate ON, 10 keys live). Step 2 next: publish light-routes-only client configs for wave-1 distribution; step 3: soak wave 1 under real concurrency; step 4 (small build): per-tenant usage metering; video buyers wait for the prepaid-credits flow. The 9 consumer-proven routes are now shared, metered-entry supply instead of open single-operator supply.
+
+**Safety.** No service restart (map hot-read), no Chrome, no paid API, no video spend; all verification calls were free (models GET, 400 echoes, one light chat). Full keys never printed to stdout, never committed.
