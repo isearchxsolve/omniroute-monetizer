@@ -30,6 +30,7 @@ SHIM_SCRIPT = Path(__file__).with_name("session_pool_shim.py")
 PYTHON_EXE = ROOT / ".venv" / "Scripts" / "python.exe"
 DEFAULT_DIAG = ROOT / "logs" / "shim_task_diag.log"
 DEFAULT_PRIMARY_LOG = ROOT / "logs" / "shim_stdout_current.log"
+DEFAULT_REPLACE_REQUEST = ROOT / "state" / "shim_owner_replace.request"
 LIVENESS_VERSION = "2026-09-01-liveness-v1"
 
 
@@ -88,20 +89,45 @@ def launch_shim(port: int, log_path: Path) -> int:
     return process.pid
 
 
+def request_replace(path: Path) -> None:
+    """Atomically ask the registered owner to perform one verified code reload."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(f"requestedAt={_stamp()}\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def consume_replace_request(path: Path) -> bool:
+    """Consume one reload marker; a failed reload self-recovers on the next cycle."""
+
+    try:
+        path.unlink()
+        return True
+    except FileNotFoundError:
+        return False
+
+
 def run_owner(
     port: int,
     diag_path: Path,
     primary_log: Path,
     fallback_dir: Path,
+    *,
+    force_replace: bool = False,
 ) -> int:
-    if healthz(port):
+    is_healthy = healthz(port)
+    if is_healthy and not force_replace:
         _, remaining = prune_owned_shims(port, "healthy-orphan")
         if remaining:
             _append(diag_path, f"FAILED healthy orphan prune remaining={remaining}")
             return 1
         return 0
 
-    _append(diag_path, "PRE-START native-owner")
+    _append(
+        diag_path,
+        "REPLACE requested native-owner" if force_replace else "PRE-START native-owner",
+    )
     _, remaining = stop_owned_shims(port, "unhealthy")
     if remaining:
         _append(diag_path, f"FAILED exact owner cleanup remaining={remaining}")
@@ -147,6 +173,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--diag", type=Path, default=DEFAULT_DIAG)
     parser.add_argument("--primary-log", type=Path, default=DEFAULT_PRIMARY_LOG)
     parser.add_argument("--fallback-dir", type=Path, default=ROOT / "logs")
+    parser.add_argument(
+        "--replace-request", type=Path, default=DEFAULT_REPLACE_REQUEST
+    )
+    parser.add_argument(
+        "--request-replace",
+        action="store_true",
+        help="write a one-shot marker for the registered owner and exit",
+    )
     return parser
 
 
@@ -154,8 +188,18 @@ def main() -> int:
     args = build_parser().parse_args()
     if not 1 <= args.port <= 65535:
         raise SystemExit("--port must be between 1 and 65535")
+    if args.request_replace:
+        request_replace(args.replace_request)
+        return 0
     try:
-        return run_owner(args.port, args.diag, args.primary_log, args.fallback_dir)
+        force_replace = consume_replace_request(args.replace_request)
+        return run_owner(
+            args.port,
+            args.diag,
+            args.primary_log,
+            args.fallback_dir,
+            force_replace=force_replace,
+        )
     except Exception:
         _append(args.diag, "FAILED owner exception\n" + traceback.format_exc())
         return 1
