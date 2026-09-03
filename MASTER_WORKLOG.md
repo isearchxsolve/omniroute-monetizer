@@ -14038,3 +14038,24 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Operator-approved plan (fill both tanks, ~4 h).** (1) Let openrouter finish �" maximum evidence retention. (2) Kill the wedged master process tree. This is the agent-graduation run owned by this workstream (pids 38752/37908), NOT a task-owned service (:20128/:8190 untouched); the wedge is proven (5 h no movement, one worker dead), and the run file is durable per-record so nothing is lost. (3) Re-run `omniroute_graduation.py --apply --e2e --chat-only` with the tenant-auth consumer fix from #1620: resume reuses every non-ERROR/non-TRANSPORT direct row, re-probes only huggingface’s missing 226 rows (prior hf AUTHs answered in ~40 ms) plus transient error rows, then runs the consumer phase through :8190 with auth and writes real admissions. (4) Log the honest full-tank number, commit, then start the seat-lane pass queued in this session (groq/chathub spacing �' deepseek/felo repairs �' 1min transport look).
 
 **No new exploration.** Safety: zero new capacity claimed; consumer probes still pending; no Chrome; no video spend; services untouched.
+
+### [2026-09-04 01:09] #1622 — Seat-lane full-tank pass executed: deepseek returned LIVE; groq/chathub root-caused auth-expired; honest recount
+
+**Operator green light.** The queued seat-lane pass (#1620/#1621) was executed exactly as planned: one bounded Law-3 request per failing seat, serial, tenant-authenticated, no hammering.
+
+**Finding 1 — the four failing seats were NOT all still advertised.** `GET :8190/v1/models` showed `api.groq.com/auto` and `app.chathub.gg/auto` ABSENT (dropped by the shim's dispatchability filter), while `chat.deepseek.com/auto`, `felo.ai/auto`, `api.1min.ai/auto` were PRESENT.
+
+**Finding 2 — retry verdicts (one request each, computed 41+17=58).** `chat.deepseek.com/auto` → **LIVE, 23.1s, computed 58 correct** (second-sample timeout was transient; per #1081 precedent). `felo.ai` → timeout 45s (third consecutive timeout; now a genuine transport case). `api.1min.ai` → timeout 45s (same). Seat-lane live count: 8→9 chat.
+
+**Finding 3 — groq/chathub root cause (adapter-level, in-process probe of the exact pool clients, NOT counted as consumer verdicts).** `api.groq.com` → `SessionExpired: invalid or expired jwt` (the seat's bearer died server-side; the #1617 "HTTP 500" and #1620 "429" were the pool's exhausted-pool answer, not a provider rate limit — the pinned request never reached groq with valid auth). `app.chathub.gg` → `SessionExpired: 403 Please sign-in` (cookie dead). Both seats are AUTH-EXPIRED and belong in the re-auth queue (bounded cdp_drive SSO playbook, one profile at a time per constraint.one_profile_at_a_time), NOT in retry scheduling.
+
+**Finding 4 — running shim carried runtime `dead` flags across rescan.** Root-caused why the rows vanished: `SessionExpired` sets `s.dead=True` in the shim's runtime pool, and `rescan()` deliberately carries `dead` across rescans (by design, so a dead file isn't resurrected silently). Fix applied through the SUPPORTED owner path only: `session_pool_shim_task.py --request-replace` → owner cycle 01:04:00Z `REPLACE requested native-owner` → `RECOVERED primary launcher_pid=44744` (shim pid 44808, healthz 200). Rows returned (37 total). Fresh pinned probes then hit the REAL upstream auth walls above — which is the honest answer; no code change was made to hide it. The shim then correctly re-dropped both rows (11 seat rows now) because the seats genuinely cannot serve. This is the filter working as designed.
+
+**Honest seat-lane tally after this pass (consumer-visible, computed proof):**
+- LIVE chat seats (9): api.cohere.com, api.monica.im, chat.mistral.ai, chat.qwen.ai, chatgpt.com, **chat.deepseek.com (new)**, claude.ai, grok.com, www.perplexity.ai.
+- LIVE video seat (1): video/lightricks-ltx-video-distilled.hf.space/auto (#1615).
+- AUTH-EXPIRED, re-auth queue (2): api.groq.com (jwt dead), app.chathub.gg (403 sign-in).
+- TRANSPORT-timeout cases, separately scheduled (2): felo.ai, api.1min.ai (45s ceiling hit on every sample; needs a transport look before any further probe).
+- Report artifacts: `state/seat_chat_retry_latest.json` (deepseek/felo/1min), `state/seat_chat_retry_groq_chathub.json` (both 500s = auth walls surfaced through pinned path).
+
+**Safety.** One request per seat, serial, tenant_001-authenticated through :8190; no Chrome touched this increment; no restart outside the registered owner chain (marker → verified RECOVERED); no video/spend-gate calls; no secrets printed. Nothing inflated: groq/chathub are NOT counted live; deepseek's LIVE is consumer-proven with the computed answer.
