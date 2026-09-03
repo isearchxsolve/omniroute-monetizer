@@ -13972,3 +13972,17 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Current certified state.** Core T1â€“T12, performance T13â€“T15, automation T16â€“T20 all green against live services (:20128 catalog serving 9,828 rows authenticated; :8190 seat-pool healthy with the first consumer-proven LTX video route from #1615). Focused component tests also green: 19 passed (shim owner, shim task, LTX client, Gradio client, pure-Python registry).
 
 **Commit.** Suite fix + this entry committed together. No secrets touched; vault password never printed; no service restart; no spend.
+
+### [2026-09-03 03:10] #1617 â€” Seat-lane live-capacity sweep: 8/13 chat seats answer with computed proof at the consumer
+
+**Campaign start.** Operator confirmed the closure-unit campaign. First increment: measure the seat lane's honest live count â Law-3 computed probes through every chat seat row advertised on the consumer endpoint `:8190/v1`, serial, exactly one request per row, no retries, no Chrome.
+
+**Method.** Enumerated `GET :8190/v1/models` â 40 rows total: 13 pinned chat seat rows (`<host>/auto`), 1 video seat row (the consumer-proven LTX route from #1615), and 26 Omni/combo rows (already covered by T4â€“T7 and the Omni graduation ledger). For each chat seat row: one `POST /v1/chat/completions` with the non-echoable computed prompt `Reply with only the number: 41 + 17` (expect `58`), `max_tokens=200` (valid payload per anti-pattern rule), 45s ceiling, serial execution.
+
+**Verdicts (consumer-level, computed proof).** LIVE (8): `api.cohere.com` 16.7s, `api.monica.im` 2.8s, `chat.mistral.ai` 16.3s, `chat.qwen.ai` 7.1s, `chatgpt.com` 18.1s, `claude.ai` 10.6s, `grok.com` 4.0s, `www.perplexity.ai` 2.1s. Not live (5, exact causes): `api.1min.ai` timeout, `api.groq.com` HTTP 500, `app.chathub.gg` HTTP 500, `chat.deepseek.com` timeout, `felo.ai` timeout. Report persisted to `state/seat_chat_live_sweep.json`.
+
+**Honest headline number.** Seat lane live capacity right now: 8 chat routes + 1 video route consumer-proven â not the 39-row catalog number. Notable: `chatgpt.com` answers (its seat was retired at #1103 after a login wall; the Chrome-blueprint runtime's re-graduation at #1119/#1442 evidently holds), and `claude.ai`/`grok.com` hold their #1119 graduations. The five failures are single-sample verdicts: per the no-hammer law no retry was made; per #1081 precedent (qwen WALL-then-LIVE minutes apart) the timeouts are candidates for one bounded retry on their own schedule in a later increment, and the two 500s need a transport look before any re-probe.
+
+**The pipeline this establishes.** Repeatable unit: enumerate consumer rows â one computed probe each â durable JSON verdicts â re-admit/repair/retry per taxonomy â recount. This is the discipline that converts the 137-seat terminal ledgers into a live number that can only move by closing routes, and the sweep itself is now a committed, rerunnable artifact.
+
+**Safety.** One light chat request per seat (13 total), zero video/spend-gate calls, no Chrome, no credential or database change, no service restart. Verdicts recorded exactly; nothing inflated.
