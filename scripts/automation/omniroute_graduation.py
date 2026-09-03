@@ -75,6 +75,23 @@ def no_proxy_session() -> requests.Session:
     return session
 
 
+def consumer_auth_header() -> dict[str, str]:
+    """Bearer for the :8190 tenant gate (hot-read map, worklog #1618).
+
+    Reads one key from state/secrets/tenant_map.json at call time; the value
+    never reaches stdout or logs.  Falls back to no header when the map is
+    absent (pre-tenancy shims).
+    """
+    try:
+        mapping = json.loads((STATE / "secrets" / "tenant_map.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    for key in mapping:
+        if isinstance(key, str) and key.startswith("sk-"):
+            return {"Authorization": f"Bearer {key}"}
+    return {}
+
+
 class GlobalRequestGate:
     """Bound live load sent to the single OmniRoute process.
 
@@ -305,7 +322,7 @@ def consumer_probe(session: requests.Session, row: dict[str, Any], timeout: floa
             "model": row["model"],
             "messages": [{"role": "user", "content": PROMPT}],
             "temperature": 0, "max_tokens": 32, "stream": False,
-        }, timeout=timeout)
+        }, timeout=timeout, headers=consumer_auth_header())
         raw = response.text or ""
         body = response.json() if response.status_code == 200 else {}
         answer = assistant_text(body, raw)
