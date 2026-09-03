@@ -494,6 +494,8 @@ def main() -> int:
     ap.add_argument("--plan", action="store_true", help="write the live catalog/management plan only")
     ap.add_argument("--apply", action="store_true", help="required before inference or video work")
     ap.add_argument("--e2e", action="store_true", help="run Omni chat graduation and native video proof")
+    ap.add_argument("--chat-only", action="store_true",
+                    help="e2e runs the chat phase only; native video proof is skipped without any spend")
     ap.add_argument("--confirm-video-spend", action="store_true",
                     help="required for native video MP4 generation")
     ap.add_argument("--timeout", type=float, default=45, help="one chat route request timeout")
@@ -516,8 +518,8 @@ def main() -> int:
     args = ap.parse_args()
     if args.e2e and not args.apply:
         ap.error("--apply is required with --e2e")
-    if args.e2e and not args.confirm_video_spend:
-        ap.error("--e2e requires --confirm-video-spend because native video proof spends capacity")
+    if args.e2e and not args.confirm_video_spend and not args.chat_only:
+        ap.error("--e2e requires --confirm-video-spend (or --chat-only) because native video proof spends capacity")
 
     plan = build_plan(include_management=not args.e2e)
     if args.e2e and not plan.get("routes"):
@@ -543,7 +545,11 @@ def main() -> int:
                         args.max_inflight, args.min_interval, resume=not args.fresh)
     atomic_json(RUN, {"schemaVersion": 1, "generatedAt": now(), "endpoint": OMNI,
                       "consumerContract": CONSUMER, "chat": chat})
-    video = run_video_e2e(args.confirm_video_spend, args.video_timeout, args.max_video_routes)
+    if args.chat_only:
+        video = {"phase": "native_video", "state": "SKIPPED_CHAT_ONLY",
+                 "reason": "--chat-only excludes native video proof; no credits spent"}
+    else:
+        video = run_video_e2e(args.confirm_video_spend, args.video_timeout, args.max_video_routes)
     final = read_json(RUN, {})
     final["video"] = video
     final["completedAt"] = now()

@@ -312,6 +312,19 @@ def cmd_sso(a):
         # non-google surface: read it
         surf_url, body = read_surface(a.port, tid, 800)
         low = body.lower()
+        # OAuth fragments: some providers (qwen measured 2026-09-02) land back on the
+        # ORIGINAL /auth path carrying #token=JWT / #access_token= / #id_token= and swap
+        # the session in client-side. The URL says "auth" but the sign-in is DONE.
+        if clicked["google"] and ("#token=" in (surf_url or "").lower()
+                                  or "#access_token=" in (surf_url or "").lower()
+                                  or "#id_token=" in (surf_url or "").lower()):
+            steps.append("oauth-fragment detected; waiting for session swap")
+            poll_url(a.port, tid, min(25, budget_left()))
+            probe = probe_state(a.port, tid, wake_url=a.url)
+            if not probe.get("signedOut"):
+                state = None
+                break
+            continue
         if body_is_hard_wall(low):
             state = "WALL"
             steps.append("hard wall on provider surface")
