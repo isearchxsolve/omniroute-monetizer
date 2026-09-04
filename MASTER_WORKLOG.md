@@ -14104,3 +14104,13 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Full-tank scoreboard at 09:05:** Omni: deadlock fixed + verified, 371 eligible, consumer phase running, ledger 21. Seat chat: 10/12 (groq+chathub re-auth queue). Seat video: 2 admitted (LTX + rtst.ai), Flow queued, kie wall, aistudio capture-needed.
 
 **Safety:** one gated render per seat, no double-submits, owner-chain reloads only, no operator-profile contact, walls named with evidence, no secrets printed.
+
+### [2026-09-04 10:24] #1626 — Omni consumer phase BLOCKER found+fixed: run crashed on WinError 5 before consumer phase ever started; resumed
+
+**Diagnosis (background log analysis).** The graduation resume never reached the consumer/apply phase: it crashed at the very END of the direct-probe phase with `PermissionError: [WinError 5] Access is denied` inside `atomic_json` — `os.replace(tmp, run.json)` failed while a reader (shim rescan / tenant hot-read / AV) held the destination. 11,555 rows of direct-probe work completed (final lane: vertex 5/115), then one state-save killed the run before a single consumer proof ran. This is why the ledger sat at 21 for hours.
+
+**Fix.** `atomic_json` in omniroute_graduation.py now retries `os.replace` up to 5 times with backoff (0.5s..2.5s) on PermissionError — a transient Windows file lock can no longer kill a multi-hour run. py_compile OK. Run file verified intact: 11,555 rows in last-good state; resume reloads terminal verdicts from it.
+
+**Resumed.** Same command (`--apply --e2e --chat-only --lanes 2`), background pid 49080. Direct phase will fast-forward through cached verdicts and re-probe only transient rows, then the consumer phase (the deadlock-fixed rung, 371 eligible routes) runs to completion and writes ADMITTED to the ledger.
+
+**Safety.** No new probing pressure beyond the resume's own rules; shim untouched this increment (already owner-reloaded with the dispatch fix at 08:46Z, verified HTTP 200 computed 58); video lanes unchanged (rtst admitted #1625, Flow poller running).

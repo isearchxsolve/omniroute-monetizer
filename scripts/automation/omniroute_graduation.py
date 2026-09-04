@@ -66,7 +66,18 @@ def atomic_json(path: pathlib.Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    # Windows: a reader (shim rescan, tenant hot-read, AV scan) can hold the destination
+    # briefly; one failure must not kill a multi-hour run (measured 2026-09-04: the final
+    # vertex-lane record() died on WinError 5 before the consumer phase ever started).
+    last: Exception | None = None
+    for attempt in range(5):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError as exc:
+            last = exc
+            time.sleep(0.5 * (attempt + 1))
+    raise last if last else RuntimeError("atomic_json: unreachable")
 
 
 def no_proxy_session() -> requests.Session:
