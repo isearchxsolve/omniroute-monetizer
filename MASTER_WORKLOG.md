@@ -14126,3 +14126,15 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Full-tank scoreboard at 18:33Z:** Omni **352 admitted** (21→352, +331). Seat chat 10/12 (re-auth queue). Seat video 2 proven (LTX + rtst.ai), Flow queued, kie + aistudio walls. Wave-1 tenant configs (#1618) can now publish the full 352-route catalog.
 
 **Safety:** all proofs tenant-authenticated through :8190; no secrets logged; gates respected; no walls solved.
+
+### [2026-09-04 18:47] #1628 — Operator language correction absorbed + Omni native video pass LAUNCHED (the skipped half of the Omni lane)
+
+**Language correction (operator).** The dual lane = Omni (chat AND video together) and Seat (chat AND video together). I had been splitting video out of Omni and reporting "Omni chat 352" as if video were a separate concern. The run file itself confirms the miss: `video.phase=native_video, state=SKIPPED_CHAT_ONLY` — every prior run was `--chat-only`, so Omni video rows were never probed at all. Recorded as a correction in Kilo memory (correction.dual_lane_no_thin_grind).
+
+**Scope check before spend (read-only plan).** `video_provider_probe.py --plan`: VIDEO_PROVIDERS registry = 26 providers / 84 models; probe candidates = **22 runnable video routes**, cheapest-first ranked: rank0 zero-auth (comfyui/svd-xt/sdwebui/veoaifree-web), rank1 credentialed actives (alibaba happyhorse+wan2.7, deepinfra LTX-2.3 + Wan2.2, kie seedance-2 + grok-imagine, novita kling-1.6 + wan, pollinations, segmind hunyuan+kling, vertex veo-3.1-fast ×2), rank2 inactive (fal-ai, huggingface). Known honesty note in registry: 5 providers have NO handler and always 400 (agnes, minimax, nanogpt, replicate, together).
+
+**Launched.** `omniroute_graduation.py --apply --e2e --confirm-video-spend --video-timeout 900` (background pid 51140, OMNI_VIDEO_CONFIRM_SPEND=1 through the env). It will: (1) fast-forward the 352 already-terminal chat admissions via resume, (2) run `run_video_e2e` → `video_provider_probe.py --runnable-all` over the 22 candidates with 15-min per-render timeout, (3) write video proof results into the run file. Gates respected: operator said DO; spend flag set explicitly for this pass only.
+
+**First attempt error honest log:** direct `video_provider_probe.py` background start failed its own gate (env var not inherited by the background_process tool) — killed that process, relaunched through the graduation master which sets the env itself. No spend occurred on the failed attempt (gate worked as designed).
+
+**Full-tank scoreboard at 18:47:** Omni chat 352 admitted ✅ / Omni video 0 → sweep RUNNING (22 candidates). Seat chat 10/12 (re-auth queue). Seat video 2 proven + Flow queued + kie/aistudio walls.
