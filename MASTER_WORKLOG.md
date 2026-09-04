@@ -14323,3 +14323,16 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Net result and remaining limitation.** The three zero-cost risks within current authority were materially reduced: off-machine source continuity is restored, C: is no longer at the original 4.6% emergency margin, and closing the lid on AC cannot suspend a long job. Complete hibernation removal/another 6.28 GB, elevated CHKDSK, and deeper SMART diagnostics remain blocked by Administrator authority, not by cost. Hardware battery capacity cannot be repaired in software.
 
 **What is not claimed.** 19.05 GB is improved but still below the preferred 30–50 GB target. Ignored credential/session state is intentionally not on GitHub and remains a single-machine risk. The worn battery is not repaired. SSD wear/temperature remain unavailable. No personal data, Chrome state, OmniRoute secret, running workload, Windows component, BIOS, driver, service ownership, or scheduled-task definition was changed.
+### [2026-09-04 21:35] #1642 — UAC-approved hibernation removal completed; C: now 25.33 GB free and S4/Fast Startup path disabled
+
+**Explicit authority.** The operator stated `YOU LAUNCH A UAC I ALLOW`, explicitly authorizing the previously blocked elevated Windows action. Launched a visible standard UAC consent prompt for one executable and argument set only: `C:\Windows\System32\powercfg.exe /hibernate off`. The operator approved the prompt. No shell, script, service, browser, installer, registry editor, or broader administrator session was elevated.
+
+**Execution result.** The elevated `powercfg` process returned exit code 0. Immediate and follow-up checks both verified `C:\hiberfil.sys` no longer exists. No reboot was requested or performed.
+
+**Space recovery.** C: free space increased from **19.05 GB (7.6%) to 25.33 GB (10.1%)**, exactly recovering the prior **6.28 GB** hibernation allocation. Combined with the native package-cache cleanup in #1637, the zero-cost stabilization increased C: free space from the original **11.5 GB to 25.33 GB**, a net gain of **13.83 GB** without deleting personal/project/browser/credential data.
+
+**Power-state verification.** A fresh `powercfg /a` reports only Standby S3 under available states. Hibernate is listed under unavailable with `Hibernation has not been enabled`; Fast Startup is unavailable because hibernation is unavailable; Hybrid Sleep is also unavailable. The previously verified plugged-in lid action remains `Do nothing`, and the automatic AC sleep/hibernate timeouts remain Never. This removes the S4/Fast Startup path associated with 87 prior firmware MTRR resume warnings while preserving deliberate S3 sleep if selected manually.
+
+**Runtime non-regression.** After the elevated action, `:8190/healthz` and `:20130/health` both returned HTTP 200. No scheduled task, service, process, Chrome profile, provider, credential, network endpoint, BIOS, driver, user document, download, or project/runtime state was modified. The only system mutation was the authorized Windows hibernation disable and removal of its managed file.
+
+**Reversal.** If the operator later wants Hibernate and Fast Startup back, the supported elevated reversal is `powercfg /hibernate on`. Re-enabling is not recommended while this old firmware's S4 warnings remain relevant and C: space is constrained.
