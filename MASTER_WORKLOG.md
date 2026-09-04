@@ -14374,3 +14374,16 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Next verification.** Record brief local silence samples from each endpoint, analyze with FFmpeg for mean RMS, peak, DC offset, clipping, and dominant spectral behavior, then delete or retain only as necessary for comparison. No speech/audio will be uploaded or committed. Settings will change only after the measurement identifies the safer endpoint/gain path.
 
 **What is not claimed or changed.** No default microphone was yet proven; no gain/boost/enhancement value was inferred; no recording, driver change, app termination, endpoint disable, registry edit, service restart, or Chrome action occurred.
+### [2026-09-04 22:02] #1645 — Microphone noise measured; built-in array is default at maximum +22.5 dB capture gain
+
+**Local measurement.** With the operator advised to remain quiet, recorded two 5.99-second mono 48 kHz PCM WAV samples locally via FFmpeg: built-in array and analog headset-jack endpoint. Files are gitignored under `state/mic_diag_*.wav`, were not uploaded or committed, and exist only for before/after analysis. Both captures succeeded.
+
+**Built-in array result.** Quiet-room array sample measured mean/RMS **-27.6 dBFS**, peak **-13.5 dBFS**, and half-second RMS varied from -31.0 to -24.3 dBFS. Spectral analysis found the strongest component at approximately **100 Hz**, 30.85% of 20–12,000 Hz energy below 300 Hz, and 27.41% above 3 kHz. This is an objectively high noise floor with mains/fan-like low-frequency energy plus hiss; it is not merely subjective loudness.
+
+**Analog jack result.** The empty analog-microphone input averaged -40.4 dBFS but produced a transient peak at -8.3 dBFS and energy clustered around 178–203 Hz. It is not a stable replacement without a connected headset microphone.
+
+**Default and root cause.** Queried Windows Core Audio directly for Console, Multimedia, and Communications capture roles. All three correctly select the built-in `Microphone Array` endpoint, ruling out wrong-device selection. However, its master capture level is **100%**, Core Audio level **+22.5 dB**, exactly the endpoint's maximum range (`-17.0 to +22.5 dB`). It is unmuted and two-channel. Maximum analog/digital capture gain explains why the internal array amplifies electrical/fan/room noise so aggressively.
+
+**Decision.** Reduce only the built-in array's Core Audio master level to a moderate reversible value, then record the same quiet sample and compare RMS/peak. Preserve the separate headset-jack endpoint. The original value is recorded here for exact reversal. No setting was changed in this measurement component.
+
+**What is not claimed.** The 100 Hz component may combine AC coupling, internal fan vibration, and room/electrical hum; this sample alone cannot locate the physical source. No voice intelligibility test has occurred. No driver, enhancement, default device, application, service, browser, or process was changed.
