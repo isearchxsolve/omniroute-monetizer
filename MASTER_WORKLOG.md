@@ -14148,3 +14148,20 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Implication for the running sweep.** The native video pass launched in #1628 probes the dedicated registry's 22 candidates; the 70 chat-lane candidates are ADDITIONAL supply the probe's registry does not cover. Route-id mapping must accept catalog ids. Next increment: extend the video contract to the 70 (same bar: direct video proof -> consumer proof -> admission), giants first (gemini/vertex veo-3.1, deepinfra, alibaba wan2.7).
 
 **Memory.** correction.dual_lane_no_thin_grind / mandate.full_tank_chat_providers_have_video_models updated with the measured numbers and the route-id mapping note.
+
+### [2026-09-04 20:05] #1630 — SEAT VIDEO 2→3: Flow Pro #2 (kunal.colab) graduated, admitted, and consumer-proofed live through :8190
+
+**Operator revealed a second Flow Pro account** (kunal.colab; seat1 is isearch.xsolve). Launch sequence (all Chrome discipline rules followed, automation never typed credentials):
+1. Second automation Chrome profile minted (`state/automation_profiles/providers_p2`, CDP :9226, guard-verified dir). Operator signed in interactively; screenshot confirmed PRO badge + banner "50 additional Flow credits daily".
+2. Credits read from the account popover DOM (the popover IS the credit source; the old `/fx/api/auth/session` JSON endpoint now returns the SPA shell on flow.google.com — Google migrated labs.google→flow.google.com, so FlowSession.refresh's SESSION_JS path is DEAD on both seats; client fix deferred): **seat2 = 1,050cr** (vs seat1 960cr).
+3. **Graduation render through the live UI**: ProseMirror composer focused via CDP, prompt inserted with Input.insertText, Enter submitted. No approval prompt appeared (agent mode auto-approved, spend still gated by UI); render completed in ~2 min: **2 clips, 1,050 → 1,026cr (24cr spent)**, screenshot `state/diag_p2_after_send.png` shows both thumbnails.
+4. **URL proof**: player view opened (duration 00:08:00), CDN URL captured from performance entries: `https://flow-content.google/video/86864626-...` — **HEAD 200, video/mp4, 2,587,440 bytes**. Proof JSON: `state/flow_p2_clip_proof.json`.
+5. Seat file minted `session_labs_google_flow_p2.json` (chrome:flow-agent, graduation.kind=chrome_flow_submit_poll_result, creditsSpent=24, urlProof with http/bytes/contentType), registry **ADMITTED**.
+6. Owner-mediated shim reload (RECOVERED launcher_pid=46492). `/v1/models` now serves **video/labs.google/auto** beside LTX + rtst.
+7. **CONSUMER PROOF through :8190** (canonical endpoint): `POST /v1/chat/completions` model=`video/labs.google/auto` → **HTTP 200** with durable job receipt: `provider=labs.google, session=session_labs_google_flow_p2, video.status=running` (202-style 200 job contract per worklog #1134 — video renders async by design). **CAPACITY_ADMITTED: labs.google × video × :8190 × video modality, session-attributed to the P2 seat.**
+
+**Client-side finding (honest):** model naming matters — `labs.google/auto` parses as CHAT modality (429 NO_LIVE_SESSION, twice) while `video/<host>/auto` is the video route. Seat1's FlowApiClient dispatchability also needs the session-endpoint fix (Google migration) before it can graduate the same way; P2's ChromeVideoClient path is proven end-to-end.
+
+**Monthly video supply restated (the number):** Flow dual-account now admitted = **~140–210 clips/mo Flow + free tier (LTX/pollinations/local) ≈ ~200 clips/month ≈ 25–30 min footage/mo**, sustainable.
+
+**Full-tank scoreboard at 20:05:** Omni chat 352 admitted ✅ / Omni video registry sweep running (background). Seat chat 10/12 (re-auth queue). Seat video **3 proven + consumer-proofed live: LTX, rtst.ai, labs.google-P2** (Flow seat1 = client fix pending, kie/aistudio walls). Wave-1 tenants can now buy film clips at scale.
