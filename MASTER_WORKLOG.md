@@ -14494,3 +14494,14 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Full-tank scoreboard at 22:05:** Omni chat 352 ✅ / Omni video 0/92 (builds queued). Seat chat **11/12** (felo joined; groq + chathub re-auth remain). Seat video **3/4** (LTX, rtst, Flow-P2; Flow seat1 client-fix pending). Pollinations keyed+valid (video waits on pollen top-up, operator decision).
 
 **Security/spend:** no new spend except felo's own free-tier credits; no credentials typed by automation; owner-chain reloads only.
+
+
+### [2026-09-04 21:50] #1654 — Phone/USB diagnostic initialized; iQOO hotspot history noted but no Android device currently attached
+
+**Operator context.** The operator clarified that a Jio 5G hotspot from an iQOO Z7 Pro 5G has been used and that continuous phone charging while running the hotspot causes concern about heat. They asked whether connecting the phone to the laptop by USB would allow a check. This component is scoped to non-invasive local Windows/USB detection and, if the operator explicitly enables it later, Android's authorized diagnostic interface; it does not authorize phone data access, account access, remote management, rooting, installation, factory reset, or battery manipulation.
+
+**Existing network evidence.** The preceding Wi-Fi diagnosis found historical attempts to connect to a profile named iQOO Z7 Pro 5G. Those records include failed association/cancellation events during connection attempts but do not expose phone temperature, battery health, charging current, cellular signal quality, or hardware condition. They are not evidence that the phone is damaged. The phone's 5G cellular modem, Wi-Fi hotspot radio, screen/CPU activity, and charging circuitry can all produce heat concurrently; this is a general workload inference, not a hardware fault diagnosis.
+
+**Current USB baseline.** Read-only enumeration of present Windows PnP USB, portable-device, and MTP classes found only the laptop's host/root/generic hubs and integrated USB composite webcam device. No iQOO, vivo, Android, MTP, portable device, Remote NDIS, Android USB tethering, or USB-network adapter is currently present. Android Debug Bridge (db) is not installed or exposed on the laptop. No USB device, driver, network interface, Wi-Fi profile, phone setting, or power setting was changed.
+
+**Next operator action.** Ask the operator to connect the phone with a data-capable USB cable, unlock it, and choose the intended Android USB mode. For a network continuity test select USB tethering; for non-network diagnostic recognition select File Transfer only if they are comfortable with Windows seeing the phone's storage. Do not enable Developer Options/USB debugging merely for this baseline. After the phone is physically connected, re-enumerate the device and tethering interface, then assess only what the authorized connection exposes.
