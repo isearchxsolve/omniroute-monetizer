@@ -14349,3 +14349,15 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **What the key DID unlock immediately:** the connection's 401 wall is gone — pollinations CHAT rows (565 catalog rows, was 401ing the whole lane) can now re-verify with the key on the next graduation pass; several of the 13 video_candidate rows may also open if some models are cheaper/free-tier-eligible at generation time. Omni-lane video supply unchanged until then.
 
 **Security:** key never logged, never written to repo files — lives only in OmniRoute's connection store and this session's runtime env. Chat transcript contains it by necessity (operator pasted it); worklog and commits redacted.
+
+### [2026-09-04 21:42] #1643 — Remaining-life estimate communicated with separate battery and chassis horizons
+
+**Operator question.** The operator asked how long the laptop will last. The answer is explicitly separated into battery runtime and remaining machine service life so the 11.6%-health battery is not conflated with the otherwise functioning chassis.
+
+**Battery estimate.** The Windows battery report's observed-drain estimate is approximately 39 minutes at the reduced 6,710 mWh full-charge capacity. Under the current heavy Kilo/Chrome/agent workload, a conservative planning figure is roughly **10–25 minutes**, not the full idle-weighted estimate. The pack must be treated as an emergency bridge only, never as reliable working time. This is an inference from measured capacity and workload, not a timed discharge test.
+
+**Machine-life estimate.** No current WHEA, disk, NTFS, SATA-controller, or bugcheck evidence indicates imminent CPU/RAM/SSD failure, and core services remain healthy after stabilization. With stable AC, clean ventilation, no S4 hibernation, adequate C: headroom, limited simultaneous heavy work, and remote source backups, **another 1–3 years of useful plugged-in service is plausible**, and it may last longer. This is not a warranty: a 2012/2013-era chassis, charger jack, fan, motherboard capacitor, display cable, or single SSD can still fail tomorrow without prior Windows warning.
+
+**Business-continuity interpretation.** Treat the laptop as `usable now, but not trustworthy as the only copy or only machine`. The remote Git synchronization materially reduces the consequence of sudden loss. The correct operational horizon is to plan in days/weeks with frequent saves and commits, while regarding each additional year as useful bonus time rather than promised capacity.
+
+**Unknowns and what is not claimed.** SSD wear/temperature/power-on-hours remain unavailable, CPU temperature/fan RPM are unavailable, the battery estimate is not a controlled discharge test, and physical charger/hinge/display inspection has not been performed. No new test, load, configuration change, service action, or hardware action was performed for this estimate; it is derived only from the verified diagnosis and stabilization evidence.
