@@ -95,6 +95,11 @@ RESPONSE_SELECTORS: Dict[str, str] = {
     # Also exclude the chat-composer landing surface: the real chat UI lives at
     # /chat-with-ai (Multi AI Chat), reached by clicking the sidebar item.
     "api.1min.ai": ".prose",
+    # felo.ai reply body: <div class="markdown_markdown__wTkaE">58</div> inside a prose
+    # wrapper (measured 2026-09-04 post-sign-in: computed 58 captured in DOM while the
+    # generic set matched toolbar chrome first — [class*="answer"] is felo's "Convert
+    # answer to" button bar, which poisoned the listener with a non-answer match).
+    "felo.ai": ".markdown_markdown__wTkaE, .prose",
 }
 
 # Per-host tab URL substrings to EXCLUDE when focusing. Some hosts open several tab
