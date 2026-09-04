@@ -14586,3 +14586,17 @@ o current emergency evidence from the operator report and single photo, not att
 **Safety qualification.** Lower charging power does not diagnose or repair a damaged/swollen battery and does not eliminate heat from 5G, hotspot/tethering, screen use, or a long time spent near full charge. Given the iQOO's historical frame/battery concern, do not use laptop USB as an unattended 24/7 trickle charger or combine it with long 5G tethering/hotspot duty. Charging should remain attended, on a hard ventilated surface, with the phone/cable/USB connector periodically checked for abnormal warmth, frame lifting, odour, or other warning signs. Stop and unplug if symptoms recur.
 
 **Practical recommendation.** If the phone remains physically stable and cool, a short normal charging session from the laptop's USB port can be a lower-heat option than fast charging. Prefer charging while the phone is otherwise idle (screen off; hotspot/tethering off), disconnect after the needed charge rather than leaving it connected indefinitely, and use a sound known-good data/charging cable. No phone, laptop, USB power, or network setting was changed by this discussion.
+
+### [2026-09-04 23:00] #1634 — GROQ back from the dead: operator harvested API key, seat converted to stateless replay, consumer proof computed 59 — seat chat 11/12 → 12/12
+
+**Operator delivered the re-auth their way:** signed into console.groq.com (stytch session live — verified: dashboard, 4.8K tokens last 30 days, NO sign-in CTA) and harvested a fresh API key from the console (key redacted, stored only in OmniRoute connection store + seat file).
+
+**Chain:**
+1. Key verified direct against `https://api.groq.com/openai/v1/chat/completions` — model set differs from the old catalog (llama-3.1-8b-instant GONE; now openai/gpt-oss-20b, gpt-oss-120b, qwen3.6/3.8-27b, groq/compound ×2, allam-2-7b, whisper ×2, orpheus ×2, prompt-guard ×2 — 14 models). Direct proof: computed **58** on gpt-oss-20b.
+2. OmniRoute groq connection (`a4047134-...` "console, autonomous harvest") keyed via PUT; test → **valid:true, 513ms** — chat supply through :20128 restored fleet-wide.
+3. **Seat conversion** (the interesting engineering): session_groq_chat was replay-kind with a dead cookie_header. Converted to stateless UniversalSessionClient replay: fresh recorded_exchange POSTing the OpenAI schema to api.groq.com with the bearer key, and the KNOWN sentinel prompt ("Hi") embedded so `substitute_prompt` injects every caller's prompt. First attempt with a placeholder-less body failed SENTINEL_NOT_FOUND (by design — it protects against re-sending a stale prompt); sentinel body fixed it. In-process proof: computed **58** again.
+4. Owner reload (RECOVERED launcher_pid=37012) → **consumer proof through :8190: HTTP 200, provider=api.groq.com, computed 59 (41+18). CAPACITY_ADMITTED.**
+
+**Full-tank scoreboard at 23:00:** Omni chat 352 ✅ / Omni video 0/92 (builds queued). Seat chat **12/12** (groq ✅; chathub remains the only seat not re-authed — its 403 sign-in wall still stands). Seat video **3/4** (Flow seat1 client-fix pending).
+
+**Security:** key never written to worklog or commits; lives in OmniRoute store + seat file (gitignored state/secrets).
