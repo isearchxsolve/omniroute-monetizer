@@ -549,6 +549,13 @@ def _video_worker(job_id: str, messages: list, host: str = None) -> None:
             s.cooldown_until = base + max(pool.cooldown, 30.0)
             s.last_error = str(e)[:60]
             last_err = f"{s.host}: {e}"
+            # wall/auth are JOB-TERMINAL (Law 5): the provider already took the spend or
+            # refuses the account, so failing over to the next seat would be a second
+            # charge / a hammer (measured 2026-09-05: flow NO_URL after submit doubled
+            # the spend when treated as a per-seat transient). Other kinds fail over.
+            kind = str(getattr(e, "args", [""])[0] or "")
+            if kind in ("wall", "auth"):
+                break
         except Exception as e:
             last_err = f"{s.host}: {type(e).__name__}: {e}"
         # Record EVERY attempt's failure reason on the durable ledger (worklog #1137). The old

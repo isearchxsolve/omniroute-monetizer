@@ -95,7 +95,12 @@ POLL_EVERY_MS = 2500
 #   gen      : optional extra generate-button regex for the UI driver
 VIDEO_HOSTS: Dict[str, Dict[str, Any]] = {
     # ---- dedicated video hosts ----
-    "labs.google":       {"tab": "labs.google", "kind": "adapter", "adapter": "flow"},
+    # labs.google MIGRATED to flow.google.com (measured 2026-09-05): every
+    # /api/auth/session shape returns the SPA shell, the frontend speaks
+    # /_/AiSandboxAngularFrontend/data/batchexecute with cookies — the old
+    # FlowSession REST+bearer stack is dead. The "flow-ui" adapter drives the
+    # provider's OWN UI in the live signed-in project tab (proven seat1 path).
+    "labs.google":       {"tab": "flow.google.com/project", "kind": "adapter", "adapter": "flow-ui"},
     "veoaifree.com":     {"tab": "veoaifree.com", "kind": "adapter", "adapter": "veofree"},
     "akool.com":         {"tab": "akool.com", "kind": "ui"},
     "magichour.ai":      {"tab": "magichour.ai", "kind": "ui"},
@@ -343,6 +348,24 @@ def _gen_flow(prompt: str, port: Optional[int]) -> Dict[str, Any]:
             "media_id": media_id}
 
 
+def _gen_flow_ui(prompt: str, port: Optional[int]) -> Dict[str, Any]:
+    """Google Flow via the MIGRATION-FITTED UI adapter (flow_ui_client.py, worklog #1637).
+
+    Google migrated labs.google -> flow.google.com and retired the NextAuth session JSON
+    endpoint entirely, so the REST+bearer FlowSession path is dead on every seat. This
+    adapter drives the provider's own UI in the live signed-in project tab: credits
+    gate -> insertText+Enter submit -> queue-aware DOM poll -> in-run signed-URL HEAD
+    proof. Spend-gated inside the client (OMNI_VIDEO_CONFIRM_SPEND / OMNI_VIDEO_MAX_SPEND).
+    """
+    from flow_ui_client import FlowUiClient
+    c = FlowUiClient()
+    c.port_hint = port
+    r = c.chat([{"role": "user", "content": prompt}])
+    return {"text": r.get("text"), "video_url": r.get("video_url"),
+            "label": "chrome-video/labs.google", "url_proof": r.get("url_proof"),
+            "credits_before": r.get("credits_before")}
+
+
 def _gen_veofree(prompt: str, port: Optional[int]) -> Dict[str, Any]:
     """veoaifree.com via the PROVEN VeoFreeSession adapter (veoaifree_client.py): the
     site's own admin-ajax nonce protocol, executed inside the logged-in tab. Free, but
@@ -370,7 +393,7 @@ def _gen_veofree(prompt: str, port: Optional[int]) -> Dict[str, Any]:
             "scene": scene}
 
 
-_ADAPTERS = {"flow": _gen_flow, "veofree": _gen_veofree}
+_ADAPTERS = {"flow": _gen_flow, "flow-ui": _gen_flow_ui, "veofree": _gen_veofree}
 
 
 # ------------------------------------------------------------ generic UI driver ----
@@ -453,7 +476,10 @@ class ChromeVideoClient:
                 self.spec = {"tab": tab, "kind": "ui"}
                 if isinstance(chrome_decl, dict) and chrome_decl.get("gen"):
                     self.spec["gen"] = str(chrome_decl["gen"])
-        self.port_hint = raw.get("chrome_port")          # pin one account/seat if set
+        # Seat pinning: "chrome_port" (legacy) or the chrome-flow-tab decl's
+        # "chrome": {"cdpPort": N} (worklog #1630 shape) — one account per profile.
+        self.port_hint = (raw.get("chrome_port")
+                          or (raw.get("chrome") or {}).get("cdpPort"))
         self.label = f"chrome-video/{self.host}"
 
     def chat(self, messages: List[Dict[str, Any]], model: Optional[str] = None,
