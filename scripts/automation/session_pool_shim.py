@@ -105,6 +105,42 @@ def _omni_verified_model_ids() -> Optional[set[str]]:
         return set()
 
 
+def _omni_consumer_proof_eligible_ids() -> Optional[set[str]]:
+    """Routes eligible to RUN a consumer proof through :8190.
+
+    The admissions ledger is the authority for what is PUBLISHED as admitted, but a route
+    cannot enter it until it passes a consumer proof through this very shim. Seeding the
+    allowlist ONLY from the ledger therefore deadlocks the graduation ladder: every
+    direct-proven route 503s in 4 ms before it can ever be consumer-proven (measured
+    2026-09-04: 359 ERROR rows, all `omniroute_route_not_admitted`, zero visible).
+
+    Direct Law-3 proof (fresh computed answer against the provider) is the ladder's rung
+    below consumer proof, so allow DIRECT_LAW3_OK routes from the graduation run file to
+    be dispatched. Publication still requires the ledger ADMITTED state — this only
+    unblocks the proof step, it does not admit anything by itself.
+    """
+    ids: set[str] = set()
+    base = _omni_verified_model_ids()
+    if base is None:
+        return None  # no ledger at all: pre-admission compatibility
+    ids |= base
+    run_file = pathlib.Path(__file__).resolve().parents[2] / "state" / "omniroute_graduation_run.json"
+    if run_file.exists():
+        try:
+            run = json.loads(run_file.read_text(encoding="utf-8"))
+            # During a run, probe rows live at top-level `results`; the finished shape also
+            # mirrors them under `chat.direct`. Read both.
+            rows = list(run.get("results") or []) + list((run.get("chat") or {}).get("direct") or [])
+            for row in rows:
+                if isinstance(row, dict) and row.get("directProof") == "DIRECT_LAW3_OK":
+                    mid = row.get("model") or row.get("consumerModel")
+                    if mid:
+                        ids.add(str(mid))
+        except (OSError, ValueError):
+            pass
+    return ids
+
+
 def _collapse_exact_mirrored_reply(text: str) -> str:
     """Repair a measured OmniRoute SSE terminal-frame duplication.
 
@@ -191,7 +227,7 @@ class OmniRouteBridge:
                     "catalogStale": bool(self._models and time.monotonic() - self._models_at >= 15.0)}
 
     def chat(self, raw: bytes, auth: str) -> tuple[Optional[dict[str, Any]], Optional[str]]:
-        allowed = _omni_verified_model_ids()
+        allowed = _omni_consumer_proof_eligible_ids()
         if allowed is not None:
             try:
                 requested = json.loads(raw).get("model")
