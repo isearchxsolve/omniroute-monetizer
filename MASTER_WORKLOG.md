@@ -14114,3 +14114,15 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Resumed.** Same command (`--apply --e2e --chat-only --lanes 2`), background pid 49080. Direct phase will fast-forward through cached verdicts and re-probe only transient rows, then the consumer phase (the deadlock-fixed rung, 371 eligible routes) runs to completion and writes ADMITTED to the ledger.
 
 **Safety.** No new probing pressure beyond the resume's own rules; shim untouched this increment (already owner-reloaded with the dispatch fix at 08:46Z, verified HTTP 200 computed 58); video lanes unchanged (rtst admitted #1625, Flow poller running).
+
+### [2026-09-04 18:33] #1627 — OMNI LANE UNLOCKED: 21 → 352 consumer-admitted routes published; the giant is on the board
+
+**The consumer phase completed.** After the two fixes (dispatch eligibility #1625, atomic_json retry #1626), the resume run finished its consumer pass: 363 routes proofed, **352 CONSUMER_LAW3_OK** (each an HTTP 200 through :8190 with a computed answer), 9 EMPTY, 2 RATE. **Ledger: 21 → 352 ADMITTED entries.** `/v1/models` now serves 352 omni routes with provider attribution — the giants are live: openrouter 37, mistral 30, agy 23, antigravity 21, nvidia 13, cline 11, cohere 8, kiro 8, perplexity-web 8, novita 7, ali 6, and more (full provider spread logged).
+
+**Consumer funnel for the record:** 11,662 catalog rows → 382 direct Law-3 proofs → 352 consumer-proven admissions (~9.2% end-to-end yield; 97% of direct-proven survived the consumer rung once the deadlock was removed — the 359 earlier ERRORs were pure gate artifact, now proven).
+
+**Flow/labs.google poller:** finished its 40-min budget without queue release (still q:true at 09:00Z); the 15cr render remains accepted-but-queued on Google's side. kie/aistudio walls unchanged. rtst admitted (#1625). Seat chat re-auths (groq/chathub) remain the next seat-lane move.
+
+**Full-tank scoreboard at 18:33Z:** Omni **352 admitted** (21→352, +331). Seat chat 10/12 (re-auth queue). Seat video 2 proven (LTX + rtst.ai), Flow queued, kie + aistudio walls. Wave-1 tenant configs (#1618) can now publish the full 352-route catalog.
+
+**Safety:** all proofs tenant-authenticated through :8190; no secrets logged; gates respected; no walls solved.
