@@ -14417,3 +14417,14 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Verification finding.** Post-commit tail inspection found that entry #1647's heading had been concatenated directly to the final sentence of #1646 because the pre-existing worklog ended without a newline at that boundary. This was a documentation-formatting issue only; no microphone, Windows, audio, cooling, file-cleanup, service, process, runtime, or project behavior was affected.
 
 **Correction.** Performed an exact byte-level replacement of the single UTF-8 sequence processing.### [ with processing. followed by a blank line and ### [. Byte-level handling preserved the worklog's unrelated legacy non-UTF-8 bytes instead of decoding and rewriting the whole file. A fresh tail read verified that #1646 and #1647 are now separate Markdown entries. No historical content, finding, timestamp, or result was otherwise changed.
+
+
+### [2026-09-04 21:30] #1649 — Synchronized microphone attempt captured no speech; 60% setting retained and sample deleted
+
+**Capture execution.** After the operator replied READY, displayed an immediate SPEAK NOW instruction and recorded 10 seconds from the proven default Microphone Array (Realtek High Definition Audio) at 48 kHz mono PCM while the external cooler continued running. FFmpeg completed successfully and produced a 958,734-byte local diagnostic WAV. No audio was uploaded, streamed externally, or committed.
+
+**Objective result.** Whole-file mean volume was **-47.6 dBFS**, true/maximum peak approximately **-32.3 dBFS**, integrated loudness **-47.58 LUFS**, and loudness range only **1.0 LU**. No intervals crossed even the -42 dB silence-analysis threshold. The time-window RMS remained approximately -45 to -48 dBFS after startup. These values match the corrected cooler/background floor and contain no material speech excursion; the earlier cooler-only post-fix sample had a higher -29.1 dBFS peak. Therefore no spoken passage was captured and voice intelligibility cannot honestly be certified from this file.
+
+**Safe decision.** Retained the built-in array at **60% / +3.28 dB**. Did not raise gain based on an absent voice signal, because doing so would begin restoring the noise amplification already removed. No endpoint, enhancement, driver, permission, application, service, process, cooler, or Windows default was changed during this component.
+
+**Privacy cleanup and next boundary.** Permanently deleted the exact path D:\omniroute-monetizer\state\mic_diag_synced_voice.wav using a path-validated System.IO.File.Delete call and verified that the file no longer exists. The disposable sample is unrecoverable through this action. A further test requires explicit confirmation that the operator spoke aloud during the capture window; otherwise the measured 60% gain correction remains the final evidence-backed setting.
