@@ -14138,3 +14138,13 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **First attempt error honest log:** direct `video_provider_probe.py` background start failed its own gate (env var not inherited by the background_process tool) — killed that process, relaunched through the graduation master which sets the env itself. No spend occurred on the failed attempt (gate worked as designed).
 
 **Full-tank scoreboard at 18:47:** Omni chat 352 admitted ✅ / Omni video 0 → sweep RUNNING (22 candidates). Seat chat 10/12 (re-auth queue). Seat video 2 proven + Flow queued + kie/aistudio walls.
+
+### [2026-09-04 18:55] #1629 — Operator language addition absorbed: chat providers have video models too — measured 70 chat-lane video candidates, ALL outside the dedicated registry; memory updated
+
+**Addition (operator).** Full tank dual-lane language gains a rule: chat providers also expose video models. The dedicated video registry is not the whole video supply.
+
+**Measured (this increment).** `providerModelCapabilityInventory` in the graduation plan: 9,431 chat rows + **70 video_candidate rows**. Diffed against the dedicated VIDEO_PROVIDERS registry (26 providers / 84 model ids): **all 70 catalog video candidates are OUTSIDE the registry's id space** (catalog uses provider-prefixed route ids like `deepinfra/deepinfra/Wan-AI/Wan2.2-T2V-A14B` vs registry bare ids). Spread: pollinations 13, kie 12, alibaba 11, orcarouter 8 (kling family), deepinfra 7 (Wan2.x + veo-3.1), vertex 5 (veo-3.1), gemini 3 (veo-3.1), segmind 3, llm7 2, novita 2, veoaifree-web 2, ainative 1, lmarena 1. Includes sora-2/sora-2-pro (kie), kling-v3-omni (orcarouter), veo-3.1 full family (gemini/vertex/deepinfra), wan2.7 family (alibaba) — giants sitting unprobed.
+
+**Implication for the running sweep.** The native video pass launched in #1628 probes the dedicated registry's 22 candidates; the 70 chat-lane candidates are ADDITIONAL supply the probe's registry does not cover. Route-id mapping must accept catalog ids. Next increment: extend the video contract to the 70 (same bar: direct video proof -> consumer proof -> admission), giants first (gemini/vertex veo-3.1, deepinfra, alibaba wan2.7).
+
+**Memory.** correction.dual_lane_no_thin_grind / mandate.full_tank_chat_providers_have_video_models updated with the measured numbers and the route-id mapping note.
