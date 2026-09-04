@@ -14361,3 +14361,16 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Business-continuity interpretation.** Treat the laptop as `usable now, but not trustworthy as the only copy or only machine`. The remote Git synchronization materially reduces the consequence of sudden loss. The correct operational horizon is to plan in days/weeks with frequent saves and commits, while regarding each additional year as useful bonus time rather than promised capacity.
 
 **Unknowns and what is not claimed.** SSD wear/temperature/power-on-hours remain unavailable, CPU temperature/fan RPM are unavailable, the battery estimate is not a controlled discharge test, and physical charger/hinge/display inspection has not been performed. No new test, load, configuration change, service action, or hardware action was performed for this estimate; it is derived only from the verified diagnosis and stabilization evidence.
+### [2026-09-04 21:50] #1644 — Microphone-noise diagnosis initialized; two Realtek capture endpoints identified
+
+**Operator symptom and scope.** The operator reported that the microphone is too noisy. Began a zero-cost, local-only audio diagnosis. No recording had been made and no audio setting had been changed at this component boundary.
+
+**Device inventory.** Windows reports Realtek High Definition Audio status OK plus Intel Display Audio status OK. Present recording endpoints are `Microphone Array (Realtek High Definition Audio)` with endpoint GUID suffix `F89C1D19-...`, and `Microphone (Realtek High Definition Audio)` with endpoint GUID suffix `56D3DDC0-...`. The former is the laptop's built-in array; the latter is the analog headset-jack input. Both PnP endpoints report status OK. No USB or Bluetooth microphone is present.
+
+**Driver and tooling.** Realtek driver is signed version 6.0.1.7614 dated 2015-09-15; Microsoft audio-bus/endpoint layers are present. FFmpeg 9.0 is already installed and enumerates both capture devices successfully, enabling short local WAV capture and objective RMS/peak/noise analysis without installing software, opening a browser, or uploading audio. No AudioDeviceCmdlets, SoundVolumeView, NirCmd, or SoX utility is installed.
+
+**Working hypotheses.** Highest-probability zero-cost causes are: the empty analog jack endpoint being selected instead of the internal array; excessive capture level/microphone boost; old Realtek processing/enhancement state; fan/room noise entering the internal array; or simultaneous voice-processing applications. The endpoints' OK status rules out only a missing/disabled device, not analog noise or bad gain.
+
+**Next verification.** Record brief local silence samples from each endpoint, analyze with FFmpeg for mean RMS, peak, DC offset, clipping, and dominant spectral behavior, then delete or retain only as necessary for comparison. No speech/audio will be uploaded or committed. Settings will change only after the measurement identifies the safer endpoint/gain path.
+
+**What is not claimed or changed.** No default microphone was yet proven; no gain/boost/enhancement value was inferred; no recording, driver change, app termination, endpoint disable, registry edit, service restart, or Chrome action occurred.
