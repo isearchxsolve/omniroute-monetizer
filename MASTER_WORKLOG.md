@@ -14600,3 +14600,16 @@ o current emergency evidence from the operator report and single photo, not att
 **Full-tank scoreboard at 23:00:** Omni chat 352 ✅ / Omni video 0/92 (builds queued). Seat chat **12/12** (groq ✅; chathub remains the only seat not re-authed — its 403 sign-in wall still stands). Seat video **3/4** (Flow seat1 client-fix pending).
 
 **Security:** key never written to worklog or commits; lives in OmniRoute store + seat file (gitignored state/secrets).
+
+### [2026-09-04 23:40] #1635 — chrome-devtools-mcp ADOPTED (operator mandate): the real enemy was our fragile Python CDP cycle; MCP config live, guard-checked, persistent cookies
+
+**Operator verdict.** The recurring seat re-auth fights had a single root cause: OUR OWN automation defect — the hand-rolled selenium/CDP attach cycle (chrome_replay_client._attach, cdp.py Page) is fragile (WinError 10053 aborts, SPA catch-all DOM misses, tab-matching failures, session endpoints migrating) and required operator babysitting on every sign-in. Chosen replacement: **Google's official chrome-devtools-mcp** — "use this with full freedom, you will not need me any more." Key property confirmed by operator: it launches its own persistent Chrome window whose **login cookies survive** between sessions — durable authenticated Chrome without the operator treadmill.
+
+**Implemented.**
+1. `.kilo/kilo.json` (validated): `mcp.chrome-devtools` = local npx server, `--userDataDir D:\omniroute-monetizer\state\automation_profiles\mcp_chrome`, viewport 1440x900, NOT --isolated (cookies persist across sessions). Node v22.23.2 / npx 12 verified; `npx chrome-devtools-mcp@latest --help` runs clean (package fetched).
+2. **Guard-checked:** profile dir resolves inside state/ — chrome_live_guard assert_safe PASS. It will NEVER attach to the operator's live profile (CHROME_RULES_FOR_AGENTS.md unchanged and still supreme).
+3. **Memory:** decision.chrome_devtools_mcp_adopted records the mandate, the config, and the rule: use the MCP for ALL future seat sign-ins, re-auths, DOM diagnosis, and captures where a persistent logged-in browser is needed.
+
+**Transition plan.** The MCP server tools load on session reload; from then on: chathub re-auth (operator's remaining chat wall), Flow seat1 session-endpoint diagnosis, and all future captures/re-auths run through the MCP Chrome — no more operator-in-the-loop sign-in treadmill for automation's own profile.
+
+**Pending queue unchanged:** chathub re-auth (first MCP task after reload), 70-row video wiring, Flow seat1 client fix, vertex/kie field mapping; pollinations pollen + kie credits remain operator cost decisions.

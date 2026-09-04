@@ -1,0 +1,19 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "mcp": {
+    "chrome-devtools": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "chrome-devtools-mcp@latest",
+        "--userDataDir",
+        "D:\\omniroute-monetizer\\state\\automation_profiles\\mcp_chrome",
+        "--viewport",
+        "1440x900"
+      ],
+      "enabled": true,
+      "timeout": 30000
+    }
+  }
+}
