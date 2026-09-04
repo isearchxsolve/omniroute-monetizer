@@ -14165,3 +14165,18 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Monthly video supply restated (the number):** Flow dual-account now admitted = **~140–210 clips/mo Flow + free tier (LTX/pollinations/local) ≈ ~200 clips/month ≈ 25–30 min footage/mo**, sustainable.
 
 **Full-tank scoreboard at 20:05:** Omni chat 352 admitted ✅ / Omni video registry sweep running (background). Seat chat 10/12 (re-auth queue). Seat video **3 proven + consumer-proofed live: LTX, rtst.ai, labs.google-P2** (Flow seat1 = client fix pending, kie/aistudio walls). Wave-1 tenants can now buy film clips at scale.
+
+### [2026-09-04 21:02] #1631 — Omni native video sweep COMPLETED: 0/45 candidates returned a usable payload — every failure classified; chat re-verified 364 direct / 351 consumer
+
+**Run completed cleanly** (no crash; terminal summary line present): `directLaw3=364 consumerLaw3=351 video=NO_VIDEO_MP4_PROOF`. Chat side re-verified through the resume path (351 vs the earlier 352: one route flipped to consumer-empty this pass — delta noted, ledger stays 352-published until next apply).
+
+**Native video sweep (the Omni-side video contract, 45 candidates, POST /v1/videos/generations, 900s timeout): 0/45 usable.** Failure taxonomy, each classified per the three-cause rule:
+- **(b) real provider-side walls (credentials/quota):** pollinations/default HTTP 401 "valid API key required" (free tier needs a key now); segmind ltx/wan2.1 401 upstream_error; xai/grok-imagine-video 400 "No credentials for video provider: xai"; several 403/401s across novita/kie-family keys.
+- **(a) fixable request-shape gaps:** vertex veo-3.1 ×5 all HTTP 400 "Invalid resource field value" (OmniRoute's video request schema doesn't match Vertex's current contract — a BUILD TARGET: fix the field mapping, not a dead provider); kie 400s of the same shape.
+- **(c/transport):** veoaifree-web seedance + veo — 2×900s read timeouts (upstream renders but never answers inside the ceiling; matches its quarantine history).
+- **Registry honesty markers:** 5 providers have NO handler and always 400 (agnes, minimax, nanogpt, replicate, together); googleflow/veo-3.0-generate listed as rank0 active-build but failed (its Chrome path is the proven one — the API path is not).
+- Full results: `state/video_provider_probe.json`. Omni-lane video remains **0 admitted** — the 45 registry candidates are all walls or build-targets; the REAL Omni video supply remains the **70 chat-lane video_candidate rows** (#1629), which this sweep did not cover (they are not in the VIDEO_PROVIDERS registry).
+
+**Honest full-tank video position (both lanes):** Omni video 0/92 (45 registry = walls/build-targets; 70 chat-lane = not yet wired to the native contract). Seat video **3/4 reachable proven + consumer-proofed** (LTX, rtst.ai, Flow-P2 — all three carry live URL/job proofs; Flow seat1 pending the session-endpoint client fix). The video tank's REAL fuel is seat-lane + the client builds, not the Omni registry sweep.
+
+**Next increments (priority order):** (1) wire the 70 chat-lane video_candidate rows into the native video contract (route-id mapping already in memory/#1629); (2) FlowApiClient session-endpoint fix for seat1 (Google migration); (3) vertex/kie request-field mapping fix (cause (a) build targets). Walls stay named: pollinations needs an API key (operator decision), xai needs credentials, veoaifree stays quarantined/slow.
