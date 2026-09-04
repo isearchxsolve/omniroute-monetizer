@@ -14336,3 +14336,16 @@ The source handler performs the documented multi-exchange pipeline: validates th
 **Runtime non-regression.** After the elevated action, `:8190/healthz` and `:20130/health` both returned HTTP 200. No scheduled task, service, process, Chrome profile, provider, credential, network endpoint, BIOS, driver, user document, download, or project/runtime state was modified. The only system mutation was the authorized Windows hibernation disable and removal of its managed file.
 
 **Reversal.** If the operator later wants Hibernate and Fast Startup back, the supported elevated reversal is `powercfg /hibernate on`. Re-enabling is not recommended while this old firmware's S4 warnings remain relevant and C: space is constrained.
+### [2026-09-04 21:45] #1632 — Pollinations API key injected (operator-supplied): connection VALID, chat test green, video gated by separate 'pollen' balance (wall)
+
+**Operator supplied a pollinations API key** (redacted here per secrets rule). Actions:
+1. Located the pollinations connection on :20128 management API (`c35aa867-...`, active, apiKeySet null).
+2. Injected the key via `PUT /api/providers/{id}` (200; key stored in OmniRoute's own credential store — never written to repo files or logs).
+3. Connection test: **`{"valid": true, "diagnosis": {"type": "ok"}, latency 1932ms}` → testStatus: active, errorCode cleared** (was expired/401).
+4. Native video probe (pollinations/default, spend-gated): **HTTP 402 PAYMENT_REQUIRED — "This request costs ~0.4000 pollen, but your available balance is 0.0000."**
+
+**Classification (b) — real provider-side metering, honestly a wall for video until topped up.** External triangulation (DeepWiki pollen-billing docs + tier pages): pollinations video costs ~0.4 pollen/clip (~$1/pollen ≈ $0.40/clip); the API key authenticates but video draws from a SEPARATE pollen balance, currently zero. Free tier covers image/text/audio only. Top-up decision is the operator's ($5 ≈ 12 clips; $10 ≈ 25 clips at the wan-fast rate).
+
+**What the key DID unlock immediately:** the connection's 401 wall is gone — pollinations CHAT rows (565 catalog rows, was 401ing the whole lane) can now re-verify with the key on the next graduation pass; several of the 13 video_candidate rows may also open if some models are cheaper/free-tier-eligible at generation time. Omni-lane video supply unchanged until then.
+
+**Security:** key never logged, never written to repo files — lives only in OmniRoute's connection store and this session's runtime env. Chat transcript contains it by necessity (operator pasted it); worklog and commits redacted.
