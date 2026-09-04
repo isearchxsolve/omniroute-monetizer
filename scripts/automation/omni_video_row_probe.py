@@ -52,13 +52,23 @@ def main() -> int:
     except SessionExpired as e:
         verdict, err = "WALL", f"AUTH: {e}"[:300]
     except ChatError as e:
-        kind = str(getattr(e, "args", [""])[0] or "")
+        kind = str(getattr(e, "kind", "") or (getattr(e, "args", [""])[0] if e.args else ""))
         err = str(e)[:300]
-        verdict = "WALL" if kind in ("wall", "auth") else "FAILED"
+        low = err.lower()
+        # "Invalid video model" = the route id is outside OmniRoute's native video-adapter
+        # registry (#1629 measured all 70 chat-lane rows there): a BUILD TARGET (cause (a)),
+        # not an upstream verdict. Distinguish it from a real provider wall/refusal.
+        if kind in ("wall", "auth"):
+            verdict = "WALL"
+        elif "invalid video model" in low:
+            verdict = "BUILD_TARGET"
+        else:
+            verdict = "FAILED"
     except Exception as e:
         err = f"{type(e).__name__}: {e}"[:300]
 
-    row.update(status=verdict, directProof=verdict, consumerProof=None,
+    row.update(status=verdict, directProof=(verdict if verdict in ("PROVEN", "WALL") else None),
+               consumerProof=None,
                error=err, resultUrl=url, probedAt=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     tmp = ROUTES.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(doc, indent=1), encoding="utf-8")
