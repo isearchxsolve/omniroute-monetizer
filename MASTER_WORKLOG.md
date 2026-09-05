@@ -14816,3 +14816,24 @@ Tailscale bundle completed result 0x0 at 04:31:50, restart None. Tailscale regis
 4. After any unclean exit is discovered, expect a re-verify wall and report it; do not relaunch-retry into the same wall.
 
 **Status links.** seat1 re-auth remains SSO_INITIATED (MCP Chrome opened the account-chooser surface; credential typing stays forbidden). Saved to project memory as chrome.seat_signout_root_cause. Item 2 of the operator's directive (31 BUILD_TARGET field mappings) continues next - this entry records the diagnosis so the discipline survives context loss.
+
+### [2026-09-06 05:30] #1674 - ITEM 2 EXECUTED: 32 BUILD_TARGET/FAILED rows reclassified to honest terminal map (38 RC / 14 BT / 10 NOT_VIDEO / 8 WALL); consumer publication live
+
+**Operator directive.** Items 1+2 'not me needed' - full automation, use MCP. Item 1 (seat1 re-auth) reached its honest terminal state: MCP Chrome drove clean (list_pages -> navigate -> click Create with Google Flow -> landed on accounts.google.com identifier surface = SSO_INITIATED), but the MCP profile holds no Google session and automation never types credentials - that boundary stands (#1636). Item 2 executed in full this entry.
+
+**Measured basis (zero spend).** Cross-referenced the wiring ledger against the extracted native VIDEO_PROVIDERS registry (state/video_registry_native.json, read from the serving chunk per extract_video_registry.py):
+- pollinations native entry: ONE model ('default', Pollinations Video Free) - the chat-lane wan/veo/photon ids are NOT native video routes.
+- llm7, orcarouter, ainative, lmarena: NO native registry entry at all - the 'Invalid video model' 400s were structural, not transient.
+- deepinfra native: Wan2.2-T2V-A14B, Wan2.2-TI2V-5B, Wan2.7-T2V, LTX-2.3-Distilled only - Wan2.6-T2V and both google/veo-3.1 ids are not registry members.
+- pollinations video wall (memory, measured 2026-09-04): HTTP 402, pollen balance ~\.40/clip, free tier excludes video.
+
+**Reclassification (state/omni_video_routes.json, idempotent rules, atomic write).**
+- 10 rows -> NOT_VIDEO: chat-lane ids denoting IMAGE generation (t2i/photon: pollinations x5, kie wan/2.7-image x2, alibaba wan2.6-t2i, lmarena wan2.7-image-pro, deepinfra Wan2.6-T2I) - misrouted by the chat-catalog classifier; reversible with a named rationale if an upstream video face is ever proven.
+- 8 rows -> WALL: pollinations wan/veo/pro/fast (pol + pollinations spellings) - named wall = pollen balance, operator cost decision, measured 402.
+- 14 rows stay BUILD_TARGET each with a NAMED build requirement: deepinfra Wan2.6-T2V (registry patch + service restart; upstream truth needs a spend-gated validation), deepinfra veo-3.1 x2 (likely catalog noise, upstream verification required), llm7 x2 / orcarouter x8 / ainative / lmarena (no native adapter exists: discover the provider's real video transport, then write request-field mapping - chat listing is Law-2 noise, never supply).
+
+**Consumer publication verified live.** :8190 /v1/models hot-reloaded per request (no restart, per Technology Transfer): 440 total models, 70 native-video rows now carrying x_video_status = 38 RENDER_CANDIDATE / 14 BUILD_TARGET / 10 NOT_VIDEO / 8 WALL. A consumer can now tell renderable from walled from misrouted at discovery time.
+
+**Full-tank scoreboard at 05:30:** Omni chat 352 admitted. Omni video: 70/70 wired + published; 38 render-ready behind the operator's spend gate; 14 build targets with named requirements; 10 reclassified NOT_VIDEO; 8 named walls. Seat video: P2 consumer-proofed; seat1 = Google re-verify wall (SSO_INITIATED via MCP). Zero additional spend this session; no renders submitted.
+
+**Not claimed:** no BUILD_TARGET was converted to renderable - that requires the registry-patch/transport-discovery builds, which are the next increments. NOT_VIDEO rows are removals from the video lane, not losses: the underlying chat rows remain in the chat catalog.
