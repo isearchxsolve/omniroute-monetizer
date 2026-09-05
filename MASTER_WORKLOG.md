@@ -1,4 +1,27 @@
-### [2026-08-29 03:15] #1154 ‚Äî Re-capture Auth-Dead Seats (Gemini, Cerebras, Groq, ChatGPT)
+### [2026-09-05 15:50] #1639 ó SHIM OWNER MINUTE-CYCLE CHURN ROOT-CAUSED + FIXED (the "interrupted by shim restart" killer), then commit f702997
+
+**Context & motivation:** Resumed per the operator's "yes" to the proposed increment list (reload shim ? relaunch P2 ? re-run seat1/P2 Flow consumer proofs). Mandatory pre-reads done: TECHNOLOGY_TRANSFER.md ß2 Five Laws + ß21ñß24 + CHROME_RULES_FOR_AGENTS.md.
+
+**Pre-flight findings (measured):**
+- :8190 healthz reported `ok:true` but healthz **PID churned** across probes: 13144 ? 15224 ? 19296 ? 17204 within ~40s. logs/shim_task_diag.log showed the failure loop since ~15:26 local: every minute `PRE-START native-owner` ? `PRIMARY-UNHEALTHY cleanup-before-fallback` ? `FAILED no-healthy-shim`. The single owner was killing a HEALTHY shim once per minute ó the exact defect that terminated consumer job 4494ceafÖ ("interrupted by shim restart; remote spend state unknown") and that a mid-render reload would have repeated.
+- Root cause: `session_pool_shim_task.py` pinned `LIVENESS_VERSION = "2026-09-01-liveness-v1"` and its `healthz()` required `payload["version"] == LIVENESS_VERSION`. The 70-row wiring (#1638) bumped the shim's `SHIM_HEALTH_VERSION` to `2026-09-05-video-wiring-v1` without touching the owner. Result: owner judged the healthy shim unhealthy every cycle, killed it, relaunched, and its own wait_for_health then FAILED on the same version mismatch ó an infinite kill-relaunch loop, one churn per minute, forever.
+- Also measured: task `OmniRoute Video Router (keepalive)` is State=Disabled (deliberate #13320 containment ó no auto-relaunch race to fight); all seat Chromes down except :9223 (owners file + niloy tab).
+
+**Fix (single file, `scripts/automation/session_pool_shim_task.py`):**
+1. Added `_expected_shim_version()` ó reads `SHIM_HEALTH_VERSION` straight out of `session_pool_shim.py`'s source (regex on the constant) so owner and shim can never drift apart again by construction; falls back to the old constant only if the read fails.
+2. `healthz()` now compares against `_expected_shim_version()` instead of the stale pinned `LIVENESS_VERSION` (kept only as fallback).
+3. Import `re` added.
+
+**Verification:**
+- Direct import probe: `_expected_shim_version()` ? `2026-09-05-video-wiring-v1`; `healthz(8190)` ? True against the live shim.
+- Next scheduled task cycles (?3, every 1 min): diag log SILENT since 15:46:26 (healthy cycles log nothing by design); healthz PID stable at 1780 across 75s+ of probes; the exact listener/launcher pair (venv python.exe 18108 ? Python311 1780) matches ß21's normal two-row shape.
+- Committed as f702997 BEFORE any render was submitted (no in-flight job existed to interrupt ó JOBS ledger checked: only terminal failed/old rows).
+
+**Security:** no secrets printed; tenant keys never echoed; operator Chrome untouched throughout.
+
+**What is NOT claimed:** the fix is verified for the owner loop and shim stability only. No Flow render has been submitted yet this session; seat1/P2 consumer proofs remain pending (next increment). The two #1637 fix files (flow_ui_client.py, session_pool_shim.py) remain uncommitted-local but are LOADED in the running shim (process started 15:35 > file mtimes 03:00).
+
+
 
 1. **Context & Motivation:**
    - The user noted that 14 seats are currently running on the four Chrome profiles.
@@ -2224,7 +2247,7 @@ Six fail-closed gates, each verified by test:
    `D:\omniroute-backups\chrome-session-rollback\` first; any exception auto-invokes `rollback()`.
 
 Gate test results:
-- TEST 1 (valid, dry-run, Profile 17 ‚Üê `chrome_profile_20260822_080520`):
+- TEST 1 (valid, dry-run, Profile 17 ‚Üù `chrome_profile_20260822_080520`):
   `[ok] source credential is complete: token_service rows=1, account=['isearch.xsolve@gmail.com']`,
   `[ok] account matches expected owner of 'Profile 17'`, then `DRY RUN -- nothing was changed`.
 - TEST 2 (wrong account): `REFUSED ... ACCOUNT MISMATCH for 'Default': expected
