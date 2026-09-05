@@ -43,10 +43,10 @@ from cdp import Page, list_targets                   # noqa: E402
 
 CREDITS_PER_CLIP_DEFAULT = 15          # observed UI chip: fast 8s clip = 15cr on Pro
 # Google queues renders under high demand: the 2026-09-05 seat1 graduation render sat
-# ~30 MINUTES in "waiting in the queue" before rendering (~4 min) and completing.
-# A 7-minute budget collected nothing while credits were already committed. Budget now
-# covers a worst-case queue; the poll reports queue state honestly every cycle.
-ANSWER_TIMEOUT_S = 2700
+# ~30 MINUTES in "waiting in the queue" before rendering (~4 min) and completing; the
+# consumer job's BOTH attempts then queued out a 45-min budget each without collecting.
+# Budget covers a worst-case queue (~80 min) so one submit actually collects its clip.
+ANSWER_TIMEOUT_S = 4800
 CDP_PORTS = [9222, 9223, 9224, 9225, 9226]
 
 

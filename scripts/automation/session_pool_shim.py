@@ -69,7 +69,32 @@ OMNIROUTE_MODEL_TIMEOUT_S = 10.0
 OMNIROUTE_CHAT_TIMEOUT_S = 8.0
 OMNIROUTE_FALLBACK_MODEL = os.environ.get("OMNIROUTE_FALLBACK_MODEL", "frontier")
 OMNI_VERIFIED_ROUTES = pathlib.Path(__file__).resolve().parents[2] / "state" / "omniroute_verified_routes.json"
-SHIM_HEALTH_VERSION = "2026-09-01-liveness-v1"
+OMNI_VIDEO_ROUTES = pathlib.Path(__file__).resolve().parents[2] / "state" / "omni_video_routes.json"
+SHIM_HEALTH_VERSION = "2026-09-05-video-wiring-v1"
+
+
+def _omni_video_routes() -> Optional[dict[str, dict[str, Any]]]:
+    """Wired chat-lane video_candidate routes -> per-route status (worklog #1638).
+
+    Shape: {catalog route id: {"provider":..., "status":..., ...}}.  A missing file
+    returns None (feature dormant); a malformed file fails CLOSED to an empty map so a
+    corrupt artifact can never widen the video dispatch surface.  Re-read per call: the
+    probe harness updates verdicts on disk with no shim restart.
+    """
+    if not OMNI_VIDEO_ROUTES.exists():
+        return None
+    try:
+        data = json.loads(OMNI_VIDEO_ROUTES.read_text(encoding="utf-8"))
+        routes = data.get("routes") if isinstance(data, dict) else None
+        if not isinstance(routes, list):
+            return {}
+        out: dict[str, dict[str, Any]] = {}
+        for r in routes:
+            if isinstance(r, dict) and r.get("model"):
+                out[str(r["model"])] = r
+        return out
+    except (OSError, ValueError):
+        return {}
 
 
 def shim_health_payload() -> dict[str, Any]:
@@ -508,12 +533,15 @@ def _job_receipt(rec: dict, tenant: str) -> dict:
     }
 
 
-def _video_worker(job_id: str, messages: list, host: str = None) -> None:
+def _video_worker(job_id: str, messages: list, host: str = None,
+                  model_override: str = None) -> None:
     """Render one video job off the HTTP thread, updating the durable ledger as it goes.
 
     Seat selection uses the pool's own reserve() so LRU/cooldown/per-host-lock semantics are
     identical to chat routing. On seat failure we try the next live video seat (bounded by the
     live count), exactly like pool.chat() failover — but every attempt is recorded on the job.
+    model_override pins the route id (chat-lane video wiring, worklog #1638) instead of the
+    seat's default MODEL.
     """
     tries = len(pool.live(modality="video", host=host)) or 1
     last_err = "no dispatchable video session"
@@ -529,7 +557,7 @@ def _video_worker(job_id: str, messages: list, host: str = None) -> None:
         JOBS.update(job_id, status="running", provider=s.host, session=s.key,
                     started=time.time(), progress=0.1)
         try:
-            r = s.chat(messages)
+            r = s.chat(messages, model=model_override)
             url = r.get("video_url") or r.get("text")
             if not (isinstance(url, str) and url.startswith(("http://", "https://"))):
                 raise ChatError("NO_VIDEO_URL", f"{s.host} returned no video URL")
@@ -620,11 +648,30 @@ class ShimHandler(BaseHTTPRequestHandler):
                     models.append(merged)
             # The direct Omni catalog is management-session protected.  The
             # bridge deliberately does not hold that management session, so an
-            # optional upstream metadata refresh can be empty even while a
-            # route has passed both direct and final-gateway Law-3 proof.  The
+            # optional upstream metadata refresh can be empty even while a route
+            # has passed both direct and final-gateway Law-3 proof.  The
             # local verified ledger is the authoritative publication source in
             # that case.  Add only admitted IDs, never the raw catalog.
             published_ids = {str(m.get("id") or "") for m in models}
+            # Chat-lane video_candidate wiring (worklog #1638): publish the wired
+            # rows with honest status in the row itself. UNPROBED rows are listed
+            # (they ARE reachable inventory now) but carry x_video_status so a
+            # consumer can tell unprobed from proven at discovery time.
+            wired = _omni_video_routes()
+            if wired is not None:
+                for route_id in sorted(wired):
+                    row = wired[route_id]
+                    if route_id in published_ids:
+                        continue
+                    models.append({
+                        "id": route_id,
+                        "object": "model",
+                        "created": int(time.time()),
+                        "owned_by": "omniroute-native-video",
+                        "x_gateway_source": "omniroute_video_routes",
+                        "x_video_status": row.get("status") or "UNPROBED",
+                    })
+                    published_ids.add(route_id)
             if allowed_omni is not None:
                 for model_id in sorted(allowed_omni):
                     if model_id in seat_ids or model_id in published_ids:
@@ -802,6 +849,32 @@ class ShimHandler(BaseHTTPRequestHandler):
         # answer 202 with the receipt, render in a worker thread. A replayed job_key returns
         # the SAME record with 200 and never spends twice.
         if modality == "video":
+            wired = _omni_video_routes()
+            wired_route = host_target in (wired or {}) if wired is not None else False
+            if wired_route:
+                # Chat-lane video_candidate row -> OmniRoute's NATIVE video contract via
+                # the omniroute-native bridge seat (worklog #1638). The route id is the
+                # model; the client's spend gate still applies per submit.
+                vmeta = req.get("video") if isinstance(req.get("video"), dict) else {}
+                job_key = vmeta.get("job_key")
+                prompt = ""
+                for m in reversed(messages):
+                    if isinstance(m, dict) and m.get("role") == "user":
+                        prompt = str(m.get("content") or "")
+                        break
+                rec, created = JOBS.create(job_key=job_key, prompt=prompt,
+                                           model=f"video/{host_target}/auto",
+                                           host="omniroute-native", tenant=tenant)
+                if created:
+                    threading.Thread(target=_video_worker,
+                                     args=(rec["job_id"], messages, "omniroute-native",
+                                           host_target),
+                                     daemon=True).start()
+                self.send_response(200 if not created else 202)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(_job_receipt(rec, tenant)).encode())
+                return
             if not pool.live(modality="video", host=host_target):
                 self.send_response(503)
                 self.send_header("Content-Type", "application/json")
