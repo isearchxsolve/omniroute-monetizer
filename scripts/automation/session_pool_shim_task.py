@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -31,7 +32,27 @@ PYTHON_EXE = ROOT / ".venv" / "Scripts" / "python.exe"
 DEFAULT_DIAG = ROOT / "logs" / "shim_task_diag.log"
 DEFAULT_PRIMARY_LOG = ROOT / "logs" / "shim_stdout_current.log"
 DEFAULT_REPLACE_REQUEST = ROOT / "state" / "shim_owner_replace.request"
-LIVENESS_VERSION = "2026-09-01-liveness-v1"
+LIVENESS_VERSION = "2026-09-05-video-wiring-v1"
+
+
+def _expected_shim_version() -> str:
+    """Derive the expected /healthz version from the shim's own source.
+
+    The version string lives in exactly one place (session_pool_shim.py). Pinning a
+    copy here (LIVENESS_VERSION) let the two drift apart (worklog #1638 bumped the
+    shim but not this file), so the owner judged the HEALTHY shim unhealthy every
+    cycle, killed it, and fail-looped - the exact churn that killed a running
+    consumer render ("interrupted by shim restart"). Reading the constant from the
+    shim's source keeps the owner and the shim in lockstep by construction.
+    """
+
+    try:
+        match = re.search(
+            r'SHIM_HEALTH_VERSION\s*=\s*"([^"]+)"', SHIM_SCRIPT.read_text(encoding="utf-8")
+        )
+    except OSError:
+        return LIVENESS_VERSION
+    return match.group(1) if match else LIVENESS_VERSION
 
 
 def _stamp() -> str:
@@ -57,7 +78,7 @@ def healthz(port: int, timeout: float = 3.0) -> bool:
     return (
         payload.get("ok") is True
         and payload.get("service") == "session-pool-shim"
-        and payload.get("version") == LIVENESS_VERSION
+        and payload.get("version") == _expected_shim_version()
     )
 
 
