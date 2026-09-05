@@ -14796,3 +14796,23 @@ Tailscale bundle completed result 0x0 at 04:31:50, restart None. Tailscale regis
 **Scoreboard update:** Seat video: P2 consumer-proofed (renders + URL + HEAD chain complete). Seat1: graduation render + URL proof done (#1637), consumer job blocked by Google re-verify wall - named, evidence archived. Omni chat 352 admitted unchanged; 70-row video wiring unchanged (38 RENDER_CANDIDATE behind spend gate, 31 BUILD_TARGETs pending field-mapping builds).
 
 **Not claimed:** seat1 CAPACITY_ADMITTED (wall stands); no new renders submitted this session (zero additional spend; all evidence from already-rendered clips). Next increments: interactive re-auth for isearch.xsolve seat, then the 31 BUILD_TARGET field mappings.
+
+### [2026-09-06 05:05] #1673 - ROOT CAUSE: repeated Google sign-outs are OUR force-kill churn (stale PSIDTS replay), not Google - clean-exit discipline mandated
+
+**Operator question.** 'They were all signed in to Google and the seats - why are they getting signed out repeatedly?'
+
+**Measured evidence (read-only profile forensics).**
+1. Preferences > profile.exit_type: providers (seat1) = **Crashed**, providers_p2 = **Crashed**, mcp_chrome = **Normal**. Every seat Chrome exit in recent history was unclean (process-tree kills at session end, shim reloads, port-conflict cleanup, Stop-Process -Force - including tonight's relaunch of 19 orphaned PIDs).
+2. Auth-redirect visit counts (History DB, read-only copy): providers = **766** (ServiceLogin/SetOSID/RotateCookiesPage rows), providers_p2 = **210**. seat1 - the seat that got fully invalidated - has 3.7x the auth-churn of the seat still alive.
+
+**Mechanism.** Google continuously rotates the short-lived __Secure-1PSIDTS/__Secure-3PSIDTS cookies (RotateCookiesPage observed live in the seat tabs). Chrome holds the newest rotation in memory and persists it to disk only on a CLEAN exit. A force-kill orphans the latest rotation; the next launch replays a STALE PSIDTS beside the long-lived SID. Google's server sees a rotation value it already retired - the token-theft/replay signature - and escalates: first 'Verify it's you' challenges, then full server-side invalidation. seat1 (isearch.xsolve) crossed that threshold; P2 is one bad kill away from the same wall. The T430's 11.6%-capacity battery and documented hard-shutdown history add more Crashed exits on top.
+
+**This is our automation defect, not Google hostility.** The 2026-08-22 RCA class again: what automation does to its own sessions is the variable that matters.
+
+**Mandated discipline (in force from now on):**
+1. Seat Chromes are PERSISTENT processes: launch once, leave running across agent sessions; per-request hot-reload means no workflow needs them restarted.
+2. When termination is truly unavoidable, close via CDP Browser.close (flushes cookies), NEVER Stop-Process/taskkill.
+3. No hard power-off / battery-pull while seat sessions are live.
+4. After any unclean exit is discovered, expect a re-verify wall and report it; do not relaunch-retry into the same wall.
+
+**Status links.** seat1 re-auth remains SSO_INITIATED (MCP Chrome opened the account-chooser surface; credential typing stays forbidden). Saved to project memory as chrome.seat_signout_root_cause. Item 2 of the operator's directive (31 BUILD_TARGET field mappings) continues next - this entry records the diagnosis so the discipline survives context loss.
