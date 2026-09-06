@@ -99,8 +99,13 @@ class DigenSessionClient:
                 "digen submit refused: set OMNI_VIDEO_CONFIRM_SPEND=1 to allow this seat to charge")
         prompt = messages[-1]["content"] if messages else ""
         
-        # 1. Submit using the exact captured shape
+        # 1. Submit using the exact captured shape, but with a FRESH scene code.
+        # Measured 2026-09-06 (#1677): scene_params.code is a ONE-TIME value minted by
+        # POST /v1/user/scene_info at page-load; replaying the captured code dies with
+        # errCode 4002 "sys error" while auth itself stays valid (the same replay with a
+        # fresh minted code is the whole fix — Chrome-gap doctrine cause (a)).
         submit_url = "https://api.digen.ai/v1/scene/job/submitv1"
+        scene_info_url = "https://api.digen.ai/v1/user/scene_info"
         submit_ex = None
         for ex in self._exchanges:
             if "submit" in ex.get("url", ""):
@@ -114,6 +119,18 @@ class DigenSessionClient:
         payload = dict(tmpl)
         if "scene_params" in payload:
             sp = json.loads(payload["scene_params"])
+            try:
+                si = _session().post(scene_info_url, headers=self._headers, json={}, timeout=30)
+                if si.status_code in (401, 403):
+                    raise SessionExpired("HTTP", "session no longer authenticates", status=si.status_code)
+                si_body = si.json()
+                if si_body.get("errCode") != 0:
+                    raise ChatError("API_ERROR", f"scene_info mint failed: {si_body.get('errMsg', '')[:120]}", status=200)
+                fresh_code = (si_body.get("data") or {}).get("code")
+                if fresh_code:
+                    sp["code"] = fresh_code
+            except requests.RequestException as e:
+                raise ChatError("NETWORK", f"scene_info mint: {str(e)[:150]}")
             sp["video_gen_prompt"] = prompt
             payload["scene_params"] = json.dumps(sp)
             
