@@ -14906,3 +14906,23 @@ Operator confirmed phone USB tethering, not Wi-Fi. RNDIS Ethernet 3 is active de
 **Scoreboard at 07:55:** Omni chat 352 admitted. Omni video: 70 wired; digen seat video ADMITTED + consumer-proven (11 video seats live in pool). Seat video: P2 proofed; seat1 Google wall. Digen wallet: 330 credits = 11 clips. Zero additional spend beyond the two planned graduation renders (60 free-tier credits).
 
 **Not claimed:** the remaining 16 hosts harvested (each needs capture + adapter discipline); digen chat-lane rows (modality=video only).
+
+### [2026-09-06 08:40] #1678 - GATE 2 harvest sweep on 9223: 0/14 captured, 2 named walls, 12 post-crash sign-outs; operator-Live-port trap caught by guard; honest terminal map for the 16 remaining hosts
+
+**Port 9222 trap (guard-correct, no breach).** Attempted capture on :9222 refused by chrome_live_guard: the listener there is now the OPERATOR's own Chrome (pid 9304, launched from the Quick Launch Google Drive shortcut; the live root's DevToolsActivePort declares 9222). The guard is authoritative per AGENTS 14.1 - automation must not attach. Consequence: seat1 (providers) capture work needs a NON-9222 port while the operator's Chrome holds it; no seat Chrome was launched on 9222 this session (the #1672-era relaunch died with its process tree; today's listener is not ours).
+
+**Health gate first.** chrome_selfheal.py: 8 fine / 0 repaired / 1 needs-you (fresh backup requires Chrome fully closed); GOOGLE_SYNC_AUTHENTICATED = 4 of 4 - the OPERATOR's profiles are healthy; the AUTOMATION seat profiles are separate and took the crash exits (#1673).
+
+**Seat relaunch (single-profile discipline).** launch_single_seat.py 9223 niloy -> CDP ready (Chrome/152.0.7977.76), 17 pages restored. Tabs observed: auth.meta.com waterfall + accounts.google.com password challenge (re-verify surfaces, expected after the Crashed exits; reported, never typed through).
+
+**Capture sweep (capture_sessions_cdp.py, sentinel 'Reply exactly one word: Omni.', one submit per site, walls terminal):** 14 sites attempted on 9223, ZERO captures:
+- WALL (2, named + left untouched): Puter Chat = 'verify your phone'; StepFun/yuewen = 'credit card'; (NemoVideo on a later batch = 'credit card').
+- NO_COMPOSER (5 - landing surface, session layer signed out): Cerebras, Pollinations, Coze, Doubao, Phind, Akool.
+- NO_REQUEST (7 - composer found but submit produced no sentinel-bearing transport: could be deeper sign-out state or a composer-targeting gap on these UIs): Zhipu GLM, Hailuo, iFlytek, Baichuan, Creen, Together AI, Cohere dashboard, Meta AI.
+- Verdict: the 2026-09-02 APP_SURFACE verdicts are STALE for chat-supply purposes - the post-crash re-verify wave (#1673 root cause) signed most seat surfaces out. The Sep-2 audits remain valid as SURFACE history, not as current sign-in state.
+
+**Premises audit correction.** My fuzzy host matcher had a prefix bug (core() took the first DNS label): app.heygen.com / chat.cerebras.ai / api.together.ai were falsely counted as 'covered'. True unharvested worklist = 20 hosts (17 named in #1677 + heygen + cerebras + together).
+
+**Scoreboard at 08:40:** Omni chat 352 admitted. Omni video: digen ADMITTED + consumer-proven (#1677). Seat video 6 admitted. Seat chat: re-auth queue now includes ~12 niloy surfaces (walls named above). Two chat captures DID land earlier this session: none. Zero spend (sentinel chat submits are free; no video renders outside the digen graduation pair).
+
+**What would actually move this lane (operator-gated):** one interactive re-auth pass over the seat profiles (the #1635 MCP-Chrome one-time sign-in route, one account at a time) - after which the same 30-minute sweep converts NO_COMPOSER rows into captures. The alternative is more tab-driving against signed-out surfaces, which produces NO_COMPOSER, not supply.
