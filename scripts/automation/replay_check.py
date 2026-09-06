@@ -56,6 +56,22 @@ WALL_HINTS = ("credit", "quota", "billing", "payment", "captcha", "upgrade", "su
 AUTH_TEXT = ("unauthorized", "not authenticated", "forbidden", "auth rejected", "invalid api key",
              "invalid token", "login required", "please log in", "session expired")
 
+# Multi-step agent pipelines (measured 2026-09-06, worklog #1679): a 200 whose body is an SSE
+# agent-project stream (genspark ask_proxy: project_start + keepalive events, answer arrives
+# minutes later) or a completed planner envelope (giz inferenceServer.infer: status completed +
+# output object, the answer lives in a follow-up render leg the single exchange never sees).
+# Neither is a wall nor a dead end -- the single-exchange replay transport simply cannot carry
+# them. The label names the transport to build (Doctrine 3a).
+PIPELINE_MARKERS = ('"project_start"', '"notification_type": "keepalive"', '"mediatool"')
+
+
+def looks_like_pipeline(low: str) -> bool:
+    if any(m in low for m in PIPELINE_MARKERS):
+        return True
+    # giz planner shape: a COMPLETED status envelope whose output is routing metadata, not text
+    if '"status": "completed"' in low or '"status":"completed"' in low:
+        return '"output"' in low and '"responseformat"' in low
+
 
 def http_status_in(text: str) -> int | None:
     """Pull the status out of a stringified requests error, e.g. "409 client error: conflict"."""
@@ -118,6 +134,9 @@ def classify(text: str, status: int | None, err: str | None, expect: str = "58")
     if "unparseable" in low:
         return "UNPARSEABLE", "200 but no recognised response shape -- not scored as an answer"
     status = status or http_status_in(low)
+    if looks_like_pipeline(low):
+        return "PIPELINE", ("200 agent/planner stream -- multi-step build target, not a wall "
+                            "(submit+poll transport needed)")
     if any(w in low for w in AUTH_TEXT) or status in (401, 403):
         return "AUTH", f"auth refused ({status or 'in body'}) -- cookie alone is not enough"
     if status == 429 or "rate limit" in low or "too many requests" in low:
@@ -200,6 +219,11 @@ def replay(path: pathlib.Path, prompt: str, expect: str) -> dict[str, Any]:
         # appearing inside a longer digit run (id/timestamp) via keyword_in_body.
         if verdict != "REPLAY_OK" and keyword_in_body(raw, expect):
             verdict, detail = "REPLAY_OK", f"keyword {expect!r} found in raw body ({len(raw)}B)"
+        elif verdict in ("WALL", "NO_ANSWER") and looks_like_pipeline(raw.lower()):
+            # The extractor stripped the planner/agent envelope, so the pipeline markers never
+            # reached classify(). The raw body settles it: this is a multi-step transport (worklog #1679).
+            verdict, detail = "PIPELINE", ("raw body is an agent/planner stream -- multi-step build "
+                                           "target, not a wall")
     except Exception as e:                        # a replay failure is data, never a crash
         text, status = "", None
         # KEYWORD-SEARCH UNLOCK: the extractor may refuse an envelope it cannot structurally
