@@ -296,6 +296,26 @@ def _client_for(host: str, raw: dict = None) -> Optional[Type[Any]]:
         # state/harvest/omniroute_native/. Gate + submit-once like every other video seat.
         from omniroute_video_client import OmnirouteVideoClient
         return OmnirouteVideoClient
+    if kind == "orcarouter_video":
+        # Upstream-verified 2026-09-06 (worklog #1675): 8 kling ids, supported_endpoint_types
+        # ['openai-video'], POST /v1/videos exists. Request-field mapping UNVERIFIED until a
+        # fresh key lands (stored key dead, 401). Spend-gated like kie.
+        from orcarouter_video_client import OrcaRouterVideoClient
+        return OrcaRouterVideoClient
+    if kind == "llm7_video":
+        # Upstream-verified 2026-09-06 (worklog #1675): kling-v3.0-pro/turbo model_type=video,
+        # POST /v1/videos exists. UNVERIFIED mapping until a fresh key (stored key dead,
+        # invalid_api_key). Spend-gated like kie.
+        from llm7_video_client import Llm7VideoClient
+        return Llm7VideoClient
+    if kind == "deepinfra_video":
+        # Upstream-verified 2026-09-06 (worklog #1675): veo-3.1/veo-3.1-fast/Wan2.6-T2V/
+        # p-video all tags=['video-gen'] on the PUBLIC list; the installed native registry
+        # chunk predates them, so this direct seat reaches the same models with only a key.
+        # UNVERIFIED inference mapping until a fresh key (stored key dead, 401).
+        # Spend-gated like kie.
+        from deepinfra_video_client import DeepInfraVideoClient
+        return DeepInfraVideoClient
 
     # WEBSOCKET seats (Doctrine 3a, CORRECTED 2026-08-28 per operator): a seat carrying
     # `recorded_ws` was captured by capture_websocket_cdp.py — the site speaks a websocket.
