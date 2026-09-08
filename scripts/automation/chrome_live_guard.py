@@ -34,6 +34,7 @@ See AGENTS.md items 5 and 14, and MASTER_WORKLOG.md #1026 / #1030.
 from __future__ import annotations
 
 import os
+import socket
 import sys
 from pathlib import Path
 
@@ -222,7 +223,10 @@ def live_devtools_ports() -> set[int]:
     """Ports advertised by any Chrome currently running on the operator's live profile.
 
     Empty set is the normal, healthy answer -- it means no live Chrome has a debugging port
-    open. Never raises: a guard that crashes on an unreadable file is worse than useless.
+    open.  ``DevToolsActivePort`` is a crash-left marker as well as a live signal: Chrome can
+    terminate before removing the file, leaving a stale port number behind for the next run.
+    Only return a port when the loopback listener is reachable now.  Never raises: a guard that
+    crashes on an unreadable file is worse than useless.
     """
     ports: set[int] = set()
     live = resolve(LIVE_ROOT)
@@ -242,7 +246,21 @@ def live_devtools_ports() -> set[int]:
         except (OSError, ValueError):
             continue
         if first and first[0].strip().isdigit():
-            ports.add(int(first[0].strip()))
+            port = int(first[0].strip())
+            # The file is written before the DevTools socket is necessarily ready and is not
+            # guaranteed to be removed on an unclean Chrome exit.  A short TCP connect check
+            # distinguishes the two cases without attaching to the browser or reading any
+            # profile data.  A refusal/timeout means this is only a stale marker, so a dedicated
+            # automation seat may safely reclaim the unused port.
+            probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            probe.settimeout(0.15)
+            try:
+                if probe.connect_ex(("127.0.0.1", port)) == 0:
+                    ports.add(port)
+            except OSError:
+                pass
+            finally:
+                probe.close()
     return ports
 
 
