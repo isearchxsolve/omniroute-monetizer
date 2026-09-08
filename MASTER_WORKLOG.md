@@ -15068,3 +15068,15 @@ and MP4 proof: the admitted count is unchanged at five video sessions, the two e
 not promoted, and OmniRoute native video remains zero-admitted. `git diff --check` passed. No browser
 profile outside the dedicated automation tree, provider request, video generation, credit spend, or
 service restart occurred. The documentation change is committed after this log entry.
+### [2026-09-09 04:36] #1695 - Final live verification before operator-gated expansion
+
+Re-read the live endpoint and exact admission registry after the 9226 P2 wake. `GET /healthz` on
+127.0.0.1:8190 returned HTTP 200, version `2026-09-09-session-heartbeat-v1`, PID 564, and the
+heartbeat counters had advanced to 6 beats / 0 failures. The exact pure-Python registry still has
+five admitted video session files: LTX Space, RTST seat2, Flow P2, Flow seat1, and Digen. No file
+was promoted by the navigation-only work. The remaining untracked scratch files were pre-existing
+user artifacts and were not staged. This final read made no provider request, no browser click, no
+video submit, and no credit spend. The complete expansion status is ready to hand to the operator:
+manual dedicated-profile authentication plus explicit bounded video-spend confirmation are the
+only remaining gates for adding the two missing Flow seats; OmniRoute video still needs provider
+contract/credential proofs.
