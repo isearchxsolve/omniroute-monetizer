@@ -1,0 +1,85 @@
+# Video-lane capacity and expansion — 2026-09-09
+
+This is the current, evidence-bounded capacity report for the designated consumer endpoint:
+`http://127.0.0.1:8190/v1`.
+
+## What is live now
+
+The task-owned shim is running `2026-09-09-session-heartbeat-v1`. Its health payload reports a
+six-hour idle window and one stateless chat heartbeat at most every five minutes. The heartbeat is
+deliberately not a video generator: it never drives Chrome and never spends video credits.
+
+The current local pool has **49 session artifacts**, of which **15 are dispatchable**:
+
+| Lane | Dispatchable/admitted session files | Current evidence |
+|---|---:|---|
+| Chat | 10 | Exact-file Law-3 replay admissions |
+| Video | 5 | Exact-file video admissions and consumer wiring |
+
+The five admitted video files are: Digen (stateless API), RTST seat2 (stateless API), public LTX
+Space (zero-auth API), and two Google Flow Chrome seats (both PRO, Chrome-backed). The two Flow
+seats are proven by submit → poll → downloadable MP4 evidence; the Chrome tabs remain a runtime
+dependency. `GET /v1/models` currently returns 438 rows / 437 unique IDs, including 351 admitted
+OmniRoute chat rows and 70 OmniRoute video-candidate rows. The 70 candidate rows are explicitly
+**UNPROBED inventory**, not video capacity.
+
+## Minutes per month: what can honestly be stated
+
+There is no single measured current-minute number for the five seats. The providers expose different
+quota units, and two seats are Chrome-backed. The hard current read-only figures are:
+
+* Digen: 330 credits remaining at the last read, with the measured 30-credit/5-second contract —
+  **11 clips = 55 seconds = 0.92 minutes** remaining.
+* RTST seat2: 4 credits remaining at the latest read; its cheapest proven option is 6 credits for
+  a 3-second clip — **0 additional clips at that balance**.
+* LTX public Space: an MP4 submit/poll/download proof exists, but no monthly quota was measured;
+  it is not converted into a guaranteed monthly-minute number.
+* Google Flow: two PRO accounts are admitted, but their balances were observed through dedicated
+  Chrome UI snapshots rather than a current non-browser API. Their recorded proofs show 20 credits
+  for an 8-second Fast generation and prior balances of 1,026 credits (P2 after proof) and a
+  separate seat1 balance snapshot. These are historical snapshots, not a live balance guarantee.
+
+For planning, the current official Google Flow help page documents **50 daily credits for every
+account**, plus **1,000 monthly credits for Google AI Pro**; unused daily/monthly credits do not
+roll over. It lists Veo 3.1 Fast at **20 credits per 4/6/8-second generation** for non-Ultra users.
+On a 30-day month, that gives a *quota ceiling* of 2,500 credits / 125 eight-second Fast clips /
+**16.7 minutes per Pro account**, if the account is actually entitled and used every day. Thus the
+two already-proven Pro Flow accounts have a planning ceiling of about **33.3 minutes/month** from
+the recurring Flow allocation, before subtracting any already-consumed balance. This is a planning
+ceiling, not a current-balance assertion.
+
+The older local estimate of **about 25–30 minutes/month** for the two-account Flow + free-tier mix
+is retained as a historical estimate only. It must not be presented as the current guaranteed
+balance. The only guaranteed current numeric remainder from the API seats is the Digen 0.92-minute
+figure above; RTST is currently below one cheapest clip.
+
+## Expansion answer
+
+**Yes, the architecture can expand**, but expansion is evidence-gated per account/provider:
+
+1. **Four Google Flow accounts (two Pro, two normal).** The pool already supports one exact session
+   file per account and hot-reloads new files without a shim restart. The two additional normal
+   accounts are not currently admitted/proven. A safe expansion requires each account to be signed
+   in on its own dedicated automation profile, a real Flow submit → poll → MP4 proof, and a pinned
+   `video/labs.google/auto` consumer proof attributed to that exact session file. Using the official
+   50-daily-credit rule, two normal accounts add a planning ceiling of about 20 minutes/month at
+   8-second Fast (75 clips × 8 seconds each per account), making all-four planning ceiling about
+   **53.3 minutes/month** (2 Pro + 2 normal, 30-day month). This assumes separate entitled accounts,
+   continuous daily use, Fast 8-second generations, and no policy/quota changes; it is not yet an
+   achieved capacity claim.
+
+2. **OmniRoute providers.** The chat side currently has 351 exact-file consumer-admitted rows.
+   Native Omni video currently has **zero admitted video routes**. The 70 published video-candidate
+   rows need provider-by-provider direct video proof, correct request-shape/credential handling,
+   and a second consumer proof through `:8190` before they can count. A catalog row or a successful
+   chat route is not video capacity. Provider credentials, quotas, and any payment/plan walls remain
+   terminal until the operator supplies a legitimate entitlement.
+
+3. **Keepalive boundary.** The new shim heartbeat prevents idle stateless session jars from going
+   stale by making one bounded real chat request and persisting any rotated cookie. It cannot refresh
+   Google/Chrome cookies, resurrect an expired browser login, or create provider credits. The separate
+   `:20130` heartbeat and OmniRoute OAuth keepalive continue to serve their own fleets; they do not
+   own the `:8190` session files.
+
+The video-router task on `:8189` remains disabled under the documented crash-containment decision.
+No video generation was submitted to manufacture a number during this report.

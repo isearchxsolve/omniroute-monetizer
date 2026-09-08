@@ -25,7 +25,9 @@ from typing import Any, Optional
 
 import requests
 
-from session_pool import SessionPool, ChatError, _load_quarantine
+from session_pool import (SessionPool, ChatError, _load_quarantine,
+                           BROKEN_ADAPTER_COOLDOWN_S, wall_in_error,
+                           wall_in_reply, unusable_reply)
 from veo_session_replay import SessionExpired
 from video_job_store import VideoJobStore
 # The tool->prompt shim is IMPORTED, not copied. It is the piece that makes a free chat seat usable
@@ -53,6 +55,164 @@ TOOL_FAILOVER_TRIES = 6
 # the fast ones. Raise this only alongside evidence that the tail is actually worth waiting for.
 CHAT_FAILOVER_TRIES = 5
 
+# Captured browser sessions have no OAuth refresh endpoint.  A successful small
+# request is what lets a provider rotate Set-Cookie back into the exact jar on
+# disk.  This heartbeat belongs inside the final pool so it touches the same
+# client object and host lock as consumer traffic; the older :20130 heartbeat
+# cannot maintain :8190's separate session-file fleet.
+SESSION_HEARTBEAT_PROMPT = "Reply with only the number: 41 + 17"
+SESSION_HEARTBEAT_DEFAULT_HOURS = 6.0
+SESSION_HEARTBEAT_TICK_MAX_S = 300.0
+SESSION_HEARTBEAT_TICK_MIN_S = 15.0
+
+
+def _heartbeat_hours() -> float:
+    try:
+        return max(0.0, float(os.environ.get("SESSION_POOL_HEARTBEAT_HOURS", SESSION_HEARTBEAT_DEFAULT_HOURS)))
+    except (TypeError, ValueError):
+        return SESSION_HEARTBEAT_DEFAULT_HOURS
+
+
+class SessionPoolHeartbeat(threading.Thread):
+    """Keep idle, browser-free chat session files warm inside the :8190 process.
+
+    This is deliberately a floor rather than a timer per seat: ordinary
+    consumer traffic counts as the refresh, at most one provider is touched per
+    tick, and a failed seat follows the same cooldown/dead semantics as a real
+    request.  Chrome-backed sessions are excluded because the heartbeat must
+    never silently drive a browser; video seats are excluded because a video
+    call can spend credits.  The task owner remains responsible only for the
+    shim process itself.
+    """
+
+    def __init__(self, pool: SessionPool, idle_hours: float | None = None):
+        super().__init__(daemon=True, name="session-pool-heartbeat")
+        self.pool = pool
+        self.idle_s = (_heartbeat_hours() if idle_hours is None else max(0.0, idle_hours)) * 3600.0
+        self.tick_s = min(SESSION_HEARTBEAT_TICK_MAX_S,
+                          max(SESSION_HEARTBEAT_TICK_MIN_S, self.idle_s / 10.0)) \
+            if self.idle_s else 0.0
+        self.beats = 0
+        self.failures = 0
+        self.skipped_busy = 0
+        self.last_note = "disabled" if not self.idle_s else "no beat needed yet"
+        self._stop = threading.Event()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    @staticmethod
+    def _last_activity(session: Any) -> float:
+        stamp = float(getattr(session, "last_used", 0.0) or 0.0)
+        if stamp:
+            return stamp
+        try:
+            return session.path.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    def _due(self) -> Any:
+        if not self.idle_s:
+            return None
+        now = time.time()
+        candidates = []
+        for session in self.pool.live(modality="chat"):
+            # `stateless` is the hard boundary: no heartbeat can attach to a
+            # Chrome seat or accidentally use the operator's browser.
+            if not getattr(session, "stateless", False):
+                continue
+            if getattr(session, "cooldown_until", 0.0) > now:
+                continue
+            idle = now - self._last_activity(session)
+            if idle >= self.idle_s:
+                candidates.append((self._last_activity(session), session))
+        candidates.sort(key=lambda item: item[0])
+        return candidates[0][1] if candidates else None
+
+    def _stand_down(self, session: Any, exc: Exception) -> None:
+        now = time.time()
+        session.last_used = now
+        wall = wall_in_error(exc)
+        if isinstance(exc, SessionExpired):
+            session.dead = True
+            session.last_error = "session_expired"
+            reason = "session expired"
+        elif wall:
+            session.cooldown_until = now + max(self.pool.cooldown, 3600.0)
+            session.last_error = f"wall:{wall}"
+            reason = f"wall:{wall}"
+        else:
+            session.cooldown_until = now + max(self.pool.cooldown, BROKEN_ADAPTER_COOLDOWN_S)
+            session.last_error = f"heartbeat:{type(exc).__name__}"
+            reason = type(exc).__name__
+        self.failures += 1
+        self.last_note = f"{session.host} stood down: {reason}"
+
+    def beat_once(self) -> bool:
+        """Touch one due session. Returns True only after a non-empty, usable reply."""
+        session = self._due()
+        if session is None:
+            return False
+        host_lock = self.pool._host_lock(session.host)
+        if not host_lock.acquire(blocking=False):
+            self.skipped_busy += 1
+            self.last_note = f"{session.host} busy; deferred"
+            return False
+        try:
+            # Mirror reserve()'s booking order: pool lock first, host lock is
+            # already held only after reserve has been logically performed.
+            with self.pool._lock:
+                now = time.time()
+                if (not session.dispatchable or session.cooldown_until > now
+                        or not getattr(session, "stateless", False)):
+                    return False
+                session.last_used = now
+                session.cooldown_until = now + self.pool.cooldown
+            try:
+                result = session.chat([{"role": "user", "content": SESSION_HEARTBEAT_PROMPT}])
+                text = str((result or {}).get("text") or "")
+                bad = unusable_reply(text) or wall_in_reply(text)
+                if bad:
+                    raise ChatError("HEARTBEAT_BAD_REPLY", f"{session.host}: {bad}")
+            except (SessionExpired, ChatError) as exc:
+                self._stand_down(session, exc)
+                return False
+            except Exception as exc:
+                self._stand_down(session, exc)
+                return False
+            session.last_used = time.time()
+            session.cooldown_until = session.last_used + self.pool.cooldown
+            session.last_error = None
+            self.pool._persist()
+            self.beats += 1
+            self.last_note = f"{session.host} kept warm"
+            return True
+        finally:
+            host_lock.release()
+
+    def run(self) -> None:
+        if not self.idle_s:
+            return
+        while not self._stop.wait(self.tick_s):
+            try:
+                self.beat_once()
+            except Exception as exc:
+                self.failures += 1
+                self.last_note = f"heartbeat thread error: {type(exc).__name__}"
+
+    def status(self) -> dict[str, Any]:
+        return {"idleWindowHours": round(self.idle_s / 3600.0, 2),
+                "tickSeconds": self.tick_s, "beatsSent": self.beats,
+                "beatFailures": self.failures, "skippedBusy": self.skipped_busy,
+                "note": self.last_note,
+                "mechanism": "one stateless chat request; successful Set-Cookie is persisted"}
+
+
+# Set by run() after the listener binds. Keeping the reference global makes the
+# constant-time liveness endpoint able to show that keepalive is actually
+# enabled, without enumerating seats or making any provider call.
+_HEARTBEAT: Optional[SessionPoolHeartbeat] = None
+
 # Rough render budget advertised in receipts (estimate only; the status URL is authoritative).
 VIDEO_EST_SECONDS = 300
 
@@ -70,7 +230,7 @@ OMNIROUTE_CHAT_TIMEOUT_S = 8.0
 OMNIROUTE_FALLBACK_MODEL = os.environ.get("OMNIROUTE_FALLBACK_MODEL", "frontier")
 OMNI_VERIFIED_ROUTES = pathlib.Path(__file__).resolve().parents[2] / "state" / "omniroute_verified_routes.json"
 OMNI_VIDEO_ROUTES = pathlib.Path(__file__).resolve().parents[2] / "state" / "omni_video_routes.json"
-SHIM_HEALTH_VERSION = "2026-09-05-video-wiring-v1"
+SHIM_HEALTH_VERSION = "2026-09-09-session-heartbeat-v1"
 
 
 def _omni_video_routes() -> Optional[dict[str, dict[str, Any]]]:
@@ -106,11 +266,14 @@ def shim_health_payload() -> dict[str, Any]:
     :8190 process itself is alive.  The scheduler uses this endpoint to avoid the
     historical `/v1/models` timeout -> duplicate-launch loop.
     """
+    heartbeat = _HEARTBEAT
     return {
         "ok": True,
         "service": "session-pool-shim",
         "version": SHIM_HEALTH_VERSION,
         "pid": os.getpid(),
+        "heartbeat": (heartbeat.status() if heartbeat is not None
+                       else {"state": "starting"}),
     }
 
 
@@ -1134,6 +1297,7 @@ class ExclusiveThreadingHTTPServer(ThreadingHTTPServer):
 
 
 def run(port=8190):
+    global _HEARTBEAT
     try:
         server = ExclusiveThreadingHTTPServer(("127.0.0.1", port), ShimHandler)
     except OSError as e:
@@ -1148,11 +1312,17 @@ def run(port=8190):
                   f"exiting cleanly (dedup, worklog #1134)")
             return
         raise
+    heartbeat = SessionPoolHeartbeat(pool)
+    _HEARTBEAT = heartbeat
+    heartbeat.start()
     print(f"SessionPool Shim listening on http://127.0.0.1:{port}/v1/chat/completions")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        heartbeat.stop()
+        _HEARTBEAT = None
 
 if __name__ == "__main__":
     import sys

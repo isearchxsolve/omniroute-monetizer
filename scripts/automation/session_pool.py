@@ -77,6 +77,7 @@ WALL_ERROR_PHRASES = (
     "payment required", "too many requests", "quota exceeded", "quota exhausted",
     "insufficient credit", "insufficient balance", "insufficient quota",
     "rate limit", "rate-limit", "forbidden", "subscription required", "upgrade required",
+    "upgrade to continue",
 )
 
 
