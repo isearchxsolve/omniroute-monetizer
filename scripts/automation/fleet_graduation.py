@@ -200,7 +200,9 @@ def inventory() -> dict[str, Any]:
             "video render success", "consumer E2E success", "provider-by-model capacity",
         ],
         "summary": {"sessionArtifacts": len(rows), "byState": dict(sorted(counts.items())),
-                    "admittedChatFiles": sum(1 for r in rows if r["state"] == "ADMITTED_TO_8190_PURE_PYTHON")},
+                    "admittedSessionFiles": sum(1 for r in rows if r["state"] == "ADMITTED_TO_8190_PURE_PYTHON"),
+                    "admittedChatFiles": sum(1 for r in rows if r["state"] == "ADMITTED_TO_8190_PURE_PYTHON" and r.get("modality") == "chat"),
+                    "admittedVideoFiles": sum(1 for r in rows if r["state"] == "ADMITTED_TO_8190_PURE_PYTHON" and r.get("modality") == "video")},
         "rows": rows,
     }
 
@@ -699,7 +701,9 @@ def main() -> int:
     atomic_json(LEDGER, ledger)
     summary = ledger["summary"]
     print(f"ledger: {LEDGER.name}; artifacts={summary['sessionArtifacts']}; "
-          f"admittedChatFiles={summary['admittedChatFiles']}; states={summary['byState']}")
+          f"admittedChatFiles={summary['admittedChatFiles']}; "
+          f"admittedVideoFiles={summary['admittedVideoFiles']}; "
+          f"admittedSessionFiles={summary['admittedSessionFiles']}; states={summary['byState']}")
     return 0
 
 

@@ -12,6 +12,30 @@ import sys
 import fleet_graduation as fleet
 
 
+def test_inventory_does_not_count_admitted_video_as_chat(tmp_path) -> None:
+    declarations = [
+        ("session_chat.json", "chat"),
+        ("session_video.json", "video"),
+        ("session_pending.json", "chat"),
+    ]
+    for name, modality in declarations:
+        (tmp_path / name).write_text(json.dumps({
+            "host": "example.test", "modality": modality,
+        }), encoding="utf-8")
+    registry = {"entries": [
+        {"sessionFile": "session_chat.json", "state": "ADMITTED"},
+        {"sessionFile": "session_video.json", "state": "ADMITTED"},
+    ]}
+    with patch.object(fleet, "SECRETS", tmp_path), \
+         patch.object(fleet, "load_registry", return_value=registry), \
+         patch.object(fleet, "canonical_gate", return_value={}):
+        summary = fleet.inventory()["summary"]
+    assert summary["sessionArtifacts"] == 3
+    assert summary["admittedSessionFiles"] == 2
+    assert summary["admittedChatFiles"] == 1
+    assert summary["admittedVideoFiles"] == 1
+
+
 def test_sso_recovery_uses_one_exact_host() -> None:
     with patch.object(fleet.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run:
         fleet.recover_sso(9223, "chat.qwen.ai", 91.0)
