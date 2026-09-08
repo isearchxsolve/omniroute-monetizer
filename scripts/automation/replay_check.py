@@ -137,12 +137,18 @@ def classify(text: str, status: int | None, err: str | None, expect: str = "58")
     if looks_like_pipeline(low):
         return "PIPELINE", ("200 agent/planner stream -- multi-step build target, not a wall "
                             "(submit+poll transport needed)")
-    if any(w in low for w in AUTH_TEXT) or status in (401, 403):
+    # A 403 is ambiguous: it can be an expired/forbidden credential, but
+    # providers also use it for exhausted trials and plan gates.  A named wall
+    # in the body is stronger evidence than the generic status code.  A 401,
+    # or explicit auth text, remains an authentication failure.
+    if any(w in low for w in AUTH_TEXT) or status == 401:
         return "AUTH", f"auth refused ({status or 'in body'}) -- cookie alone is not enough"
     if status == 429 or "rate limit" in low or "too many requests" in low:
         return "RATE", f"rate limited ({status or 'in body'}) -- left alone, not retried"
     if any(w in low for w in WALL_HINTS):
         return "WALL", "wall text in reply -- left alone, not retried"
+    if status == 403:
+        return "AUTH", "auth refused (403) -- cookie alone is not enough"
     if status and status >= 400:
         hint = next((h for h in SINGLE_USE_HINTS if h in low), None)
         if hint:

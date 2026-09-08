@@ -54,6 +54,14 @@ class NumericLawThreeTests(unittest.TestCase):
         verdict, _ = classify("The answer is 58", 200, None, "58")
         self.assertEqual(verdict, "NO_ANSWER")
 
+    def test_upgrade_text_outweighs_ambiguous_http_403(self) -> None:
+        verdict, _ = classify("You've used your access. Upgrade your plan.", 403, None, "58")
+        self.assertEqual(verdict, "WALL")
+
+    def test_bare_http_403_remains_an_authentication_failure(self) -> None:
+        verdict, _ = classify("forbidden by upstream", 403, None, "58")
+        self.assertEqual(verdict, "AUTH")
+
     def test_alphabetic_phrase_diagnostic_fallback_still_has_meaningful_input(self) -> None:
         self.assertTrue(keyword_in_body('data: {"content":"the holy cow jumps"}', "holy cow"))
 

@@ -14976,3 +14976,14 @@ Waited through the next one-minute trigger and re-queried the registered task pl
 **State result.** No session file was changed, no registry entry was added, no route was published, no browser/CDP connection occurred, no video request was submitted, and no service/task was restarted. The correct diagnosis is a real authentication gap in the recorded browser session, not evidence that the provider is dead. Under Law 5 it is reported and not retried. Re-authentication/capture in a dedicated automation seat is the future recovery path; it cannot be performed from stale bytes.
 
 **Next exact increment.** Continue one artifact at a time from `LAW3_REPLAY_PROOF_REQUIRED`, prioritizing a stateless HTTP recorded exchange and stopping after every terminal verdict. Do not treat an authentication wall as capacity or use it to pad the 25-chat mandate.
+### [2026-09-09 03:35] #1687 - aymo.ai exact-file graduation probe: one-time plan wall; classifier corrected
+
+**Component / action.** After #1686, selected the next one exact `LAW3_REPLAY_PROOF_REQUIRED` HTTP capture, `state/secrets/session_aymo_ai.json`. Ran one and only one direct arithmetic replay through `python scripts/automation/fleet_graduation.py --apply --verify-and-admit session_aymo_ai.json`; no browser, no video, no retry.
+
+**Measured provider outcome.** The provider returned HTTP 403 after 3328 ms with an explicit non-secret plan message: the one-time Claude Opus 5 access had been used and an upgrade was required. No current completion capacity exists for this artifact. It was not admitted and no session/registry/service state was mutated.
+
+**Classifier RCA and correction.** replay_check.py originally classified every HTTP 403 as AUTH before inspecting body wall text. That loses the meaningful distinction between `credential not accepted` and `authenticated but trial/plan exhausted`. Reordered classification: explicit authentication text or HTTP 401 remains AUTH; named quota/payment/upgrade/captcha text is WALL; a bare 403 without a named wall remains AUTH. Offline reclassification of this already-recorded response is WALL. Added two regression tests (403 + upgrade => WALL; bare 403 => AUTH); combined replay and coordinator suites passed 19 tests in 0.91s.
+
+**Honesty boundary.** The actual provider call was made before the classification patch and was never repeated after it. The scratch report retains its historical AUTH label; this worklog records the corrected offline classification. The outcome is still terminal for this run: a plan wall is reported and not bypassed or retried. No chat capacity was added toward the 25-session mandate.
+
+**Next exact increment.** Continue serially with a distinct recorded HTTP artifact that has no known plan/auth terminal result; preserve one request per session and log/commit before moving onward.
