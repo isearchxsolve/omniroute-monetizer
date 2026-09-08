@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 
@@ -58,3 +59,19 @@ def test_force_replace_bypasses_healthy_shortcut(tmp_path, monkeypatch) -> None:
     text = diag.read_text(encoding="utf-8")
     assert "REPLACE requested native-owner" in text
     assert "RECOVERED primary launcher_pid=12" in text
+
+
+def test_bounded_owner_operation_returns_when_cleanup_hangs() -> None:
+    started = time.monotonic()
+
+    def hung(_port, _reason):
+        time.sleep(30)
+
+    try:
+        task._bounded_owner_operation(hung, 8190, "failed-primary", timeout=0.05)
+    except task.OwnerOperationTimeout as exc:
+        elapsed = time.monotonic() - started
+        assert elapsed < 1.0
+        assert "failed-primary" in str(exc)
+    else:
+        raise AssertionError("a hung owner operation must time out")

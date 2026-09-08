@@ -12,9 +12,11 @@ import argparse
 import json
 import os
 from pathlib import Path
+import queue
 import re
 import subprocess
 import sys
+import threading
 import time
 import traceback
 import urllib.error
@@ -91,6 +93,44 @@ def wait_for_health(port: int, seconds: float = 8.0) -> bool:
     return False
 
 
+class OwnerOperationTimeout(RuntimeError):
+    """The exact-process owner operation exceeded its bounded recovery window."""
+
+
+def _bounded_owner_operation(operation, port: int, reason: str, timeout: float = 4.0):
+    """Run psutil discovery/cleanup without allowing one Windows process query to wedge the owner.
+
+    `psutil.process_iter()` and `psutil.wait_procs()` have both been observed to block on a
+    half-dead Windows process.  The old owner called them on its main thread, so one bad process
+    held the scheduled task for its 72-hour execution limit and `MultipleInstances=IgnoreNew`
+    discarded every subsequent recovery tick.  A daemon worker gives the operation a strict
+    deadline; if it misses the deadline the owner exits and the next scheduled tick gets a clean
+    chance.  We never launch after an unknown cleanup result, preserving the single-owner rule.
+    """
+    result: queue.Queue = queue.Queue(maxsize=1)
+
+    def run() -> None:
+        try:
+            result.put((True, operation(port, reason)))
+        except BaseException as exc:  # returned to the owner thread for honest logging
+            result.put((False, exc))
+
+    worker = threading.Thread(target=run, name=f"shim-owner-{reason}", daemon=True)
+    worker.start()
+    worker.join(max(0.1, float(timeout)))
+    if worker.is_alive():
+        raise OwnerOperationTimeout(
+            f"{reason} exact-process operation exceeded {float(timeout):g}s"
+        )
+    try:
+        ok, value = result.get_nowait()
+    except queue.Empty as exc:
+        raise OwnerOperationTimeout(f"{reason} exact-process operation returned no result") from exc
+    if not ok:
+        raise value
+    return value
+
+
 def launch_shim(port: int, log_path: Path) -> int:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
@@ -139,7 +179,13 @@ def run_owner(
 ) -> int:
     is_healthy = healthz(port)
     if is_healthy and not force_replace:
-        _, remaining = prune_owned_shims(port, "healthy-orphan")
+        try:
+            _, remaining = _bounded_owner_operation(
+                prune_owned_shims, port, "healthy-orphan"
+            )
+        except OwnerOperationTimeout as exc:
+            _append(diag_path, f"FAILED bounded cleanup: {exc}")
+            return 1
         if remaining:
             _append(diag_path, f"FAILED healthy orphan prune remaining={remaining}")
             return 1
@@ -149,14 +195,24 @@ def run_owner(
         diag_path,
         "REPLACE requested native-owner" if force_replace else "PRE-START native-owner",
     )
-    _, remaining = stop_owned_shims(port, "unhealthy")
+    try:
+        _, remaining = _bounded_owner_operation(stop_owned_shims, port, "unhealthy")
+    except OwnerOperationTimeout as exc:
+        _append(diag_path, f"FAILED bounded cleanup: {exc}")
+        return 1
     if remaining:
         _append(diag_path, f"FAILED exact owner cleanup remaining={remaining}")
         return 1
 
     primary_pid = launch_shim(port, primary_log)
     if wait_for_health(port):
-        _, remaining = prune_owned_shims(port, "healthy-orphan")
+        try:
+            _, remaining = _bounded_owner_operation(
+                prune_owned_shims, port, "healthy-orphan"
+            )
+        except OwnerOperationTimeout as exc:
+            _append(diag_path, f"FAILED bounded cleanup: {exc}")
+            return 1
         if remaining:
             _append(diag_path, f"FAILED primary prune remaining={remaining}")
             return 1
@@ -164,7 +220,13 @@ def run_owner(
         return 0
 
     _append(diag_path, "PRIMARY-UNHEALTHY cleanup-before-fallback")
-    _, remaining = stop_owned_shims(port, "failed-primary")
+    try:
+        _, remaining = _bounded_owner_operation(
+            stop_owned_shims, port, "failed-primary"
+        )
+    except OwnerOperationTimeout as exc:
+        _append(diag_path, f"FAILED bounded cleanup: {exc}")
+        return 1
     if remaining:
         _append(diag_path, f"FAILED primary cleanup remaining={remaining}")
         return 1
@@ -174,7 +236,13 @@ def run_owner(
     )
     fallback_pid = launch_shim(port, fallback_log)
     if wait_for_health(port):
-        _, remaining = prune_owned_shims(port, "healthy-orphan")
+        try:
+            _, remaining = _bounded_owner_operation(
+                prune_owned_shims, port, "healthy-orphan"
+            )
+        except OwnerOperationTimeout as exc:
+            _append(diag_path, f"FAILED bounded cleanup: {exc}")
+            return 1
         if remaining:
             _append(diag_path, f"FAILED fallback prune remaining={remaining}")
             return 1
