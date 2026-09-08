@@ -45,6 +45,10 @@ def test_live_devtools_marker_requires_reachable_listener(monkeypatch, tmp_path)
         port = int(listener.getsockname()[1])
         _write_marker(tmp_path, port)
         monkeypatch.setattr(guard, "LIVE_ROOT", tmp_path)
+        # The test socket is deliberately not Chrome.  Stub the provenance branch so this test
+        # isolates the marker + reachable-listener contract; process ownership is covered by the
+        # helper's conservative behavior in production.
+        monkeypatch.setattr(guard, "_listener_uses_live_profile", lambda _: True)
 
         assert guard.live_devtools_ports() == {port}
     finally:

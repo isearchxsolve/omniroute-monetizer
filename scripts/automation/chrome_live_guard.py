@@ -251,17 +251,93 @@ def live_devtools_ports() -> set[int]:
             # guaranteed to be removed on an unclean Chrome exit.  A short TCP connect check
             # distinguishes the two cases without attaching to the browser or reading any
             # profile data.  A refusal/timeout means this is only a stale marker, so a dedicated
-            # automation seat may safely reclaim the unused port.
+            # automation seat may safely reclaim the unused port.  If the port is live, identify
+            # the listening process before treating it as the operator's browser: a dedicated
+            # automation Chrome can legitimately reuse a port whose old live-profile marker was
+            # left behind by a prior crash.
             probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             probe.settimeout(0.15)
             try:
-                if probe.connect_ex(("127.0.0.1", port)) == 0:
+                if (probe.connect_ex(("127.0.0.1", port)) == 0
+                        and _listener_uses_live_profile(port)):
                     ports.add(port)
             except OSError:
                 pass
             finally:
                 probe.close()
     return ports
+
+
+def _listener_uses_live_profile(port: int) -> bool:
+    """Return whether the current loopback listener belongs to the live Chrome profile.
+
+    ``DevToolsActivePort`` records only a number, not the user-data directory.  On this machine
+    port 9222 has historically been used by both the operator's browser and the dedicated
+    ``providers`` seat, so a port-only refusal is not sufficient.  Process provenance is checked
+    read-only through psutil.  Unknown provenance remains conservative (protected) whenever a
+    listener is present; a dedicated Chrome is allowed only when its command line explicitly names
+    a user-data directory outside ``LIVE_ROOT``.
+    """
+    try:
+        import psutil
+    except Exception:
+        # The guard is a safety boundary.  If process inspection is unavailable, keep the old
+        # conservative refusal rather than risk attaching to the operator's browser.
+        return True
+
+    listeners = []
+    try:
+        for conn in psutil.net_connections(kind="tcp"):
+            if conn.status != getattr(psutil, "CONN_LISTEN", "LISTEN"):
+                continue
+            addr = conn.laddr
+            if not addr or int(getattr(addr, "port", 0)) != int(port):
+                continue
+            ip = str(getattr(addr, "ip", ""))
+            if ip not in ("127.0.0.1", "::1", "0.0.0.0", "::"):
+                continue
+            listeners.append(conn)
+    except Exception:
+        return True
+
+    if not listeners:
+        # A connect can race with process exit.  The marker is not enough to claim liveness.
+        return False
+
+    live = resolve(LIVE_ROOT)
+    for conn in listeners:
+        pid = getattr(conn, "pid", None)
+        if not pid:
+            return True
+        try:
+            proc = psutil.Process(int(pid))
+            cmdline = [str(x) for x in (proc.cmdline() or [])]
+        except Exception:
+            return True
+
+        # DevTools is a Chrome listener.  If a non-Chrome process has claimed the stale port, it is
+        # not the operator's profile; the normal attach/connect path will still fail safely.
+        if not any(Path(x).name.lower() in {"chrome.exe", "chrome", "chromium", "chromium.exe"}
+                   for x in [str(getattr(proc, "exe", lambda: "")() or ""),
+                             str(getattr(proc, "name", lambda: "")() or "")]):
+            continue
+
+        udd = None
+        for i, arg in enumerate(cmdline):
+            if arg.startswith("--user-data-dir="):
+                udd = arg.split("=", 1)[1].strip('"')
+                break
+            if arg == "--user-data-dir" and i + 1 < len(cmdline):
+                udd = cmdline[i + 1].strip('"')
+                break
+        if udd is None:
+            # A Chrome process with no explicit user-data-dir uses the operator default by
+            # definition; retain the refusal.
+            return True
+        if resolve(udd) == live or live in resolve(udd).parents or resolve(udd) in live.parents:
+            return True
+
+    return False
 
 
 def _endpoint_port(endpoint: str) -> int | None:
