@@ -6,8 +6,9 @@ This is the current, evidence-bounded capacity report for the designated consume
 ## What is live now
 
 The task-owned shim is running `2026-09-09-session-heartbeat-v1`. Its health payload reports a
-six-hour idle window and one stateless chat heartbeat at most every five minutes. The heartbeat is
-deliberately not a video generator: it never drives Chrome and never spends video credits.
+six-hour idle window and one stateless chat heartbeat at most every five minutes; the latest live
+read showed **4 beats / 0 failures**. The heartbeat is deliberately not a video generator: it never
+drives Chrome and never spends video credits.
 
 The current local pool has **49 session artifacts**, of which **15 are dispatchable**:
 
@@ -83,3 +84,15 @@ figure above; RTST is currently below one cheapest clip.
 
 The video-router task on `:8189` remains disabled under the documented crash-containment decision.
 No video generation was submitted to manufacture a number during this report.
+
+## Expansion preparation completed at 04:14 IST
+
+The live-profile guard now distinguishes a stale operator `DevToolsActivePort` marker from a real
+operator listener by checking the reachable listener's process and resolved user-data directory.
+The normal navigation-only wake path brought dedicated automation Chromes up on ports 9222–9225;
+it did not open the operator profile. Read-only target inspection found Flow and RTST tabs on 9222,
+a Flow page without an access token on 9223, Google's cookie-rotation frame on 9224, and Google's
+account chooser on 9225. Those last three are authentication/session states, not video capacity.
+The guard/video regression suite is 12/12 green. The two unadmitted Flow declarations and all
+OmniRoute native video candidates remain outside the five-seat admission count until they pass the
+real submit -> poll -> MP4 and pinned `:8190` consumer proofs.
