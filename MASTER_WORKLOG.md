@@ -15059,3 +15059,12 @@ Waited through the next one-minute trigger and re-queried the registered task pl
 **What is not claimed.** A `RotateCookiesPage` is not an entitlement or MP4 proof. The P2 account still requires a legitimate session refresh in its dedicated profile before it can serve a new clip. The two unadmitted Flow declarations (niloy/9223 and seat3/9225) remain behind their own auth states, and OmniRoute native video remains zero-admitted.
 
 **Next gated action.** If the operator wants this P2 seat or the two missing Flow seats refreshed, use the dedicated-profile, user-visible sign-in path. Do not attach to the operator's Chrome and do not run the spend-gated graduation until explicit credit-spend authorization is given.
+### [2026-09-09 04:31] #1694 - Capacity reports include the restored P2 dedicated port
+
+Updated both status reports after the P2 navigation-only recovery. They now record dedicated Chrome
+ports 9222–9226, including the admitted P2 Flow project on 9226 and its observed `RotateCookiesPage`
+auth frame. The reports continue to distinguish page reachability from authentication, entitlement,
+and MP4 proof: the admitted count is unchanged at five video sessions, the two extra Flow seats are
+not promoted, and OmniRoute native video remains zero-admitted. `git diff --check` passed. No browser
+profile outside the dedicated automation tree, provider request, video generation, credit spend, or
+service restart occurred. The documentation change is committed after this log entry.

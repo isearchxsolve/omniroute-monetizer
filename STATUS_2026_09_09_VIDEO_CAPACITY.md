@@ -89,10 +89,11 @@ No video generation was submitted to manufacture a number during this report.
 
 The live-profile guard now distinguishes a stale operator `DevToolsActivePort` marker from a real
 operator listener by checking the reachable listener's process and resolved user-data directory.
-The normal navigation-only wake path brought dedicated automation Chromes up on ports 9222–9225;
+The normal navigation-only wake path brought dedicated automation Chromes up on ports 9222–9226;
 it did not open the operator profile. Read-only target inspection found Flow and RTST tabs on 9222,
-a Flow page without an access token on 9223, Google's cookie-rotation frame on 9224, and Google's
-account chooser on 9225. Those last three are authentication/session states, not video capacity.
-The guard/video regression suite is 12/12 green. The two unadmitted Flow declarations and all
-OmniRoute native video candidates remain outside the five-seat admission count until they pass the
-real submit -> poll -> MP4 and pinned `:8190` consumer proofs.
+a Flow page without an access token on 9223, Google's cookie-rotation frame on 9224, Google's
+account chooser on 9225, and the admitted P2 project on 9226 with its own cookie-rotation frame.
+Those auth/session states are not video capacity. The guard/video regression suite is 12/12 green.
+The two unadmitted Flow declarations and all OmniRoute native video candidates remain outside the
+five-seat admission count until they pass the real submit -> poll -> MP4 and pinned `:8190`
+consumer proofs.
