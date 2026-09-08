@@ -212,33 +212,24 @@ def replay(path: pathlib.Path, prompt: str, expect: str) -> dict[str, Any]:
         status = (res or {}).get("status")
         raw = str((res or {}).get("raw") or "")
         verdict, detail = classify(text, status if isinstance(status, int) else None, None, expect)
-        # KEYWORD-SEARCH UNLOCK (success path): if the structural extractor assembled something
-        # that misses the computed token, but the token IS in the raw body, the model answered --
-        # only the assembly is imperfect. Score on the raw body so a live replay is not lost to a
-        # parser gap. The token is computed (41+17=58), never echoable. Guarded against the token
-        # appearing inside a longer digit run (id/timestamp) via keyword_in_body.
-        if verdict != "REPLAY_OK" and keyword_in_body(raw, expect):
-            verdict, detail = "REPLAY_OK", f"keyword {expect!r} found in raw body ({len(raw)}B)"
-        elif verdict in ("WALL", "NO_ANSWER") and looks_like_pipeline(raw.lower()):
+        # Raw envelopes may contain the expected number in token counts, IDs,
+        # titles, or error metadata. Only extracted assistant text can prove a
+        # completion; a raw match is diagnostic evidence, never admission.
+        if verdict in ("WALL", "NO_ANSWER") and looks_like_pipeline(raw.lower()):
             # The extractor stripped the planner/agent envelope, so the pipeline markers never
             # reached classify(). The raw body settles it: this is a multi-step transport (worklog #1679).
             verdict, detail = "PIPELINE", ("raw body is an agent/planner stream -- multi-step build "
                                            "target, not a wall")
     except Exception as e:                        # a replay failure is data, never a crash
         text, status = "", None
-        # KEYWORD-SEARCH UNLOCK: the extractor may refuse an envelope it cannot structurally
-        # parse, but if the COMPUTED answer token is literally present in the raw response body,
-        # the session DID answer -- the replay is live, only our parser is blind to that shape.
-        # The token is computed (41+17=58), never echoable, so finding it in the body is proof
-        # of a real model reply, not a wall or an echo.
-        raw = getattr(e, "raw", "") or ""
+        # Preserve failure classification without treating raw exception data
+        # or the exception message itself as a completed assistant answer.
         raw_status = getattr(e, "status", None)
-        if keyword_in_body(raw, expect):
-            verdict, detail = "REPLAY_OK", f"keyword {expect!r} found in raw body ({len(raw)}B, no structural parser)"
-        else:
-            verdict, detail = classify(str(e), None, None, expect)
-            if verdict == "ERROR":
-                verdict, detail = classify(str(e), 400, None, expect)
+        verdict, detail = classify(str(e), raw_status, None, expect)
+        if verdict == "REPLAY_OK":
+            # Exception text itself is not an assistant response, even if it
+            # happens to equal the expected answer.
+            verdict, detail = "ERROR", "client raised before producing an assistant response"
     row["latencyMs"] = round((time.perf_counter() - started) * 1000)
     row["verdict"] = verdict
     row["detail"] = detail
