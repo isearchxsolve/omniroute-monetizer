@@ -3,6 +3,26 @@
 This is the current, evidence-bounded capacity report for the designated consumer endpoint:
 `http://127.0.0.1:8190/v1`.
 
+## Fresh capacity correction at 11:58 IST
+
+A read-only `video_router.py accounts` pass against the dedicated automation seats found the
+current balances to be Flow `0 / 15 / 0 / 15`, RTST `1`, and Digen `0`.  All four Flow project tabs
+remain ready, but the proven Fast Flow route costs 20 credits **on one account**. Credits cannot be
+pooled between accounts, so the 30 total Flow credits buy **zero** proven Fast clips at this moment;
+all 30 are below the per-account floor. RTST's one credit is below its 6-credit cheapest proven
+clip, and Digen's zero is below its 30-credit cheapest proven clip.
+
+The capacity CLI previously summed account balances before dividing by a clip price, which
+incorrectly displayed one Flow Fast clip for four isolated balances of 0/15/0/15. It now sums
+whole purchasable clips per account and explicitly reports stranded below-floor credits. Regression
+coverage prevents that false capacity claim. The older 330-credit Digen and 4-credit RTST figures
+below are historical reads, not current supply.
+
+Therefore the current measured, immediately spendable capacity for the proven Flow Fast, RTST, and
+Digen routes is **zero clips**. LTX remains an unquantified MP4-proven route and is deliberately not
+converted into a numeric promise. This correction does not alter the 33.3 / 53.3 minute recurring
+Flow **planning ceilings** below; those remain entitlement assumptions, not the present balances.
+
 ## What is live now
 
 The task-owned shim is running `2026-09-09-session-heartbeat-v1`. Its health payload reports a
@@ -27,11 +47,12 @@ dependency. `GET /v1/models` currently returns **439 rows / 438 unique IDs**, in
 ## Minutes per month: what can honestly be stated
 
 There is no single measured current-minute number for the five seats. The providers expose different
-quota units, and two seats are Chrome-backed. The hard current read-only figures are:
+quota units, and two seats are Chrome-backed. The following earlier reads are retained as historical
+provenance only; the 11:58 IST correction above supersedes them for current capacity:
 
-* Digen: 330 credits remaining at the last read, with the measured 30-credit/5-second contract —
+* Digen: 330 credits remaining at an earlier read, with the measured 30-credit/5-second contract —
   **11 clips = 55 seconds = 0.92 minutes** remaining.
-* RTST seat2: 4 credits remaining at the latest read; its cheapest proven option is 6 credits for
+* RTST seat2: 4 credits remaining at an earlier read; its cheapest proven option is 6 credits for
   a 3-second clip — **0 additional clips at that balance**.
 * LTX public Space: an MP4 submit/poll/download proof exists, but no monthly quota was measured;
   it is not converted into a guaranteed monthly-minute number.
@@ -48,12 +69,13 @@ On a 30-day month, that gives a *quota ceiling* of 2,500 credits / 125 eight-sec
 two already-proven Pro Flow accounts have a planning ceiling of about **33.3 minutes/month** from
 the recurring Flow allocation, before subtracting any already-consumed balance. This is a planning
 ceiling, not a current-balance assertion. The latest read-only UI balance across all four Flow tabs
-is **30 credits (0 + 15 + 0 + 15)**; it is not a monthly quota measurement.
+is **30 credits (0 + 15 + 0 + 15)**; it is not a monthly quota measurement and cannot be pooled into
+one Fast generation.
 
 The older local estimate of **about 25–30 minutes/month** for the two-account Flow + free-tier mix
 is retained as a historical estimate only. It must not be presented as the current guaranteed
-balance. The only guaranteed current numeric remainder from the API seats is the Digen 0.92-minute
-figure above; RTST is currently below one cheapest clip.
+balance. As of the fresh 11:58 IST read, Digen and RTST are both below one cheapest clip and no
+numeric current remainder is guaranteed from those API seats.
 
 ## Expansion answer
 

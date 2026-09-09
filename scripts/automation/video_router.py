@@ -1706,6 +1706,24 @@ def serve(a) -> int:
     return 0
 
 
+def clips_from_individual_balances(accounts, per_clip: int) -> tuple[int, int]:
+    """Return purchasable clips and credits stranded below one clip's floor.
+
+    Provider balances belong to individual accounts.  They are deliberately not
+    transferable: summing four 15-credit Flow accounts and dividing by Flow's
+    20-credit Fast floor would advertise a clip that no account can actually
+    submit.  Keep the arithmetic beside the human-facing capacity report so
+    the report cannot disagree with ``Fleet.acquire()``, which chooses one
+    account at a time.
+    """
+    if not isinstance(per_clip, int) or per_clip <= 0:
+        return 0, 0
+    balances = [max(0, int(getattr(a, "credits", 0) or 0)) for a in accounts]
+    clips = sum(balance // per_clip for balance in balances)
+    stranded = sum(balance % per_clip for balance in balances)
+    return clips, stranded
+
+
 def cmd_accounts(a) -> int:
     global FLEET
     FLEET = load_accounts()
@@ -1759,8 +1777,11 @@ def cmd_accounts(a) -> int:
                    if p.quotes_before_spending else
                    f"the {'measured' if measured else 'estimated'} reservation floor; "
                    f"{p.name} cannot be quoted")
-            print(f"{head}  ~= {total // cheapest} x its cheapest clip "
-                  f"({of}{dims} = {cheapest})  -- {how}")
+            clips, stranded = clips_from_individual_balances(ready, cheapest)
+            remainder = (f"; {stranded} credit(s) stranded below one clip's floor"
+                         if stranded else "")
+            print(f"{head}  ~= {clips} x its cheapest clip across individual balances "
+                  f"({of}{dims} = {cheapest}){remainder}  -- {how}")
         else:
             print(f"{head}  -- no model on the menu could be priced (catalogue unavailable?)")
     print()
