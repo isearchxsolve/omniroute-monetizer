@@ -44,3 +44,27 @@ def test_manual_signin_refuses_when_profile_occupancy_cannot_be_verified(
     assert helper.run_manual_signin() == 4
     assert launched == []
     assert "Could not verify" in capsys.readouterr().out
+
+
+def test_sso_profile_uses_a_distinct_human_only_profile_tag(monkeypatch, tmp_path):
+    seen = []
+
+    def profile(tag):
+        seen.append(tag)
+        return tmp_path / tag
+
+    monkeypatch.setattr(helper, "safe_profile_dir", profile)
+    monkeypatch.setattr(helper, "assert_safe", lambda path, who: path)
+    monkeypatch.setattr(helper, "_chrome_using_profile", lambda _path: 1)
+
+    assert helper.run_manual_signin(profile_tag=helper.SSO_PROFILE_TAG) == 4
+    assert seen == ["providers_sso"]
+
+
+def test_manual_signin_sso_switch_selects_the_distinct_profile(monkeypatch):
+    selected = []
+
+    monkeypatch.setattr(helper, "run_manual_signin", lambda profile_tag: selected.append(profile_tag) or 0)
+
+    assert helper.main(["--manual-signin", "--sso-profile"]) == 0
+    assert selected == [helper.SSO_PROFILE_TAG]

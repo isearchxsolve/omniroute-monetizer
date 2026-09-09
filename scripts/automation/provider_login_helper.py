@@ -70,6 +70,10 @@ from chrome_no_discard import NO_DISCARD_FLAGS  # noqa: E402  -- stop Chrome dis
 
 PROJECT_ROOT = HERE.parents[1]
 PROFILE_TAG = "providers"
+# `providers` is a scheduled video-seat profile on this rig.  Manual Google SSO
+# needs its own human-only profile so Chrome cannot forward the sign-in URL into
+# the managed seat via ProcessSingleton.
+SSO_PROFILE_TAG = "providers_sso"
 REPORT = PROJECT_ROOT / "state" / "harvest" / "login_status.json"
 
 # ---------------------------------------------------------------------------------------
@@ -520,7 +524,7 @@ def _find_chrome() -> Path | None:
     return None
 
 
-def run_manual_signin() -> int:
+def run_manual_signin(profile_tag: str = PROFILE_TAG) -> int:
     """Open the robot's profile in PLAIN Chrome so the operator can sign into Google by hand.
 
     WHY THIS MODE EXISTS -- read before replacing it with a Playwright launch.
@@ -544,7 +548,7 @@ def run_manual_signin() -> int:
     The profile is still `safe_profile_dir()`, so chrome_live_guard applies: this can never
     point at the operator's live Chrome tree.
     """
-    udd = safe_profile_dir(PROFILE_TAG)          # guard runs here
+    udd = safe_profile_dir(profile_tag)          # guard runs here
     assert_safe(udd, who="run_manual_signin")    # and again, explicitly, at the call site
 
     # Chrome's ProcessSingleton forwards a second chrome.exe invocation into the
@@ -715,12 +719,18 @@ def main(argv=None) -> int:
     ap.add_argument("--manual-signin", action="store_true",
                     help="open the robot's profile in PLAIN Chrome so you can sign into "
                          "Google by hand (Google refuses automated browsers)")
+    ap.add_argument("--sso-profile", action="store_true",
+                    help="with --manual-signin, use the separate human-only providers_sso "
+                         "profile instead of the scheduled providers video seat")
     ap.add_argument("--harvest-browser", action="store_true",
                     help="open the robot's profile in PLAIN Chrome WITH a local debugging "
                          "port (leave it open; run auto_key_harvester with --attach)")
     args = ap.parse_args(argv)
 
     if args.harvest_browser:
+        if args.sso_profile:
+            _say("PROBLEM", "--sso-profile is only valid with --manual-signin.")
+            return 2
         # Like --manual-signin: no Playwright involved in this mode.
         try:
             return run_harvest_browser()
@@ -732,7 +742,8 @@ def main(argv=None) -> int:
     if args.manual_signin:
         # Deliberately BEFORE the Playwright import check: this mode does not use Playwright.
         try:
-            return run_manual_signin()
+            profile_tag = SSO_PROFILE_TAG if args.sso_profile else PROFILE_TAG
+            return run_manual_signin(profile_tag=profile_tag)
         except LiveProfileRefused as exc:
             _say("PROBLEM", "REFUSED by chrome_live_guard. The guard is right.")
             print(exc)
