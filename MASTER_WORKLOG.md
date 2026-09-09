@@ -15510,3 +15510,13 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Capacity / RCA classification.** This is a **real server-side plan/quota wall** for the tested entitlement, not an HTTP transport defect, a stale-byte replay inference, or evidence that the provider site is globally dead. It adds zero chat capacity and must remain stood down until a legitimate plan entitlement changes; no workaround, upgrade, captcha handling, or retry loop is appropriate.
 
 **Safety / what is not claimed.** No Chrome profile/tab was opened or attached. No video generation/credit spend, credential mutation, database edit, service restart, or registry/session-file promotion occurred. The endpoint stays at 11 admitted chat files and 5 admitted video files after this one bounded check.
+
+### [2026-09-09 13:14] #1743 - Duck.ai replay classified as encrypted-response transport gap
+
+**Component / fresh proof.** A second one-file Law-3 check ran against `session_duckduckgo_ai_chat_(duck_ai).json`. The provider returned HTTP **200** in about 2.45 seconds and emitted an SSE success event, but the replay extractor did not receive a plaintext model completion. It saw a response-envelope ID/action/model metadata plus an `encryptedText`-style payload and correctly rejected the raw event as `NO_ANSWER`; the exact result is stored in `state/scratch/fleet_graduation_session_duckduckgo_ai_chat_(duck_ai).json`.
+
+**RCA classification.** This is neither a successful completion nor a provider-death finding. It is a **capture/response-transport gap**: the captured HTTP exchange reaches Duck's service but does not include the client-side key/material or processing step required to turn the encrypted stream payload into a model answer. The response was not promoted based on an HTTP 200 or metadata that happened to contain a model name. A repository/history review also records Duck's separate browser-driven route as CAPTCHA-gated; that is a reportable wall and is not a reason to automate CAPTCHA solving.
+
+**Next-action decision.** Do not invest capacity work in an encrypted Duck adapter now. Any future work must first identify the legitimate browser-side key/response processing contract and still pass a non-echoable computed proof; it must not guess/decrypt arbitrary payloads or count the site from a success event alone. The next bounded chat candidate will be independent of Duck.
+
+**Safety / what is not claimed.** No Chrome profile/tab action occurred. No answer was fabricated, no seat was admitted, and no credentials, browser state, provider configuration, database, service, or video balance was changed. Current admission remains 11 chat / 5 video.
