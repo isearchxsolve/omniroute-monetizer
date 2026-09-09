@@ -15104,3 +15104,12 @@ The explicit label filter selected only `niloy-1` (9223) and `flow-seat3` (9225)
 **Verification.** `.venv\\Scripts\\python.exe -m pytest -q tests/test_video_registry.py tests/test_video_provider_probe.py tests/test_video_result_accounting.py tests/test_chrome_live_guard.py` -> **12 passed in 5.96s**. `py_compile` passed after a small follow-up that propagates `--video-label` through the complete `--e2e` path as well as `--e2e-video`; no behavior of the executed video-only command changed.
 
 **Honesty boundary / next gate.** The four-Flow planning ceiling remains a quota model, not achieved capacity. These two accounts need legitimate sign-in/session recovery in their dedicated profiles and a fresh run before any minutes can be added. OmniRoute native video remains 0 admitted; its 70 candidate rows are inventory/build targets only and were not spend-authorized here.
+### [2026-09-09 04:34] #1698 — Read-only recheck confirms both Flow seats remain behind cookie-rotation auth wall
+
+**Check performed.** Queried only the dedicated automation CDP target lists on ports 9223 (`niloy-1`) and 9225 (`flow-seat3`); no DOM input, screenshot-driven click, prompt, Generate action, provider request, or spend occurred.
+
+**Observed state.** Port 9223 now exposes the exact Flow project page for the declared niloy seat and an embedded `accounts.google.com/RotateCookiesPage` frame. Port 9225 exposes the exact Flow project page for the declared seat3 project and the same Google cookie-rotation frame. Neither port exposes a usable authenticated generation surface in this read-only inventory. The account chooser seen during the prior bounded run has progressed to a cookie-rotation state, but that is still an authentication/session barrier and not a Flow quota or server-death signal.
+
+**Capacity effect.** No registry, session artifact, model catalog, route, or credit balance changed. The video lane remains 5 admitted historical sessions; niloy-1 and flow-seat3 remain NOT_ADMITTED. No restart is indicated because :8190, :20128, and :20130 are healthy; restarting cannot manufacture the missing Google session.
+
+**Required operator action.** Complete legitimate sign-in/cookie rotation in each dedicated profile (9223 and 9225) using a user-visible Session-1 flow, then leave each on its Flow project generation page with the composer visible. Do not use the operator's live Chrome profile. After that, a new explicitly authorized bounded proof run can be attempted.
