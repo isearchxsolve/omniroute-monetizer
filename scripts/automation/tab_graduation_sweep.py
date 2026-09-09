@@ -102,8 +102,14 @@ VERIFY_EXPECT = "58"
 # is a submit → poll → result contract and can spend credits, while a legacy chat
 # URL override would navigate/open a different tab (forbidden in an open-tabs-only
 # sweep).  A classification is a build target, never a dead-provider verdict.
-VIDEO_SITES = {"Google Flow (labs.google)", "rtst.ai", "digen.ai", "veoaifree",
+VIDEO_SITES = {"Google Flow (labs.google)", "Google Flow (flow.google.com)", "rtst.ai", "digen.ai", "veoaifree",
                "HeyGen Video", "MagicHour Video", "Akool Video", "NemoVideo"}
+# ``reg(flow.google.com)`` intentionally reduces to ``google.com``.  That is
+# useful for most host matching, but it aliases a credit-spending Flow project
+# tab to the Gemini chat artifact.  Keep the exact Flow hosts ahead of that
+# broad registered-domain lookup so a chat capture command can never select a
+# Flow tab merely because the associated Google account looks signed in.
+FLOW_HOSTS = {"flow.google.com", "labs.google"}
 # Sites that historically needed navigation were blanket-deferred.  Since the
 # harness (harness_all_tabs.py) exists, a tab on these sites is judged by WHERE
 # IT SITS: on its chat surface -> eligible; off-surface -> HARNESS_NAVIGATE.
@@ -568,6 +574,14 @@ def classify_tab(
     }
     if not host:
         base.update(classification="SKIP_INTERNAL_OR_BLANK", nextAction="none")
+        return base
+
+    if host in FLOW_HOSTS:
+        base.update(
+            knownSite="Google Flow (flow.google.com)",
+            classification="VIDEO_SEPARATE_GRADUATION",
+            nextAction="video_contract_and_spend_gate",
+        )
         return base
 
     known = readiness.get(registered)
