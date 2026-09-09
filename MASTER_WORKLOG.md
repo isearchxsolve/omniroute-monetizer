@@ -15882,3 +15882,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** `claude.ai` returned HTTP 403 with a structured `permission_error` stating `account_session_invalid` / `Invalid authorization`. The verifier classified the response as `AUTH` (`auth refused (403) -- cookie alone is not enough`) and refused admission without retrying. The session file and replay registry remain unchanged; the only output is the non-secret report `state/scratch/fleet_graduation_session_claude_official_web.json`.
 
 **Classification and capacity.** This is an expired/invalid browser-session authorization gap, not proof of Claude service death or rate limiting. A fresh dedicated automation-profile sign-in/capture is required; live operator Chrome credentials cannot be borrowed. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
+### [2026-09-09 15:39] #1784 - Inner AI replay stopped by daily agent limit
+
+**Exact-file action.** Ran one bounded `fleet_graduation.py --apply --verify-and-admit "session_inner_ai_web.json"` unit with the standard computed Law-3 prompt. Only the captured Inner AI exchange was contacted; no Chrome profile, OmniRoute process, video route, or other artifact was touched.
+
+**Observed result.** `chat-api-v3.innerai.com` answered with HTTP 402 and an `agent_limit_reached` error indicating the account's daily window was exhausted. The universal verifier surfaced this as `NO_ANSWER` because the HTTP error was not an assistant message (`http_error: http error 402`); the coordinator correctly refused promotion. The exact capture and replay registry were left unchanged; only the redacted diagnostic report `state/scratch/fleet_graduation_session_inner_ai_web.json` was written.
+
+**Classification and capacity.** This is a provider quota/entitlement wall, not an HTTP transport outage or parser defect. Keep-alive cannot create additional daily allowance; the artifact can only be reconsidered after the provider window resets or an eligible plan/account is supplied. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
