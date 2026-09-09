@@ -15590,3 +15590,15 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Chrome safety.** Chrome rules were read before this Chrome-adjacent work. The pre- and post-`chrome_selfheal.py --dry-run` checks report no alias into the live Chrome folder and an active guard that rejects live-profile automation. All four operator profiles remain reported sync-authenticated. Every manifest operation used dedicated `state/automation_profiles` seats and only CDP's public target-list endpoint; it never attached to/focused/navigated/clicked/typed/submitted/read cookies from any tab.
 
 **What is not claimed.** This protects against an accidental chat-to-video misroute; it does not prove Flow credits, submit a video, graduate the two normal Flow accounts, increase the 5-video admission count, or refresh any chat credential. No provider request, secret/configuration change, database edit, or service restart occurred.
+
+### [2026-09-09 14:04] #1751 - Cohere capture candidate stopped at the required visual gate
+
+**Candidate selection.** After the Flow/Gemini alias correction, port 9224's fresh dedicated-seat manifest contains one remaining `ELIGIBLE_CAPTURE` chat candidate: `dashboard.cohere.com`, labelled Cohere Coral Web. It is the only manifest candidate that is not a Flow video tab, so it was assessed serially rather than combined with any other capture.
+
+**Visual-gate outcome.** Per the browser automation protocol, attempted only `tab_graduation_sweep.py --port 9224 --screenshot-target <exact manifest target>` first. That helper is designed to invoke only `Page.captureScreenshot` without focus, DOM evaluation, navigation, click, type, submit, or cookie read. This invocation did not produce the required `pre_capture.png` artifact or a usable screenshot-path confirmation. Therefore no follow-on `--execute` capture was run. Absence of the untouched visual evidence means the tab has not been established as a usable chat composer.
+
+**Decision.** The Cohere candidate remains ungraduated and unmodified. Do not substitute a blind capture/send just because its dashboard URL appeared signed-in-probable in a manifest. A future attempt must first restore a successful untouched screenshot gate, then inspect the visible UI, then use the exact one-seat staged capture/proof sequence.
+
+**Chrome safety.** The required post-check `chrome_selfheal.py --dry-run` again confirms no alias to the operator's Chrome tree and an active live-profile refusal guard; its operator sign-in audit remains 4/4. The candidate is in `state/automation_profiles/seat2`, not an operator profile.
+
+**What is not claimed.** No Cohere provider request, prompt submission, capture, credential read/write, video spend, session promotion, database edit, or service restart occurred. This does not prove Cohere is signed out or unavailable; it proves only that the mandatory visual assessment did not complete, so automation stopped safely.
