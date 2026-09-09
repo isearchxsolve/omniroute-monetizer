@@ -15363,3 +15363,11 @@ The chat client now pins the only approved model, `session-pool/auto`, and rejec
 **Verification.** `py_compile` passed for the client and test module. The focused consumer suite passed **4 tests**: existing provenance/pinned-video behavior, unknown-receipt timeout handling, non-canonical network-target rejection, and no-double-`/v1` normalization plus chat-model pinning. No live request was made; all HTTP assertions used an in-memory `httpx.MockTransport`.
 
 **Safety / boundary.** No browser, credential, database, service, or provider state was touched and no video credit was spent. This client-level guard now makes an accidental consumer URL override fail before any network call. The next component will make the OiiOii durable film API reject mock execution in production while retaining zero-credit local admission/testing.
+
+### [2026-09-09 10:29] #1728 - Closed OiiOii production mock execution loophole
+
+**Component changed.** Added request-time deployment checks to `backend/app/api/v1/endpoints/films.py`. The owner-only `/films/` creation escape hatch and `/films/{id}/tick` now reject `backend=mock` whenever `APP_ENV` is `production`/`prod`, returning a structured 422 (`mock_backend_disabled_in_production`) that points callers to the canonical durable flow. Deterministic mock admission remains available for local tests and the zero-credit crew handoff because it does not invoke a provider; billable production work must use the live `ChatPoolClient`/`VideoRouterClient` path.
+
+**Verification.** `py_compile` passed. Added API coverage for both mock film creation and mock tick rejection under a production environment; the focused film/API subset passed **4 tests**, including the canonical crew-run path and legacy pipeline retirement. The existing test emitted only known Pydantic deprecation warnings. No network transport was used by the new checks.
+
+**Safety / boundary.** No provider request, browser action, credential mutation, database edit, service restart, or video spend occurred. The unrelated `backend/test.db` change remains untouched. The next OiiOii component removes the dead direct-registry helper from `chat.py`, leaving the canonical chat client as the only implementation behind customer chat routes.
