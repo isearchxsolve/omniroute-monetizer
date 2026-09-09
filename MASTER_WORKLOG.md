@@ -15080,3 +15080,12 @@ video submit, and no credit spend. The complete expansion status is ready to han
 manual dedicated-profile authentication plus explicit bounded video-spend confirmation are the
 only remaining gates for adding the two missing Flow seats; OmniRoute video still needs provider
 contract/credential proofs.
+### [2026-09-09 04:25] #1696 — Added explicit label-scoped video graduation retry guard
+
+**Component reviewed.** The durable video run ledger (`state/fleet_e2e_video_graduation_run.json`) already contained terminal `NOT_ADMITTED` rows for every declared seat. The ordinary resumable `--e2e-video` path therefore skips all rows by design; using it after the operator's bounded authorization would have performed no proof, while deleting or editing historical rows would destroy audit history. The declared expansion target is the two normal Flow seats named by the prior capacity audit: `niloy-1` on CDP 9223 and `flow-seat3` on CDP 9225. RTST, Digen, the stale `pro-1` declaration, and `flow-seat2` were deliberately kept outside this authorization.
+
+**Change.** Updated `scripts/automation/fleet_graduation.py` with a repeatable `--video-label` option. When labels are explicitly supplied with `--e2e-video`, the runner validates them against `state/video_accounts.json`, filters the account loop to exactly those labels, and intentionally overrides the normal terminal-seat skip. Without explicit labels, the original no-repeat resumable behavior is unchanged. Unknown labels and use outside `--e2e-video`/`--e2e` fail before any provider request. This is a narrow operational guard so a one-seat spend authorization cannot widen into a fleet-wide render.
+
+**Verification.** `.venv\\Scripts\\python.exe -m py_compile scripts/automation/fleet_graduation.py` passed. The parser safety check `.venv\\Scripts\\python.exe scripts/automation/fleet_graduation.py --video-label niloy-1` exited with the expected argument error (`--video-label requires --e2e-video or --e2e`) before any network call or state mutation. No Chrome profile was opened, no provider request was sent, no video was generated, and no credits were spent by this component.
+
+**Next action.** Run one explicit spend-gated command for `niloy-1` and `flow-seat3` only, with the existing 30-credit client ceiling and `--confirm-video-spend`; record each capture/MP4/consumer result separately.

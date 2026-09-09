@@ -510,8 +510,14 @@ def e2e_chat_consumer_proofs() -> None:
     atomic_json(E2E_RUN, run)
 
 
-def e2e_video_apply(job_wait: float, sso_budget: float) -> None:
-    """Serial resumable video lane.  A terminal seat is never automatically re-spent."""
+def e2e_video_apply(job_wait: float, sso_budget: float, selected_labels: set[str] | None = None) -> None:
+    """Serial resumable video lane.
+
+    With no selection, terminal seats are never automatically re-spent.  An
+    explicit label selection is an operator-scoped retry request for exactly
+    those labels; it is intentionally required by the CLI so a bounded proof
+    authorization cannot widen into a fleet-wide spend.
+    """
     prior = read_json(E2E_VIDEO_RUN, {})
     prior_seats = prior.get("seats") if isinstance(prior, dict) else []
     prior_proofs = prior.get("consumerProofs") if isinstance(prior, dict) else []
@@ -523,9 +529,16 @@ def e2e_video_apply(job_wait: float, sso_budget: float) -> None:
            "consumerContract": "http://127.0.0.1:8190/v1", "seats": seats, "consumerProofs": proofs}
     if seats:
         run["resumedFrom"] = str(prior.get("generatedAt") or "unknown")
-    for account in declared_video_accounts():
+    selected = {str(label).strip() for label in (selected_labels or set()) if str(label).strip()}
+    declared = declared_video_accounts()
+    known_labels = {str(account["label"]) for account in declared}
+    unknown = selected - known_labels
+    if unknown:
+        raise SystemExit(f"unknown --video-label(s): {', '.join(sorted(unknown))}")
+    accounts = [account for account in declared if not selected or str(account["label"]) in selected]
+    for account in accounts:
         label = str(account["label"])
-        if label in completed_labels:
+        if not selected and label in completed_labels:
             print(f"video resume: {label} already has terminal evidence; not re-running", flush=True)
             continue
         row = capture_and_graduate_video(account, job_wait, sso_budget)
@@ -561,12 +574,12 @@ def e2e_apply(sso_budget: float, capture_wait: float, limit: int, video_job_wait
             os.environ["OMNI_VIDEO_CONFIRM_SPEND"] = prior
 
 
-def e2e_video_only_apply(job_wait: float, sso_budget: float) -> None:
+def e2e_video_only_apply(job_wait: float, sso_budget: float, selected_labels: set[str] | None = None) -> None:
     """Run every declared video seat without repeating a completed chat lane."""
     prior = os.environ.get("OMNI_VIDEO_CONFIRM_SPEND")
     os.environ["OMNI_VIDEO_CONFIRM_SPEND"] = "1"
     try:
-        e2e_video_apply(job_wait, sso_budget)
+        e2e_video_apply(job_wait, sso_budget, selected_labels)
     finally:
         if prior is None:
             os.environ.pop("OMNI_VIDEO_CONFIRM_SPEND", None)
@@ -673,11 +686,15 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0, help="cap chat seats in --e2e-chat (0 = all)")
     ap.add_argument("--video-job-wait", type=float, default=420.0,
                     help="seconds to record one browser video job's submit -> poll -> result sequence")
+    ap.add_argument("--video-label", action="append", default=[],
+                    help="explicitly retry only this declared video label (repeatable; overrides terminal-seat skip)")
     ap.add_argument("--confirm-video-spend", action="store_true",
                     help="required with --apply --e2e; acknowledges real video renders in capture, Python proof, and pinned :8190 proof")
     args = ap.parse_args()
     if (args.verify_and_admit or args.capture_chat or args.recover_sso or args.e2e_chat or args.e2e_video or args.e2e) and not args.apply:
         ap.error("--apply is required: these operations send a provider request and/or change an admission")
+    if args.video_label and not (args.e2e_video or args.e2e):
+        ap.error("--video-label requires --e2e-video or --e2e")
     if (args.e2e or args.e2e_video) and not args.confirm_video_spend:
         ap.error("--apply --e2e/--e2e-video requires --confirm-video-spend because it deliberately renders real videos")
     if args.verify_and_admit:
@@ -694,7 +711,7 @@ def main() -> int:
     elif args.e2e_chat:
         e2e_chat_apply(args.sso_budget, args.capture_wait, args.limit)
     elif args.e2e_video:
-        e2e_video_only_apply(args.video_job_wait, args.sso_budget)
+        e2e_video_only_apply(args.video_job_wait, args.sso_budget, set(args.video_label))
     elif args.e2e:
         e2e_apply(args.sso_budget, args.capture_wait, args.limit, args.video_job_wait)
     ledger = inventory()
