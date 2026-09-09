@@ -15827,3 +15827,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** SambaNova returned HTTP 401 with `Invalid token`. `replay_check.py` classified the file as `AUTH` and the graduation path refused promotion without retrying. The session JSON was not modified; the only output was the non-secret exact-file report under `state/scratch/`.
 
 **Classification and capacity.** This is an authentication/session-refresh gap, not proof of provider death or rate limiting. A fresh dedicated-profile sign-in/capture is required before another replay can be attempted; the operator's live Chrome credentials remain out of scope. Admitted capacity is unchanged at 12 chat and 5 video seats.
+### [2026-09-09 15:54] #1777 - Gemini Web replay rejected expired authentication
+
+**Exact-file action.** Ran one `fleet_graduation.py --apply --verify-and-admit "session_google_gemini_web.json"` unit using the captured Gemini Web exchange and the fresh computed Law-3 prompt. No Chrome profile was opened or attached, and no other seat or service was touched.
+
+**Observed result.** Gemini returned HTTP 401 in its batchexecute envelope. The verifier classified the artifact as `AUTH` (`auth refused (401) -- cookie alone is not enough`) and refused promotion. The captured session JSON and replay registry remain unchanged; only the non-secret exact-file diagnostic report was written.
+
+**Classification and next action.** This is a stale/invalid browser-session credential gap, not proof of Gemini service death. A new dedicated-profile sign-in and fresh capture is required; automation may not borrow the operator's normal Chrome profile or type credentials. The admitted pool remains 12 chat and 5 video seats.
