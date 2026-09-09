@@ -15728,3 +15728,12 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Safety boundary.** This was process-state inspection only. No browser/profile/page/session attachment, provider interaction, credential access, capture, spend, endpoint mutation, or service lifecycle action occurred. The helper must remain user-guided for protected sign-in/account flows.
 
 **What is not claimed.** No provider authentication, API key, video balance, session proof, graduation, or capacity increase is established by the wait. Endpoint capacity remains 11 chat / 5 video.
+### [2026-09-09 15:47] #1766 - Manual provider-onboarding handoff remains the current capacity blocker
+
+**Third verified wait observation.** Re-polled the same exact isolated onboarding helper command lineage. The CMD wrapper plus its two helper interpreter processes remain live, proving the workflow is still waiting for the operator at a provider-authentication step. This is the third consecutive verified wait for this user-guided flow after launch.
+
+**Why the system stops here.** The remaining actions are protected provider login/SSO decisions and possibly user account challenges. This system must not enter credentials/OTP, solve CAPTCHA, select/pay for plans, or bypass the interactive workflow. Inspecting its browser session would not establish legitimate video/chat capacity; only completed provider authentication followed by fresh capture and computed proof can do that.
+
+**Recovery path.** The user can resume immediately by completing the visible provider screen and pressing Enter in the black command window. When the exact helper process exits, the next action is a safety check, a review of its state-only report, then serial provider validation/capture/proof. No work needs to be redone.
+
+**What is not claimed.** No Kie/Segmind/Novita authentication, key, credit, capture, replay proof, graduation, spend, capacity increase, configuration/DB mutation, or service restart occurred. The consumer endpoint remains 11 chat / 5 video, below the 25 / 23 target.
