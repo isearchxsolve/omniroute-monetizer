@@ -15813,3 +15813,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** Aymo returned HTTP 403 with explicit plan-wall text stating the one-time Claude Opus access had already been used and an upgrade was required. The verifier classified this as `WALL` and refused admission, correctly stopping without retries. No session artifact or replay registry entry was promoted; only `state/scratch/fleet_graduation_session_aymo_ai.json` was produced.
 
 **Classification and capacity.** This is a provider entitlement/quota wall, not a replay parser failure or proof of server death. It cannot be fixed by keep-alive or stale-byte replay; a funded/eligible provider account or a fresh permitted model entitlement is required. The admitted pool is unchanged at 12 chat and 5 video seats.
+### [2026-09-09 15:38] #1775 - DeepInfra replay stopped by positive-balance wall
+
+**Exact-file action.** Ran one `fleet_graduation.py --apply --verify-and-admit "session_deepinfra_chat.json"` unit against the captured DeepInfra chat artifact. The operation sent one valid computed replay and did not touch any other session, browser profile, OmniRoute process, or video route.
+
+**Observed result.** DeepInfra returned HTTP 402 with explicit text requiring a positive account balance before inference. The verifier classified the response as `WALL` and stopped without retrying or admitting the artifact. The exact file remains unmodified; only the non-secret report `state/scratch/fleet_graduation_session_deepinfra_chat.json` was written.
+
+**Classification and capacity.** This is a confirmed provider billing/entitlement wall, not an HTTP transport outage or stale-parser issue. Keep-alive cannot create balance, so the artifact cannot add sellable chat capacity until the account is funded or another eligible free route is captured. The admitted pool remains 12 chat and 5 video seats.
