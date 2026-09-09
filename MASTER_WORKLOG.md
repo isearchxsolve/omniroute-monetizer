@@ -15528,3 +15528,13 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **RCA classification.** This is an **authentication-expiry outcome**, not a generic HTTP failure and not evidence that the 1min.ai service is dead. The captured cookie/token is no longer accepted. Per the session rules, an expired credential needs a legitimate dedicated-profile re-authentication/capture path; replay retries cannot refresh it. The verifier correctly refused admission and did not turn the error payload into an answer.
 
 **Safety / what is not claimed.** One direct non-video probe only; no Chrome process/profile action, video submission/credit spend, provider-plan change, secret disclosure, service restart, or session/registry promotion occurred. Admission remains 11 chat and 5 video files.
+
+### [2026-09-09 13:22] #1745 - Felo HTTP replay classified as expired authentication
+
+**Component / fresh proof.** Ran one exact independent HTTP unit, `fleet_graduation.py --apply --verify-and-admit session_felo_ai_web.json`, using the mandatory non-echoable arithmetic proof. Felo returned HTTP **401** in about 1.40 seconds with a structured unauthorized response. The one-file verifier report is `state/scratch/fleet_graduation_session_felo_ai_web.json`.
+
+**RCA classification.** This is a **credential-expiry/authentication** outcome, not a replay-parser defect, service-death conclusion, or capacity admission. The recorded session no longer grants access, so retrying recorded bytes would only hammer a rejected token. The appropriate future path is dedicated-profile legitimate re-authentication and a fresh capture, followed by the same Law-3 proof.
+
+**Capacity implication.** The Aymo (plan wall), Duck (encrypted response gap), 1min.ai (expired auth), and Felo (expired auth) samples show why raw artifact counts cannot be used as SaaS headroom. None of these four pending chat artifacts adds a 12th admitted chat seat. The next action is a fresh non-spending inventory/consumer catalogue read, not an assertion from stale captures.
+
+**Safety / what is not claimed.** No browser action, provider spend, video request, credential/configuration write, session-file promotion, database edit, or service restart occurred. No secrets were logged.
