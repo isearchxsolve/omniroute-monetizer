@@ -62,6 +62,29 @@ class NumericLawThreeTests(unittest.TestCase):
         verdict, _ = classify("forbidden by upstream", 403, None, "58")
         self.assertEqual(verdict, "AUTH")
 
+    def test_captcha_body_attached_to_http_exception_is_a_wall(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "session_test.json"
+            path.write_text(json.dumps({"host": "example.test"}), encoding="utf-8")
+            exc = RuntimeError("Auth rejected")
+            exc.raw = '{"error":{"message":"Captcha verification failed"}}'
+            exc.status = 403
+            client = SimpleNamespace(chat=lambda messages: (_ for _ in ()).throw(exc))
+            with patch("universal_replay.make_session_client", return_value=client):
+                row = replay(path, "Compute 41 + 17", "58")
+            self.assertEqual(row["verdict"], "WALL")
+
+    def test_http_exception_without_body_stays_auth(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "session_test.json"
+            path.write_text(json.dumps({"host": "example.test"}), encoding="utf-8")
+            exc = RuntimeError("Auth rejected")
+            exc.status = 403
+            client = SimpleNamespace(chat=lambda messages: (_ for _ in ()).throw(exc))
+            with patch("universal_replay.make_session_client", return_value=client):
+                row = replay(path, "Compute 41 + 17", "58")
+            self.assertEqual(row["verdict"], "AUTH")
+
     def test_alphabetic_phrase_diagnostic_fallback_still_has_meaningful_input(self) -> None:
         self.assertTrue(keyword_in_body('data: {"content":"the holy cow jumps"}', "holy cow"))
 

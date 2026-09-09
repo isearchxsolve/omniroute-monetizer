@@ -874,7 +874,14 @@ class UniversalSessionClient:
                 self._absorb_cookies(r)
             
             if r.status_code in (401, 403):
-                raise SessionExpired("AUTH", "Auth rejected: " + r.text[:100])
+                # Keep the provider's non-secret error body attached to the canonical exception.
+                # replay_check uses it to distinguish a named CAPTCHA/plan wall from a genuinely
+                # rejected credential; dropping it here collapses both into the same AUTH verdict.
+                # The body is held in memory only and is never logged by this client.
+                exc = SessionExpired("AUTH", "Auth rejected: " + r.text[:100], status=r.status_code)
+                exc.raw = r.text
+                exc.status = r.status_code
+                raise exc
 
             r.raise_for_status()
 

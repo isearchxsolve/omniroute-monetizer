@@ -231,7 +231,15 @@ def replay(path: pathlib.Path, prompt: str, expect: str) -> dict[str, Any]:
         # Preserve failure classification without treating raw exception data
         # or the exception message itself as a completed assistant answer.
         raw_status = getattr(e, "status", None)
-        verdict, detail = classify(str(e), raw_status, None, expect)
+        # HTTP refusals carry useful, non-secret evidence in the response body.  Prefer that body
+        # for classification (e.g. a 403 CAPTCHA is WALL, while a 403 with no named wall is AUTH),
+        # falling back to the exception text for transports that have no response at all.  This
+        # keeps the exact provider status without ever treating exception text as assistant output.
+        raw_body = getattr(e, "raw", None)
+        if isinstance(raw_body, str) and raw_body:
+            verdict, detail = classify(raw_body, raw_status, None, expect)
+        else:
+            verdict, detail = classify(str(e), raw_status, None, expect)
         if verdict == "REPLAY_OK":
             # Exception text itself is not an assistant response, even if it
             # happens to equal the expected answer.
