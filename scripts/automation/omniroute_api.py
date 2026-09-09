@@ -13,6 +13,7 @@ import json
 import os
 import re
 import time
+from urllib.parse import urlsplit, urlunsplit
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,10 +26,10 @@ except ImportError:
     # Fallback if model_cache not available
     ModelCatalogCache = None
 
-_raw_base = os.environ.get("OMNIROUTE_BASE_URL", "http://localhost:20128").rstrip("/")
+_raw_base = os.environ.get("OMNIROUTE_BASE_URL", "http://127.0.0.1:20128").rstrip("/")
 if _raw_base.endswith("/v1"):
     _raw_base = _raw_base[:-3].rstrip("/")
-BASE_URL = _raw_base or "http://localhost:20128"
+BASE_URL = _raw_base or "http://127.0.0.1:20128"
 API_URL = f"{BASE_URL}/api"
 V1_URL = f"{BASE_URL}/v1"
 
@@ -63,6 +64,32 @@ PRESIGN_PARAM_RE = re.compile(
 # every management script in the repo. Widened deliberately: a slow login is normal,
 # a failed one is not.
 LOGIN_TIMEOUT = int(os.environ.get("OMNIROUTE_LOGIN_TIMEOUT", "120"))
+
+
+def normalize_base_url(value: str) -> str:
+    """Canonicalize local OmniRoute access and avoid proxy/IPv6 ambiguity.
+
+    Management calls are always to the local service. On this Windows host, ``localhost`` can
+    resolve through a proxy or an IPv6 listener while the service is bound to loopback IPv4. A
+    caller may still pass an explicit remote URL; only the local ``localhost`` hostname is changed.
+    """
+    raw = str(value or "").rstrip("/")
+    try:
+        parsed = urlsplit(raw)
+        if parsed.hostname and parsed.hostname.lower() == "localhost":
+            netloc = "127.0.0.1"
+            if parsed.port:
+                netloc = f"{netloc}:{parsed.port}"
+            if parsed.username:
+                auth = parsed.username
+                if parsed.password:
+                    auth += f":{parsed.password}"
+                netloc = f"{auth}@{netloc}"
+            raw = urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment)).rstrip("/")
+    except ValueError:
+        # Preserve the original value; requests will provide the normal URL error to the caller.
+        pass
+    return raw
 
 
 def redact(value: Any) -> str:
@@ -179,12 +206,15 @@ class OmniRouteAPI:
     """Session-based client for the OmniRoute management + inference APIs."""
 
     def __init__(self, base_url: str = BASE_URL, password: Optional[str] = None):
-        self.base = base_url.rstrip("/")
+        self.base = normalize_base_url(base_url)
         if self.base.endswith("/v1"):
             self.base = self.base[:-3].rstrip("/")
         self.api = f"{self.base}/api"
         self.v1 = f"{self.base}/v1"
         self.session = requests.Session()
+        # This client talks to the local management API only. Never let a machine-wide HTTP(S)
+        # proxy intercept loopback auth/refresh calls or leave a scheduled keep-alive run hung.
+        self.session.trust_env = False
         self._password = password if password is not None else get_password()
         self._logged_in = False
 
@@ -294,10 +324,10 @@ class OmniRouteAPI:
         except Exception:
             return []
 
-    def refresh_connection(self, cid: str) -> Dict[str, Any]:
+    def refresh_connection(self, cid: str, timeout: int = 60) -> Dict[str, Any]:
         self._ensure_login()
         try:
-            r = self.session.post(f"{self.api}/providers/{cid}/refresh", timeout=60)
+            r = self.session.post(f"{self.api}/providers/{cid}/refresh", timeout=timeout)
             try:
                 body = r.json()
             except Exception:

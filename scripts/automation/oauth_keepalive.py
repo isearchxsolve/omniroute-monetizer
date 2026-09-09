@@ -35,6 +35,7 @@ import os
 import re
 import sys
 import time
+from datetime import timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -51,6 +52,18 @@ RESULT_FILE = STATE_DIR / "keepalive_result.json"
 PW_FILE = STATE_DIR / "omniroute_password.txt"
 
 DEFAULT_INTERVAL = 900  # 15 minutes — safe for 30-min Copilot tokens
+DEFAULT_PASS_BUDGET = 240  # a hung provider must not block the next scheduled run indefinitely
+
+
+def parse_expiry(value: object) -> dt.datetime | None:
+    """Parse an OmniRoute expiry timestamp without treating malformed metadata as a secret/error."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
 
 
 def log(msg: str) -> None:
@@ -117,6 +130,8 @@ def run_pass() -> dict:
         "skipped": [],
         "ok": True,
     }
+    pass_budget = max(30, int(os.environ.get("OMNIROUTE_KEEPALIVE_PASS_BUDGET", str(DEFAULT_PASS_BUDGET))))
+    summary["passBudgetSeconds"] = pass_budget
     pw = resolve_password()
     if not pw:
         log("ERROR: no management password resolvable; pass skipped")
@@ -142,15 +157,30 @@ def run_pass() -> dict:
 
     for c in targets:
         cid, prov = c.get("id"), c.get("provider")
+        elapsed = time.monotonic() - started
+        if elapsed >= pass_budget:
+            summary["skipped"].append({"id": cid, "provider": prov, "reason": "pass_budget_exceeded"})
+            log(f"  SKIPPED   {prov:14s} pass budget exceeded ({pass_budget}s)")
+            continue
         try:
-            res = api.refresh_connection(cid)
+            timeout = max(5, min(60, int(pass_budget - elapsed)))
+            res = api.refresh_connection(cid, timeout=timeout)
             http = res.get("http_status")
             body = res.get("result") or {}
             success = http == 200 and bool(body.get("success"))
             if success:
                 exp = body.get("expiresAt")
-                summary["refreshed"].append({"id": cid, "provider": prov, "expiresAt": exp})
-                log(f"  REFRESHED {prov:14s} expiresAt={exp}")
+                parsed_expiry = parse_expiry(exp)
+                if parsed_expiry is not None and parsed_expiry <= dt.datetime.now(timezone.utc):
+                    # Some providers return HTTP 200/success while leaving an already-expired
+                    # token and expiry in place. Calling that "REFRESHED" hid the real failure
+                    # and made the keep-alive report look healthier than the routing pool.
+                    err = "refresh returned expired token metadata"
+                    summary["failed"].append({"id": cid, "provider": prov, "error": err})
+                    log(f"  FAILED    {prov:14s} {err}")
+                else:
+                    summary["refreshed"].append({"id": cid, "provider": prov, "expiresAt": exp})
+                    log(f"  REFRESHED {prov:14s} expiresAt={exp}")
             else:
                 err = body.get("error") or body.get("message") or f"HTTP {http}"
                 summary["failed"].append({"id": cid, "provider": prov, "error": redact(str(err))[:160]})

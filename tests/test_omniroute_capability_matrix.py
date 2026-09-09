@@ -34,9 +34,37 @@ def test_supervisor_has_application_paths_for_unowned_services() -> None:
     from omni_supervisor import services
 
     configured = {svc.key: svc.health for svc in services()}
-    assert configured["omniroute"] == "/v1/models"
+    assert configured["omniroute"] == "/api/health"
     assert configured["video_router"] == "/healthz"
     assert configured["session_pool_shim"] == "/healthz"
+
+
+def test_management_client_canonicalizes_loopback_and_disables_proxy_inheritance() -> None:
+    from omniroute_api import OmniRouteAPI
+
+    api = OmniRouteAPI(base_url="http://localhost:20128/v1", password="test-only")
+    assert api.base == "http://127.0.0.1:20128"
+    assert api.api == "http://127.0.0.1:20128/api"
+    assert api.session.trust_env is False
+
+
+def test_consumer_catalog_audit_uses_tenant_auth_without_echoing_key(tmp_path, monkeypatch) -> None:
+    import audit_merged_healthy_capacity as audit
+
+    tenant_map = tmp_path / "tenant_map.json"
+    tenant_map.write_text(json.dumps({"sk-test-tenant": "opaque"}), encoding="utf-8")
+    monkeypatch.setattr(audit, "TENANT_MAP", tenant_map)
+
+    assert audit.consumer_auth_headers() == {"Authorization": "Bearer sk-test-tenant"}
+
+
+def test_keepalive_expiry_parser_handles_utc_and_rejects_bad_metadata() -> None:
+    from oauth_keepalive import parse_expiry
+
+    parsed = parse_expiry("2026-09-09T09:43:15.000Z")
+    assert parsed is not None and parsed.utcoffset().total_seconds() == 0
+    assert parse_expiry("not-a-timestamp") is None
+    assert parse_expiry(None) is None
 
 
 def test_paths_are_read_only_capability_surface() -> None:

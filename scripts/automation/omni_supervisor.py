@@ -161,9 +161,12 @@ def services() -> list:
         ),
         Service(
             key="omniroute", label="OmniRoute chat", port=20128,
-            health="/v1/models", owned=False, required=False,
+            # /v1/models is auth-gated; use the public liveness route so a missing client key is
+            # not misreported as a dead OmniRoute process.
+            health="/api/health", owned=False, required=False,
             note="NEVER restarted from here. Holds live OAuth connections; bouncing it has cost real "
-                 "credentials before. A red line here is a report, not an action.",
+                 "credentials before. A red line here is a report, not an action. "
+                 "The model catalog remains a separate authenticated audit.",
         ),
         Service(
             key="video_router", label="Video router", port=8189,

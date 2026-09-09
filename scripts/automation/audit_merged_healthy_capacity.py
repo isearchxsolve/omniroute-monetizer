@@ -44,6 +44,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "state" / "merged_healthy_capacity_audit.json"
 CONSUMER = "http://127.0.0.1:8190/v1"
 OMNI = "http://127.0.0.1:20128"
+TENANT_MAP = ROOT / "state" / "secrets" / "tenant_map.json"
 OMNI_ADMISSIONS = ROOT / "state" / "omniroute_verified_routes.json"
 SEAT_REGISTRY = ROOT / "state" / "pure_python_replay_registry.json"
 SEAT_VIDEO_RUN = ROOT / "state" / "fleet_e2e_video_graduation_run.json"
@@ -51,14 +52,64 @@ COMPUTED_PROMPT = "Reply with only the number: 41 + 17"
 EXPECTED = "58"
 
 
-def get_json(url: str, timeout: int = 15) -> tuple[dict[str, Any], int | None, str | None]:
+def consumer_auth_headers() -> dict[str, str]:
+    """Return one tenant bearer without ever printing or persisting it.
+
+    The merged consumer intentionally requires a tenant key when ``tenant_map.json`` exists. An
+    unauthenticated catalog response is not an empty catalog; it is an auth failure. This helper
+    keeps the read-only audit aligned with the real consumer contract while retaining an empty
+    header for fresh installs that have no tenant map yet.
+    """
+    try:
+        mapping = json.loads(TENANT_MAP.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(mapping, dict):
+        return {}
+    key = next((k for k in mapping if isinstance(k, str) and k.startswith("sk-")), None)
+    return {"Authorization": f"Bearer {key}"} if key else {}
+
+
+def get_json(url: str, timeout: int = 15, headers: dict[str, str] | None = None) -> tuple[dict[str, Any], int | None, str | None]:
     session = requests.Session()
     session.trust_env = False  # 127.0.0.1 must not be sent through the system proxy.
     try:
-        r = session.get(url, timeout=timeout)
+        r = session.get(url, headers=headers or {}, timeout=timeout)
         return (r.json() if r.ok else {}), r.status_code, None
     except (requests.RequestException, ValueError) as exc:
         return {}, None, f"{type(exc).__name__}: {exc}"[:240]
+
+
+def get_omni_catalog() -> tuple[dict[str, Any], int | None, str | None, str]:
+    """Read OmniRoute's auth-gated catalog through its management session.
+
+    ``/v1/models`` is intentionally protected on the live instance. Sending the consumer tenant
+    bearer (or no bearer) to OmniRoute is the wrong credential and yields HTTP 401. A management
+    login followed by the same session cookie is read-only and mirrors how the dashboard reads the
+    catalog. The final field records the auth mode without persisting the cookie or password.
+    """
+    try:
+        import sys
+        sys.path.insert(0, str(ROOT / "scripts" / "automation"))
+        from omniroute_api import OmniRouteAPI, get_password
+
+        password = get_password()
+        if password:
+            api = OmniRouteAPI(base_url=OMNI, password=password)
+            if api.login():
+                response = api.session.get(f"{OMNI}/v1/models", timeout=120)
+                try:
+                    body = response.json() if response.ok else {}
+                except ValueError:
+                    body = {}
+                if response.ok and isinstance(body, dict):
+                    return body, response.status_code, None, "management_cookie"
+                return {}, response.status_code, "authenticated catalog request failed", "management_cookie"
+    except (OSError, ValueError, requests.RequestException, RuntimeError) as exc:
+        return {}, None, f"{type(exc).__name__}: {exc}"[:240], "unavailable"
+
+    body, status, error = get_json(f"{OMNI}/v1/models")
+    return body, status, error, "unauthenticated_fallback"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -156,6 +207,7 @@ def probe(model: str, timeout: int) -> dict[str, Any]:
             f"{CONSUMER}/chat/completions",
             json={"model": model, "messages": [{"role": "user", "content": COMPUTED_PROMPT}],
                   "temperature": 0, "max_tokens": 20},
+            headers=consumer_auth_headers(),
             timeout=timeout,
         )
         body = response.json()
@@ -186,8 +238,9 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=75)
     args = parser.parse_args()
 
-    consumer, consumer_status, consumer_error = get_json(f"{CONSUMER}/models")
-    omni, omni_status, omni_error = get_json(f"{OMNI}/v1/models")
+    consumer, consumer_status, consumer_error = get_json(
+        f"{CONSUMER}/models", headers=consumer_auth_headers())
+    omni, omni_status, omni_error, omni_auth_mode = get_omni_catalog()
     merged_models = consumer.get("data") or []
     omni_models = omni.get("data") or []
     metadata = consumer.get("x_gateway") if isinstance(consumer.get("x_gateway"), dict) else {}
@@ -221,6 +274,7 @@ def main() -> int:
                      "mergedAdvertisedModelCount": len(merged_models), "gateway": metadata},
         "omniRouteHarness": {
             "base": OMNI, "modelsHttpStatus": omni_status, "error": omni_error,
+            "authMode": omni_auth_mode,
             "advertisedModelCount": len(omni_models), "providerModelCounts": dict(sorted(owners.items())),
             "meaning": "advertised provider/model inventory; not a health or account-capacity claim",
         },
