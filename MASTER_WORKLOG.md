@@ -15558,3 +15558,13 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Capacity conclusion from recent samples.** Four recent independent HTTP candidate outcomes now separate into one real plan wall (Aymo), one response-transport gap (Duck), and three auth-expiry outcomes (1min.ai, Felo, SambaNova). This is evidence that static artifact count is currently a poor predictor of the missing 14 chat admissions. The next productive admission work should prioritize seats with a known live credential source or an existing stateless adapter, rather than batch-probing more decayed capture files.
 
 **Safety / what is not claimed.** One chat replay request only. No browser action, password/OTP entry, video generation, credit spend, provider configuration/credential mutation, database edit, service restart, or admission promotion occurred. The final consumer endpoint remains at 11 admitted chat / 5 admitted video files.
+
+### [2026-09-09 13:36] #1748 - Gemini replay classified as expired auth inside Google envelope
+
+**Component / fresh proof.** Ran `fleet_graduation.py --apply --verify-and-admit session_google_gemini_web.json`, one exact HTTP replay using the project's computed arithmetic verifier. Google returned its XSSI-prefixed batchexecute envelope in about 1.35 seconds, containing an explicit **401** response status. The single-file result is `state/scratch/fleet_graduation_session_google_gemini_web.json`.
+
+**RCA classification.** This is a **captured-session authentication expiry**, not a malformed Google-envelope parser result. The universal replay layer recognized the structured auth condition and returned `AUTH`; it did not treat the length-framed envelope, internal request identifiers, or numeric metadata as a model answer. No retry, cookie persistence, or admission occurred. A live Google browser session could still work; only the copied replay credential is disproven by this evidence.
+
+**Admission planning consequence.** The recent sample set now includes three different providers whose static capture tokens are expired (1min.ai, Felo, SambaNova, Gemini), confirming a supply-refresh problem rather than an `:8190` protocol problem. Reaching the 25-chat target now requires a legitimate credential refresh/capture program in the dedicated automation profiles, followed by serial computed proof. Continuing to probe stale artifacts has declining information value and cannot create supply.
+
+**Safety / what is not claimed.** No Chrome instance/profile was opened or attached; no Google sign-in, password, OTP, captcha interaction, video request, provider credit spend, registry/session-file promotion, database mutation, or service restart occurred. Admission remains 11 chat / 5 video.
