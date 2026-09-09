@@ -15806,3 +15806,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Classification and next action.** This is an authentication/session-expiry gap, not evidence that Yuanbao is server-dead or rate-limited. A genuine fix requires a fresh operator-controlled sign-in/capture in a dedicated automation profile followed by another exact-file replay; the current safety rules prohibit reading or refreshing the operator's live Chrome credentials automatically. No retry was issued in this component's step.
 
 **Capacity effect.** The live admitted pool remains 12 chat and 5 video seats. The Yuanbao capture remains outside the admission gate until fresh authentication and a computed answer are proven.
+### [2026-09-09 15:31] #1774 - Aymo replay stopped at provider plan wall
+
+**Exact-file action.** Ran one `fleet_graduation.py --apply --verify-and-admit "session_aymo_ai.json"` unit with the standard computed replay prompt. The direct replay used the captured Aymo session only; no Chrome, OmniRoute, video, or other seat was touched.
+
+**Observed result.** Aymo returned HTTP 403 with explicit plan-wall text stating the one-time Claude Opus access had already been used and an upgrade was required. The verifier classified this as `WALL` and refused admission, correctly stopping without retries. No session artifact or replay registry entry was promoted; only `state/scratch/fleet_graduation_session_aymo_ai.json` was produced.
+
+**Classification and capacity.** This is a provider entitlement/quota wall, not a replay parser failure or proof of server death. It cannot be fixed by keep-alive or stale-byte replay; a funded/eligible provider account or a fresh permitted model entitlement is required. The admitted pool is unchanged at 12 chat and 5 video seats.
