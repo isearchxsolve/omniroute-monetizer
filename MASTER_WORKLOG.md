@@ -16008,3 +16008,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Verification.** Added a regression assertion that `classify("V0_NO_CHAT_ID", 200, None, "58")` returns `BAD_FILE` with a conversation-ID explanation. `pytest tests/test_omniroute_capability_matrix.py -vv -s` -> **25 passed**; `pytest scripts/automation/test_replay_check_law3.py -q` -> **10 passed**; `py_compile scripts/automation/replay_check.py` and `git diff --check` passed.
 
 **Capacity effect.** The Niloy V0 file is not admissible and contributes no capacity; it requires a complete fresh dedicated-profile capture. Fleet remains **15 admitted chat / 5 admitted video** (20 total), below the strict 25/23 target. No Chrome profile, OmniRoute service, or video route was touched.
+### [2026-09-09 17:40] #1800 - V0 Niloy retry records malformed capture honestly
+
+**Exact-file retry.** Reran the single `/chat/api/send` V0 Niloy artifact after the classifier correction. The bounded replay sent only the captured first leg; because its body has `chat_id=null` and no recorded final chat-submit leg, the adapter did not fabricate a conversation or issue a follow-up request.
+
+**Observed result.** The report now records `BAD_FILE` with `V0 replay adapter could not derive a conversation id from the capture` (HTTP 200 bootstrap `ok`, 1.7 s). No promotion or registry mutation occurred; the redacted report is `state/scratch/fleet_graduation_session_v0_by_vercel_niloy.json`.
+
+**Classification and capacity.** This is a capture defect requiring a complete dedicated-profile recapture, not a provider single-use failure. V0 contributes no capacity. Fleet remains **15 admitted chat / 5 admitted video** (20 total), below the strict 25/23 target.
