@@ -547,6 +547,23 @@ def run_manual_signin() -> int:
     udd = safe_profile_dir(PROFILE_TAG)          # guard runs here
     assert_safe(udd, who="run_manual_signin")    # and again, explicitly, at the call site
 
+    # Chrome's ProcessSingleton forwards a second chrome.exe invocation into the
+    # existing instance for this profile. If that instance is one of the managed
+    # CDP seats, a supposedly plain, human-only sign-in would instead navigate the
+    # automation browser. Refuse before launching so manual SSO is never silently
+    # performed inside a service-owned seat.
+    in_use = _chrome_using_profile(udd)
+    if in_use > 0:
+        _say("YOU", "The dedicated provider profile is already open by a managed Chrome seat.")
+        _say("YOU", "Nothing was opened or navigated. Do not use that seat for manual SSO.")
+        _say("info", "Close no managed Chrome yourself; wait for a separately provisioned "
+             "dedicated sign-in profile.")
+        return 4
+    if in_use < 0:
+        _say("PROBLEM", "Could not verify whether the dedicated provider profile is in use.")
+        _say("info", "Nothing was opened. Resolve the process check before attempting manual SSO.")
+        return 4
+
     chrome = _find_chrome()
     if not chrome:
         _say("PROBLEM", "Could not find an installed chrome.exe. Nothing was opened.")
