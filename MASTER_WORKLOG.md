@@ -15852,3 +15852,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Capacity delta.** Admitted exact chat files increased from 13 to **14**, and total admitted sessions from 18 to **19**; video remains **5**. This is the second separate Poe account/session file and counts as a file-level seat, while host-level coalescing remains visible in the consumer route audit. Remaining ledger states are 23 `LAW3_REPLAY_PROOF_REQUIRED` chat artifacts and 7 `VIDEO_PROOF_REQUIRED` video artifacts; the 25/23 mandate is not yet met.
 
 **Verification.** The command reported HTTP 200 / `REPLAY_OK` / answer `58`; the 20-test capability suite and parser regression remain passed. No video job, paid operation, browser interaction, secret access, or OmniRoute restart occurred.
+### [2026-09-09 16:18] #1780 - ChatGPT Niloy capture rejected document affinity authentication
+
+**Exact-file action.** Ran one `fleet_graduation.py --apply --verify-and-admit "session_chatgpt_free_web_niloy.json"` unit with the standard computed replay. Only this captured session was contacted; no Chrome profile, other artifact, OmniRoute process, or video route was touched.
+
+**Observed result.** ChatGPT returned HTTP 403 with `Invalid conversation document affinity`. The verifier classified it as `AUTH` (`auth refused (403) -- cookie alone is not enough`) and refused promotion without retrying. The capture and replay registry are unchanged; only the non-secret exact-file report under `state/scratch/` was created.
+
+**Classification and capacity.** This is a send-time/session-affinity authentication gap, not proof that ChatGPT is dead. The browser constructs fresh conversation/affinity state that the stale capture does not contain; a fresh dedicated-profile capture or a specialized multi-step adapter is required. Current admitted capacity remains 14 chat and 5 video seats.
