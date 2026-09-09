@@ -23,6 +23,24 @@ Digen routes is **zero clips**. LTX remains an unquantified MP4-proven route and
 converted into a numeric promise. This correction does not alter the 33.3 / 53.3 minute recurring
 Flow **planning ceilings** below; those remain entitlement assumptions, not the present balances.
 
+## Fresh independent-provider check at 12:52 IST
+
+The locally vaulted Kie, Novita, and AI Studio credentials were rechecked against their own
+documented, non-generation endpoints. All three authenticate today. Kie's own credit endpoint
+reported a current **7.74-credit** balance. That is not capacity: its previous bounded
+`kling-3.0/video` submit was correctly refused for insufficient credits at 7.79 credits, with no
+charge, so the slightly lower present balance still buys **zero proven clips**. The Kie Python
+adapter remains technically ready for its documented submit -> task ID -> poll -> result-URL flow,
+but it must not be counted or submitted until the wallet can cover a known model cost.
+
+Novita's key was accepted, but no direct video request, funded-balance response, or MP4 proof has
+been obtained; its two candidate routes remain candidates only. AI Studio's key was accepted and
+can list Veo models, but the previous bounded `predictLongRunning` attempt returned Google
+`RESOURCE_EXHAUSTED` (generation quota/billing wall), so it also contributes zero current clips.
+Segmind's recheck hit a connection timeout rather than an authentication rejection: the stored key
+is not disproven, but the provider is not ready to count until a later non-spending verification
+returns. These checks involved no render submission or credit spend.
+
 ## What is live now
 
 The task-owned shim is running `2026-09-09-session-heartbeat-v1`. Its health payload reports a
