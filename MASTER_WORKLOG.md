@@ -15219,4 +15219,12 @@ The explicit label filter selected only `niloy-1` (9223) and `flow-seat3` (9225)
 
 **Contract evidence.** Without calling the explicit `/v1/rescan` endpoint, an authenticated `GET http://127.0.0.1:8190/v1/models` returned HTTP 200 with 439 rows / 438 unique IDs, 11 concrete chat pins, 5 video pins, `huggingface.co/auto` present, and `x_gateway.seatPool={chat:11,video:5}`. This proves the corrected per-request signature notices the registry/quarantine state at process startup and preserves the zero-restart hot-add/reload contract for future in-place admission edits.
 
-**Boundary.** The task owner is healthy and remains the sole service owner. No provider request, Chrome interaction, video generation, credit spend, or credential mutation occurred during deployment. The 25-chat / 23-video target remains incomplete; one more chat seat is now consumer-visible and the remaining candidates will continue serially.
+**Boundary.** The task owner is healthy and remains the sole service owner. No provider request, Chrome interaction, video generation, credit spend, or credential mutation occurred during deployment. The 25-chat / 23-video target remains incomplete; one more chat seat is now consumer-visible and the remaining candidates will continue serially.### [2026-09-09 08:47] #1711 — Chat graduation probe: Felo capture authorization expired
+
+**Component reviewed.** Selected one remaining HTTP chat artifact, `state/secrets/session_felo_ai_web.json`, after the successful Hugging Face admission. Its structure is eligible for the universal replay path and it has not been admitted in the exact-file registry.
+
+**Measured action.** Ran `.venv\Scripts\python.exe scripts/automation/fleet_graduation.py --apply --verify-and-admit session_felo_ai_web.json` exactly once. The recorded Felo endpoint returned HTTP 401 with the non-secret body classification `unauthorized`. `replay_check.py` and the coordinator correctly returned `AUTH`; the file was not promoted and no retry was attempted.
+
+**RCA classification.** This is a current authorization failure for the captured artifact (cause (b) for this file), not evidence of a Felo server outage or a parser defect. The earlier live browser proof from the operator is not interchangeable with this stale capture; a fresh dedicated-profile capture is required before admission. Passwords, OTPs, and the operator's Chrome profile remain out of scope.
+
+**Capacity / safety boundary.** The live consumer pool remains 11 admitted chat seats and 5 video seats. This unit used one direct chat request, spent no video credits, touched no Chrome target, changed no registry or service state, and wrote only the non-secret scratch verdict. The worklog was appended before the next candidate.
