@@ -110,8 +110,11 @@ def _v0_preflight(body_str: str) -> str:
     and v0_followup polls that exact chat for a message newer than our send."""
     try:
         body = json.loads(body_str)
-        if "message_id" in body:
-            body["message_id"] = str(uuid.uuid4())
+        # The telemetry leg uses snake_case, while the real `/chat/api/chat`
+        # submit uses camelCase. Both are client-generated and must be fresh.
+        for key in ("message_id", "messageId"):
+            if key in body:
+                body[key] = str(uuid.uuid4())
         return json.dumps(body)
     except Exception:
         return body_str
@@ -406,13 +409,46 @@ def v0_followup(
     timeout: float = 90.0,
     chat_id: str = None,
     started_ms: int = None,
+    leg2: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Optional[str], Optional[str]]:
-    """Poll the v0 chat-latest endpoint for the assistant message answering OUR send.
+    """Replay V0's real chat-submit leg, then poll for the assistant message.
 
     Returns (answer_text, error). Exactly one is non-None. Stale answers are
     rejected by createdAt: only messages created after started_ms (the send
     fire time) count, so a failed send can never score the OLD recorded reply.
     """
+    # The first `/chat/api/send` request is a 2-byte acknowledgement.  Buffered
+    # captures also contain the final `/chat/api/chat` request that actually creates
+    # the message. Re-send that leg with the caller's prompt and a fresh messageId
+    # before polling; otherwise the endpoint can only ever return the old `ok` ack.
+    if leg2 and leg2.get("url"):
+        body_str = apply_preflight("v0.app", str(leg2.get("request_body") or ""))
+        if not body_str:
+            return None, "V0_EMPTY_CHAT_SUBMIT"
+        headers = {}
+        for key, value in (leg2.get("request_headers") or {}).items():
+            if str(key).startswith(":"):
+                continue
+            if str(key).lower() in ("content-length", "content-md5"):
+                continue
+            headers[str(key)] = str(value)
+        if cookie_header and not any(k.lower() == "cookie" for k in headers):
+            headers["Cookie"] = cookie_header
+        try:
+            if _HAVE_CURL_CFFI:
+                submit = curl_cffi.request(
+                    "POST", str(leg2["url"]), headers=headers,
+                    content=body_str.encode("utf-8"), timeout=60.0,
+                    impersonate=_IMPERSONATE, default_headers=False,
+                    allow_redirects=True)
+            else:
+                submit = requests.post(str(leg2["url"]), headers=headers,
+                                       data=body_str.encode("utf-8"), timeout=60.0)
+        except _STREAM_EXC as exc:
+            return None, f"V0_CHAT_SUBMIT_HTTP: {exc}"
+        if submit.status_code != 200:
+            return None, f"V0_CHAT_SUBMIT_{submit.status_code}: {submit.text[:120]}"
+
     if not chat_id:
         return None, "V0_NO_CHAT_ID"
     started_ms = started_ms or int(time.time() * 1000)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -76,6 +77,71 @@ def test_universal_replay_extracts_duckchat_message_sse_frames() -> None:
     text, error = client._extract_response(body)
     assert text == "58"
     assert error is None
+
+
+def test_v0_pipeline_selects_and_substitutes_real_chat_submit_leg() -> None:
+    from universal_replay import _leg2_for
+
+    raw = {"recorded_exchanges": [
+        {"url": "https://v0.app/chat/api/send", "request_body": '{"chat_id":"slug-id"}'},
+        {"url": "https://v0.app/chat/api/send", "request_body": '{"promptText":"Reply exactly one word: Omni."}'},
+        {"url": "https://v0.app/chat/api/chat", "request_body":
+         '{"messageId":"old","chatId":"bare-id","messageContent":{"parts":[{"content":"Reply exactly one word: Omni."}]}}'},
+    ]}
+
+    leg = _leg2_for("v0.app", raw, "Reply with only the number: 41 + 17")
+    assert leg is not None
+    assert leg["url"].endswith("/chat/api/chat")
+    assert '"chatId":"bare-id"' in leg["request_body"]
+    assert "Reply with only the number: 41 + 17" in leg["request_body"]
+
+
+def test_v0_followup_replays_submit_then_polls_new_assistant(monkeypatch) -> None:
+    import multistep_replay as ms
+
+    posted = {}
+
+    class _SubmitResponse:
+        status_code = 200
+        text = "ok"
+
+    class _PollResponse:
+        status_code = 200
+
+        def __init__(self):
+            self.text = json.dumps({"value": {"newMessages": [{
+                "role": "assistant",
+                "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "content": ["text", {}, "58"],
+            }]}})
+
+    def fake_post(url, headers=None, data=None, timeout=None):
+        posted["url"] = url
+        posted["body"] = json.loads(data.decode("utf-8"))
+        return _SubmitResponse()
+
+    monkeypatch.setattr(ms, "_HAVE_CURL_CFFI", False)
+    monkeypatch.setattr(ms.requests, "post", fake_post)
+    monkeypatch.setattr(ms, "_stream_get", lambda *args, **kwargs: _PollResponse())
+
+    leg = {
+        "url": "https://v0.app/chat/api/chat",
+        "request_headers": {"content-type": "application/json"},
+        "request_body": json.dumps({
+            "messageId": "old-message",
+            "chatId": "bare-id",
+            "messageContent": {"parts": [{"type": "mdx", "content": "Reply exactly one word: Omni."}]},
+        }),
+    }
+    answer, error = ms.v0_followup(
+        "ok", {"User-Agent": "test"}, "", timeout=1,
+        chat_id="bare-id", started_ms=int(time.time() * 1000) - 1000, leg2=leg)
+    assert error is None
+    assert answer == "58"
+    assert posted["url"].endswith("/chat/api/chat")
+    assert posted["body"]["messageId"] != "old-message"
+    assert posted["body"]["chatId"] == "bare-id"
+    assert posted["body"]["messageContent"]["parts"][0]["content"] == "Reply exactly one word: Omni."
 
 
 def test_paths_are_read_only_capability_surface() -> None:

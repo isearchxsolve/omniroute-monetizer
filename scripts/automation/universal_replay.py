@@ -124,15 +124,30 @@ def _leg2_for(provider_key: str, raw: dict, new_prompt: str):
     Returns None for single-exchange captures (classic replay path unchanged) and for
     providers whose follow-up is not exchange-driven. chatgpt.com is the current
     consumer: prepare (leg 1, replayed as the recorded exchange) mints the conduit
-    token, conversation (leg 2) carries the actual message."""
-    if provider_key != "chatgpt.com":
-        return None
+    token, conversation (leg 2) carries the actual message. v0.app records a small
+    analytics pair followed by the real `/chat/api/chat` submit; the final leg is the
+    one that must be replayed before polling for the assistant message."""
     seq = raw.get("recorded_exchanges") or []
-    if len(seq) < 2:
-        return None
-    leg2 = dict(seq[1])
-    leg2["request_body"] = substitute_prompt(str(leg2.get("request_body") or ""), new_prompt)
-    return leg2
+    if provider_key == "chatgpt.com":
+        if len(seq) < 2:
+            return None
+        leg2 = dict(seq[1])
+        leg2["request_body"] = substitute_prompt(str(leg2.get("request_body") or ""), new_prompt)
+        return leg2
+    if provider_key == "v0.app":
+        # Prefer the actual chat submit over the `/chat/api/send` telemetry legs.  A
+        # few older captures have only two exchanges, so choose the last one as the
+        # least surprising fallback and let v0_followup fail honestly if it is not a
+        # chat submit.
+        candidates = [e for e in seq if "/chat/api/chat" in str(e.get("url") or "")]
+        if not candidates:
+            candidates = seq[1:]
+        if not candidates:
+            return None
+        leg2 = dict(candidates[-1])
+        leg2["request_body"] = substitute_prompt(str(leg2.get("request_body") or ""), new_prompt)
+        return leg2
+    return None
 
 
 class UniversalSessionClient:
@@ -910,12 +925,20 @@ class UniversalSessionClient:
             # request URL query, bootstrap body -- then give up honestly.
             _chat_id = None
             import re as _re_id
+            _follow_leg = _leg2_for(provider_key, self.raw, new_prompt)
             # The recorded Referer often names the chat path (/.../chat/<id>) even when the
-            # send body's own chat_id field is empty -- measured on v0.app.
+            # send body's own chat_id field is empty -- measured on v0.app.  V0's final
+            # `/chat/api/chat` leg carries the canonical bare chatId, so inspect it before
+            # the first `/chat/api/send` acknowledgement (which may contain a slug prefix).
             _referer = next((v for k, v in self.headers.items() if k.lower() == "referer"), "")
-            for _src in (new_body_str, _up.urlsplit(self.url).query, _referer, r.text):
+            _id_sources = []
+            if provider_key == "v0.app" and _follow_leg:
+                _id_sources.append(_follow_leg.get("request_body") or "")
+            _id_sources.extend((new_body_str, _up.urlsplit(self.url).query, _referer, r.text))
+            for _src in _id_sources:
                 try:
-                    _cand = json.loads(_src).get("chat_id")
+                    _obj = json.loads(_src)
+                    _cand = _obj.get("chatId") or _obj.get("chat_id")
                     if _cand:
                         _chat_id = str(_cand)
                         break
@@ -941,7 +964,7 @@ class UniversalSessionClient:
                 # first response threaded forward. The leg-2 body gets the same sentinel
                 # substitution leg-1 got, so the caller's prompt -- not the recorded
                 # probe -- is what the pipeline answers.
-                leg2=_leg2_for(provider_key, self.raw, new_prompt))
+                leg2=_follow_leg)
             if follow_text:
                 # The no-tool envelope is never the model's words (see unwrap_no_tool_text).
                 follow_text = unwrap_no_tool_text(follow_text) or follow_text
@@ -951,6 +974,14 @@ class UniversalSessionClient:
                     "status": r.status_code,
                     "raw": r.text,
                 }
+            if provider_key == "v0.app" and follow_err:
+                # V0's bootstrap is only an acknowledgement. Returning it as the
+                # assistant answer would turn a dropped/failed submit into false
+                # capacity, so surface the follow-up failure instead.
+                e = ChatError("UPSTREAM_ERROR", follow_err)
+                e.raw = r.text
+                e.status = r.status_code
+                raise e
             # follow-up failed: fall through to normal extraction so the bootstrap
             # is at least reported honestly rather than swallowed.
 
