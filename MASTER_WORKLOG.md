@@ -15868,3 +15868,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Capacity delta.** The fleet ledger now reports **15 admitted chat files** and **5 admitted video files** (**20 total admitted sessions**). The primary Poe capture is a distinct file-level chat seat; remaining states are 22 `LAW3_REPLAY_PROOF_REQUIRED` chat artifacts and 7 `VIDEO_PROOF_REQUIRED` video artifacts. The strict 25-chat / 23-video target remains incomplete.
 
 **Verification.** The exact-file report recorded HTTP 200 / `REPLAY_OK` / answer `58`. The focused capability and parser tests remain green from the preceding fixes. No video generation, paid operation, browser interaction, secret access, or service restart occurred.
+### [2026-09-09 16:30] #1782 - 1min.AI replay rejected expired token
+
+**Exact-file action.** Ran one bounded `fleet_graduation.py --apply --verify-and-admit "session_1min_ai.json"` unit against the captured 1min.AI chat exchange. The standard computed Law-3 probe was sent directly through the existing UniversalSessionClient; no Chrome profile, OmniRoute process, video route, or other seat artifact was touched.
+
+**Observed result.** `api.1min.ai` returned HTTP 401 with the provider body `TOKEN_EXPIRED` / `Token Expired`. `replay_check.py` classified the artifact as `AUTH` (`auth refused (401) -- cookie alone is not enough`) and the coordinator refused promotion. The exact session file and replay registry were left unchanged; only the non-secret diagnostic report `state/scratch/fleet_graduation_session_1min_ai.json` was written.
+
+**Classification and capacity.** This is a stale credential/send-time authentication gap, not evidence of provider death or a keep-alive failure. A fresh dedicated-profile sign-in and capture is required before another replay; the operator's live Chrome credentials remain out of scope. Admitted capacity remains **15 chat / 5 video** (20 total). The strict 25-chat / 23-video target remains incomplete.
