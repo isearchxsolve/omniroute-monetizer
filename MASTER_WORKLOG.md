@@ -15714,3 +15714,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Human-in-the-loop stage.** The launcher presents Kie, Segmind, and Novita sequentially in the isolated profile and pauses for the operator's normal visual/manual action. It may reuse the manually established Google SSO session where a provider supports it. The operator must handle any account selection/password/OTP/CAPTCHA themselves, can skip any card/paywall/captcha wall, and must not supply any secret in chat. No automation tries to complete protected authentication.
 
 **What is not claimed.** Launching the workflow does not prove any provider session/key, provider credit, capture, computed completion, seat graduation, capacity increase, video result, or configuration change. No inference prompt/video job, secret extraction, database action, OmniRoute restart, shim restart, or video-router restart occurred. Consumer capacity remains 11 chat / 5 video until a future capture and Law-3 proof succeeds.
+### [2026-09-09 15:39] #1764 - Verified wait: isolated Kie/Segmind/Novita onboarding helper is live
+
+**Verified wait handle.** Process-lineage-only poll confirms the known isolated onboarding CMD wrapper and its two helper interpreter processes remain live with the exact `--only kie,segmind,novita --sso-profile` command. This is an active user-guided workflow, not an assumption from a report or state file.
+
+**Deliberate non-action.** Did not connect to the profile, inspect a page/DOM/session, collect a cookie/key, navigate, focus, click, type, or submit. The workflow is deliberately paused for the operator's visual/manual action at its current provider. The isolated profile boundary and the scheduled video-seat/normal Chrome boundaries remain unchanged.
+
+**What is not claimed.** A waiting helper does not prove Kie, Segmind, or Novita authentication, API-key creation, provider balance, completion/capture/replay proof, graduation, or capacity increase. No spend, secret access, configuration/DB mutation, or service restart occurred. Consumer capacity remains 11 chat / 5 video.
