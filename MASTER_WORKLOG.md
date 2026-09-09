@@ -15976,3 +15976,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Verification.** Added regression coverage for both branches (explicit credit wall stays `WALL`; unanswered project stream becomes `PIPELINE`). `pytest tests/test_omniroute_capability_matrix.py -q` -> **24 passed**; `pytest scripts/automation/test_replay_check_law3.py -q` -> **10 passed**; `py_compile scripts/automation/replay_check.py` and `git diff --check` passed. No code path changed Chrome, OmniRoute, or video.
 
 **Capacity effect.** Genspark remains unadmitted because the account is credit-exhausted; this is not sellable headroom until credits/entitlement are restored. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target. The exact provider response was not logged; only its non-secret wall classification was retained.
+### [2026-09-09 17:02] #1796 - Genspark exact retry now records credit wall
+
+**Exact-file retry.** Reran one bounded `fleet_graduation.py --apply --verify-and-admit "session_genspark_ai.json"` after the classifier-precedence fix. The provider was contacted once with the standard computed Law-3 prompt; no Chrome, OmniRoute, video, or other session was touched.
+
+**Observed result.** Genspark again returned HTTP 200 agent/keepalive SSE, but the extracted assistant text was the provider's credit-exhaustion message and did not contain `58`. The corrected report now records `WALL` (`wall text in reply -- left alone, not retried`) rather than `PIPELINE`; no promotion occurred.
+
+**Classification and capacity.** This seat is currently blocked by provider credits/entitlement, not a replay parser or transport gap. It cannot contribute sellable chat headroom until the account window/credits are restored. Admitted capacity remains **15 chat / 5 video** (20 total), below the strict 25/23 target.
