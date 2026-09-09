@@ -1,4 +1,4 @@
-# Video-lane capacity and expansion — 2026-09-09
+# Video-lane capacity and expansion — 2026-09-09 09:22 IST
 
 This is the current, evidence-bounded capacity report for the designated consumer endpoint:
 `http://127.0.0.1:8190/v1`.
@@ -7,22 +7,22 @@ This is the current, evidence-bounded capacity report for the designated consume
 
 The task-owned shim is running `2026-09-09-session-heartbeat-v1`. Its health payload reports a
 six-hour idle window and one stateless chat heartbeat at most every five minutes; the latest live
-read showed **4 beats / 0 failures**. The heartbeat is deliberately not a video generator: it never
-drives Chrome and never spends video credits.
+read showed **0 beats / 0 failures / 0 skipped-busy** (`no beat needed yet`). The heartbeat is
+deliberately not a video generator: it never drives Chrome and never spends video credits.
 
-The current local pool has **49 session artifacts**, of which **15 are dispatchable**:
+The current local pool has **49 session artifacts**, of which **16 are dispatchable**:
 
 | Lane | Dispatchable/admitted session files | Current evidence |
 |---|---:|---|
-| Chat | 10 | Exact-file Law-3 replay admissions |
+| Chat | 11 | Exact-file Law-3 replay admissions |
 | Video | 5 | Exact-file video admissions and consumer wiring |
 
 The five admitted video files are: Digen (stateless API), RTST seat2 (stateless API), public LTX
 Space (zero-auth API), and two Google Flow Chrome seats (both PRO, Chrome-backed). The two Flow
 seats are proven by submit → poll → downloadable MP4 evidence; the Chrome tabs remain a runtime
-dependency. `GET /v1/models` currently returns 438 rows / 437 unique IDs, including 351 admitted
-OmniRoute chat rows and 70 OmniRoute video-candidate rows. The 70 candidate rows are explicitly
-**UNPROBED inventory**, not video capacity.
+dependency. `GET /v1/models` currently returns **439 rows / 438 unique IDs**, including the
+`video/auto` alias and per-provider aliases. Catalog rows and unprobed candidates are explicitly
+**not video capacity** until they have exact provider proof and a pinned consumer proof.
 
 ## Minutes per month: what can honestly be stated
 
@@ -47,7 +47,8 @@ On a 30-day month, that gives a *quota ceiling* of 2,500 credits / 125 eight-sec
 **16.7 minutes per Pro account**, if the account is actually entitled and used every day. Thus the
 two already-proven Pro Flow accounts have a planning ceiling of about **33.3 minutes/month** from
 the recurring Flow allocation, before subtracting any already-consumed balance. This is a planning
-ceiling, not a current-balance assertion.
+ceiling, not a current-balance assertion. The latest read-only UI balance across all four Flow tabs
+is **30 credits (0 + 15 + 0 + 15)**; it is not a monthly quota measurement.
 
 The older local estimate of **about 25–30 minutes/month** for the two-account Flow + free-tier mix
 is retained as a historical estimate only. It must not be presented as the current guaranteed
@@ -59,22 +60,24 @@ figure above; RTST is currently below one cheapest clip.
 **Yes, the architecture can expand**, but expansion is evidence-gated per account/provider:
 
 1. **Four Google Flow accounts (two Pro, two normal).** The pool already supports one exact session
-   file per account and hot-reloads new files without a shim restart. The two additional normal
-   accounts are not currently admitted/proven. A safe expansion requires each account to be signed
-   in on its own dedicated automation profile, a real Flow submit → poll → MP4 proof, and a pinned
+   file per account and hot-reloads new files without a shim restart. The live UI/tab check now
+   finds all four project tabs and reports them `ready`, but only the two Pro seats are admitted with
+   submit → poll → downloadable-MP4 proofs. The two additional accounts are therefore **ready but
+   not graduated**. A safe expansion requires each account to be signed in on its own dedicated
+   automation profile, a real Flow submit → poll → MP4 proof, and a pinned
    `video/labs.google/auto` consumer proof attributed to that exact session file. Using the official
    50-daily-credit rule, two normal accounts add a planning ceiling of about 20 minutes/month at
-   8-second Fast (75 clips × 8 seconds each per account), making all-four planning ceiling about
+   8-second Fast (75 clips × 8 seconds each per account), making the all-four planning ceiling about
    **53.3 minutes/month** (2 Pro + 2 normal, 30-day month). This assumes separate entitled accounts,
    continuous daily use, Fast 8-second generations, and no policy/quota changes; it is not yet an
    achieved capacity claim.
 
-2. **OmniRoute providers.** The chat side currently has 351 exact-file consumer-admitted rows.
-   Native Omni video currently has **zero admitted video routes**. The 70 published video-candidate
-   rows need provider-by-provider direct video proof, correct request-shape/credential handling,
-   and a second consumer proof through `:8190` before they can count. A catalog row or a successful
-   chat route is not video capacity. Provider credentials, quotas, and any payment/plan walls remain
-   terminal until the operator supplies a legitimate entitlement.
+2. **OmniRoute providers.** The chat side currently has **11 exact-file consumer-admitted seat
+   routes**. Native Omni video currently has **zero admitted video routes**. Published model rows
+   and candidate aliases need provider-by-provider direct video proof, correct request-shape/
+   credential handling, and a second consumer proof through `:8190` before they can count. A
+   catalog row or a successful chat route is not video capacity. Provider credentials, quotas, and
+   any payment/plan walls remain terminal until the operator supplies a legitimate entitlement.
 
 3. **Keepalive boundary.** The new shim heartbeat prevents idle stateless session jars from going
    stale by making one bounded real chat request and persisting any rotated cookie. It cannot refresh
@@ -83,17 +86,19 @@ figure above; RTST is currently below one cheapest clip.
    own the `:8190` session files.
 
 The video-router task on `:8189` remains disabled under the documented crash-containment decision.
-No video generation was submitted to manufacture a number during this report.
+No video generation was submitted to manufacture a number during this report. The current
+seat-owned Flow queue samples remain provider-side `scheduled/waiting` with no newly correlated MP4;
+they are not counted as additional capacity.
 
-## Expansion preparation completed at 04:14 IST
+## Expansion preparation completed at 09:22 IST
 
 The live-profile guard now distinguishes a stale operator `DevToolsActivePort` marker from a real
 operator listener by checking the reachable listener's process and resolved user-data directory.
-The normal navigation-only wake path brought dedicated automation Chromes up on ports 9222–9226;
-it did not open the operator profile. Read-only target inspection found Flow and RTST tabs on 9222,
-a Flow page without an access token on 9223, Google's cookie-rotation frame on 9224, Google's
-account chooser on 9225, and the admitted P2 project on 9226 with its own cookie-rotation frame.
-Those auth/session states are not video capacity. The guard/video regression suite is 12/12 green.
-The two unadmitted Flow declarations and all OmniRoute native video candidates remain outside the
-five-seat admission count until they pass the real submit -> poll -> MP4 and pinned `:8190`
-consumer proofs.
+The migrated-tab matcher now accepts `flow.google.com/project/<id>` as well as the rollback-era
+`labs.google/fx/tools/flow` form, and the UI probe no longer treats the retired relative session
+endpoint's HTML shell as a JSON credential. Read-only target inspection found visible composers on
+all four Flow project tabs (9222, 9223, 9224, 9225) and balances 0/15/0/15. Those auth/session
+states are readiness evidence, not video capacity. The migration and error-body regression suites
+are green (25 focused Flow/probe tests; 26 focused replay/fleet tests). The two unadmitted Flow
+declarations and all OmniRoute native video candidates remain outside the five-seat admission count
+until they pass the real submit → poll → MP4 and pinned `:8190` consumer proofs.
