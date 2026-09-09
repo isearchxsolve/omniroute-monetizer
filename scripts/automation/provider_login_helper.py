@@ -76,6 +76,10 @@ PROFILE_TAG = "providers"
 SSO_PROFILE_TAG = "providers_sso"
 REPORT = PROJECT_ROOT / "state" / "harvest" / "login_status.json"
 
+
+class ProfileInUse(RuntimeError):
+    """A managed/interactive Chrome already owns the requested robot profile."""
+
 # ---------------------------------------------------------------------------------------
 # Targets. `tier` explains WHY a provider is worth the operator's time, so nobody re-argues
 # it later. Model counts are OmniRoute registry counts as of 2026-08-22.
@@ -238,10 +242,20 @@ def _classify(page, markers) -> str:
     return "UNCLEAR"
 
 
-def _open_browser(pw, headed: bool = True):
+def _open_browser(pw, headed: bool = True, profile_tag: str = PROFILE_TAG):
     """Persistent context on the ROBOT's profile. Guard-checked twice, on purpose."""
-    udd = safe_profile_dir(PROFILE_TAG)
+    udd = safe_profile_dir(profile_tag)
     assert_safe(udd, who="provider_login_helper")
+    in_use = _chrome_using_profile(udd)
+    if in_use > 0:
+        raise ProfileInUse(
+            f"{profile_tag!r} is already open by {in_use} Chrome process(es); "
+            "refusing to reuse or control that profile"
+        )
+    if in_use < 0:
+        raise ProfileInUse(
+            f"could not verify whether {profile_tag!r} is already open; refusing to launch"
+        )
     _say("ok", f"robot's own browser profile: {udd}")
 
     ctx = pw.chromium.launch_persistent_context(
@@ -264,7 +278,7 @@ def _board(ctx):
     return page
 
 
-def run_status(only: list[str] | None) -> int:
+def run_status(only: list[str] | None, profile_tag: str = PROFILE_TAG) -> int:
     """Read-only: report what the robot's profile is already logged into."""
     from playwright.sync_api import sync_playwright
 
@@ -273,7 +287,7 @@ def run_status(only: list[str] | None) -> int:
 
     with sync_playwright() as pw:
         install()
-        ctx = _open_browser(pw, headed=True)
+        ctx = _open_browser(pw, headed=True, profile_tag=profile_tag)
         _board(ctx)
         page = ctx.new_page()
         try:
@@ -291,11 +305,15 @@ def run_status(only: list[str] | None) -> int:
         finally:
             ctx.close()
 
-    _write_report(results, mode="status")
+    _write_report(results, mode="status", profile_tag=profile_tag)
     return 0
 
 
-def run_interactive(only: list[str] | None, do_google: bool) -> int:
+def run_interactive(
+    only: list[str] | None,
+    do_google: bool,
+    profile_tag: str = PROFILE_TAG,
+) -> int:
     from playwright.sync_api import sync_playwright
 
     targets = [t for t in TARGETS if not only or t["name"] in only]
@@ -322,7 +340,7 @@ def run_interactive(only: list[str] | None, do_google: bool) -> int:
     with sync_playwright() as pw:
         install()
         try:
-            ctx = _open_browser(pw, headed=True)
+            ctx = _open_browser(pw, headed=True, profile_tag=profile_tag)
         except LiveProfileRefused as exc:
             _say("PROBLEM", "the guard refused the profile path. That means this script is")
             _say("PROBLEM", "wrong, not the guard. Nothing was opened. Details below.")
@@ -430,18 +448,18 @@ def run_interactive(only: list[str] | None, do_google: bool) -> int:
             except Exception:
                 pass
 
-    _write_report(results, mode="interactive")
+    _write_report(results, mode="interactive", profile_tag=profile_tag)
     _summary(results)
     return 0
 
 
-def _write_report(results: dict, mode: str) -> None:
+def _write_report(results: dict, mode: str, profile_tag: str = PROFILE_TAG) -> None:
     """Persist states only. There is nothing secret in here, and that is deliberate."""
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": _now(),
         "mode": mode,
-        "profile": str(safe_profile_dir(PROFILE_TAG)),
+        "profile": str(safe_profile_dir(profile_tag)),
         "note": "States only. No passwords, cookies, tokens or API keys are ever stored here.",
         "results": results,
         "dropped": {name: why for name, why in DROPPED},
@@ -720,8 +738,8 @@ def main(argv=None) -> int:
                     help="open the robot's profile in PLAIN Chrome so you can sign into "
                          "Google by hand (Google refuses automated browsers)")
     ap.add_argument("--sso-profile", action="store_true",
-                    help="with --manual-signin, use the separate human-only providers_sso "
-                         "profile instead of the scheduled providers video seat")
+                    help="use the separate human-only providers_sso profile instead of "
+                         "the scheduled providers video seat")
     ap.add_argument("--harvest-browser", action="store_true",
                     help="open the robot's profile in PLAIN Chrome WITH a local debugging "
                          "port (leave it open; run auto_key_harvester with --attach)")
@@ -766,13 +784,18 @@ def main(argv=None) -> int:
         return 3
 
     try:
+        profile_tag = SSO_PROFILE_TAG if args.sso_profile else PROFILE_TAG
         if args.status:
-            return run_status(only)
-        return run_interactive(only, do_google=args.google)
+            return run_status(only, profile_tag=profile_tag)
+        return run_interactive(only, do_google=args.google, profile_tag=profile_tag)
     except LiveProfileRefused as exc:
         _say("PROBLEM", "REFUSED by chrome_live_guard. The guard is right; this code is wrong.")
         print(exc)
         return 2
+    except ProfileInUse as exc:
+        _say("YOU", "the requested dedicated profile is already open. Nothing was controlled.")
+        _say("info", str(exc))
+        return 4
     except KeyboardInterrupt:
         print()
         _say("info", "stopped by operator. Nothing was changed in your own Chrome.")
