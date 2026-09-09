@@ -15889,3 +15889,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** `chat-api-v3.innerai.com` answered with HTTP 402 and an `agent_limit_reached` error indicating the account's daily window was exhausted. The universal verifier surfaced this as `NO_ANSWER` because the HTTP error was not an assistant message (`http_error: http error 402`); the coordinator correctly refused promotion. The exact capture and replay registry were left unchanged; only the redacted diagnostic report `state/scratch/fleet_graduation_session_inner_ai_web.json` was written.
 
 **Classification and capacity.** This is a provider quota/entitlement wall, not an HTTP transport outage or parser defect. Keep-alive cannot create additional daily allowance; the artifact can only be reconsidered after the provider window resets or an eligible plan/account is supplied. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
+### [2026-09-09 15:43] #1785 - Felo AI replay rejected unauthorized session
+
+**Exact-file action.** Ran one bounded `fleet_graduation.py --apply --verify-and-admit "session_felo_ai_web.json"` unit with the computed Law-3 probe. The request used only the captured Felo AI artifact; Chrome, OmniRoute, video, and unrelated seats were not touched.
+
+**Observed result.** `felo.ai` returned HTTP 401 with a structured `unauthorized` error. `replay_check.py` classified the file as `AUTH` (`auth refused (401) -- cookie alone is not enough`) and the coordinator refused admission without retrying. The session file and replay registry remain unchanged; only the non-secret report `state/scratch/fleet_graduation_session_felo_ai_web.json` was generated.
+
+**Classification and capacity.** This is an expired/missing send-time authentication gap, not proof of provider death or rate limiting. A new dedicated-profile login and capture is required; operator Chrome credentials remain prohibited. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
