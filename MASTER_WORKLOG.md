@@ -15951,3 +15951,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Verification.** Added regression assertions for V0 final-leg status extraction. `pytest tests/test_omniroute_capability_matrix.py -q` -> **23 passed**; `py_compile` for `universal_replay.py` and `multistep_replay.py` passed; `git diff --check` passed. No Chrome profile or OmniRoute service was touched during the code change.
 
 **Capacity effect.** V0 is still not admitted because its captured anti-bot/session token is rejected on the real submit leg. The ledger remains **15 admitted chat / 5 admitted video** (20 total), below the 25/23 target. A fresh dedicated-profile V0 capture is required for another proof attempt; the operator's live Chrome credentials remain prohibited.
+### [2026-09-09 16:34] #1793 - V0 pipeline now reports the real final-leg 401
+
+**Exact-file retry.** Reran one bounded `fleet_graduation.py --apply --verify-and-admit "session_v0_by_vercel_(v0_app).json"` after the pipeline/error-reporting fixes. The first recorded `/chat/api/send` still returned HTTP 200 `ok`; the adapter then replayed the final `/chat/api/chat` leg with a fresh message ID and polled the conversation as designed.
+
+**Observed result.** The real final submit returned HTTP 401, and the coordinator now surfaced the correct `AUTH` verdict (`auth refused (401) -- cookie alone is not enough`) instead of the misleading `NO_ANSWER: ok`. No promotion occurred; the exact non-secret report `state/scratch/fleet_graduation_session_v0_by_vercel_(v0_app).json` records the corrected classification.
+
+**Classification and capacity.** V0's remaining blocker is the captured anti-bot/session credential (`x-is-human` and associated account state), not the multi-step transport. This is a fresh dedicated-profile capture/re-auth requirement; it is not evidence that V0 itself is dead. Admitted capacity remains **15 chat / 5 video** (20 total), below the strict 25/23 target.
