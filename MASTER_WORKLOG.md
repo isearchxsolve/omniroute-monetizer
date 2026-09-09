@@ -15345,3 +15345,11 @@ The explicit label filter selected only `niloy-1` (9223) and `flow-seat3` (9225)
 **Verification.** `py_compile` passed for the changed endpoint and its API test module. Added a hermetic API regression test with a fake canonical catalogue; the retirement/catalogue subset passed **5 tests**. The new test proves `video/labs.google/auto` is surfaced, `video/auto` is excluded from provider rows, and the response transport is exactly `http://127.0.0.1:8190/v1`. `git diff --check` reported no source whitespace errors.
 
 **Safety / boundary.** No live consumer or provider request, browser action, credential mutation, database edit, service restart, or video spend occurred. The prior `OMNIROUTE_VIDEO_BASE_URL`/`:8189` path remains only in supply-side/diagnostic code and is no longer reachable through this customer API endpoint. The next component will remove direct-registry utility generation handlers from the remaining OiiOii API modules.
+
+### [2026-09-09 10:00] #1726 - Retired OiiOii direct image and audio generation paths
+
+**Component changed.** Replaced `backend/app/api/v1/endpoints/images.py` and `audio.py` with authenticated compatibility stubs. Their former registry calls, external URL fallback, and untracked direct generation behavior are removed. The routes retain request models and stable paths solely to return the common HTTP 410 migration response. Neither endpoint can construct a provider, emit a fake completed artifact, or bypass the `http://127.0.0.1:8190/v1` consumer boundary even when old development flags are present.
+
+**Verification.** Both modules passed `py_compile`. The OiiOii API retirement subset passed **4 tests** (legacy project pipeline, image, video, and audio paths) after the prior declared multipart dependency was installed in the repository virtual environment. A focused source scan found no direct provider imports or calls in either module, and the API responses retained `detail.code=legacy_route_retired` with `/api/v1/films` as the replacement.
+
+**Safety / boundary.** No live request, browser action, credential mutation, database edit, service restart, or video spend occurred. The unrelated `backend/test.db` change remains unstaged. The next component will centralize OiiOii's canonical consumer base/model validation and production mock policy for the durable film clients.
