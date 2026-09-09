@@ -15664,3 +15664,12 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Safety boundary.** The browser remains operator-controlled. No DevTools connection, page/read DOM operation, cookie/storage access, screenshot, navigation, focus, click, type, submit, credential capture, or provider request occurred during or after the wait. The active video-seat Chrome and all operator Chrome profiles were not targeted.
 
 **What is not claimed.** The open process does not prove Google SSO completion, a provider session, key, capture, computed replay proof, graduation, spend, MP4 result, or capacity increase. Consumer capacity remains 11 chat / 5 video.
+### [2026-09-09 15:10] #1758 - Manual SSO handoff remains the active capacity-expansion blocker
+
+**Third verified wait observation.** Re-polled the exact known top-level Chrome process for `state/automation_profiles/providers_sso`; it remains live as the same dedicated manual SSO browser. This is the third consecutive verified process-state observation after the isolated window was opened. It proves the human-in-the-loop step is still pending; it does not infer a provider or Google account state from process existence.
+
+**Why automation stops here.** Completing Google SSO requires the operator to enter account credentials and potentially respond to account-security challenges in the dedicated plain browser. Project Law 5 and Chrome isolation rules prohibit this system from entering passwords/OTPs, solving CAPTCHA, reading session cookies, or using any normal Chrome profile as a substitute. Closing the active dedicated browser is also an explicit handoff condition before safe post-login onboarding can begin. No alternate automated action can establish genuine provider-session capacity without violating those rules.
+
+**What remains ready.** The isolated `providers_sso` launcher and its collision guard are committed and tested; the browser remains open for the operator. After the operator signs in, closes it, and confirms completion, the next safe stage is screenshot-first, one-provider-at-a-time SSO onboarding and fresh computed graduation checks. Until then the factual endpoint capacity remains 11 chat / 5 video, below the 25 / 23 mandate.
+
+**What is not claimed.** No Google SSO/provider authentication, key, capture, replay proof, graduation, spend, video job, MP4 result, capacity increase, configuration/DB mutation, or service restart occurred. No password, OTP, CAPTCHA response, cookie, or token was accessed or logged.
