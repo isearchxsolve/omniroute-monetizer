@@ -15917,3 +15917,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** `veoaifree.com` returned HTTP 403 (body `-1`). `replay_check.py` classified the artifact as `AUTH` (`auth refused (403) -- cookie alone is not enough`) and the coordinator refused admission without retries. The capture and replay registry remain unchanged; only the non-secret report `state/scratch/fleet_graduation_session_veoaifree.json` was written.
 
 **Classification and capacity.** This is an invalid/expired session or missing send-time credential gap, not proof of provider death. A fresh dedicated-profile capture is required before reconsideration; live operator Chrome credentials cannot be used. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
+### [2026-09-09 16:02] #1789 - VEOAIFree web capture landed on unauthenticated HTML
+
+**Exact-file action.** Ran one bounded `fleet_graduation.py --apply --verify-and-admit "session_veoaifree_chat_web.json"` unit with the standard computed Law-3 prompt. The request was restricted to this second VEOAIFree capture; Chrome, OmniRoute, video, and all other seats were untouched.
+
+**Observed result.** The provider returned HTTP 200, but the body was the site's HTML/login surface rather than an assistant response. The verifier correctly classified this as `AUTH` (`auth refused (200) -- cookie alone is not enough`) and refused promotion. The capture and replay registry were not modified; only the non-secret report `state/scratch/fleet_graduation_session_veoaifree_chat_web.json` was written.
+
+**Classification and capacity.** This is an unauthenticated landing-page/session gap, not proof that VEOAIFree is dead. A fresh dedicated-profile sign-in/capture is required; do not borrow the operator's live Chrome credentials. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
