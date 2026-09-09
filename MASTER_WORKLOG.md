@@ -15737,3 +15737,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Recovery path.** The user can resume immediately by completing the visible provider screen and pressing Enter in the black command window. When the exact helper process exits, the next action is a safety check, a review of its state-only report, then serial provider validation/capture/proof. No work needs to be redone.
 
 **What is not claimed.** No Kie/Segmind/Novita authentication, key, credit, capture, replay proof, graduation, spend, capacity increase, configuration/DB mutation, or service restart occurred. The consumer endpoint remains 11 chat / 5 video, below the 25 / 23 target.
+### [2026-09-09 15:55] #1767 - Visual diagnosis attempted; isolated onboarding window is not exposed to the screen connector
+
+**Operator request.** The operator asked to check the stalled onboarding flow. Confirmed by process-lineage that the isolated helper remains live. Used the authorized Windows computer-use inspection path only to enumerate visible browser surfaces; it exposed only the normal Chrome extension browser with existing Google Flow/about:blank tabs and no `providers_sso` onboarding tab/window.
+
+**Safety decision.** Did not select, attach to, inspect, focus, navigate, or operate any of the exposed normal Flow Chrome tabs because they are not the isolated onboarding window. The dedicated profile is intentionally absent from this connector's browser inventory, so visual diagnosis cannot be completed safely from that surface. Requested a user screenshot containing the small provider window and the black command window instead.
+
+**What is not claimed.** No provider login/account state, DOM, cookie, credential, capture, proof, graduation, spend, capacity change, or service/configuration action was observed or performed. The active helper remains user-guided; endpoint capacity remains 11 chat / 5 video.
