@@ -15548,3 +15548,13 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Admission-ledger reconciliation.** A fresh offline `fleet_graduation.py` inventory independently reports 49 artifacts: 11 admitted chat files, 5 admitted video files, 16 total admitted pure-Python files, 26 chat files still requiring Law-3 replay proof, and 7 video files still requiring spend-gated submit->poll->MP4 proof. The active endpoint therefore satisfies the canonical transport/alias/persistence boundary, but it does **not** yet meet the originally requested 25-chat / 23-video admission target.
 
 **Safety / what is not claimed.** No chat completion, video submission, browser action, provider request, credential/configuration mutation, database edit, or service restart occurred. This is an endpoint/capacity measurement, not a claim that catalogue rows, queued browser jobs, raw session artifacts, or model discovery are sellable capacity.
+
+### [2026-09-09 13:31] #1747 - SambaNova pending replay classified as invalid-token authentication
+
+**Component / fresh proof.** Ran one bounded Law-3 unit through `fleet_graduation.py --apply --verify-and-admit session_sambanova_cloud_chat.json`. The recorded HTTP exchange reached `cloud.sambanova.ai` and returned HTTP **401** in about 2.33 seconds with structured `Invalid token` information. The exact scratch verdict is `state/scratch/fleet_graduation_session_sambanova_cloud_chat.json`.
+
+**RCA classification.** This is an **expired/invalid authentication token**, not a generic endpoint transport failure, not a parse failure, and not proof that SambaNova is unavailable in a live legitimate browser session. The capture artifact has decayed. The verifier did not retry it, admit it, or interpret the error response as model text. A valid future route requires legitimate dedicated-profile reauthentication/fresh capture and a new computed proof.
+
+**Capacity conclusion from recent samples.** Four recent independent HTTP candidate outcomes now separate into one real plan wall (Aymo), one response-transport gap (Duck), and three auth-expiry outcomes (1min.ai, Felo, SambaNova). This is evidence that static artifact count is currently a poor predictor of the missing 14 chat admissions. The next productive admission work should prioritize seats with a known live credential source or an existing stateless adapter, rather than batch-probing more decayed capture files.
+
+**Safety / what is not claimed.** One chat replay request only. No browser action, password/OTP entry, video generation, credit spend, provider configuration/credential mutation, database edit, service restart, or admission promotion occurred. The final consumer endpoint remains at 11 admitted chat / 5 admitted video files.
