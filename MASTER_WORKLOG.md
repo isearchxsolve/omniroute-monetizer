@@ -15500,3 +15500,13 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Documentation change.** Updated `STATUS_2026_09_09_VIDEO_CAPACITY.md` with a time-stamped independent-provider section, including the distinction between key acceptance, model enumeration, a funded render route, and consumer admission.
 
 **Safety / what is not claimed.** No Chrome process/profile was opened, attached, or altered. No video generation was submitted, no credit was spent, no live service was restarted, and no database/provider configuration was mutated. The vault recheck modified only its gitignored verification metadata. This entry does not graduate Kie, Novita, AI Studio, or Segmind; it does not change the five admitted video-seat count or the zero immediately spendable proven Flow/RTST/Digen capacity.
+
+### [2026-09-09 13:05] #1742 - Aymo HTTP replay candidate classified as a real plan wall
+
+**Component / reason for selection.** The non-spending admission inventory showed 24 exact HTTP chat artifacts pending one-file Law-3 proof. `session_aymo_ai.json` was selected as the first bounded candidate because its prior architecture evidence showed a pure-HTTP, cookie-rotating response path. This was one computed arithmetic probe through `fleet_graduation.py --apply --verify-and-admit`, not a broad sweep and not a Chrome action.
+
+**Fresh provider result.** The direct replay sent the non-echoable `41 + 17` verification prompt once. The provider returned HTTP **403** in approximately 2.95 seconds with a structured message that the account's one-time Claude Opus 5 access had been used and an upgrade was required. The universal replay layer classified this as `WALL` from the reply/error body. It did not treat the 403 body as text, did not retry it, did not rotate a failed cookie jar, and did not promote the seat. The exact scratch verdict is `state/scratch/fleet_graduation_session_aymo_ai.json`.
+
+**Capacity / RCA classification.** This is a **real server-side plan/quota wall** for the tested entitlement, not an HTTP transport defect, a stale-byte replay inference, or evidence that the provider site is globally dead. It adds zero chat capacity and must remain stood down until a legitimate plan entitlement changes; no workaround, upgrade, captcha handling, or retry loop is appropriate.
+
+**Safety / what is not claimed.** No Chrome profile/tab was opened or attached. No video generation/credit spend, credential mutation, database edit, service restart, or registry/session-file promotion occurred. The endpoint stays at 11 admitted chat files and 5 admitted video files after this one bounded check.
