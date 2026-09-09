@@ -163,6 +163,11 @@ def classify(text: str, status: int | None, err: str | None, expect: str = "58")
         return "WALL", "wall text in reply -- left alone, not retried"
     if status == 403:
         return "AUTH", "auth refused (403) -- cookie alone is not enough"
+    # A multistep client can reject its own capture before contacting a provider
+    # (for example V0's one-leg artifact has no conversation id).  These are
+    # capture/adapter defects, not evidence that a provider consumed a nonce.
+    if low.startswith("v0_") or "v0_no_chat_id" in low:
+        return "BAD_FILE", "V0 replay adapter could not derive a conversation id from the capture"
     if status and status >= 400:
         hint = next((h for h in SINGLE_USE_HINTS if h in low), None)
         if hint:

@@ -15999,3 +15999,12 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** The websocket client failed before producing an assistant answer and the verifier classified the artifact as `AUTH` (`auth refused (in body) -- cookie alone is not enough`). The report has no recorded URL/body because the websocket handshake/stream did not yield a safe response envelope; it is stored at `state/scratch/fleet_graduation_session_microsoft_copilot_web.json`. No promotion or session mutation occurred.
 
 **Classification and capacity.** This is a captured websocket authentication/session gap, not evidence that Copilot is dead. A fresh dedicated-profile websocket capture with current bearer/session state is required; live operator Chrome credentials remain prohibited. Admitted capacity remains **15 chat / 5 video** (20 total), below the strict 25/23 target.
+### [2026-09-09 17:32] #1799 - Classified malformed V0 one-leg capture as BAD_FILE
+
+**Exact-file action.** Ran one bounded `fleet_graduation.py --apply --verify-and-admit "session_v0_by_vercel_niloy.json"` unit. The artifact contains only a single `/chat/api/send` exchange whose `chat_id` is null; it has no final `/chat/api/chat` leg from which the adapter can submit or poll. The adapter stopped without a second provider call, and the prior generic classifier labeled its own `V0_NO_CHAT_ID` diagnostic as `SINGLE_USE` because of the substring `chat_id`.
+
+**Code change.** Added an evidence-gated capture/adapter branch in `replay_check.classify()`: V0 adapter diagnostics beginning with `v0_` (including `V0_NO_CHAT_ID`) are now `BAD_FILE`, ahead of the generic single-use hint ladder. This prevents malformed captures from being mistaken for a provider nonce rejection and makes the required re-capture action explicit.
+
+**Verification.** Added a regression assertion that `classify("V0_NO_CHAT_ID", 200, None, "58")` returns `BAD_FILE` with a conversation-ID explanation. `pytest tests/test_omniroute_capability_matrix.py -vv -s` -> **25 passed**; `pytest scripts/automation/test_replay_check_law3.py -q` -> **10 passed**; `py_compile scripts/automation/replay_check.py` and `git diff --check` passed.
+
+**Capacity effect.** The Niloy V0 file is not admissible and contributes no capacity; it requires a complete fresh dedicated-profile capture. Fleet remains **15 admitted chat / 5 admitted video** (20 total), below the strict 25/23 target. No Chrome profile, OmniRoute service, or video route was touched.

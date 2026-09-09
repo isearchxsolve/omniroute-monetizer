@@ -166,6 +166,14 @@ def test_pipeline_marker_does_not_hide_explicit_credit_wall() -> None:
     assert "multi-step build target" in detail
 
 
+def test_v0_missing_chat_id_is_capture_error_not_single_use() -> None:
+    from replay_check import classify
+
+    verdict, detail = classify("V0_NO_CHAT_ID", 200, None, "58")
+    assert verdict == "BAD_FILE"
+    assert "conversation id" in detail
+
+
 def test_paths_are_read_only_capability_surface() -> None:
     assert set(PATHS) == {
         "health",
