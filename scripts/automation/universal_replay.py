@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 import time
 import requests
@@ -148,6 +149,17 @@ def _leg2_for(provider_key: str, raw: dict, new_prompt: str):
         leg2["request_body"] = substitute_prompt(str(leg2.get("request_body") or ""), new_prompt)
         return leg2
     return None
+
+
+def _followup_http_status(error: str, fallback: int | None = None) -> int | None:
+    """Extract a follow-up HTTP status from a multistep adapter error.
+
+    Bootstrap requests commonly return HTTP 200 even when the subsequent submit or
+    poll is rejected. Keeping the final-leg status attached lets replay_check classify
+    the real failure (AUTH/RATE/WALL) instead of scoring the bootstrap as NO_ANSWER.
+    """
+    m = re.search(r"V0_(?:CHAT_SUBMIT|POLL)_(\d{3})", str(error or ""))
+    return int(m.group(1)) if m else fallback
 
 
 class UniversalSessionClient:
@@ -979,8 +991,11 @@ class UniversalSessionClient:
                 # assistant answer would turn a dropped/failed submit into false
                 # capacity, so surface the follow-up failure instead.
                 e = ChatError("UPSTREAM_ERROR", follow_err)
-                e.raw = r.text
-                e.status = r.status_code
+                # Preserve the follow-up's own HTTP status for replay_check.  The
+                # bootstrap is normally HTTP 200 `ok`, so attaching it here would
+                # hide a final-leg 401/403 as a misleading NO_ANSWER result.
+                e.raw = follow_err
+                e.status = _followup_http_status(follow_err, r.status_code)
                 raise e
             # follow-up failed: fall through to normal extraction so the bootstrap
             # is at least reported honestly rather than swallowed.

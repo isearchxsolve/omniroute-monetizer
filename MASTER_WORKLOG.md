@@ -15942,3 +15942,12 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Verification.** Added regression coverage for (1) selecting/substituting the final V0 leg and (2) replaying the submit then accepting only a newer assistant message. `pytest tests/test_omniroute_capability_matrix.py -q` -> **22 passed**; `py_compile` for `universal_replay.py` and `multistep_replay.py` passed; `git diff --check` passed. No provider request was sent during this component; the exact V0 retry is the next stateful step after this committed fix.
 
 **Capacity effect.** The ledger remains **15 admitted chat / 5 admitted video** until the fixed V0 artifact produces a fresh computed `58` proof. No Chrome profile or OmniRoute service was touched.
+### [2026-09-09 16:28] #1792 - Preserved V0 final-leg auth status instead of hiding behind ack
+
+**Diagnostic action.** After the submit-and-poll adapter reached the new path, one direct redacted probe of the V0 final `/chat/api/chat` leg returned HTTP 401 with a short provider body (`2`). This proved the remaining obstacle is the captured `x-is-human`/session authorization state, not the earlier pipeline selection. The first bootstrap still returns HTTP 200 `ok`, which previously masked that final-leg refusal in the coordinator report.
+
+**Code change.** Added `_followup_http_status()` to parse V0 submit/poll statuses from adapter errors. When V0's follow-up fails, `UniversalSessionClient` now attaches the follow-up error and its HTTP status to the canonical exception instead of attaching the bootstrap `ok` body/status. This makes `replay_check.py` classify a final 401/403 as AUTH (or 429 as RATE) and prevents an acknowledgement from being mistaken for a completed answer.
+
+**Verification.** Added regression assertions for V0 final-leg status extraction. `pytest tests/test_omniroute_capability_matrix.py -q` -> **23 passed**; `py_compile` for `universal_replay.py` and `multistep_replay.py` passed; `git diff --check` passed. No Chrome profile or OmniRoute service was touched during the code change.
+
+**Capacity effect.** V0 is still not admitted because its captured anti-bot/session token is rejected on the real submit leg. The ledger remains **15 admitted chat / 5 admitted video** (20 total), below the 25/23 target. A fresh dedicated-profile V0 capture is required for another proof attempt; the operator's live Chrome credentials remain prohibited.

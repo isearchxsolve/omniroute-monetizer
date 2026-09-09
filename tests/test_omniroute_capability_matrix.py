@@ -144,6 +144,14 @@ def test_v0_followup_replays_submit_then_polls_new_assistant(monkeypatch) -> Non
     assert posted["body"]["messageContent"]["parts"][0]["content"] == "Reply exactly one word: Omni."
 
 
+def test_v0_followup_error_keeps_final_leg_http_status() -> None:
+    from universal_replay import _followup_http_status
+
+    assert _followup_http_status("V0_CHAT_SUBMIT_401: 2", 200) == 401
+    assert _followup_http_status("V0_POLL_429: busy", 200) == 429
+    assert _followup_http_status("V0_NO_NEW_MESSAGE", 200) == 200
+
+
 def test_paths_are_read_only_capability_surface() -> None:
     assert set(PATHS) == {
         "health",
