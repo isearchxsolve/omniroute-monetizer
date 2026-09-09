@@ -15680,3 +15680,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Decision.** Do not begin provider onboarding, create a CDP attachment, inspect the page/session, or attempt a second browser launch while the manual plain Chrome is open. The next safe action requires the operator to close that dedicated window and then confirm. The blocked audit resumes fresh from this handoff condition.
 
 **What is not claimed.** No Google/provider authentication, capture, replay proof, graduation, capacity increase, spend, secret access, configuration/DB mutation, or service action occurred. The final consumer endpoint remains at 11 chat / 5 video seats.
+### [2026-09-09 15:14] #1760 - Repeated manual SSO handoff blocker confirmed after resumed-goal poll
+
+**Verified re-poll.** On the resumed capacity goal, re-polled the same exact top-level `providers_sso` Chrome process without attaching to the browser. It is still open. This repeats the same user-controlled handoff condition: the isolated manual SSO window has not been closed, so no safe provider-onboarding/capture stage can start.
+
+**Blocking condition.** The next action requires external human completion: sign in manually if desired, close the separate window, and confirm. The system may not complete SSO, enter credentials/OTP, inspect the page/session, or repurpose the user's regular Chrome. No additional safe diagnostic action would change endpoint capacity while the same handoff remains open.
+
+**What is not claimed.** No authentication state, provider session, capture, replay proof, graduation, capacity increase, spend, service action, or secret access occurred. The endpoint remains 11 chat / 5 video seats, below the required 25 / 23 distribution target.
