@@ -51,11 +51,21 @@ def is_owned_shim_process(
 def owned_shim_processes(port: int) -> list[psutil.Process]:
     owned: list[psutil.Process] = []
     current_pid = os.getpid()
-    for process in psutil.process_iter(("pid", "name", "cmdline")):
+    # Asking psutil for ``cmdline`` on every process makes its Windows backend
+    # walk every image's command line.  One wedged GUI process can block that
+    # query long enough for the task owner's four-second deadline to expire,
+    # which leaves a requested code reload unapplied.  Enumerate only the cheap
+    # pid/name fields first, then inspect command lines for Python candidates
+    # that could possibly be this exact shim.
+    for process in psutil.process_iter(("pid", "name")):
         try:
-            if process.pid != current_pid and is_owned_shim_process(
-                process.info.get("name"), process.info.get("cmdline"), port
-            ):
+            if process.pid == current_pid:
+                continue
+            name = process.info.get("name")
+            if not name or str(name).lower() not in PYTHON_NAMES:
+                continue
+            cmdline = process.cmdline()
+            if is_owned_shim_process(name, cmdline, port):
                 owned.append(process)
         except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
             continue
