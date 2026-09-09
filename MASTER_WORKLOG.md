@@ -15257,4 +15257,12 @@ The explicit label filter selected only `niloy-1` (9223) and `flow-seat3` (9225)
 
 **RCA classification.** Cause (a)/(c) at the response-shape/session boundary: the HTTP transport is accepted, but this captured conversation stream carries additional historical fragments that the generic extractor cannot safely isolate. This is not an HTTP outage or auth wall, and it is not proof Perplexity is dead; a fresh capture with a clean conversation or a narrowly tested Perplexity stream boundary is required. The existing admitted base seat remains the only Perplexity route.
 
-**Capacity / safety boundary.** Current consumer state remains 11 admitted chat seats and 5 admitted video seats. One chat request was sent, no video credits were spent, no Chrome or credential state was touched, no registry/service state changed, and the non-secret scratch verdict was written. The artifact remains unadmitted.
+**Capacity / safety boundary.** Current consumer state remains 11 admitted chat seats and 5 admitted video seats. One chat request was sent, no video credits were spent, no Chrome or credential state was touched, no registry/service state changed, and the non-secret scratch verdict was written. The artifact remains unadmitted.### [2026-09-09 09:03] #1716 — Chat graduation probe: Niloy ChatGPT capture rejected for conversation affinity
+
+**Component reviewed.** Continued the serial pass with `state/secrets/session_chatgpt_free_web_niloy.json`, a distinct ChatGPT capture from the already-admitted base ChatGPT artifact. No prior request was repeated against the Niloy file.
+
+**Measured action.** Ran `.venv\Scripts\python.exe scripts/automation/fleet_graduation.py --apply --verify-and-admit session_chatgpt_free_web_niloy.json` exactly once. ChatGPT returned HTTP 403 with `Invalid conversation document affinity`; the coordinator classified the body as `AUTH` and refused promotion. No retry or registry mutation occurred.
+
+**RCA classification.** Cause (a)/(b) for this captured exchange: the recorded conversation/document binding is no longer accepted alongside the cookie snapshot. This is a send-time/session-affinity gap or stale capture, not evidence that ChatGPT is server-dead and not a generic extractor defect. A fresh dedicated-profile capture that creates a new conversation document is the recovery path; the operator Chrome profile remains prohibited.
+
+**Capacity / safety boundary.** The consumer pool remains 11 admitted chat seats and 5 admitted video seats. One direct chat request was used, no video credits were spent, no Chrome or credential state was changed, and only the non-secret scratch verdict was written. The Niloy artifact remains unadmitted.
