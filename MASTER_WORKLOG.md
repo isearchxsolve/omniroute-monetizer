@@ -15371,3 +15371,11 @@ The chat client now pins the only approved model, `session-pool/auto`, and rejec
 **Verification.** `py_compile` passed. Added API coverage for both mock film creation and mock tick rejection under a production environment; the focused film/API subset passed **4 tests**, including the canonical crew-run path and legacy pipeline retirement. The existing test emitted only known Pydantic deprecation warnings. No network transport was used by the new checks.
 
 **Safety / boundary.** No provider request, browser action, credential mutation, database edit, service restart, or video spend occurred. The unrelated `backend/test.db` change remains untouched. The next OiiOii component removes the dead direct-registry helper from `chat.py`, leaving the canonical chat client as the only implementation behind customer chat routes.
+
+### [2026-09-09 10:39] #1729 - Removed the dead direct-registry chat helper from OiiOii
+
+**Component changed.** Deleted the unused `_complete()` implementation and its `ProviderRegistry`/adapter imports from `backend/app/api/v1/endpoints/chat.py`. The helper had remained as an alternate direct-provider implementation even though current handlers called `_complete_via_consumer()`. Customer completion, SSE stream, and session-backed send routes now have one visible implementation: `ChatPoolClient` with `session-pool/auto`, retaining provider/session/tenant attribution.
+
+**Verification.** `py_compile` passed; a focused API suite covering canonical completion, stream, and durable crew-run behavior passed **3 tests**. A source scan found no `get_provider_registry`, `ProviderRegistry`, provider-service, or adapter request references in the chat endpoint. Existing Pydantic deprecation warnings are non-fatal and unrelated.
+
+**Safety / boundary.** No live request, browser action, credential/database/service mutation, or video spend occurred. The next component addresses the EmergentSH FastAPI transport: force the exact canonical URL and `session-pool/auto` route, reject noncanonical environment overrides, and keep direct NIM importability only as an explicit test/legacy failure path.
