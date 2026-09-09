@@ -15958,3 +15958,12 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** The real final submit returned HTTP 401, and the coordinator now surfaced the correct `AUTH` verdict (`auth refused (401) -- cookie alone is not enough`) instead of the misleading `NO_ANSWER: ok`. No promotion occurred; the exact non-secret report `state/scratch/fleet_graduation_session_v0_by_vercel_(v0_app).json` records the corrected classification.
 
 **Classification and capacity.** V0's remaining blocker is the captured anti-bot/session credential (`x-is-human` and associated account state), not the multi-step transport. This is a fresh dedicated-profile capture/re-auth requirement; it is not evidence that V0 itself is dead. Admitted capacity remains **15 chat / 5 video** (20 total), below the strict 25/23 target.
+### [2026-09-09 16:40] #1794 - Genspark replay confirms multi-step agent pipeline
+
+**Exact-file action.** Ran one bounded `fleet_graduation.py --apply --verify-and-admit "session_genspark_ai.json"` unit with the computed Law-3 prompt. Only the Genspark capture was contacted; no Chrome profile, OmniRoute service, video route, or unrelated seat was touched.
+
+**Observed result.** `www.genspark.ai` returned HTTP 200 SSE beginning with `project_start` and `agent_notification`/`keepalive` frames. The verifier classified the artifact as `PIPELINE` (`raw body is an agent/planner stream -- multi-step build target, not a wall`) and refused promotion because the single HTTP exchange does not contain the eventual answer. The exact non-secret report is `state/scratch/fleet_graduation_session_genspark_ai.json`; the session and registry remain unchanged.
+
+**Classification and next action.** This is a confirmed Chrome-gap transport difference, not provider death, rate limiting, or an entitlement wall. Genspark needs a submit -> agent-run/poll -> result assembler that follows the live task identifier and extracts the completed answer. Building that adapter is the next step if this seat is to contribute sellable headroom.
+
+**Capacity effect.** Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target. No browser action or video spend occurred.
