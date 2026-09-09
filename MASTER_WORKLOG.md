@@ -15673,3 +15673,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **What remains ready.** The isolated `providers_sso` launcher and its collision guard are committed and tested; the browser remains open for the operator. After the operator signs in, closes it, and confirms completion, the next safe stage is screenshot-first, one-provider-at-a-time SSO onboarding and fresh computed graduation checks. Until then the factual endpoint capacity remains 11 chat / 5 video, below the 25 / 23 mandate.
 
 **What is not claimed.** No Google SSO/provider authentication, key, capture, replay proof, graduation, spend, video job, MP4 result, capacity increase, configuration/DB mutation, or service restart occurred. No password, OTP, CAPTCHA response, cookie, or token was accessed or logged.
+### [2026-09-09 15:12] #1759 - SSO handoff rechecked after operator continuation signal; browser remains open
+
+**Resume check.** The operator signaled continuation, so re-polled the exact known `providers_sso` top-level Chrome process without connecting to it. It remains open. The required browser-closure handoff has therefore not occurred yet. The open process cannot prove sign-in completion or failure; it only proves the manual browser is still active.
+
+**Decision.** Do not begin provider onboarding, create a CDP attachment, inspect the page/session, or attempt a second browser launch while the manual plain Chrome is open. The next safe action requires the operator to close that dedicated window and then confirm. The blocked audit resumes fresh from this handoff condition.
+
+**What is not claimed.** No Google/provider authentication, capture, replay proof, graduation, capacity increase, spend, secret access, configuration/DB mutation, or service action occurred. The final consumer endpoint remains at 11 chat / 5 video seats.
