@@ -15721,3 +15721,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Deliberate non-action.** Did not connect to the profile, inspect a page/DOM/session, collect a cookie/key, navigate, focus, click, type, or submit. The workflow is deliberately paused for the operator's visual/manual action at its current provider. The isolated profile boundary and the scheduled video-seat/normal Chrome boundaries remain unchanged.
 
 **What is not claimed.** A waiting helper does not prove Kie, Segmind, or Novita authentication, API-key creation, provider balance, completion/capture/replay proof, graduation, or capacity increase. No spend, secret access, configuration/DB mutation, or service restart occurred. Consumer capacity remains 11 chat / 5 video.
+### [2026-09-09 15:43] #1765 - Verified wait: user-guided isolated provider flow remains live
+
+**Verified re-poll.** Re-polled the same exact `SignInToProviders.cmd --only kie,segmind,novita --sso-profile` helper process lineage. All three expected wrapper/interpreter processes remain live, confirming that the interactive provider workflow is still waiting for manual progress rather than terminally failing.
+
+**Safety boundary.** This was process-state inspection only. No browser/profile/page/session attachment, provider interaction, credential access, capture, spend, endpoint mutation, or service lifecycle action occurred. The helper must remain user-guided for protected sign-in/account flows.
+
+**What is not claimed.** No provider authentication, API key, video balance, session proof, graduation, or capacity increase is established by the wait. Endpoint capacity remains 11 chat / 5 video.
