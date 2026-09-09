@@ -15924,3 +15924,12 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** The provider returned HTTP 200, but the body was the site's HTML/login surface rather than an assistant response. The verifier correctly classified this as `AUTH` (`auth refused (200) -- cookie alone is not enough`) and refused promotion. The capture and replay registry were not modified; only the non-secret report `state/scratch/fleet_graduation_session_veoaifree_chat_web.json` was written.
 
 **Classification and capacity.** This is an unauthenticated landing-page/session gap, not proof that VEOAIFree is dead. A fresh dedicated-profile sign-in/capture is required; do not borrow the operator's live Chrome credentials. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
+### [2026-09-09 16:07] #1790 - V0 HTTP replay yields only ack; pipeline adapter remains required
+
+**Exact-file action.** Ran one bounded `fleet_graduation.py --apply --verify-and-admit "session_v0_by_vercel_(v0_app).json"` unit with the computed Law-3 prompt. The direct replay used only the recorded V0 exchange and did not attach to Chrome or touch OmniRoute, video, or other seats.
+
+**Observed result.** V0 returned HTTP 200 with body `ok`, but no assistant answer. The verifier reported `NO_ANSWER` (`200 but the extracted reply is not only '58': ok`) and refused admission. The exact non-secret report is `state/scratch/fleet_graduation_session_v0_by_vercel_(v0_app).json`; the session and replay registry were not modified.
+
+**Classification and build target.** This is the documented V0 multi-exchange pipeline/anti-bot gap: `/chat/api/send` acknowledges, while the answer is produced asynchronously through the live tab's follow-up/poll path and a fresh client-minted human token. Under the Chrome-gap doctrine this is explicitly a transport adapter build target, not a dead provider or an auth verdict. The existing `scripts/automation/v0_live_tab.py` is the dedicated adapter blueprint, but it must only be used with a verified dedicated automation profile, never the operator's live Chrome profile.
+
+**Capacity effect.** Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target. No retry or browser action was issued in this component.
