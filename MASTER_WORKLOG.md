@@ -15657,3 +15657,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Deliberate non-action.** Did not attach to the browser, retrieve a DevTools target, read the DOM, inspect cookies/storage, take a screenshot, navigate, focus, click, type, submit, or inspect account state. The SSO window remains wholly under the operator's manual control until it is closed. Its process being open proves only that the manual sign-in opportunity is available, not that a Google or provider login succeeded.
 
 **What is not claimed.** No manual SSO completion, provider session, key, capture, Law-3 computed verification, session graduation, spend, video result, capacity increase, endpoint/configuration change, service restart, or profile mutation is claimed from this wait. Consumer capacity remains 11 chat / 5 video.
+### [2026-09-09 15:08] #1757 - Verified wait: manual SSO process remains live after an uninterrupted interval
+
+**Verified handle re-poll.** Waited 30 seconds without any browser interaction, then re-polled the same top-level Chrome process by its exact `providers_sso` user-data-directory command-line marker. The dedicated manual browser remains live as one top-level process. This is a second verified process-state observation; it is not a session/authentication assertion and no restart was attempted.
+
+**Safety boundary.** The browser remains operator-controlled. No DevTools connection, page/read DOM operation, cookie/storage access, screenshot, navigation, focus, click, type, submit, credential capture, or provider request occurred during or after the wait. The active video-seat Chrome and all operator Chrome profiles were not targeted.
+
+**What is not claimed.** The open process does not prove Google SSO completion, a provider session, key, capture, computed replay proof, graduation, spend, MP4 result, or capacity increase. Consumer capacity remains 11 chat / 5 video.
