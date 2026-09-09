@@ -275,7 +275,11 @@ class UniversalSessionClient:
             parts = [b.get("text", "") for b in cont if isinstance(b, dict)]
             if any(parts):
                 return "".join(parts)
-        for k in ("content", "text", "answer", "token", "value", "output", "response", "completion"):
+        # DuckChat's SSE protocol uses a top-level `message` string for each response delta (the
+        # older endpoint returned the same field, and the current Responses-style envelope still
+        # carries it on successful frames).  Treat it like the other visible text fields; metadata
+        # objects are ignored because only strings are accepted here.
+        for k in ("content", "text", "message", "answer", "token", "value", "output", "response", "completion"):
             v = o.get(k)
             if isinstance(v, str) and v:
                 return v

@@ -67,6 +67,17 @@ def test_keepalive_expiry_parser_handles_utc_and_rejects_bad_metadata() -> None:
     assert parse_expiry(None) is None
 
 
+def test_universal_replay_extracts_duckchat_message_sse_frames() -> None:
+    from universal_replay import UniversalSessionClient
+
+    client = object.__new__(UniversalSessionClient)
+    client._last_prompt = "Reply with only the number: 41 + 17"
+    body = 'data: {"message":"5"}\n\ndata: {"message":"8"}\n\ndata: [DONE]\n'
+    text, error = client._extract_response(body)
+    assert text == "58"
+    assert error is None
+
+
 def test_paths_are_read_only_capability_surface() -> None:
     assert set(PATHS) == {
         "health",
