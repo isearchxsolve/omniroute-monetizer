@@ -15875,3 +15875,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** `api.1min.ai` returned HTTP 401 with the provider body `TOKEN_EXPIRED` / `Token Expired`. `replay_check.py` classified the artifact as `AUTH` (`auth refused (401) -- cookie alone is not enough`) and the coordinator refused promotion. The exact session file and replay registry were left unchanged; only the non-secret diagnostic report `state/scratch/fleet_graduation_session_1min_ai.json` was written.
 
 **Classification and capacity.** This is a stale credential/send-time authentication gap, not evidence of provider death or a keep-alive failure. A fresh dedicated-profile sign-in and capture is required before another replay; the operator's live Chrome credentials remain out of scope. Admitted capacity remains **15 chat / 5 video** (20 total). The strict 25-chat / 23-video target remains incomplete.
+### [2026-09-09 15:34] #1783 - Claude Official Web replay rejected invalid authorization
+
+**Exact-file action.** Ran one bounded `fleet_graduation.py --apply --verify-and-admit "session_claude_official_web.json"` unit using the captured Claude Web completion exchange and the standard computed Law-3 prompt. Only this artifact was contacted; Chrome, OmniRoute, video, and all other session files were untouched.
+
+**Observed result.** `claude.ai` returned HTTP 403 with a structured `permission_error` stating `account_session_invalid` / `Invalid authorization`. The verifier classified the response as `AUTH` (`auth refused (403) -- cookie alone is not enough`) and refused admission without retrying. The session file and replay registry remain unchanged; the only output is the non-secret report `state/scratch/fleet_graduation_session_claude_official_web.json`.
+
+**Classification and capacity.** This is an expired/invalid browser-session authorization gap, not proof of Claude service death or rate limiting. A fresh dedicated automation-profile sign-in/capture is required; live operator Chrome credentials cannot be borrowed. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
