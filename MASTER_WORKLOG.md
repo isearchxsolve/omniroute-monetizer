@@ -15903,3 +15903,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** `chatgpt.com` returned HTTP 403 with `Invalid conversation document affinity`. The verifier classified it as `AUTH` (`auth refused (403) -- cookie alone is not enough`) and refused admission without a retry. The capture and pure-Python registry remain unchanged; the only new artifact is the non-secret report `state/scratch/fleet_graduation_session_chatx.json`.
 
 **Classification and capacity.** This reproduces the previously observed ChatGPT send-time affinity gap, not provider death. A fresh dedicated-profile capture with current conversation/affinity state or a specialized multi-step adapter is required; live operator Chrome credentials remain out of scope. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
+### [2026-09-09 15:52] #1787 - ChatGPT Niloy alternate capture has the same affinity gap
+
+**Exact-file action.** Ran one bounded `fleet_graduation.py --apply --verify-and-admit "session_chatx_niloy.json"` unit using the standard computed Law-3 probe. The request was limited to this separate ChatGPT capture; no Chrome profile, OmniRoute process, video route, or other artifact was touched.
+
+**Observed result.** `chatgpt.com` returned HTTP 403 `Invalid conversation document affinity` again. `replay_check.py` classified the artifact as `AUTH` and the coordinator refused promotion without retrying. The session JSON and replay registry remain unchanged; only `state/scratch/fleet_graduation_session_chatx_niloy.json` was written as a non-secret diagnostic report.
+
+**Classification and capacity.** The independent Niloy capture confirms the same ChatGPT send-time conversation-affinity requirement; it is a replay/auth construction gap, not evidence that the provider is dead. A fresh dedicated capture or multi-step affinity adapter is needed before retrying. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
