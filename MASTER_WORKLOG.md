@@ -15687,3 +15687,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Blocking condition.** The next action requires external human completion: sign in manually if desired, close the separate window, and confirm. The system may not complete SSO, enter credentials/OTP, inspect the page/session, or repurpose the user's regular Chrome. No additional safe diagnostic action would change endpoint capacity while the same handoff remains open.
 
 **What is not claimed.** No authentication state, provider session, capture, replay proof, graduation, capacity increase, spend, service action, or secret access occurred. The endpoint remains 11 chat / 5 video seats, below the required 25 / 23 distribution target.
+### [2026-09-09 15:18] #1761 - Operator reported SSO done; profile-close handoff remains incomplete
+
+**Verification after operator report.** Immediately re-polled the known top-level `providers_sso` Chrome process and ran the required `chrome_selfheal.py --dry-run`. The dedicated SSO Chrome process remains open, so the profile is still locked and cannot safely advance to the next provider-onboarding mode. The Chrome safety check remains clean: no aliases into the operator Chrome tree, active guard refusal, and 4/4 operator Google Sync profiles reported healthy.
+
+**Clarification sent.** The operator may have finished the Google account page or closed a tab, but must close the whole smaller dedicated Chrome window using its window control. This is a profile-handoff condition, not an assertion that Google sign-in failed. No attempt was made to inspect the page/account, force-close the user window, attach to it, or infer SSO status from a process.
+
+**What is not claimed.** The open process does not prove or disprove Google SSO. No provider onboarding, capture, replay proof, graduation, spend, secret access, capacity change, configuration/DB mutation, or service restart occurred. Endpoint capacity remains 11 chat / 5 video.
