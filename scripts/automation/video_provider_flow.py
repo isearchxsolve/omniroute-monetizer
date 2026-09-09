@@ -17,6 +17,7 @@ strictly weaker than rtst's pre-commit refusal, and it is reported as such rathe
 from __future__ import annotations
 
 import pathlib
+import re
 import sys
 import time
 
@@ -25,8 +26,37 @@ import googleflow_client as gf  # noqa: E402
 import video_provider as vp  # noqa: E402
 from cdp import Page, list_targets  # noqa: E402
 
-FLOW_MATCH = "tools/flow"
-FLOW_URL = "https://labs.google/fx/tools/flow"
+# Google migrated the UI from labs.google/fx/tools/flow to flow.google.com.  Keep the legacy
+# substring as a compatibility fallback, but make the migrated project URL the primary selector so
+# the seat router does not report healthy signed-in tabs as "no Flow tab".
+FLOW_MATCH = "flow.google.com/project/"
+FLOW_LEGACY_MATCH = "labs.google/fx/tools/flow"
+FLOW_URL = "https://flow.google.com/"
+
+
+def _is_flow_tab(target: dict) -> bool:
+    """Return True for either generation of a Flow project tab.
+
+    Titles are included for the old SPA because Chrome can briefly expose a title before the URL is
+    committed during navigation.  The URL substring remains the authoritative project selector for
+    ``Page``/``FlowSession`` once a target is chosen.
+    """
+    text = ((target.get("url", "") or "") + " " + (target.get("title", "") or "")).lower()
+    return FLOW_MATCH in text or FLOW_LEGACY_MATCH in text
+
+
+def _flow_tabs(port: int) -> list[dict]:
+    """List page targets for a Flow project on one dedicated seat port."""
+    return [t for t in list_targets(port)
+            if t.get("type") == "page" and _is_flow_tab(t)]
+
+
+def _flow_match(port: int, tabs: list[dict] | None = None) -> str:
+    """Choose a concrete target URL for ``Page`` so migrated and legacy tabs both work."""
+    rows = tabs if tabs is not None else _flow_tabs(port)
+    if rows:
+        return str(rows[0].get("url") or FLOW_MATCH)
+    return FLOW_MATCH
 
 # MEASURED 2026-08-23 through this shim: one 720p/16:9 8s veo_3_1_t2v_fast clip == 1 media,
 # 1 workflow, 950 -> 930 credits. Exactly 20, matching the price shown in the Flow UI.
@@ -168,14 +198,14 @@ class FlowProvider(vp.Provider):
 
         vp.assert_cdp_safe(f"http://127.0.0.1:{acct.port}", who=f"video_router {acct.label}")
         try:
-            sess = gf.FlowSession(FLOW_MATCH, port=acct.port).refresh()
+            sess = gf.FlowSession(_flow_match(acct.port), port=acct.port).refresh()
         except vp.NON_FATAL as first:
             if not any(s in str(first) for s in self.RETRYABLE):
                 raise
             vp.log(f"{acct.label}: {'tab not settled' if 'parse URL' in str(first) else 'no access_token'}"
                    f", reloading the Flow tab once")
             self._reload(acct)
-            sess = gf.FlowSession(FLOW_MATCH, port=acct.port).refresh()
+            sess = gf.FlowSession(_flow_match(acct.port), port=acct.port).refresh()
 
         acct.state["sess"], acct.state["sess_at"] = sess, time.time()
         acct.email, acct.project_id, acct.tier = sess.email, sess.project_id, sess.tier
@@ -183,7 +213,7 @@ class FlowProvider(vp.Provider):
 
     def _reload(self, acct: vp.Account) -> None:
         try:
-            with Page(FLOW_MATCH, port=acct.port) as p:
+            with Page(_flow_match(acct.port), port=acct.port) as p:
                 p.send("Page.reload", {}, timeout=60)
                 for _ in range(30):
                     time.sleep(1)
@@ -222,12 +252,42 @@ class FlowProvider(vp.Provider):
             acct.ready, acct.fault = False, vp.FAULT_PORT
             acct.reason = f"chrome debug port {acct.port} is not answering ({type(e).__name__})"
             return
-        tabs = [t for t in targets
-                if FLOW_MATCH in (t.get("url", "") + t.get("title", "")).lower()]
+        tabs = [t for t in targets if _is_flow_tab(t)]
         if not tabs:
             acct.ready, acct.fault = False, vp.FAULT_TAB
             acct.reason = f"no Flow tab open on port {acct.port} ({len(targets)} other page(s))"
             return
+
+        # The migrated flow.google.com SPA no longer serves the old NextAuth JSON endpoint used by
+        # googleflow_client.FlowSession; it returns the application HTML shell instead.  Its signed-in
+        # state and balance are still observable safely through the page UI, which is also the adapter
+        # used by the :8190 consumer.  Do that read-only capacity probe here rather than reporting a
+        # live account as AUTH/HTML.  Legacy labs.google tabs continue through the bearer path below.
+        migrated = next((t for t in tabs if "flow.google.com/project/" in
+                         (t.get("url", "") or "").lower()), None)
+        if migrated is not None:
+            try:
+                from flow_ui_client import FlowUiClient
+                ui = FlowUiClient(host="labs.google")
+                ui.port_hint = acct.port
+                cap = ui.capacity()
+                credits = cap.get("creditsRemaining")
+                if credits is None:
+                    raise RuntimeError("Flow UI did not expose a credits balance")
+                acct.credits = int(credits)
+                acct.ready, acct.fault, acct.reason = True, vp.FAULT_NONE, "ok (migrated Flow UI)"
+                acct.url = migrated.get("url") or acct.url
+                m = re.search(r"/project/([0-9a-f-]{8,})", acct.url or "", re.I)
+                if m:
+                    acct.project_id = m.group(1)
+                return
+            except vp.NON_FATAL as e:
+                # Preserve the normal fault taxonomy (frozen renderer, port, or other) without
+                # falling through to the retired JSON endpoint and manufacturing an HTML parse error.
+                acct.ready = False
+                acct.fault = vp.FAULT_FROZEN if vp.is_frozen(e) else vp.FAULT_OTHER
+                acct.reason = f"migrated Flow UI: {vp.scrub(e)[:160]}"
+                return
 
         try:
             sess = self.session(acct)
@@ -334,15 +394,14 @@ class FlowProvider(vp.Provider):
             return
         yield vp.Step("chrome debug port", True, f"{len(targets)} page target(s)")
 
-        flow = [t for t in targets
-                if FLOW_MATCH in (t.get("url", "") + t.get("title", "")).lower()]
+        flow = [t for t in targets if _is_flow_tab(t)]
         if not flow:
             yield vp.Step("flow tab open", False, "none", CHAIN_HELP["tab"])
             return
         yield vp.Step("flow tab open", True, flow[0].get("url", "")[:60])
 
         try:
-            sess = gf.FlowSession(FLOW_MATCH, port=acct.port).refresh()
+            sess = gf.FlowSession(_flow_match(acct.port, flow), port=acct.port).refresh()
         except Exception as e:
             yield vp.Step("session token", False, vp.scrub(e)[:70], CHAIN_HELP["session"])
             return
