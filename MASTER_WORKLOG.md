@@ -15820,3 +15820,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** DeepInfra returned HTTP 402 with explicit text requiring a positive account balance before inference. The verifier classified the response as `WALL` and stopped without retrying or admitting the artifact. The exact file remains unmodified; only the non-secret report `state/scratch/fleet_graduation_session_deepinfra_chat.json` was written.
 
 **Classification and capacity.** This is a confirmed provider billing/entitlement wall, not an HTTP transport outage or stale-parser issue. Keep-alive cannot create balance, so the artifact cannot add sellable chat capacity until the account is funded or another eligible free route is captured. The admitted pool remains 12 chat and 5 video seats.
+### [2026-09-09 15:45] #1776 - SambaNova replay rejected expired/invalid session token
+
+**Exact-file action.** Ran one `fleet_graduation.py --apply --verify-and-admit "session_sambanova_cloud_chat_niloy.json"` unit with the standard fresh computed prompt. No other artifact, browser, service, or video route was touched.
+
+**Observed result.** SambaNova returned HTTP 401 with `Invalid token`. `replay_check.py` classified the file as `AUTH` and the graduation path refused promotion without retrying. The session JSON was not modified; the only output was the non-secret exact-file report under `state/scratch/`.
+
+**Classification and capacity.** This is an authentication/session-refresh gap, not proof of provider death or rate limiting. A fresh dedicated-profile sign-in/capture is required before another replay can be attempted; the operator's live Chrome credentials remain out of scope. Admitted capacity is unchanged at 12 chat and 5 video seats.
