@@ -15520,3 +15520,11 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Next-action decision.** Do not invest capacity work in an encrypted Duck adapter now. Any future work must first identify the legitimate browser-side key/response processing contract and still pass a non-echoable computed proof; it must not guess/decrypt arbitrary payloads or count the site from a success event alone. The next bounded chat candidate will be independent of Duck.
 
 **Safety / what is not claimed.** No Chrome profile/tab action occurred. No answer was fabricated, no seat was admitted, and no credentials, browser state, provider configuration, database, service, or video balance was changed. Current admission remains 11 chat / 5 video.
+
+### [2026-09-09 13:18] #1744 - 1min.ai exact replay classified as expired authentication
+
+**Component / fresh proof.** Ran the next independent one-file computed replay unit: `fleet_graduation.py --apply --verify-and-admit session_1min_ai.json`. The provider returned HTTP **401** in approximately 1.90 seconds with structured `TOKEN_EXPIRED` / `Token Expired` information. The exact single-file result is persisted at `state/scratch/fleet_graduation_session_1min_ai.json`.
+
+**RCA classification.** This is an **authentication-expiry outcome**, not a generic HTTP failure and not evidence that the 1min.ai service is dead. The captured cookie/token is no longer accepted. Per the session rules, an expired credential needs a legitimate dedicated-profile re-authentication/capture path; replay retries cannot refresh it. The verifier correctly refused admission and did not turn the error payload into an answer.
+
+**Safety / what is not claimed.** One direct non-video probe only; no Chrome process/profile action, video submission/credit spend, provider-plan change, secret disclosure, service restart, or session/registry promotion occurred. Admission remains 11 chat and 5 video files.
