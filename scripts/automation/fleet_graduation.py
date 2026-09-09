@@ -557,7 +557,8 @@ def e2e_video_apply(job_wait: float, sso_budget: float, selected_labels: set[str
     print(f"all-profile video E2E complete: {E2E_VIDEO_RUN.name}")
 
 
-def e2e_apply(sso_budget: float, capture_wait: float, limit: int, video_job_wait: float) -> None:
+def e2e_apply(sso_budget: float, capture_wait: float, limit: int, video_job_wait: float,
+              selected_labels: set[str] | None = None) -> None:
     """The literal complete master sequence requested by the operator."""
     # Child video clients use this established explicit spend gate.  It is set
     # only inside the command that also required --confirm-video-spend.
@@ -566,7 +567,7 @@ def e2e_apply(sso_budget: float, capture_wait: float, limit: int, video_job_wait
     try:
         e2e_chat_apply(sso_budget, capture_wait, limit)
         e2e_chat_consumer_proofs()
-        e2e_video_apply(video_job_wait, sso_budget)
+        e2e_video_apply(video_job_wait, sso_budget, selected_labels)
     finally:
         if prior is None:
             os.environ.pop("OMNI_VIDEO_CONFIRM_SPEND", None)
@@ -713,7 +714,7 @@ def main() -> int:
     elif args.e2e_video:
         e2e_video_only_apply(args.video_job_wait, args.sso_budget, set(args.video_label))
     elif args.e2e:
-        e2e_apply(args.sso_budget, args.capture_wait, args.limit, args.video_job_wait)
+        e2e_apply(args.sso_budget, args.capture_wait, args.limit, args.video_job_wait, set(args.video_label))
     ledger = inventory()
     atomic_json(LEDGER, ledger)
     summary = ledger["summary"]
