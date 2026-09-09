@@ -15992,3 +15992,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Classification and next action.** This is not provider death or a quota wall. The capture records the planning leg (`inferenceServer.infer`); Giz's user-facing answer is produced by a subsequent render/generation exchange that is not sentinel-bearing in this artifact. A dedicated multi-step Giz planner -> render adapter and a fresh capture of that follow-up are required before it can add headroom.
 
 **Capacity effect.** Admitted capacity remains **15 chat / 5 video** (20 total), below the strict 25/23 target. No browser interaction or video spend occurred.
+### [2026-09-09 17:18] #1798 - Copilot websocket replay rejected captured authentication
+
+**Exact-file action.** Ran one bounded `fleet_graduation.py --apply --verify-and-admit "session_microsoft_copilot_web.json"` unit through the existing websocket replay adapter. Only the Copilot artifact was contacted; no Chrome profile, OmniRoute process, video route, or other seat was touched.
+
+**Observed result.** The websocket client failed before producing an assistant answer and the verifier classified the artifact as `AUTH` (`auth refused (in body) -- cookie alone is not enough`). The report has no recorded URL/body because the websocket handshake/stream did not yield a safe response envelope; it is stored at `state/scratch/fleet_graduation_session_microsoft_copilot_web.json`. No promotion or session mutation occurred.
+
+**Classification and capacity.** This is a captured websocket authentication/session gap, not evidence that Copilot is dead. A fresh dedicated-profile websocket capture with current bearer/session state is required; live operator Chrome credentials remain prohibited. Admitted capacity remains **15 chat / 5 video** (20 total), below the strict 25/23 target.
