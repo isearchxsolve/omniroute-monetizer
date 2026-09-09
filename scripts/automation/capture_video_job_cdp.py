@@ -195,6 +195,59 @@ JS_WALL_PROBE = r"""(() => {
   return out;
 })()"""
 
+# Flow's Agent composer can require a one-time, per-render approval after the prompt POST.  The
+# approval card is part of the provider UI, not an auth wall.  Keep the selector deliberately exact:
+# "Always approve" is a different, persistent policy and must never be clicked by automation.
+JS_APPROVAL_PROBE = r"""(() => {
+  const vis = (el) => {
+    const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+    return r.width > 1 && r.height > 1 && s.display !== 'none' && s.visibility !== 'hidden'
+      && parseFloat(s.opacity || '1') > 0.1 && r.bottom > 0 && r.top < innerHeight;
+  };
+  const text = document.body ? document.body.innerText : '';
+  const pending = /kick off this\\s+\\d+\\s+video generation[\\s\\S]{0,180}costing\\s+\\d+\\s+credits/i.test(text);
+  if (!pending) return {pending: false};
+  const approve = Array.from(document.querySelectorAll('button,[role="button"]')).find((el) => {
+    const label = (el.innerText || '').trim();
+    return vis(el) && label === 'Approve' && !el.disabled
+      && el.getAttribute('aria-disabled') !== 'true';
+  });
+  if (!approve) return {pending: true, ok: false, why: 'active Approve control not visible'};
+  const r = approve.getBoundingClientRect();
+  return {pending: true, ok: true, x: r.left + r.width / 2, y: r.top + r.height / 2};
+})()"""
+
+
+def _approve_pending_video(c: CDP, row: dict, wait: float = 30.0) -> bool:
+    """Approve one visible Flow render request, never the persistent ``Always approve`` policy.
+
+    The helper is called only from the real (non-``--dry-run``) capture path, which is already behind
+    fleet_graduation's explicit ``--confirm-video-spend`` gate.  It is intentionally a no-op when the
+    provider has already accepted the request or when the card is not visible, so a login/wall state
+    cannot be turned into a click.  Returns whether this invocation clicked an active Approve button.
+    """
+    deadline = time.monotonic() + max(0.0, wait)
+    saw_pending = False
+    while time.monotonic() < deadline:
+        probe = c.evaluate(JS_APPROVAL_PROBE, timeout=20) or {}
+        if not probe.get("pending"):
+            if saw_pending:
+                row["approval"] = "not_required_or_already_approved"
+            return False
+        saw_pending = True
+        if probe.get("ok") and probe.get("x") is not None and probe.get("y") is not None:
+            x, y = float(probe["x"]), float(probe["y"])
+            for kind, clicks in (("mouseMoved", 0), ("mousePressed", 1), ("mouseReleased", 1)):
+                c.call("Input.dispatchMouseEvent", {"type": kind, "x": x, "y": y,
+                                                      "button": "left", "clickCount": clicks},
+                       timeout=15)
+            row["approval"] = "approve_clicked"
+            return True
+        time.sleep(1.0)
+    if saw_pending:
+        row["approval"] = "pending_control_not_visible"
+    return False
+
 
 def _secret_path(host: str, seat: str = "") -> pathlib.Path:
     """Same convention as record_video_job.py, so `session_pool` globs it as another seat."""
@@ -710,6 +763,12 @@ def capture_video(port: int, match: str, host: str, api_substr: str, seat: str, 
                        note=f"all submit strategies failed; {len(rec.order)} first-party "
                             f"exchange(s) seen but none carried the prompt")
             return row
+
+        # Flow Agent may acknowledge the prompt with HTTP 200 and then pause on a visible,
+        # per-render credit approval card. Accept only the one-time ``Approve`` control while the
+        # explicit non-dry-run spend gate is active; never click ``Always approve``. Network capture
+        # remains enabled, so the approval's follow-up/poll exchanges are part of this same proof.
+        _approve_pending_video(c, row, wait=min(30.0, max(5.0, job_wait / 10.0)))
 
         # ---- the video-specific half: keep recording poll -> result -------------------------
         # Chat stops here. A video seat is only supply once the poll shape and the result URL are on
