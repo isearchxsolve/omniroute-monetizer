@@ -15834,3 +15834,12 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** Gemini returned HTTP 401 in its batchexecute envelope. The verifier classified the artifact as `AUTH` (`auth refused (401) -- cookie alone is not enough`) and refused promotion. The captured session JSON and replay registry remain unchanged; only the non-secret exact-file diagnostic report was written.
 
 **Classification and next action.** This is a stale/invalid browser-session credential gap, not proof of Gemini service death. A new dedicated-profile sign-in and fresh capture is required; automation may not borrow the operator's normal Chrome profile or type credentials. The admitted pool remains 12 chat and 5 video seats.
+### [2026-09-09 16:02] #1778 - Graduated the second Perplexity session after fresh computed proof
+
+**Exact-file action.** Ran one `fleet_graduation.py --apply --verify-and-admit "session_perplexity_free_web_niloy.json"` unit against the separate captured Perplexity session artifact. The operation sent one fresh Law-3 computed replay and did not touch Chrome, other session files, OmniRoute, or video.
+
+**Observed result.** Perplexity returned HTTP 200 SSE. The UniversalSessionClient extracted a reply opening with the computed value `58` (followed by provider-generated explanatory text), which is an accepted numeric Law-3 success shape. `replay_check.py` returned `REPLAY_OK`; `fleet_graduation.py` admitted the exact file and the shim hot-reloaded the registry without restart. No secret or raw response credential was persisted.
+
+**Capacity delta.** The admitted exact-session registry moved from 12 to **13 chat files** and from 17 to **18 total admitted sessions**; video remains **5**. The host is a second Perplexity account/session, so the file-level seat count increased by one even though host-level route IDs may be coalesced by the pool. Remaining ledger states are 24 `LAW3_REPLAY_PROOF_REQUIRED` chat artifacts and 7 `VIDEO_PROOF_REQUIRED` video artifacts. The strict 25/23 mandate remains incomplete.
+
+**Verification.** The exact-file command reported HTTP 200 / `REPLAY_OK` / answer `58`; prior parser and focused tests remain green (`20` capability tests). No video job, credit spend, browser interaction, or service restart occurred.
