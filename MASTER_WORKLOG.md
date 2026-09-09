@@ -15859,3 +15859,12 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** ChatGPT returned HTTP 403 with `Invalid conversation document affinity`. The verifier classified it as `AUTH` (`auth refused (403) -- cookie alone is not enough`) and refused promotion without retrying. The capture and replay registry are unchanged; only the non-secret exact-file report under `state/scratch/` was created.
 
 **Classification and capacity.** This is a send-time/session-affinity authentication gap, not proof that ChatGPT is dead. The browser constructs fresh conversation/affinity state that the stale capture does not contain; a fresh dedicated-profile capture or a specialized multi-step adapter is required. Current admitted capacity remains 14 chat and 5 video seats.
+### [2026-09-09 16:26] #1781 - Graduated the primary Poe session after fresh computed proof
+
+**Exact-file action.** The previously launched `fleet_graduation.py --apply --verify-and-admit "session_poe.json"` completed for the primary Poe capture. It sent one valid Law-3 computed replay directly through the existing UniversalSessionClient; no Chrome profile, OmniRoute process, video route, or unrelated session artifact was touched.
+
+**Observed result.** Poe returned HTTP 200 from its GraphQL endpoint. The verifier recovered the exact computed answer `58`; `replay_check.py` returned `REPLAY_OK`; and the graduation command admitted `session_poe.json` to the pure-Python replay registry. The shim hot-reloaded the registry, so no restart was required and no credential material was printed or logged.
+
+**Capacity delta.** The fleet ledger now reports **15 admitted chat files** and **5 admitted video files** (**20 total admitted sessions**). The primary Poe capture is a distinct file-level chat seat; remaining states are 22 `LAW3_REPLAY_PROOF_REQUIRED` chat artifacts and 7 `VIDEO_PROOF_REQUIRED` video artifacts. The strict 25-chat / 23-video target remains incomplete.
+
+**Verification.** The exact-file report recorded HTTP 200 / `REPLAY_OK` / answer `58`. The focused capability and parser tests remain green from the preceding fixes. No video generation, paid operation, browser interaction, secret access, or service restart occurred.
