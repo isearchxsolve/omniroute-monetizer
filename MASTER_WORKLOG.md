@@ -16015,3 +16015,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** The report now records `BAD_FILE` with `V0 replay adapter could not derive a conversation id from the capture` (HTTP 200 bootstrap `ok`, 1.7 s). No promotion or registry mutation occurred; the redacted report is `state/scratch/fleet_graduation_session_v0_by_vercel_niloy.json`.
 
 **Classification and capacity.** This is a capture defect requiring a complete dedicated-profile recapture, not a provider single-use failure. V0 contributes no capacity. Fleet remains **15 admitted chat / 5 admitted video** (20 total), below the strict 25/23 target.
+### [2026-09-09 17:58] #1801 - No-spend video router audit confirms optional 8189 is down
+
+**Read-only action.** Ran `scripts/automation/video_capability_audit.py` against its canonical loopback base `http://127.0.0.1:8189`. The health/model read failed with `URLError` because no listener is present. No video request, job creation, credit spend, service restart, or Chrome action occurred.
+
+**Interpretation.** This does not reduce the admitted `:8190` video-seat count: the final consumer's proven video routes are the two Google Flow seats, Digen, RTST seat2, and public LTX (5). Port 8189 is the separate optional legacy video-router owner and is intentionally not being hand-launched or substituted; its disabled/unowned state is recorded in the transfer/recovery rules. The canonical consumer remains `http://127.0.0.1:8190/v1`.
+
+**Current no-spend capacity evidence.** The live merged audit reports 15 admitted chat sessions, 5 admitted video sessions, 351 independently proven OmniRoute models, and zero completed consumer video jobs in this run. The four Flow account rows exist in `state/video_accounts.json` (pro-1, niloy-1, flow-seat2, flow-seat3), but only two Flow sessions currently have completed submit/poll/download evidence; the other two need fresh dedicated-profile capture and an explicit spend-gated proof.
