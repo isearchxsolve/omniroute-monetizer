@@ -15227,4 +15227,12 @@ The explicit label filter selected only `niloy-1` (9223) and `flow-seat3` (9225)
 
 **RCA classification.** This is a current authorization failure for the captured artifact (cause (b) for this file), not evidence of a Felo server outage or a parser defect. The earlier live browser proof from the operator is not interchangeable with this stale capture; a fresh dedicated-profile capture is required before admission. Passwords, OTPs, and the operator's Chrome profile remain out of scope.
 
-**Capacity / safety boundary.** The live consumer pool remains 11 admitted chat seats and 5 video seats. This unit used one direct chat request, spent no video credits, touched no Chrome target, changed no registry or service state, and wrote only the non-secret scratch verdict. The worklog was appended before the next candidate.
+**Capacity / safety boundary.** The live consumer pool remains 11 admitted chat seats and 5 video seats. This unit used one direct chat request, spent no video credits, touched no Chrome target, changed no registry or service state, and wrote only the non-secret scratch verdict. The worklog was appended before the next candidate.### [2026-09-09 08:48] #1712 — Chat graduation probe: Poe transport returned unparseable 200
+
+**Component reviewed.** Selected exactly one remaining HTTP artifact, `state/secrets/session_poe.json`, for the serial 25-chat admission pass. The file is structurally eligible for `UniversalSessionClient` but has no prior exact-file admission.
+
+**Measured action.** Ran `.venv\Scripts\python.exe scripts/automation/fleet_graduation.py --apply --verify-and-admit session_poe.json` exactly once. Poe returned HTTP 200 with a GraphQL message envelope, but the current universal response extractor produced no recognized assistant text and classified the result `UNPARSEABLE`. The coordinator refused promotion and wrote the non-secret scratch verdict. No retry was made.
+
+**RCA classification.** This is cause (a)/(c) at the response-shape boundary: the upstream accepted the request, but the captured GraphQL envelope is not currently mapped to an assistant-text extractor. It is not an HTTP outage, auth wall, or proof of a dead Poe account. The next valid action is an offline envelope-shape analysis and a parser fixture before any second live request; the existing one-request-per-artifact discipline remains intact.
+
+**Capacity / safety boundary.** Current live pool remains 11 admitted chat and 5 admitted video seats. This unit sent one chat request only, spent no video credits, touched no Chrome or credentials, changed no admission state, and left the Poe artifact unadmitted. The worklog was appended before moving on.
