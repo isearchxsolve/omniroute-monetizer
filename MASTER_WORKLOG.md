@@ -15353,3 +15353,13 @@ The explicit label filter selected only `niloy-1` (9223) and `flow-seat3` (9225)
 **Verification.** Both modules passed `py_compile`. The OiiOii API retirement subset passed **4 tests** (legacy project pipeline, image, video, and audio paths) after the prior declared multipart dependency was installed in the repository virtual environment. A focused source scan found no direct provider imports or calls in either module, and the API responses retained `detail.code=legacy_route_retired` with `/api/v1/films` as the replacement.
 
 **Safety / boundary.** No live request, browser action, credential mutation, database edit, service restart, or video spend occurred. The unrelated `backend/test.db` change remains unstaged. The next component will centralize OiiOii's canonical consumer base/model validation and production mock policy for the durable film clients.
+
+### [2026-09-09 10:18] #1727 - Enforced the OiiOii canonical consumer client contract
+
+**Component changed.** Hardened `backend/film_pipeline/clients.py` around the documented consumer boundary. Added explicit `CANONICAL_CONSUMER_BASE_URL=http://127.0.0.1:8190/v1`, origin normalization that accepts either the documented path or its origin without producing `/v1/v1`, and a fail-closed rejection for any non-canonical real network target (including `localhost`, `:20128`, `:20130`, and `:8189`). A caller-supplied HTTPX client remains an explicit hermetic-test seam. Added versioned path construction that works for injected clients whose base URL already includes `/v1`.
+
+The chat client now pins the only approved model, `session-pool/auto`, and rejects arbitrary/upstream model IDs before sending. Video keeps the approved `video/auto`/`video/<host>/auto` validation, preserves provider/session/tenant and ambiguous-receipt behavior, and routes all live requests/discovery through the same canonical path helper.
+
+**Verification.** `py_compile` passed for the client and test module. The focused consumer suite passed **4 tests**: existing provenance/pinned-video behavior, unknown-receipt timeout handling, non-canonical network-target rejection, and no-double-`/v1` normalization plus chat-model pinning. No live request was made; all HTTP assertions used an in-memory `httpx.MockTransport`.
+
+**Safety / boundary.** No browser, credential, database, service, or provider state was touched and no video credit was spent. This client-level guard now makes an accidental consumer URL override fail before any network call. The next component will make the OiiOii durable film API reject mock execution in production while retaining zero-credit local admission/testing.
