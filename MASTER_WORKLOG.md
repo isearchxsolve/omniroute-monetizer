@@ -15843,3 +15843,12 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Capacity delta.** The admitted exact-session registry moved from 12 to **13 chat files** and from 17 to **18 total admitted sessions**; video remains **5**. The host is a second Perplexity account/session, so the file-level seat count increased by one even though host-level route IDs may be coalesced by the pool. Remaining ledger states are 24 `LAW3_REPLAY_PROOF_REQUIRED` chat artifacts and 7 `VIDEO_PROOF_REQUIRED` video artifacts. The strict 25/23 mandate remains incomplete.
 
 **Verification.** The exact-file command reported HTTP 200 / `REPLAY_OK` / answer `58`; prior parser and focused tests remain green (`20` capability tests). No video job, credit spend, browser interaction, or service restart occurred.
+### [2026-09-09 16:10] #1779 - Graduated the second Poe session after fresh computed proof
+
+**Exact-file action.** Ran one `fleet_graduation.py --apply --verify-and-admit "session_poe_niloy.json"` unit against the separate Poe capture. It sent one valid computed replay directly to the provider and left Chrome, OmniRoute, video, and all other artifacts untouched.
+
+**Observed result.** Poe returned HTTP 200 with a GraphQL message envelope. The universal extractor recovered the computed answer `58`; `replay_check.py` returned `REPLAY_OK`; and the exact file was admitted to the pure-Python registry. The shim hot-reloads this registry, so no service restart was required and no credential material was logged.
+
+**Capacity delta.** Admitted exact chat files increased from 13 to **14**, and total admitted sessions from 18 to **19**; video remains **5**. This is the second separate Poe account/session file and counts as a file-level seat, while host-level coalescing remains visible in the consumer route audit. Remaining ledger states are 23 `LAW3_REPLAY_PROOF_REQUIRED` chat artifacts and 7 `VIDEO_PROOF_REQUIRED` video artifacts; the 25/23 mandate is not yet met.
+
+**Verification.** The command reported HTTP 200 / `REPLAY_OK` / answer `58`; the 20-test capability suite and parser regression remain passed. No video job, paid operation, browser interaction, secret access, or OmniRoute restart occurred.
