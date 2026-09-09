@@ -15797,3 +15797,12 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Capacity delta.** Fleet ledger moved from 11 to **12 admitted chat seats** while video remains **5**. Total admitted exact sessions are now 17 of 49; remaining ledger states are 25 `LAW3_REPLAY_PROOF_REQUIRED` chat artifacts and 7 `VIDEO_PROOF_REQUIRED` video artifacts. The strict 25/23 mandate is still incomplete, but this is a real, independently proven +1 chat-capacity gain rather than catalog inventory.
 
 **Verification.** `pytest tests/test_omniroute_capability_matrix.py -q` -> **20 passed** (including the new DuckChat parser regression). `py_compile scripts/automation/universal_replay.py` passed. The command's own exact-file replay proof was `REPLAY_OK` with HTTP 200 and answer `58`. No secrets or raw provider credentials were logged.
+### [2026-09-09 15:24] #1773 - Tencent Yuanbao replay rejected stale authentication
+
+**Exact-file action.** Ran one `fleet_graduation.py --apply --verify-and-admit "session_tencent_yuanbao.json"` unit against the existing captured chat artifact. The operation used the standard fresh Law-3 computed prompt and direct UniversalSessionClient replay; no other file, Chrome profile, OmniRoute service, or video route was touched.
+
+**Observed result.** The provider returned HTTP 401 with a localized authentication-error body. `replay_check.py` classified the file as `AUTH` (`auth refused (401) -- cookie alone is not enough`) and `fleet_graduation.py` refused admission. No session mutation or registry promotion occurred; only the non-secret diagnostic report `state/scratch/fleet_graduation_session_tencent_yuanbao.json` was written.
+
+**Classification and next action.** This is an authentication/session-expiry gap, not evidence that Yuanbao is server-dead or rate-limited. A genuine fix requires a fresh operator-controlled sign-in/capture in a dedicated automation profile followed by another exact-file replay; the current safety rules prohibit reading or refreshing the operator's live Chrome credentials automatically. No retry was issued in this component's step.
+
+**Capacity effect.** The live admitted pool remains 12 chat and 5 video seats. The Yuanbao capture remains outside the admission gate until fresh authentication and a computed answer are proven.
