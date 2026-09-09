@@ -152,6 +152,20 @@ def test_v0_followup_error_keeps_final_leg_http_status() -> None:
     assert _followup_http_status("V0_NO_NEW_MESSAGE", 200) == 200
 
 
+def test_pipeline_marker_does_not_hide_explicit_credit_wall() -> None:
+    from replay_check import apply_pipeline_override
+
+    verdict, detail = apply_pipeline_override(
+        "WALL", "credit wall", 'data: {"type":"project_start"}')
+    assert verdict == "WALL"
+    assert detail == "credit wall"
+
+    verdict, detail = apply_pipeline_override(
+        "NO_ANSWER", "no answer", 'data: {"type":"project_start"}')
+    assert verdict == "PIPELINE"
+    assert "multi-step build target" in detail
+
+
 def test_paths_are_read_only_capability_surface() -> None:
     assert set(PATHS) == {
         "health",

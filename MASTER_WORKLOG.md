@@ -15967,3 +15967,12 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Classification and next action.** This is a confirmed Chrome-gap transport difference, not provider death, rate limiting, or an entitlement wall. Genspark needs a submit -> agent-run/poll -> result assembler that follows the live task identifier and extracts the completed answer. Building that adapter is the next step if this seat is to contribute sellable headroom.
 
 **Capacity effect.** Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target. No browser action or video spend occurred.
+### [2026-09-09 16:52] #1795 - Corrected Genspark credit-wall precedence
+
+**Diagnostic action.** One direct redacted Genspark replay inspection recorded only event types/lengths. The provider returned HTTP 200 with a short assistant text stating that all credits were used and pointing to its upgrade page; no answer `58` was present. The raw body simultaneously contained `project_start` and keepalive markers. This proved the current state is a provider credit wall, while also exposing that the classifier was letting the raw pipeline marker override a real extracted wall.
+
+**Code change.** Added `replay_check.apply_pipeline_override()` and changed the replay path to promote only `NO_ANSWER` responses with agent/planner markers to `PIPELINE`. Explicit `WALL` verdicts now remain walls even when the raw body is a project stream, so quota/plan exhaustion cannot be mislabeled as an engineering transport target.
+
+**Verification.** Added regression coverage for both branches (explicit credit wall stays `WALL`; unanswered project stream becomes `PIPELINE`). `pytest tests/test_omniroute_capability_matrix.py -q` -> **24 passed**; `pytest scripts/automation/test_replay_check_law3.py -q` -> **10 passed**; `py_compile scripts/automation/replay_check.py` and `git diff --check` passed. No code path changed Chrome, OmniRoute, or video.
+
+**Capacity effect.** Genspark remains unadmitted because the account is credit-exhausted; this is not sellable headroom until credits/entitlement are restored. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target. The exact provider response was not logged; only its non-secret wall classification was retained.

@@ -73,6 +73,20 @@ def looks_like_pipeline(low: str) -> bool:
         return '"output"' in low and '"responseformat"' in low
 
 
+def apply_pipeline_override(verdict: str, detail: str, raw: str) -> tuple[str, str]:
+    """Classify an unparsed agent stream without hiding an explicit wall.
+
+    A provider can return a project/keepalive stream whose extracted assistant text is
+    itself a quota or plan refusal.  The explicit wall is stronger evidence than the
+    transport marker and must remain WALL; only an otherwise unanswered stream becomes
+    the PIPELINE build target.
+    """
+    if verdict == "NO_ANSWER" and looks_like_pipeline((raw or "").lower()):
+        return "PIPELINE", ("raw body is an agent/planner stream -- multi-step build "
+                             "target, not a wall")
+    return verdict, detail
+
+
 def http_status_in(text: str) -> int | None:
     """Pull the status out of a stringified requests error, e.g. "409 client error: conflict"."""
     m = re.search(r"\b([1-5]\d\d)\s+(?:client|server)\s+error", text)
@@ -221,11 +235,7 @@ def replay(path: pathlib.Path, prompt: str, expect: str) -> dict[str, Any]:
         # Raw envelopes may contain the expected number in token counts, IDs,
         # titles, or error metadata. Only extracted assistant text can prove a
         # completion; a raw match is diagnostic evidence, never admission.
-        if verdict in ("WALL", "NO_ANSWER") and looks_like_pipeline(raw.lower()):
-            # The extractor stripped the planner/agent envelope, so the pipeline markers never
-            # reached classify(). The raw body settles it: this is a multi-step transport (worklog #1679).
-            verdict, detail = "PIPELINE", ("raw body is an agent/planner stream -- multi-step build "
-                                           "target, not a wall")
+        verdict, detail = apply_pipeline_override(verdict, detail, raw)
     except Exception as e:                        # a replay failure is data, never a crash
         text, status = "", None
         # Preserve failure classification without treating raw exception data
