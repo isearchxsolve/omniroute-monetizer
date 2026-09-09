@@ -15896,3 +15896,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Observed result.** `felo.ai` returned HTTP 401 with a structured `unauthorized` error. `replay_check.py` classified the file as `AUTH` (`auth refused (401) -- cookie alone is not enough`) and the coordinator refused admission without retrying. The session file and replay registry remain unchanged; only the non-secret report `state/scratch/fleet_graduation_session_felo_ai_web.json` was generated.
 
 **Classification and capacity.** This is an expired/missing send-time authentication gap, not proof of provider death or rate limiting. A new dedicated-profile login and capture is required; operator Chrome credentials remain prohibited. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
+### [2026-09-09 15:48] #1786 - Alternate ChatGPT capture rejected conversation affinity
+
+**Exact-file action.** Ran one bounded `fleet_graduation.py --apply --verify-and-admit "session_chatx.json"` unit with the standard computed Law-3 replay. Only this alternate ChatGPT capture was contacted; no Chrome profile, OmniRoute service, video route, or other seat artifact was touched.
+
+**Observed result.** `chatgpt.com` returned HTTP 403 with `Invalid conversation document affinity`. The verifier classified it as `AUTH` (`auth refused (403) -- cookie alone is not enough`) and refused admission without a retry. The capture and pure-Python registry remain unchanged; the only new artifact is the non-secret report `state/scratch/fleet_graduation_session_chatx.json`.
+
+**Classification and capacity.** This reproduces the previously observed ChatGPT send-time affinity gap, not provider death. A fresh dedicated-profile capture with current conversation/affinity state or a specialized multi-step adapter is required; live operator Chrome credentials remain out of scope. Admitted capacity remains **15 chat / 5 video** (20 total), below the 25/23 target.
