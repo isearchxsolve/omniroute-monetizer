@@ -27,7 +27,8 @@ import requests
 
 from session_pool import (SessionPool, ChatError, _load_quarantine,
                            BROKEN_ADAPTER_COOLDOWN_S, wall_in_error,
-                           wall_in_reply, unusable_reply)
+                           wall_in_reply, unusable_reply,
+                           PURE_PYTHON_REGISTRY, POOL_QUARANTINE)
 from veo_session_replay import SessionExpired
 from video_job_store import VideoJobStore
 # The tool->prompt shim is IMPORTED, not copied. It is the piece that makes a free chat seat usable
@@ -490,13 +491,40 @@ TENANT_MAP_PATH = pathlib.Path(r"D:\omniroute-monetizer\state\secrets\tenant_map
 
 # ------------------------------------------------------------------ hot-add ----
 # One Chrome, infinite sites (worklog #1112): adding a provider must NOT require a shim
-# restart. The tenant map is already re-read per request; seats now are too. Every request
-# does ONE cheap stat of the secrets directory (its mtime moves on any add/remove/rename
-# inside it) and only calls pool.rescan() when the directory actually changed. rescan()
-# itself is a no-op for untouched files (it keeps the exact same session objects), so even
-# a spurious trigger costs one glob + one stat per seat -- microseconds, zero disruption.
+# restart. The tenant map is already re-read per request; seats and their exact-file
+# admission registry are too. A directory mtime catches add/remove/rename events, while
+# the registry and quarantine file mtimes catch the more common *in-place* admission and
+# release edits (Windows does not update a directory mtime when an existing file changes).
+# rescan() itself is a no-op for untouched files (it keeps the exact same session objects),
+# so the extra two file stats remain bounded and do not disturb in-flight requests.
 _RESCAN_LOCK = threading.Lock()
-_dir_sig = [None]                                    # [last-seen directory signature]
+_dir_sig = [None]                                    # [last-seen rescan signature]
+
+
+def _rescan_signature() -> tuple:
+    """Return the cheap filesystem signature that gates zero-restart rescans.
+
+    The old signature watched only ``pool.secrets``.  Admission promotes an existing
+    ``session_*.json`` file by editing ``pure_python_replay_registry.json`` and the
+    directory mtime consequently stays unchanged on Windows; the process then kept the
+    old in-memory admission set forever.  Include the registry and quarantine file
+    mtimes so exact-file promotions and releases become visible on the next request.
+    Missing files are represented as ``None`` so creation/removal also triggers a pass.
+    """
+    try:
+        directory = os.stat(pool.secrets)
+        directory_sig = (directory.st_mtime_ns, directory.st_ctime_ns)
+    except OSError:
+        directory_sig = None
+
+    def file_sig(path: pathlib.Path) -> tuple | None:
+        try:
+            st = os.stat(path)
+            return (st.st_mtime_ns, st.st_ctime_ns, st.st_size)
+        except OSError:
+            return None
+
+    return (directory_sig, file_sig(PURE_PYTHON_REGISTRY), file_sig(POOL_QUARANTINE))
 
 
 def _tools_from_request(req: dict) -> list:
@@ -593,10 +621,8 @@ def _unwrap_no_tool_text(text: str) -> Optional[str]:
 
 
 def _maybe_rescan() -> None:
-    try:
-        st = os.stat(pool.secrets)
-        sig = (st.st_mtime_ns, st.st_ctime_ns)
-    except OSError:
+    sig = _rescan_signature()
+    if sig[0] is None:
         return
     if sig == _dir_sig[0]:
         return
@@ -622,11 +648,7 @@ def _force_rescan() -> dict:
             pool.quarantined = _load_quarantine()
         except Exception:
             pass
-        try:
-            st = os.stat(pool.secrets)
-            _dir_sig[0] = (st.st_mtime_ns, st.st_ctime_ns)
-        except OSError:
-            pass
+        _dir_sig[0] = _rescan_signature()
         return r
 
 
