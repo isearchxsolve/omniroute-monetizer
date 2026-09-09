@@ -742,7 +742,19 @@ def _video_worker(job_id: str, messages: list, host: str = None,
         JOBS.update(job_id, status="running", provider=s.host, session=s.key,
                     started=time.time(), progress=0.1)
         try:
-            r = s.chat(messages, model=model_override)
+            # reserve() prevents the *same seat* being selected twice, but it
+            # intentionally permits distinct seats for one host.  That is
+            # correct for chat throughput, not for a credit-spending video
+            # submit: two account tabs for the same provider can otherwise
+            # submit concurrently before either job has settled.  Keep the
+            # whole provider exchange serial, exactly as SessionPool.chat()
+            # does.  Re-check cancellation after waiting so a queued job
+            # cannot spend after the consumer cancelled it.
+            with pool._host_lock(s.host):
+                rec = JOBS.get(job_id)
+                if rec is None or rec["status"] == "cancelled":
+                    return
+                r = s.chat(messages, model=model_override)
             url = r.get("video_url") or r.get("text")
             if not (isinstance(url, str) and url.startswith(("http://", "https://"))):
                 raise ChatError("NO_VIDEO_URL", f"{s.host} returned no video URL")
