@@ -15538,3 +15538,13 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Capacity implication.** The Aymo (plan wall), Duck (encrypted response gap), 1min.ai (expired auth), and Felo (expired auth) samples show why raw artifact counts cannot be used as SaaS headroom. None of these four pending chat artifacts adds a 12th admitted chat seat. The next action is a fresh non-spending inventory/consumer catalogue read, not an assertion from stale captures.
 
 **Safety / what is not claimed.** No browser action, provider spend, video request, credential/configuration write, session-file promotion, database edit, or service restart occurred. No secrets were logged.
+
+### [2026-09-09 13:26] #1746 - Read-only final consumer-endpoint admission inventory
+
+**Mandated endpoint verification.** Performed a read-only loopback check against the required base `http://127.0.0.1:8190/v1` (never `localhost`). `GET /healthz` returned HTTP 200 from `session-pool-shim`, version `2026-09-09-session-heartbeat-v1`. Its internal stateless-chat heartbeat reports a six-hour idle window, 6 successful beats, 0 failures, 0 busy skips, and current warm-seat note `app.chathub.gg`; it is not a video spend mechanism.
+
+**Authenticated catalogue evidence.** Used one local tenant credential only in-memory for a single `GET /v1/models` loopback call; it was neither printed nor written. The response returned HTTP 200, **439 rows / 438 unique model IDs**, and includes both required consumer aliases: `session-pool/auto` and `video/auto`. Its authoritative `x_gateway.seatPool` fields report **11 chat** and **5 video** currently dispatchable local seats. The local video alias count is 5. The catalogue's large overall ID count includes discovery/upstream rows and must not be presented as 438 independently admitted sessions.
+
+**Admission-ledger reconciliation.** A fresh offline `fleet_graduation.py` inventory independently reports 49 artifacts: 11 admitted chat files, 5 admitted video files, 16 total admitted pure-Python files, 26 chat files still requiring Law-3 replay proof, and 7 video files still requiring spend-gated submit->poll->MP4 proof. The active endpoint therefore satisfies the canonical transport/alias/persistence boundary, but it does **not** yet meet the originally requested 25-chat / 23-video admission target.
+
+**Safety / what is not claimed.** No chat completion, video submission, browser action, provider request, credential/configuration mutation, database edit, or service restart occurred. This is an endpoint/capacity measurement, not a claim that catalogue rows, queued browser jobs, raw session artifacts, or model discovery are sellable capacity.
