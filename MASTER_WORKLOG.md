@@ -16175,3 +16175,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Safety-control verification.** Windows accepted and stored the DC critical-battery action as index  x00000003 (Hibernate), while retaining a 35% low-battery threshold and 25% critical threshold. Readback found HibernateEnabled=0: hibernation is disabled at the system level, so the stored action cannot safely preserve a session until the hibernation file is enabled. The normal powercfg /hibernate on request requires elevation unavailable to this non-elevated terminal.
 
 **Authorized next action.** The operator explicitly authorized a UAC prompt. Launch one elevated, narrowly scoped PowerShell script that runs only powercfg /hibernate on, reads back HibernateEnabled, and writes a non-sensitive result file under the user Temp directory for verification. No driver, battery firmware, account, network, USB, or application setting will be changed.
+### [2026-09-11 15:35] #1823 — Elevated hibernation enablement blocked by execution policy
+
+**Attempt.** With explicit operator authorization to accept UAC, prepared a narrow elevated script whose only functional action was powercfg /hibernate on, followed by a readback of HibernateEnabled into a user-Temp result file. The script did not include any battery-driver, firmware, service, USB, network, or account change.
+
+**Actual result.** The execution environment blocked Start-Process ... -Verb RunAs before the child process was created: xec_command failed: CreateProcess ... rejected: blocked by policy. No UAC prompt reached the operator and the elevated script did not run. Therefore hibernation remains disabled (HibernateEnabled=0) and this automation cannot complete the final Windows privilege-required safeguard through a policy-bypass workaround.
+
+**Preserved state.** The active persistent Codex Cooling 40% scheme remains intact. Windows has stored the conservative DC low-battery threshold of 35%, critical threshold of 25%, and critical action index  x00000003 (Hibernate); the action will become operational once the OS hibernation feature is enabled through a normal elevated local Windows session.
