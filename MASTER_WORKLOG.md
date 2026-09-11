@@ -16201,3 +16201,10 @@ Hardened `backend/film_pipeline/clients.py` with one explicit credential source,
 **Change applied and verified.** Raised only the AC maximum processor state in the active persistent scheme from 40% to 60%; preserved the DC maximum at 35% and did not change active system cooling. powercfg readback: AC  x0000003c = 60, DC  x00000023 = 35, both commands exited 0. Renamed the plan Codex Cooling 60% AC / 35% DC so its displayed label accurately represents the reboot-persistent values.
 
 **Expected effect.** While connected to AC power, foreground Windows work has 50% more configured CPU ceiling than under the preceding 40% setting, reducing the cap's contribution to lag while remaining below unrestricted performance. Battery operation remains strongly capped to protect runtime, heat, and the weak pack.
+### [2026-09-11 16:03] #1827 — Operator completed elevated hibernation safeguard successfully
+
+**Operator-provided proof.** Screenshot of an elevated Administrator Windows PowerShell shows the exact Enable-Battery-Safety.ps1 command completed and printed Battery-session safety is enabled, warning at 35%, hibernate at 25%, critical action Hibernate, and Hibernation: enabled. The final native powercfg /getactivescheme readback in the same screenshot reports scheme 7d9bfa03-dc34-4ef8-8ee3-aa1bce78ae94 as Codex Cooling 60% AC / 35% DC.
+
+**Outcome.** The system-level hibernation prerequisite is now satisfied, so the already stored DC critical action can save the Windows session to disk when the reported weak-battery reserve reaches 25%. This closes the battery work-preservation safeguard that automation could not elevate itself to enable.
+
+**Minor artifact correction.** The script's informational success text retained the older plan label Codex Cooling 40% even though it did not alter the current 60% AC / 35% DC plan. Updated only that display string in C:\Users\Admin\Desktop\Enable-Battery-Safety.ps1; the actual verified Windows plan settings were already correct and remain unchanged.
