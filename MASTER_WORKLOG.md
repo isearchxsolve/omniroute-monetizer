@@ -16365,3 +16365,7 @@ Operator explicitly requested immediate live hibernation and session restoration
 ### [2026-09-13 15:30] #1847 — Post-reload live connectivity check
 
 **Verification.** After reloading the hardened monitor, the phone gateway `10.23.38.61` answered 10/10 ICMP probes with 0% loss and 0–1 ms latency. The RNDIS adapter `Ethernet 4` was Up at 426 Mbps, and the only IPv4 default route remained through the phone gateway. Ten probes to `1.1.1.1` answered 10/10 with 47–101 ms latency (65 ms average), which confirms the current tether path is working; it is a point-in-time check and cannot guarantee carrier behavior during a future incoming call. The first adapter query used the old no-space name and failed to resolve, but the subsequent enumeration confirmed the actual name `Ethernet 4`; no adapter was changed.
+
+### [2026-09-13 15:35] #1848 — Live headset microphone signal test
+
+**Capture.** With the 3.5 mm headset microphone assigned to Windows input device 1, ran one six-second, in-memory capture at 44.1 kHz without writing or retaining an audio file. The measured overall RMS was `0.005801` with peak `0.112427`; one-second RMS windows were `0.00095, 0.00578, 0.00856, 0.00835, 0.00152, 0.00471`. The elevated middle windows show a changing input signal during the spoken test, confirming that the inline microphone path is receiving sound. The amplitude-only test cannot verify word intelligibility or classify the remaining sound as speech versus noise, so the operator's listening result remains the final check. No audio was saved.
