@@ -1,14 +1,26 @@
 param(
     [switch]$Once,
     [ValidateRange(10, 3600)]
-    [int]$IntervalSeconds = 30
+    [int]$IntervalSeconds = 15
 )
 
 $adb = 'D:\anonym\platform-tools\adb.exe'
 $log = 'D:\anonym\phone-health\usb-tethering-selfheal.log'
 $script:lastStatus = ''
+$script:lastFailoverStatus = ''
 $script:lastRecovery = [datetime]::MinValue
+$script:wifiFailureSamples = 0
+$script:wifiSuccessSamples = 0
 $recoveryCooldownSeconds = 120
+$wifiFailureSamplesRequired = 2
+$wifiRecoverySamplesRequired = 2
+
+# These are intentionally limited to the two adapters this monitor owns.  Lower
+# IPv4 metrics win when Windows has matching default routes.
+$wifiPreferredMetric = 10
+$tetherStandbyMetric = 25
+$tetherPreferredMetric = 5
+$wifiFallbackMetric = 50
 
 function Write-Log([string]$Message) {
     try {
@@ -27,6 +39,13 @@ function Write-State([string]$Message) {
     if ($script:lastStatus -ne $Message) {
         Write-Log $Message
         $script:lastStatus = $Message
+    }
+}
+
+function Write-FailoverState([string]$Message) {
+    if ($script:lastFailoverStatus -ne $Message) {
+        Write-Log $Message
+        $script:lastFailoverStatus = $Message
     }
 }
 
@@ -65,15 +84,179 @@ function Invoke-Adb {
     }
 }
 
+function Get-RndisAdapter {
+    $matches = @(Get-NetAdapter -ErrorAction Stop | Where-Object {
+        $_.Status -eq 'Up' -and $_.InterfaceDescription -match 'Remote NDIS|RNDIS|Android.*Ethernet'
+    })
+    if ($matches.Count -gt 0) { return $matches[0] }
+    return $null
+}
+
 function Get-RndisState {
     try {
-        $adapter = Get-NetAdapter -ErrorAction Stop | Where-Object {
-            $_.Status -eq 'Up' -and $_.InterfaceDescription -match 'Remote NDIS|RNDIS|Android.*Ethernet'
-        } | Select-Object -First 1
-        if ($null -ne $adapter) { return 'Up' }
+        if ($null -ne (Get-RndisAdapter)) { return 'Up' }
         return 'Down'
     } catch {
         return 'Unknown'
+    }
+}
+
+function Get-WifiAdapter {
+    $matches = @(Get-NetAdapter -ErrorAction Stop | Where-Object {
+        $_.Status -eq 'Up' -and (
+            $_.Name -match 'Wi-?Fi|Wireless|802\.11' -or
+            $_.InterfaceDescription -match 'Wi-?Fi|Wireless|802\.11'
+        )
+    })
+    if ($matches.Count -gt 0) { return $matches[0] }
+    return $null
+}
+
+function Get-AdapterIpv4Address {
+    param([object]$Adapter)
+    if ($null -eq $Adapter -or $null -eq $Adapter.ifIndex) { return $null }
+    $addresses = @(Get-NetIPAddress -InterfaceIndex ([int]$Adapter.ifIndex) -AddressFamily IPv4 -ErrorAction Stop |
+        Where-Object {
+            $_.IPAddress -and
+            $_.IPAddress -notmatch '^(0\.|127\.|169\.254\.)'
+        })
+    if ($addresses.Count -gt 0) { return [string]$addresses[0].IPAddress }
+    return $null
+}
+
+function Test-InterfaceInternet {
+    param(
+        [string]$SourceAddress,
+        [ValidateRange(1000, 15000)]
+        [int]$TimeoutMilliseconds = 4000
+    )
+    if ([string]::IsNullOrWhiteSpace($SourceAddress)) { return $false }
+    foreach ($destination in @('1.1.1.1', '8.8.8.8')) {
+        $client = $null
+        try {
+            $client = [Net.Sockets.TcpClient]::new([Net.Sockets.AddressFamily]::InterNetwork)
+            $source = [Net.IPAddress]::Parse($SourceAddress)
+            $client.Client.Bind([Net.IPEndPoint]::new($source, 0))
+            $connect = $client.ConnectAsync($destination, 443)
+            if ($connect.Wait($TimeoutMilliseconds) -and $client.Connected) {
+                return $true
+            }
+        } catch {
+            # Try the independent second endpoint before treating the path as down.
+        } finally {
+            if ($null -ne $client) { $client.Dispose() }
+        }
+    }
+    return $false
+}
+
+function Get-RouteMode {
+    param([object]$WifiAdapter, [object]$TetherAdapter)
+    if ($null -eq $WifiAdapter -or $null -eq $TetherAdapter) { return 'Unknown' }
+    try {
+        $wifi = @(Get-NetIPInterface -InterfaceIndex ([int]$WifiAdapter.ifIndex) -AddressFamily IPv4 -ErrorAction Stop)[0]
+        $tether = @(Get-NetIPInterface -InterfaceIndex ([int]$TetherAdapter.ifIndex) -AddressFamily IPv4 -ErrorAction Stop)[0]
+        if ([int]$tether.InterfaceMetric -lt [int]$wifi.InterfaceMetric) { return 'Tether' }
+        return 'Wifi'
+    } catch {
+        return 'Unknown'
+    }
+}
+
+function Set-RouteMode {
+    param(
+        [ValidateSet('Wifi', 'Tether')]
+        [string]$Mode,
+        [object]$WifiAdapter,
+        [object]$TetherAdapter
+    )
+    if ($Mode -eq 'Tether') {
+        if ($null -ne $WifiAdapter) {
+            Set-NetIPInterface -InterfaceIndex ([int]$WifiAdapter.ifIndex) -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric $wifiFallbackMetric -ErrorAction Stop
+        }
+        Set-NetIPInterface -InterfaceIndex ([int]$TetherAdapter.ifIndex) -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric $tetherPreferredMetric -ErrorAction Stop
+        return
+    }
+    # Raise tether first so a successful Wi-Fi recovery is the only path that becomes preferred.
+    Set-NetIPInterface -InterfaceIndex ([int]$TetherAdapter.ifIndex) -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric $tetherStandbyMetric -ErrorAction Stop
+    Set-NetIPInterface -InterfaceIndex ([int]$WifiAdapter.ifIndex) -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric $wifiPreferredMetric -ErrorAction Stop
+}
+
+function Update-InternetFailover {
+    $wifi = $null
+    try {
+        $wifi = Get-WifiAdapter
+    } catch {
+        Write-FailoverState 'WAIT: Wi-Fi adapter query unavailable; IPv4 route metrics were left unchanged.'
+        return
+    }
+    $tether = $null
+    try { $tether = Get-RndisAdapter } catch { $tether = $null }
+
+    $wifiAddress = Get-AdapterIpv4Address $wifi
+    $wifiOnline = $false
+    if ($null -ne $wifi -and $null -ne $wifiAddress) {
+        $wifiOnline = Test-InterfaceInternet -SourceAddress $wifiAddress
+    }
+
+    if ($wifiOnline) {
+        $script:wifiFailureSamples = 0
+        $script:wifiSuccessSamples++
+        if ($null -eq $tether) {
+            Write-FailoverState 'HEALTHY: Wi-Fi Internet is reachable; USB tether adapter is not present.'
+            return
+        }
+        $mode = Get-RouteMode -WifiAdapter $wifi -TetherAdapter $tether
+        if ($mode -eq 'Tether') {
+            if ($script:wifiSuccessSamples -lt $wifiRecoverySamplesRequired) {
+                Write-FailoverState ('WAIT: Wi-Fi recovery sample {0}/{1}; keeping the proven USB tether route.' -f $script:wifiSuccessSamples, $wifiRecoverySamplesRequired)
+                return
+            }
+            try {
+                Set-RouteMode -Mode Wifi -WifiAdapter $wifi -TetherAdapter $tether
+                Write-FailoverState 'OK: Wi-Fi Internet recovered twice; Wi-Fi is preferred again and USB tether remains standby.'
+            } catch {
+                Write-FailoverState 'WAIT: Wi-Fi recovered, but route metrics need an elevated monitor; no route was claimed changed.'
+            }
+            return
+        }
+        if ($mode -eq 'Unknown') {
+            Write-FailoverState 'WAIT: Wi-Fi is reachable, but IPv4 route metrics could not be read; leaving them unchanged.'
+            return
+        }
+        Write-FailoverState 'HEALTHY: Wi-Fi Internet is reachable and remains the preferred IPv4 route.'
+        return
+    }
+
+    $script:wifiSuccessSamples = 0
+    if ($null -eq $wifi) {
+        $script:wifiFailureSamples = $wifiFailureSamplesRequired
+    } else {
+        $script:wifiFailureSamples++
+    }
+    if ($null -eq $tether) {
+        Write-FailoverState 'WAIT: Wi-Fi has no usable Internet path and the USB tether adapter is absent; no route change.'
+        return
+    }
+    $tetherAddress = Get-AdapterIpv4Address $tether
+    if ($null -eq $tetherAddress -or -not (Test-InterfaceInternet -SourceAddress $tetherAddress)) {
+        Write-FailoverState 'WAIT: Wi-Fi failed, but USB tether Internet was not independently verified; no route change.'
+        return
+    }
+    if ($script:wifiFailureSamples -lt $wifiFailureSamplesRequired) {
+        Write-FailoverState ('WAIT: Wi-Fi Internet failure sample {0}/{1}; holding its priority until confirmed.' -f $script:wifiFailureSamples, $wifiFailureSamplesRequired)
+        return
+    }
+    $mode = Get-RouteMode -WifiAdapter $wifi -TetherAdapter $tether
+    if ($mode -eq 'Tether') {
+        Write-FailoverState 'OK: Wi-Fi Internet is unavailable; the independently verified USB tether route remains preferred.'
+        return
+    }
+    try {
+        Set-RouteMode -Mode Tether -WifiAdapter $wifi -TetherAdapter $tether
+        Write-FailoverState 'OK: Wi-Fi Internet failed twice; USB tether was Internet-verified and is now the preferred IPv4 route.'
+    } catch {
+        Write-FailoverState 'WAIT: USB tether works, but changing route metrics needs an elevated monitor; routes were left unchanged.'
     }
 }
 
@@ -174,10 +357,17 @@ try {
         $ownsMutex = $true
     }
     if (-not $ownsMutex) { return }
-    Write-Log 'START: USB tether monitor; confirmed-down recovery, fresh UI, 120-second cooldown.'
+    Write-Log 'START: USB tether monitor; confirmed-down recovery plus two-sample Wi-Fi-to-tether IPv4 failover.'
     do {
-        try { Restore-UsbTethering } catch {
+        try {
+            Restore-UsbTethering
+        } catch {
             Write-State 'WAIT: Unexpected monitor error; deferring recovery.'
+        }
+        try {
+            Update-InternetFailover
+        } catch {
+            Write-FailoverState 'WAIT: Unexpected failover-monitor error; IPv4 route metrics were left unchanged.'
         }
         if (-not $Once) { Start-Sleep -Seconds $IntervalSeconds }
     } while (-not $Once)
