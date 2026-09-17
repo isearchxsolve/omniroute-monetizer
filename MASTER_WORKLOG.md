@@ -17012,3 +17012,33 @@ Operator explicitly requested immediate live hibernation and session restoration
 - **Execution:** Ran `powershell.exe -NoProfile -Sta -ExecutionPolicy Bypass -File C:\Users\Admin\Set-RequestyKey.ps1` without UAC. Output was `REQUESTY_API_KEY saved for the current Windows user.` The script warned that the clipboard could not be cleared from the non-interactive execution context; no key value appeared in output.
 - **Verification:** A separate read-only check returned `REQUESTY_API_KEY=SET length=117`. Only the length was printed; the secret value was never read into worklog output, displayed, or transmitted. No inference request was sent.
 - **Operator follow-up:** The operator should manually clear the clipboard in the interactive desktop if the key remains there, then open a new PowerShell/Kilo process so it inherits the persistent user variable. Continue with `kilo --continue -m requesty/nvidia/nemotron-3-super-120b-a12b`. No existing Kilo session was interrupted by this action.
+
+### [2026-09-17 16:04] #1931 — Benchmarked Kilo Gateway no-key free routes
+
+- **Operator request and scope:** The operator asked for the same reality-checked comparison for all Kilo models that are marked free and do not require a provider API key. The test scope was therefore Kilo Gateway's own `kilo/` routes exposed by the installed Kilo CLI, excluding the separately configured Requesty and Meta BYOK providers and excluding OpenCode Zen contributor routes. This is an availability/latency smoke benchmark, not a claim that a single short prompt measures software-engineering quality.
+- **Catalog enumeration:** Ran `kilo models` and identified the Kilo Gateway free routes, including the concrete `:free` entries for Cohere North Mini Code, Dots 3 Note Preview, Ling 3.0 Flash Fin/Sante/VL, Liquid LFM 2.5 2.6B, Nex N2.5 Mini/Pro, NVIDIA Nemotron 3 Nano Omni reasoning/Super/Ultra, NVIDIA Nemotron 3.5 Content Safety/Lightning, Poolside Laguna S/XS 2.1, StepFun Step 3.7 Flash, and Thinking Machines Inkling Small. The test also included the two Kilo free aliases `kilo/kilo-auto/free` and `kilo/openrouter/free`; these aliases are composites/fallback routes rather than individual model-quality observations.
+- **Harness and safety:** Ran Kilo's read-only `roll-call` with filter `^kilo/(?:.*:free|kilo-auto/free|openrouter/free)$`, one controlled text prompt requiring `FINAL=34`, `--parallel 1`, `--timeout 60000`, and JSON/quiet output. The prompt did not ask for tools, file access, process changes, or any mutation. No API key was supplied to the Kilo Gateway calls, no workspace file was changed by the benchmark, and no Chrome profile or running project process was touched.
+- **Measured successful routes (access and latency):**
+  - `kilo/nex-agi/nex-n2.5-mini:free` — pass, 1,576 ms.
+  - `kilo/inclusionai/ling-3.0-flash-vl:free` — pass, 2,070 ms.
+  - `kilo/nvidia/nemotron-3-super-120b-a12b:free` — pass, 2,099 ms.
+  - `kilo/inclusionai/ling-3.0-flash-sante:free` — pass, 2,562 ms.
+  - `kilo/inclusionai/ling-3.0-flash-fin:free` — pass, 3,369 ms.
+  - `kilo/nvidia/nemotron-3-ultra-550b-a55b:free` — pass, 3,522 ms.
+  - `kilo/cohere/north-mini-code:free` — pass, 3,730 ms.
+  - `kilo/nex-agi/nex-n2.5-pro:free` — pass, 4,267 ms.
+  - `kilo/stepfun/step-3.7-flash:free` — pass, 3,115 ms.
+  - `kilo/openrouter/free` alias — pass, 4,464 ms; this is an alias/fallback route, not a single model.
+  - `kilo/liquid/lfm-2.5-2.6b:free` — pass, 8,585 ms.
+  - `kilo/kilo-auto/free` alias — pass, 17,706 ms; this is an automatic composite route, not a single model.
+  - `kilo/dots-studio/dots-3-note-preview:free` — pass, 12,720 ms.
+  - `kilo/nvidia/nemotron-3.5-lightning:free` — pass, 21,535 ms.
+- **Measured unavailable routes (not quality failures):**
+  - `kilo/poolside/laguna-s-2.1:free` — access false, `[Poolside] Rate limit exceeded`, 8,570 ms.
+  - `kilo/thinkingmachines/inkling-small:free` — access false, provider daily `limit_rpd` reached; the response explicitly said credits do not remove that cap and suggested using an own OpenRouter key, 8,040 ms.
+  - `kilo/poolside/laguna-xs-2.1:free` — access false, temporarily rate-limited upstream, 8,737 ms.
+  - `kilo/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` — access false, NVIDIA worker capacity exhausted (`ResourceExhausted`, local total request limit 16/16), 733 ms.
+  These four records show route/provider capacity or quota at test time; they must not be ranked as intellectually weak models. The `nvidia/nemotron-3.5-content-safety:free` entry was not returned by the text-agent roll-call (a separate filtered call returned an empty result), so it is treated as non-benchmarkable/safety-only rather than as a failed coding model.
+- **Result count:** 18 records were returned: 14 accessible records (12 concrete model routes plus 2 aliases) and 4 temporarily unavailable concrete routes. Every accessible record returned the required `FINAL=34` answer on the controlled smoke prompt. The run did not exercise tool calls, file edits, long-context continuation, or recovery after compaction; those remain unverified dimensions.
+- **Decision from evidence:** The operator's prior observation that Nex behaves properly is consistent with this run: `nex-n2.5-pro:free` passed in 4,267 ms and is a sensible coherence-first default for the existing long-running task. `nemotron-3-super-120b-a12b:free` was the fastest strong-looking reasoning/tool-capable route in this smoke run at 2,099 ms and is the best speed/agent-capability alternative, but the short test cannot prove it will maintain task coherence over hundreds of turns. `nemotron-3-ultra:free` passed quickly (3,522 ms) and advertises a larger context in the picker, but the operator has already reported that Ultra fumbles/confuses this task; that real-session evidence outweighs nominal size, so Ultra is not recommended as the default. Lightning is a slower long-context fallback, while Mini/Ling are quick choices for small independent tasks. The aliases are useful availability fallbacks but hide which underlying model answered and therefore are poor choices for a reproducible benchmark verdict.
+- **Operational next action:** For the current session, select `kilo/nex-agi/nex-n2.5-pro:free` and continue with `kilo --continue -m kilo/nex-agi/nex-n2.5-pro:free` only after the current Kilo process is idle. Keep `kilo/nvidia/nemotron-3-super-120b-a12b:free` as the next A/B test or fallback. Use a read-only state-check prompt after switching before allowing edits. No model was changed automatically by this benchmark and no session was interrupted.
