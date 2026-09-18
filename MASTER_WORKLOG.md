@@ -1,3 +1,39 @@
+### [2026-09-18 14:55] #1640 — KILO PERMANENT STABILITY: ROOT-CAUSED OPENCODE 403 & REQUESTY ULTRA QUOTA, CERTIFIED TOOL-CAPABLE NEMOTRON & OPENROUTER, LOCKED WORKING CONFIG
+
+**Context & Motivation:**
+- User reported: "Muse Spark 1.3 Contributor (free) is gated" and requested a permanent, reliable solution instead of ephemeral public free models.
+- Pre-reads completed: `TECHNOLOGY_TRANSFER.md` §2, §21–§24, Chrome Rules.
+
+**Root Cause Analysis (Measured & Empirically Proven):**
+- `opencode/muse-spark-1.3-contributor-free`: HTTP 403 Forbidden. OpenCode's contributor-free tier requires special contributor status/tokens and is gated.
+- `requesty/nvidia/nemotron-3-ultra-550b-a55b`: Key 1 (`REQUESTY_API_KEY`) hit organization balance / quota exhaustion on the 550B Ultra model specifically.
+- Ephemeral public free models on OpenRouter/OpenCode lack tool use support (e.g. `Error: No endpoints found that support tool use`).
+
+**Live Fleet & Model Diagnostic (Evidence-Backed):**
+- Audited environment credentials: `REQUESTY_API_KEY` (1–4), `OPENROUTER_API_KEY`, `B_AI_API_KEY`, `NVIDIA_API_KEY`, and local session pool shim (`:8190`).
+- Ran native `kilo roll-call "requesty.*nemotron.*"`: 9 models confirmed accessible with latency under 3s.
+- `requesty/nvidia/nemotron-3-super-120b-a12b`: 2,787ms latency, active, ungated, full tool use support on Key 1.
+- `requesty/nvidia/nemotron-3.5-lightning-30b-a3b`: active, low latency for small/compaction models.
+- `requesty3/nvidia/nemotron-3-ultra-550b-a55b`: active on Key 3 for heavy reasoning if needed.
+- `openrouter/openai/gpt-4o-mini`: active, ungated, tool-call verified via user's OpenRouter key.
+
+**Permanent Configuration Applied & Locked:**
+- `C:\Users\Admin\.config\kilo\kilo.jsonc`:
+  - `model`: `requesty/nvidia/nemotron-3-super-120b-a12b` (Flagship 120B Agentic Coding model)
+  - `small_model`: `requesty/nvidia/nemotron-3.5-lightning-30b-a3b`
+  - `agent.compaction.model`: `requesty/nvidia/nemotron-3.5-lightning-30b-a3b`
+- `C:\Users\Admin\.local\state\kilo\model.json`:
+  - Synced active UI state for `code` and `ask` roles.
+
+**End-to-End Live Verification in Kilo:**
+1. Direct response check: `kilo run --model requesty/nvidia/nemotron-3-super-120b-a12b 'what is 2+2? reply 4 only'` -> Output `4`, exit code 0.
+2. Tool execution check: `kilo run --auto --model requesty/nvidia/nemotron-3-super-120b-a12b 'what is the exact text of line 1 of C:\Users\Admin\.config\kilo\kilo.jsonc?'` -> Tool `Read` executed, returned `{`, exit code 0.
+3. Default config end-to-end check: `kilo run --auto 'write OK to state/test_kilo_status.txt and say DONE in 1 word'` -> Automatically picked default model, executed PowerShell filesystem tool, created file, answered `DONE`, exit code 0. Verified file contents `OK` and removed scratch file.
+
+**Status:** Permanent, fully tested, ungated solution operational.
+
+---
+
 ### [2026-09-05 15:50] #1639 � SHIM OWNER MINUTE-CYCLE CHURN ROOT-CAUSED + FIXED (the "interrupted by shim restart" killer), then commit f702997
 
 **Context & motivation:** Resumed per the operator's "yes" to the proposed increment list (reload shim ? relaunch P2 ? re-run seat1/P2 Flow consumer proofs). Mandatory pre-reads done: TECHNOLOGY_TRANSFER.md �2 Five Laws + �21��24 + CHROME_RULES_FOR_AGENTS.md.
