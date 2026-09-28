@@ -56,3 +56,10 @@ _reactivation_backup_*.json
 
 # transient DOM captures from graduation sweep (chat content)
 scratch/*.html
+
+# commit_dirty hygiene - build artifacts are never committed
+node_modules/
+__pycache__/
+*.pyc
+.tmp_*
+
