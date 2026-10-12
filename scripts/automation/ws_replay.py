@@ -10,8 +10,9 @@ Same contract, same rules as the HTTP adapter:
 
   * the capture (capture_sessions_cdp.py) records the genuine exchange: the handshake url,
     the headers Chrome sent, and every SENT frame in order (`recorded_ws`);
-  * at call time the sentinel is string-replaced inside the recorded frames -- the protocol
-    is never rebuilt from scratch, so every field the site's own client sends stays in;
+  * at call time the sentinel is string-replaced inside the recorded frames (or binary
+    Protobuf varint-patched for binary frames) -- the protocol is never rebuilt from
+    scratch, so every field the site's own client sends stays in;
   * received frames are pumped and assembled, then handed to the SAME extraction pipeline
     (_extract_response) and the same strict numeric verdict as the HTTP path.
 
@@ -20,15 +21,20 @@ keyword-search unlock and classify() work unchanged. Cookie rotation on the ws h
 not absorbed (websocket-client does not expose response headers portably) -- noted honestly;
 ws session lifetimes are bounded by that.
 """
+import base64
 import json
 import time
 import urllib.parse
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import websocket                      # websocket-client -- already the CDP transport's lib
 
 from veoaifree_chat_client import ChatError          # noqa: E402  (canonical exception)
-from universal_replay import UniversalSessionClient  # noqa: E402  (extraction pipeline)
+from universal_replay import (                       # noqa: E402  (extraction + protobuf pipeline)
+    UniversalSessionClient,
+    substitute_protobuf_bytes,
+    extract_protobuf_strings,
+)
 
 DEFAULT_SENTINEL = "Reply exactly one word: Omni."
 
@@ -54,6 +60,33 @@ def _sentinel_forms(s: str) -> list[str]:
     return [s, urllib.parse.quote_plus(s), urllib.parse.quote(s), json.dumps(s)[1:-1]]
 
 
+def _parse_ws_proxy_kwargs(proxy_url: Optional[str]) -> Dict[str, Any]:
+    """Convert an HTTP/SOCKS5 proxy URL into websocket.create_connection kwargs."""
+    if not proxy_url:
+        return {}
+    parsed = urllib.parse.urlparse(proxy_url if "://" in proxy_url else f"http://{proxy_url}")
+    if not parsed.hostname or not parsed.port:
+        return {}
+    scheme = (parsed.scheme or "http").lower()
+    if scheme.startswith("socks5"):
+        ptype = "socks5h" if "socks5h" in scheme else "socks5"
+    elif scheme.startswith("socks4"):
+        ptype = "socks4"
+    else:
+        ptype = "http"
+    kw: Dict[str, Any] = {
+        "http_proxy_host": parsed.hostname,
+        "http_proxy_port": parsed.port,
+        "proxy_type": ptype,
+    }
+    if parsed.username:
+        kw["http_proxy_auth"] = (
+            urllib.parse.unquote(parsed.username),
+            urllib.parse.unquote(parsed.password or ""),
+        )
+    return kw
+
+
 class WebSocketSessionClient:
     """Same .chat() contract as UniversalSessionClient, over the recorded websocket."""
 
@@ -67,7 +100,7 @@ class WebSocketSessionClient:
         if not self.rec.get("url"):
             raise ChatError("NO_WS_URL", "capture has no recorded_ws.url to replay")
         self.url: str = self.rec["url"]
-        self.sent_frames: list = [str(f) for f in (self.rec.get("sent_frames") or [])]
+        self.sent_frames: list = list(self.rec.get("sent_frames") or [])
         self.sentinel: str = self.raw.get("sentinel") or DEFAULT_SENTINEL
         self.cookie_header: str = (self.raw.get("cookie_header")
                                    or self.rec.get("cookie_header") or "")
@@ -81,11 +114,39 @@ class WebSocketSessionClient:
         if self.cookie_header:
             self.headers.append(f"Cookie: {self.cookie_header}")
 
-    # -- sentinel injection: same one-string-replacement rule as the HTTP path ------------
-    def _inject(self, new_prompt: str) -> list[str]:
+        try:
+            from multistep_replay import resolve_egress_proxy
+        except ImportError:
+            import sys as _sys
+            _sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+            from multistep_replay import resolve_egress_proxy
+        self.proxy: Optional[str] = resolve_egress_proxy(self.raw, self.raw.get("host"))
+
+    # -- sentinel injection: text frames + binary Protobuf frames (Point 5) ----------------
+    def _inject(self, new_prompt: str) -> List[Union[str, bytes]]:
         pairs = list(zip(_sentinel_forms(self.sentinel), _sentinel_forms(new_prompt)))
-        out, hits = [], 0
-        for frame in self.sent_frames:
+        out: List[Union[str, bytes]] = []
+        hits = 0
+        for raw_frame in self.sent_frames:
+            # Binary frame representation: {"type": "binary", "data_b64": "..."} or "base64:..."
+            if isinstance(raw_frame, dict) and raw_frame.get("data_b64"):
+                raw_bytes = base64.b64decode(raw_frame["data_b64"])
+                patched_b, h = substitute_protobuf_bytes(
+                    raw_bytes, new_prompt, extra_sentinels=[self.sentinel]
+                )
+                hits += h
+                out.append(patched_b)
+                continue
+            if isinstance(raw_frame, str) and raw_frame.startswith("base64:"):
+                raw_bytes = base64.b64decode(raw_frame[7:])
+                patched_b, h = substitute_protobuf_bytes(
+                    raw_bytes, new_prompt, extra_sentinels=[self.sentinel]
+                )
+                hits += h
+                out.append(patched_b)
+                continue
+
+            frame = str(raw_frame)
             n = 0
             for old, new in pairs:
                 if old and old in frame:
@@ -101,6 +162,13 @@ class WebSocketSessionClient:
                 f"re-send the captured probe instead of the caller's prompt.")
         return out
 
+    @staticmethod
+    def _ws_send(ws, frame: Union[str, bytes]) -> None:
+        if isinstance(frame, bytes):
+            ws.send(frame, opcode=websocket.ABNF.OPCODE_BINARY)
+        else:
+            ws.send(frame)
+
     def chat(self, messages: list, model: Optional[str] = None, **kw) -> Dict[str, Any]:
         if not messages:
             raise ChatError("NO_MESSAGES", "no messages provided")
@@ -114,10 +182,16 @@ class WebSocketSessionClient:
         seen: set = set()
         unique_frames = [f for f in frames if not (f in seen or seen.add(f))]
 
+        ws_kwargs: Dict[str, Any] = {
+            "timeout": self.timeout,
+            "header": self.headers,
+            "suppress_origin": True,
+            "max_size": 16 * 1024 * 1024,
+        }
+        ws_kwargs.update(_parse_ws_proxy_kwargs(getattr(self, "proxy", None)))
+
         try:
-            ws = websocket.create_connection(self.url, timeout=self.timeout,
-                                             header=self.headers, suppress_origin=True,
-                                             max_size=16 * 1024 * 1024)
+            ws = websocket.create_connection(self.url, **ws_kwargs)
         except websocket.WebSocketBadStatusException as e:
             # 401/403 at the handshake: replay_check's classify() reads these as AUTH.
             raise ChatError("HTTP_ERROR", f"ws handshake rejected: {e}") from e
@@ -154,7 +228,7 @@ class WebSocketSessionClient:
                 fresh = "".join(_secrets.choice(
                     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
                     for _ in range(20))
-                send_frames = [f for f in unique_frames if '"event":"send"' in f]
+                send_frames = [f for f in unique_frames if isinstance(f, str) and '"event":"send"' in f]
                 if not send_frames:
                     raise ChatError("SENTINEL_NOT_FOUND",
                                     "copilot replay: no send frame in the recorded sequence")
@@ -174,8 +248,8 @@ class WebSocketSessionClient:
                 import json as _json
                 import re as _re
                 import uuid as _uuid
-                create_frame = next((f for f in unique_frames if '"session.create"' in f), None)
-                send_frames = [f for f in unique_frames if '"response.create"' in f]
+                create_frame = next((f for f in unique_frames if isinstance(f, str) and '"session.create"' in f), None)
+                send_frames = [f for f in unique_frames if isinstance(f, str) and '"response.create"' in f]
                 if not send_frames:
                     raise ChatError("SENTINEL_NOT_FOUND",
                                     "grok replay: no response.create frame in the recorded sequence")
@@ -183,7 +257,7 @@ class WebSocketSessionClient:
                 if create_frame:
                     create_frame = _re.sub(r'"event_id":"evt_init_[^"]+"',
                                            f'"event_id":"evt_init_{_uuid.uuid4()}"', create_frame)
-                    ws.send(create_frame)
+                    self._ws_send(ws, create_frame)
                     deadline_ack = time.monotonic() + 15.0
                     while time.monotonic() < deadline_ack and not sid:
                         try:
@@ -212,15 +286,15 @@ class WebSocketSessionClient:
                                         "(server error or protocol change)")
                 rewritten = [_re.sub(r'"session_id":"[A-Za-z0-9-]+"',
                                      f'"session_id":"{sid}"', f) for f in send_frames]
-                if '"presence.update"' in " ".join(unique_frames):
-                    presence = next(f for f in unique_frames if '"presence.update"' in f)
+                if '"presence.update"' in " ".join(str(x) for x in unique_frames):
+                    presence = next(f for f in unique_frames if isinstance(f, str) and '"presence.update"' in f)
                     rewritten.append(_re.sub(r'"session_id":"[A-Za-z0-9-]+"',
                                              f'"session_id":"{sid}"', presence))
                 for frame in rewritten:
-                    ws.send(frame)
+                    self._ws_send(ws, frame)
             else:
                 for frame in unique_frames:
-                    ws.send(frame)
+                    self._ws_send(ws, frame)
             deadline = time.monotonic() + self.timeout
             last_text_at = time.monotonic()
             while time.monotonic() < deadline:
@@ -234,10 +308,17 @@ class WebSocketSessionClient:
                 except (websocket.WebSocketConnectionClosedException, ConnectionError):
                     break                            # server closed: we keep what we got
                 if isinstance(msg, bytes):
-                    try:
-                        msg = msg.decode("utf-8", "replace")
-                    except Exception:
-                        continue
+                    proto_strs = extract_protobuf_strings(msg)
+                    if proto_strs:
+                        for ps in proto_strs:
+                            if ps.strip() and ps.strip() != new_prompt.strip():
+                                append_texts.append(ps)
+                        msg = "\n".join(proto_strs)
+                    else:
+                        try:
+                            msg = msg.decode("utf-8", "replace")
+                        except Exception:
+                            continue
                 if msg:
                     payloads.append(msg)
                     last_text_at = time.monotonic()

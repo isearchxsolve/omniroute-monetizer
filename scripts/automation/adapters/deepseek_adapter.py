@@ -24,11 +24,19 @@ def solve_deepseek_pow(pow_challenge_json_str) -> str:
         raise ValueError("Missing 'salt' or 'challenge' in PoW payload.")
         
     # Paths for Node executable and our JS solver script
-    node_exe = r"D:\DOWNLOADS\node-v24.18.0-win-x64\node-v24.18.0-win-x64\node.exe"
+    import shutil
+    default_node = r"D:\DOWNLOADS\node-v24.18.0-win-x64\node-v24.18.0-win-x64\node.exe"
+    node_exe = default_node if os.path.exists(default_node) else (shutil.which("node") or "node")
     solver_script = os.path.join(os.path.dirname(__file__), "ds_pow_solver.js")
     
     # Run the Node script synchronously (it prints the JSON answer to stdout)
-    res = subprocess.run([node_exe, solver_script, json.dumps(challenge_data)], capture_output=True, text=True)
+    res = subprocess.run(
+        [node_exe, solver_script, json.dumps(challenge_data)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     
     if res.returncode != 0:
         raise ValueError(f"PoW solver failed: {res.stderr}")
@@ -55,3 +63,4 @@ def solve_deepseek_pow(pow_challenge_json_str) -> str:
     # Must serialize closely to what the server expects: no spaces
     json_str = json.dumps(response_obj, separators=(',', ':'))
     return base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
+

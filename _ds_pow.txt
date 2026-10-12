@@ -1,5 +1,5 @@
-﻿=== DeepSeek PoW-related headers ===
-  authorization: Bearer HIkYEXqyiCG/zlIaTOdKcGXHmbpeh427qH8UaHQy3BOrcgwVC42aG6w3Qv8hkLeu
+=== DeepSeek PoW-related headers ===
+  authorization: Bearer REDACTED_SESSION_BEARER_TOKEN_SANITIZED
   x-client-bundle-id: com.deepseek.chat
   x-client-locale: en_US
   x-client-platform: web

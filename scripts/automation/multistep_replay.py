@@ -6,14 +6,17 @@ Pattern (Felo, Mistral, and similar):
   2. GET a stream/poll endpoint using a value from the bootstrap (stream_key, task_id, etc.)
      with the same Authorization header. The answer arrives as SSE or chunked JSON.
 
-This module implements step 2 for each known provider shape. It is called by
+This module implements step 2 for each known provider shape, plus a generalized N-leg
+recorded_exchanges threading engine (`generic_multistep_followup`). It is called by
 universal_replay.py when the bootstrap response is detected, and by replay_check.py
 so these providers are scored correctly instead of being misclassified as SINGLE_USE.
 
 Law 4 still holds: the recorded POST is replayed byte-for-byte with one substitution.
 The second request is a deterministic follow-up using values from the first response.
 """
+import hashlib
 import json
+import os
 import re
 import time
 import uuid
@@ -37,13 +40,52 @@ except ImportError:
 _IMPERSONATE = "chrome"
 
 
-def _stream_get(url: str, headers: Dict[str, str], timeout: float):
+def resolve_egress_proxy(raw: Optional[Dict[str, Any]] = None, host: Optional[str] = None) -> Optional[str]:
+    """Resolve optional residential / SOCKS5 / HTTP egress proxy for ASN-sensitive targets.
+
+    Priority order:
+      1. Explicit per-seat blueprint key: `raw["proxy"]` or `raw["egress_proxy"]`
+      2. Host-specific environment variable: `OMNIROUTE_PROXY_<HOST_SLUG>` (e.g. OMNIROUTE_PROXY_CLAUDE_AI)
+      3. Global environment variable: `OMNIROUTE_PROXY` or `OMNIROUTE_HTTPS_PROXY` or `OMNIROUTE_SOCKS_PROXY`
+
+    When routed through curl_cffi (`impersonate="chrome"`), the BoringSSL TLS ClientHello
+    (JA3/JA4) and HTTP/2 ALPN handshake occur inside the proxy tunnel to the origin, combining
+    residential ASN reputation with Chrome's exact TLS fingerprint.
+    """
+    if isinstance(raw, dict):
+        p = raw.get("proxy") or raw.get("egress_proxy")
+        if isinstance(p, str) and p.strip():
+            return p.strip()
+    if host:
+        slug = re.sub(r"[^A-Za-z0-9]+", "_", host).strip("_").upper()
+        if slug:
+            env_host = os.environ.get(f"OMNIROUTE_PROXY_{slug}", "").strip()
+            if env_host:
+                return env_host
+    for env_key in ("OMNIROUTE_PROXY", "OMNIROUTE_HTTPS_PROXY", "OMNIROUTE_SOCKS_PROXY"):
+        val = os.environ.get(env_key, "").strip()
+        if val:
+            return val
+    return None
+
+
+def _stream_get(url: str, headers: Dict[str, str], timeout: float, proxy: Optional[str] = None):
     """GET a streaming endpoint through the impersonation transport."""
     if _HAVE_CURL_CFFI:
-        return curl_cffi.request(
-            "GET", url, headers=headers, timeout=timeout,
-            impersonate=_IMPERSONATE, default_headers=False, stream=True)
-    return requests.get(url, headers=headers, timeout=timeout, stream=True)
+        kwargs: Dict[str, Any] = {
+            "headers": headers,
+            "timeout": timeout,
+            "impersonate": _IMPERSONATE,
+            "default_headers": False,
+            "stream": True,
+        }
+        if proxy:
+            kwargs["proxy"] = proxy
+        return curl_cffi.request("GET", url, **kwargs)
+    req_kwargs: Dict[str, Any] = {"headers": headers, "timeout": timeout, "stream": True}
+    if proxy:
+        req_kwargs["proxies"] = {"http": proxy, "https": proxy}
+    return requests.get(url, **req_kwargs)
 
 
 def _iter_text_chunks(r):
@@ -66,11 +108,75 @@ def _iter_text_chunks(r):
 
 
 # ---------------------------------------------------------------------------
-# Pre-flight body mutations: fields that must be fresh on every replay.
+# Pre-flight body & dynamic header mutations: fields that must be fresh on
+# every replay (Point 2: Polymorphic Dynamic Crypto / Nonce / Timestamp).
 # These are NOT adapters (Law 4 holds — the recorded request is still replayed
 # byte-for-byte except for the sentinel swap); they refresh client-generated
 # identifiers that the server rejects if reused.
 # ---------------------------------------------------------------------------
+
+_HEX32_RE = re.compile(r"^[0-9a-fA-F]{32}$")
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def _fresh_like(old_val: str) -> str:
+    """Mint a fresh UUID/nonce preserving the exact format of the recorded value."""
+    s = str(old_val or "").strip()
+    if _HEX32_RE.match(s):
+        return uuid.uuid4().hex
+    if _UUID_RE.match(s):
+        return str(uuid.uuid4())
+    return uuid.uuid4().hex if len(s) == 32 else str(uuid.uuid4())
+
+
+def _chatglm_sign(timestamp_s: str, nonce: str, secret: str = "8a1317a7468aa3ad86e997d08f3f31cb") -> str:
+    """Compute ChatGLM web request signature (`X-Sign`) from timestamp + nonce."""
+    raw = f"{timestamp_s}-{nonce}-{secret}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+
+def apply_dynamic_headers(host: str, headers: Dict[str, str], body_str: str = "") -> Dict[str, str]:
+    """Refresh per-request anti-replay headers (timestamps, nonces, request IDs, X-Sign).
+
+    Preserves byte-for-byte static headers while preventing replay-deduplication 400/403s
+    on endpoints that check X-Timestamp, X-Nonce, X-Request-Id, or ChatGLM X-Sign.
+    """
+    out = dict(headers)
+    now_s = str(int(time.time()))
+    now_ms = str(int(time.time() * 1000))
+
+    ts_key = None
+    nonce_key = None
+    sign_key = None
+
+    for k, v in list(out.items()):
+        kl = k.lower()
+        vs = str(v or "").strip()
+        if kl in ("x-request-id", "x-client-request-id", "x-correlation-id", "x-trace-id", "request-id"):
+            out[k] = _fresh_like(vs)
+        elif kl in ("x-nonce", "nonce"):
+            nonce_key = k
+            out[k] = _fresh_like(vs)
+        elif kl in ("x-timestamp", "timestamp"):
+            ts_key = k
+            if vs.isdigit() and len(vs) >= 12:
+                out[k] = now_ms
+            else:
+                out[k] = now_s
+        elif kl == "x-sign":
+            sign_key = k
+
+    if sign_key and (ts_key or nonce_key or "chatglm" in (host or "").lower()):
+        t_val = out.get(ts_key, now_s) if ts_key else now_s
+        n_val = out.get(nonce_key, uuid.uuid4().hex) if nonce_key else uuid.uuid4().hex
+        if ts_key is None:
+            out["X-Timestamp"] = t_val
+        if nonce_key is None:
+            out["X-Nonce"] = n_val
+        out[sign_key] = _chatglm_sign(t_val, n_val)
+
+    return out
+
 
 def _mistral_preflight(body_str: str) -> str:
     """Mistral Le Chat: messageId is a client-generated UUID that must be unique
@@ -150,13 +256,158 @@ PREFLIGHT_REGISTRY: Dict[str, Callable[[str], str]] = {
 }
 
 
-
 def apply_preflight(host: str, body_str: str) -> str:
     """Apply any registered pre-flight mutation for this host."""
     fn = PREFLIGHT_REGISTRY.get(host)
     if fn:
         return fn(body_str)
     return body_str
+
+
+# ---------------------------------------------------------------------------
+# Generalized N-Leg Dynamic ID Extraction & Threading (Point 3)
+# ---------------------------------------------------------------------------
+
+_BOOTSTRAP_ID_KEYS = (
+    "conduit_token", "conduitToken",
+    "stream_key", "streamKey",
+    "conversation_id", "conversationId",
+    "chat_id", "chatId",
+    "session_id", "sessionId",
+    "thread_id", "threadId",
+    "message_id", "messageId",
+    "task_id", "taskId",
+    "token", "id",
+)
+
+# Map header names (lowercased) to the canonical token key they consume
+_HEADER_TOKEN_MAP = {
+    "x-conduit-token": ("conduit_token", "conduitToken", "token"),
+    "x-conversation-id": ("conversation_id", "conversationId", "id"),
+    "x-session-id": ("session_id", "sessionId", "id"),
+    "x-chat-id": ("chat_id", "chatId", "id"),
+    "x-thread-id": ("thread_id", "threadId", "id"),
+    "x-stream-key": ("stream_key", "streamKey"),
+}
+
+
+def extract_bootstrap_tokens(bootstrap_body: str) -> Dict[str, str]:
+    """Recursively extract dynamic session/conversation/message/stream identifiers
+    from a Leg-1 JSON response so they can be threaded into Leg 2+."""
+    tokens: Dict[str, str] = {}
+    if not bootstrap_body:
+        return tokens
+    try:
+        data = json.loads(bootstrap_body)
+    except Exception:
+        return tokens
+
+    def _walk(node: Any, depth: int = 0) -> None:
+        if depth > 5 or not isinstance(node, dict):
+            return
+        for k, v in node.items():
+            if k in _BOOTSTRAP_ID_KEYS and isinstance(v, (str, int)) and str(v).strip():
+                # Keep top-most match for each key
+                tokens.setdefault(k, str(v).strip())
+            elif isinstance(v, dict):
+                _walk(v, depth + 1)
+            elif isinstance(v, list):
+                for item in v[:5]:
+                    if isinstance(item, dict):
+                        _walk(item, depth + 1)
+
+    _walk(data)
+    return tokens
+
+
+def thread_bootstrap_into_leg(
+    leg: Dict[str, Any],
+    tokens: Dict[str, str],
+    old_tokens: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """Thread extracted dynamic IDs from Leg 1 into Leg 2's URL, headers, and JSON/form body."""
+    out = dict(leg)
+    url = str(out.get("url") or "")
+    headers = dict(out.get("request_headers") or {})
+    body_str = str(out.get("request_body") or "")
+
+    # 1. Value-to-value replacement when the recorded Leg 1 response tokens are known
+    if old_tokens:
+        for k, old_val in old_tokens.items():
+            new_val = tokens.get(k)
+            if old_val and new_val and old_val != new_val and len(old_val) >= 6:
+                url = url.replace(old_val, new_val)
+                body_str = body_str.replace(old_val, new_val)
+                for hk, hv in list(headers.items()):
+                    if isinstance(hv, str) and old_val in hv:
+                        headers[hk] = hv.replace(old_val, new_val)
+
+    # 2. Header key matching (e.g. x-conduit-token, x-conversation-id, x-session-id)
+    for hk in list(headers.keys()):
+        hkl = hk.lower()
+        cand_keys = _HEADER_TOKEN_MAP.get(hkl)
+        if cand_keys:
+            for ck in cand_keys:
+                if ck in tokens:
+                    headers[hk] = tokens[ck]
+                    break
+
+    # 3. Query-string parameter threading in URL (e.g. ?conversation_id=... or ?chatId=...)
+    for tk, tv in tokens.items():
+        if tk == "id":
+            continue
+        url = re.sub(
+            rf"([?&]{re.escape(tk)}=)[^&#\s]+",
+            rf"\g<1>{tv}",
+            url,
+        )
+
+    # 4. JSON body field threading for matching ID keys (excluding generic "id" unless top-level match)
+    if body_str.lstrip().startswith("{"):
+        try:
+            bobj = json.loads(body_str)
+            if isinstance(bobj, dict):
+                mutated = False
+                # Alias groups so snake_case in bootstrap can populate camelCase in Leg 2 or vice versa
+                alias_groups = [
+                    ("conversation_id", "conversationId"),
+                    ("chat_id", "chatId"),
+                    ("session_id", "sessionId"),
+                    ("thread_id", "threadId"),
+                    ("message_id", "messageId"),
+                    ("stream_key", "streamKey"),
+                    ("task_id", "taskId"),
+                    ("conduit_token", "conduitToken"),
+                ]
+                expanded = dict(tokens)
+                for a, b in alias_groups:
+                    if a in expanded and b not in expanded:
+                        expanded[b] = expanded[a]
+                    elif b in expanded and a not in expanded:
+                        expanded[a] = expanded[b]
+
+                def _patch_dict(d: Dict[str, Any], depth: int = 0) -> None:
+                    nonlocal mutated
+                    if depth > 4:
+                        return
+                    for k in list(d.keys()):
+                        if k in expanded and k != "id" and isinstance(d[k], (str, int, type(None))):
+                            if str(d[k] or "") != expanded[k]:
+                                d[k] = expanded[k]
+                                mutated = True
+                        elif isinstance(d[k], dict):
+                            _patch_dict(d[k], depth + 1)
+
+                _patch_dict(bobj)
+                if mutated:
+                    body_str = json.dumps(bobj)
+        except Exception:
+            pass
+
+    out["url"] = url
+    out["request_headers"] = headers
+    out["request_body"] = body_str
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +419,9 @@ def felo_followup(
     recorded_headers: Dict[str, str],
     cookie_header: str,
     timeout: float = 60.0,
+    proxy: Optional[str] = None,
+    cookie_absorber: Optional[Callable[[Any], Any]] = None,
+    **_extra,
 ) -> Tuple[Optional[str], Optional[str]]:
     """Given the bootstrap response body, fetch the answer from the Felo stream.
 
@@ -192,12 +446,17 @@ def felo_followup(
     }
 
     try:
-        r = _stream_get(url, headers, timeout)
+        r = _stream_get(url, headers, timeout, proxy=proxy)
     except _STREAM_EXC as e:
         return None, f"FELLO_STREAM_HTTP: {e}"
 
     if r.status_code != 200:
         return None, f"FELLO_STREAM_{r.status_code}"
+    if cookie_absorber:
+        try:
+            cookie_absorber(r)
+        except Exception:
+            pass
 
     # Parse SSE events, accumulate answer text
     answer_parts: list[str] = []
@@ -250,6 +509,9 @@ def mistral_followup(
     recorded_headers: Dict[str, str],
     cookie_header: str,
     timeout: float = 60.0,
+    proxy: Optional[str] = None,
+    cookie_absorber: Optional[Callable[[Any], Any]] = None,
+    **_extra,
 ) -> Tuple[Optional[str], Optional[str]]:
     """Mistral Le Chat: the POST returns a bootstrap; the answer arrives on a
     second SSE stream at a conversation-specific URL. The bootstrap body contains
@@ -284,12 +546,17 @@ def mistral_followup(
     }
 
     try:
-        r = _stream_get(url, headers, timeout)
+        r = _stream_get(url, headers, timeout, proxy=proxy)
     except _STREAM_EXC as e:
         return None, f"MISTRAL_STREAM_HTTP: {e}"
 
     if r.status_code != 200:
         return None, f"MISTRAL_STREAM_{r.status_code}"
+    if cookie_absorber:
+        try:
+            cookie_absorber(r)
+        except Exception:
+            pass
 
     # Mistral uses tRPC-style numbered chunks: "15:{json}"
     answer_parts: list[str] = []
@@ -410,6 +677,9 @@ def v0_followup(
     chat_id: str = None,
     started_ms: int = None,
     leg2: Optional[Dict[str, Any]] = None,
+    proxy: Optional[str] = None,
+    cookie_absorber: Optional[Callable[[Any], Any]] = None,
+    **_extra,
 ) -> Tuple[Optional[str], Optional[str]]:
     """Replay V0's real chat-submit leg, then poll for the assistant message.
 
@@ -436,18 +706,35 @@ def v0_followup(
             headers["Cookie"] = cookie_header
         try:
             if _HAVE_CURL_CFFI:
-                submit = curl_cffi.request(
-                    "POST", str(leg2["url"]), headers=headers,
-                    content=body_str.encode("utf-8"), timeout=60.0,
-                    impersonate=_IMPERSONATE, default_headers=False,
-                    allow_redirects=True)
+                kwargs: Dict[str, Any] = {
+                    "headers": headers,
+                    "content": body_str.encode("utf-8"),
+                    "timeout": 60.0,
+                    "impersonate": _IMPERSONATE,
+                    "default_headers": False,
+                    "allow_redirects": True,
+                }
+                if proxy:
+                    kwargs["proxy"] = proxy
+                submit = curl_cffi.request("POST", str(leg2["url"]), **kwargs)
             else:
-                submit = requests.post(str(leg2["url"]), headers=headers,
-                                       data=body_str.encode("utf-8"), timeout=60.0)
+                req_kw: Dict[str, Any] = {
+                    "headers": headers,
+                    "data": body_str.encode("utf-8"),
+                    "timeout": 60.0,
+                }
+                if proxy:
+                    req_kw["proxies"] = {"http": proxy, "https": proxy}
+                submit = requests.post(str(leg2["url"]), **req_kw)
         except _STREAM_EXC as exc:
             return None, f"V0_CHAT_SUBMIT_HTTP: {exc}"
         if submit.status_code != 200:
             return None, f"V0_CHAT_SUBMIT_{submit.status_code}: {submit.text[:120]}"
+        if cookie_absorber:
+            try:
+                cookie_absorber(submit)
+            except Exception:
+                pass
 
     if not chat_id:
         return None, "V0_NO_CHAT_ID"
@@ -464,7 +751,7 @@ def v0_followup(
     last_err: Optional[str] = None
     while time.time() < deadline:
         try:
-            r = _stream_get(url, headers, timeout=15)
+            r = _stream_get(url, headers, timeout=15, proxy=proxy)
         except _STREAM_EXC as e:
             last_err = f"V0_POLL_HTTP: {e}"
             time.sleep(3)
@@ -473,6 +760,11 @@ def v0_followup(
             last_err = f"V0_POLL_{r.status_code}"
             time.sleep(3)
             continue
+        if cookie_absorber:
+            try:
+                cookie_absorber(r)
+            except Exception:
+                pass
         try:
             body = json.loads(r.text)
         except Exception:
@@ -520,6 +812,9 @@ def chatgpt_followup(
     leg2: Optional[Dict[str, Any]] = None,
     chat_id: Optional[str] = None,
     started_ms: Optional[int] = None,
+    proxy: Optional[str] = None,
+    cookie_absorber: Optional[Callable[[Any], Any]] = None,
+    **_extra,
 ) -> Tuple[Optional[str], Optional[str]]:
     """Run leg-2 (POST /backend-api/f/conversation) with the fresh conduit token.
 
@@ -547,13 +842,28 @@ def chatgpt_followup(
     # request_body arrives here already carrying the caller's prompt.
     body = (leg2.get("request_body") or "").encode("utf-8")
     if _HAVE_CURL_CFFI:
-        r = curl_cffi.request(
-            "POST", leg2["url"], headers=headers, data=body, timeout=timeout,
-            impersonate=_IMPERSONATE, default_headers=False)
+        kwargs: Dict[str, Any] = {
+            "headers": headers,
+            "data": body,
+            "timeout": timeout,
+            "impersonate": _IMPERSONATE,
+            "default_headers": False,
+        }
+        if proxy:
+            kwargs["proxy"] = proxy
+        r = curl_cffi.request("POST", leg2["url"], **kwargs)
     else:
-        r = requests.post(leg2["url"], headers=headers, data=body, timeout=timeout)
+        req_kw: Dict[str, Any] = {"headers": headers, "data": body, "timeout": timeout}
+        if proxy:
+            req_kw["proxies"] = {"http": proxy, "https": proxy}
+        r = requests.post(leg2["url"], **req_kw)
     if r.status_code != 200:
         return None, f"CHATGPT_LEG2_{r.status_code}: {r.text[:120]}"
+    if cookie_absorber:
+        try:
+            cookie_absorber(r)
+        except Exception:
+            pass
     assembled = _chatgpt_v_protocol_assemble(r.text)
     if assembled:
         return assembled, None
@@ -615,6 +925,105 @@ def _chatgpt_v_protocol_assemble(raw: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Generic Multi-Step Followup (Point 3: Generalized 2-Leg / N-Leg Threading)
+# ---------------------------------------------------------------------------
+
+def generic_multistep_followup(
+    bootstrap_body: str,
+    recorded_headers: Dict[str, str],
+    cookie_header: str,
+    timeout: float = 60.0,
+    leg2: Optional[Dict[str, Any]] = None,
+    legs: Optional[list] = None,
+    proxy: Optional[str] = None,
+    cookie_absorber: Optional[Callable[[Any], Any]] = None,
+    extractor: Optional[Callable[[str], Tuple[str, Optional[str]]]] = None,
+    **_extra,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Execute a generalized 2-leg or N-leg recorded_exchanges sequence.
+
+    Extracts dynamic IDs (`conversation_id`, `session_id`, `chat_id`, `message_id`,
+    `stream_key`, `conduit_token`, `token`) from the bootstrap response of Leg 1 and
+    threads them into Leg 2 (and any subsequent legs in `legs`), absorbing rotated
+    cookies at every step.
+    """
+    seq = list(legs) if legs else ([leg2] if leg2 else [])
+    seq = [item for item in seq if isinstance(item, dict) and item.get("url")]
+    if not seq:
+        return None, "GENERIC_MULTISTEP_NO_LEG2"
+
+    tokens = extract_bootstrap_tokens(bootstrap_body)
+    last_resp_text = bootstrap_body
+    last_status = 200
+
+    import urllib.parse as _up
+
+    for idx, raw_leg in enumerate(seq):
+        old_tokens = extract_bootstrap_tokens(str(raw_leg.get("prev_response_body") or ""))
+        threaded = thread_bootstrap_into_leg(raw_leg, tokens, old_tokens=old_tokens)
+        target_url = str(threaded.get("url") or "")
+        method = str(threaded.get("method") or "POST").upper()
+        host = _up.urlsplit(target_url).netloc
+
+        body_str = apply_preflight(host, str(threaded.get("request_body") or ""))
+        headers: Dict[str, str] = {}
+        for k, v in (threaded.get("request_headers") or recorded_headers or {}).items():
+            if str(k).startswith(":") or str(k).lower() in ("content-length", "content-md5"):
+                continue
+            headers[str(k)] = str(v)
+        if cookie_header and not any(k.lower() == "cookie" for k in headers):
+            headers["Cookie"] = cookie_header
+        headers = apply_dynamic_headers(host, headers, body_str)
+
+        body_bytes = body_str.encode("utf-8") if (body_str and method in ("POST", "PUT", "PATCH")) else None
+        try:
+            if _HAVE_CURL_CFFI:
+                kw: Dict[str, Any] = {
+                    "headers": headers,
+                    "timeout": timeout,
+                    "impersonate": _IMPERSONATE,
+                    "default_headers": False,
+                    "allow_redirects": True,
+                }
+                if body_bytes:
+                    kw["content"] = body_bytes
+                if proxy:
+                    kw["proxy"] = proxy
+                r = curl_cffi.request(method, target_url, **kw)
+            else:
+                req_kw: Dict[str, Any] = {"headers": headers, "timeout": timeout}
+                if body_bytes:
+                    req_kw["data"] = body_bytes
+                if proxy:
+                    req_kw["proxies"] = {"http": proxy, "https": proxy}
+                r = requests.request(method, target_url, **req_kw)
+        except _STREAM_EXC as exc:
+            return None, f"GENERIC_LEG{idx + 2}_HTTP: {exc}"
+
+        last_status = r.status_code
+        last_resp_text = r.text or ""
+        if r.ok and cookie_absorber:
+            try:
+                cookie_absorber(r)
+            except Exception:
+                pass
+        if r.status_code != 200:
+            return None, f"GENERIC_LEG{idx + 2}_{r.status_code}: {last_resp_text[:120]}"
+
+        # Merge any newly minted tokens for subsequent legs in an N-leg chain
+        new_toks = extract_bootstrap_tokens(last_resp_text)
+        tokens.update(new_toks)
+
+    if extractor is not None:
+        assembled, err = extractor(last_resp_text)
+        if assembled:
+            return assembled, None
+        return None, err or f"GENERIC_MULTISTEP_NO_ANSWER ({last_status})"
+
+    return (last_resp_text.strip() or None), (None if last_resp_text.strip() else "GENERIC_MULTISTEP_EMPTY")
+
+
+# ---------------------------------------------------------------------------
 # Registry: host -> followup function
 # ---------------------------------------------------------------------------
 
@@ -623,10 +1032,11 @@ FOLLOWUP_REGISTRY: Dict[str, Any] = {
     "chat.mistral.ai": mistral_followup,
     "v0.app": v0_followup,
     "chatgpt.com": chatgpt_followup,
+    "generic_multistep": generic_multistep_followup,
 }
 
 
-def detect_bootstrap(body: str, host: str = None) -> Optional[str]:
+def detect_bootstrap(body: str, host: str = None, has_followup_legs: bool = False) -> Optional[str]:
     """Detect if a response body is a bootstrap (small JSON with stream/task keys).
     Returns the provider key if recognized, else None."""
     if host and "v0.app" in host and len(body) <= 64 and body.strip().strip('"').lower() == "ok":
@@ -650,8 +1060,14 @@ def detect_bootstrap(body: str, host: str = None) -> Optional[str]:
     if "stream_key" in d and "task_id" in d:
         return "felo.ai"
     # Mistral bootstrap signature
-    if "conversation_id" in d or ("message" in d and isinstance(d.get("message"), dict)):
+    if ("conversation_id" in d or ("message" in d and isinstance(d.get("message"), dict))) and (
+        not host or "mistral" in host
+    ):
         return "chat.mistral.ai"
+    # Generic multi-step bootstrap: when the capture has recorded_exchanges (2+ legs)
+    # and Leg 1 returned a small JSON containing a dynamic session/conversation/stream token
+    if has_followup_legs and extract_bootstrap_tokens(body):
+        return "generic_multistep"
     return None
 
 

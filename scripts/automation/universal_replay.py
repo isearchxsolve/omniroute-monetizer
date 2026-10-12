@@ -1,9 +1,12 @@
+import base64
 import json
+import os
 import re
+import struct
 import sys
 import time
 import requests
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple, List
 
 # --- Browser-impersonation transport ---------------------------------------
 # Servers fingerprint the client at the TLS Client Hello (JA3/JA4) and the
@@ -94,6 +97,272 @@ _PROMPT_PLACEHOLDERS = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Point 5: Binary Protobuf / gRPC-Web / Connect Frame Surgery
+# ---------------------------------------------------------------------------
+
+def _encode_varint(n: int) -> bytes:
+    """Encode an unsigned integer as a Protobuf base-128 varint."""
+    if n < 0:
+        raise ValueError("varint must be non-negative")
+    out = bytearray()
+    while n > 0x7F:
+        out.append((n & 0x7F) | 0x80)
+        n >>= 7
+    out.append(n & 0x7F)
+    return bytes(out)
+
+
+def _decode_varint(buf: bytes, pos: int) -> Tuple[int, int]:
+    """Decode a Protobuf varint starting at `pos`. Returns (value, new_pos)."""
+    result = 0
+    shift = 0
+    length = len(buf)
+    while pos < length:
+        b = buf[pos]
+        pos += 1
+        result |= (b & 0x7F) << shift
+        if not (b & 0x80):
+            return result, pos
+        shift += 7
+        if shift >= 64:
+            raise ValueError("varint too long")
+    raise ValueError("truncated varint")
+
+
+def _patch_protobuf_message(
+    buf: bytes,
+    old_bytes_list: List[bytes],
+    new_bytes: bytes,
+    depth: int = 0,
+) -> Tuple[bytes, int]:
+    """Recursively walk a Protobuf message, replace sentinel bytes inside any
+    length-delimited string/submessage, and recompute all enclosing Wire Type 2
+    varint lengths bottom-up. Returns (patched_bytes, replacement_count)."""
+    if depth > 16 or not buf:
+        return buf, 0
+    pos = 0
+    length = len(buf)
+    out = bytearray()
+    total_hits = 0
+
+    try:
+        while pos < length:
+            tag_start = pos
+            tag, pos = _decode_varint(buf, pos)
+            field_num = tag >> 3
+            wire_type = tag & 0x07
+            if field_num <= 0:
+                return buf, 0
+            tag_bytes = buf[tag_start:pos]
+
+            if wire_type == 0:  # Varint
+                val_start = pos
+                _, pos = _decode_varint(buf, pos)
+                out.extend(tag_bytes)
+                out.extend(buf[val_start:pos])
+            elif wire_type == 1:  # 64-bit
+                if pos + 8 > length:
+                    return buf, 0
+                out.extend(tag_bytes)
+                out.extend(buf[pos:pos + 8])
+                pos += 8
+            elif wire_type == 5:  # 32-bit
+                if pos + 4 > length:
+                    return buf, 0
+                out.extend(tag_bytes)
+                out.extend(buf[pos:pos + 4])
+                pos += 4
+            elif wire_type == 2:  # Length-delimited (string, bytes, submessage)
+                sub_len, pos = _decode_varint(buf, pos)
+                if sub_len < 0 or pos + sub_len > length:
+                    return buf, 0
+                payload = buf[pos:pos + sub_len]
+                pos += sub_len
+
+                # Only inspect if a sentinel actually appears inside `payload`
+                matched_sentinel = next((old_b for old_b in old_bytes_list if old_b and old_b in payload), None)
+                if matched_sentinel is not None:
+                    # 1. Try recursive submessage patching first (if payload is an embedded message)
+                    sub_patched, sub_hits = _patch_protobuf_message(
+                        payload, old_bytes_list, new_bytes, depth=depth + 1
+                    )
+                    if sub_hits > 0:
+                        payload = sub_patched
+                        total_hits += sub_hits
+                    else:
+                        # 2. Leaf string/bytes field: replace directly and recompute varint length
+                        for old_b in old_bytes_list:
+                            if old_b and old_b in payload:
+                                cnt = payload.count(old_b)
+                                payload = payload.replace(old_b, new_bytes)
+                                total_hits += cnt
+                                break
+                out.extend(tag_bytes)
+                out.extend(_encode_varint(len(payload)))
+                out.extend(payload)
+            else:
+                # Unknown/deprecated wire type -> not a valid protobuf frame at this level
+                return buf, 0
+    except ValueError:
+        return buf, 0
+
+    if total_hits == 0:
+        return buf, 0
+    return bytes(out), total_hits
+
+
+def _is_grpc_web_framed(buf: bytes) -> bool:
+    """True when `buf` consists of one or more 5-byte gRPC-Web / Connect envelopes:
+    [1-byte flag (0x00 or 0x01 or 0x80)][4-byte big-endian uint32 length][payload]."""
+    if len(buf) < 5:
+        return False
+    pos = 0
+    frames = 0
+    while pos < len(buf):
+        if pos + 5 > len(buf):
+            return False
+        flag = buf[pos]
+        if flag not in (0x00, 0x01, 0x80):
+            return False
+        frame_len = struct.unpack(">I", buf[pos + 1:pos + 5])[0]
+        if pos + 5 + frame_len > len(buf):
+            return False
+        pos += 5 + frame_len
+        frames += 1
+    return frames >= 1 and pos == len(buf)
+
+
+def substitute_protobuf_bytes(
+    raw_bytes: bytes,
+    new_prompt: str,
+    content_type: str = "",
+    extra_sentinels: Optional[List[str]] = None,
+) -> Tuple[bytes, int]:
+    """Replace the sentinel prompt inside a binary Protobuf or gRPC-Web / Connect payload,
+    dynamically recomputing all Protobuf varint length prefixes and 5-byte gRPC-Web
+    big-endian frame headers. Returns (patched_bytes, hit_count)."""
+    if not raw_bytes:
+        return raw_bytes, 0
+
+    sentinels = list(extra_sentinels or []) + list(_PROMPT_PLACEHOLDERS)
+    # Only use short placeholders ("Hi", "Hello") in binary mode if no primary sentinel is present
+    primary = [s.encode("utf-8") for s in sentinels if len(s) >= 8]
+    fallback = [s.encode("utf-8") for s in sentinels if 0 < len(s) < 8]
+    new_b = new_prompt.encode("utf-8")
+
+    ct_low = (content_type or "").lower()
+
+    # Case 1: Base64-encoded gRPC-Web-Text (`application/grpc-web-text`)
+    if "grpc-web-text" in ct_low:
+        try:
+            decoded = base64.b64decode(raw_bytes)
+            patched_dec, hits = substitute_protobuf_bytes(
+                decoded, new_prompt, content_type="application/grpc-web+proto", extra_sentinels=extra_sentinels
+            )
+            if hits > 0:
+                return base64.b64encode(patched_dec), hits
+        except Exception:
+            pass
+
+    old_list = primary if any(p in raw_bytes for p in primary) else fallback
+    if not any(p in raw_bytes for p in old_list):
+        return raw_bytes, 0
+
+    # Case 2: 5-byte gRPC-Web / Connect framed sequence
+    if _is_grpc_web_framed(raw_bytes) or "grpc" in ct_low or "connect+proto" in ct_low:
+        if _is_grpc_web_framed(raw_bytes):
+            pos = 0
+            out = bytearray()
+            total_hits = 0
+            while pos < len(raw_bytes):
+                flag = raw_bytes[pos]
+                frame_len = struct.unpack(">I", raw_bytes[pos + 1:pos + 5])[0]
+                frame_payload = raw_bytes[pos + 5:pos + 5 + frame_len]
+                pos += 5 + frame_len
+                if flag == 0x00:  # Uncompressed data frame
+                    patched_payload, h = _patch_protobuf_message(frame_payload, old_list, new_b)
+                    total_hits += h
+                    out.append(flag)
+                    out.extend(struct.pack(">I", len(patched_payload)))
+                    out.extend(patched_payload)
+                else:
+                    out.append(flag)
+                    out.extend(struct.pack(">I", len(frame_payload)))
+                    out.extend(frame_payload)
+            if total_hits > 0:
+                return bytes(out), total_hits
+
+    # Case 3: Raw Protobuf wire payload
+    patched, hits = _patch_protobuf_message(raw_bytes, old_list, new_b)
+    if hits > 0:
+        return patched, hits
+
+    return raw_bytes, 0
+
+
+def extract_protobuf_strings(raw_bytes: bytes, depth: int = 0) -> List[str]:
+    """Recursively extract UTF-8 text strings from a binary Protobuf or gRPC-Web response."""
+    if depth > 12 or not raw_bytes:
+        return []
+
+    # Unwrap 5-byte gRPC-Web frames if present
+    if depth == 0 and _is_grpc_web_framed(raw_bytes):
+        pos = 0
+        strings: List[str] = []
+        while pos < len(raw_bytes):
+            flag = raw_bytes[pos]
+            frame_len = struct.unpack(">I", raw_bytes[pos + 1:pos + 5])[0]
+            frame_payload = raw_bytes[pos + 5:pos + 5 + frame_len]
+            pos += 5 + frame_len
+            if flag == 0x00:
+                strings.extend(extract_protobuf_strings(frame_payload, depth=1))
+        return strings
+
+    pos = 0
+    length = len(raw_bytes)
+    found: List[str] = []
+    try:
+        while pos < length:
+            tag, pos = _decode_varint(raw_bytes, pos)
+            field_num = tag >> 3
+            wire_type = tag & 0x07
+            if field_num <= 0:
+                return []
+            if wire_type == 0:
+                _, pos = _decode_varint(raw_bytes, pos)
+            elif wire_type == 1:
+                if pos + 8 > length:
+                    return []
+                pos += 8
+            elif wire_type == 5:
+                if pos + 4 > length:
+                    return []
+                pos += 4
+            elif wire_type == 2:
+                sub_len, pos = _decode_varint(raw_bytes, pos)
+                if sub_len < 0 or pos + sub_len > length:
+                    return []
+                payload = raw_bytes[pos:pos + sub_len]
+                pos += sub_len
+                # Try parsing as nested message first
+                nested = extract_protobuf_strings(payload, depth=depth + 1)
+                if nested:
+                    found.extend(nested)
+                else:
+                    try:
+                        s = payload.decode("utf-8")
+                        if s and all(c.isprintable() or c in "\r\n\t" for c in s):
+                            found.append(s)
+                    except UnicodeDecodeError:
+                        pass
+            else:
+                return []
+    except ValueError:
+        return []
+    return found
+
+
 def substitute_prompt(body: str, new_prompt: str) -> str:
     """Swap the recorded probe prompt for the caller's prompt in one body string."""
     import urllib.parse
@@ -148,7 +417,31 @@ def _leg2_for(provider_key: str, raw: dict, new_prompt: str):
         leg2 = dict(candidates[-1])
         leg2["request_body"] = substitute_prompt(str(leg2.get("request_body") or ""), new_prompt)
         return leg2
+    if len(seq) >= 2:
+        leg2 = dict(seq[1])
+        if isinstance(seq[0], dict) and seq[0].get("response_body"):
+            leg2["prev_response_body"] = seq[0].get("response_body")
+        leg2["request_body"] = substitute_prompt(str(leg2.get("request_body") or ""), new_prompt)
+        return leg2
     return None
+
+
+def _followup_legs_for(raw: dict, new_prompt: str) -> List[Dict[str, Any]]:
+    """Return all follow-up legs (leg 2..N) from `recorded_exchanges`, sentinel-substituted."""
+    seq = raw.get("recorded_exchanges") or []
+    if len(seq) < 2:
+        return []
+    out: List[Dict[str, Any]] = []
+    for idx in range(1, len(seq)):
+        if not isinstance(seq[idx], dict):
+            continue
+        leg = dict(seq[idx])
+        prev = seq[idx - 1]
+        if isinstance(prev, dict) and prev.get("response_body"):
+            leg["prev_response_body"] = prev.get("response_body")
+        leg["request_body"] = substitute_prompt(str(leg.get("request_body") or ""), new_prompt)
+        out.append(leg)
+    return out
 
 
 def _followup_http_status(error: str, fallback: int | None = None) -> int | None:
@@ -158,8 +451,21 @@ def _followup_http_status(error: str, fallback: int | None = None) -> int | None
     poll is rejected. Keeping the final-leg status attached lets replay_check classify
     the real failure (AUTH/RATE/WALL) instead of scoring the bootstrap as NO_ANSWER.
     """
-    m = re.search(r"V0_(?:CHAT_SUBMIT|POLL)_(\d{3})", str(error or ""))
+    m = re.search(r"(?:V0_(?:CHAT_SUBMIT|POLL)|CHATGPT_LEG2|GENERIC_LEG\d+)_(\d{3})", str(error or ""))
     return int(m.group(1)) if m else fallback
+
+
+# Common cookie names that carry a short-lived JWT mirrored in `Authorization: Bearer <jwt>`
+_JWT_COOKIE_NAMES = (
+    "__stytch_session_jwt",
+    "stytch_session_jwt",
+    "__session",
+    "access_token",
+    "auth_token",
+    "id_token",
+    "jwt",
+    "token",
+)
 
 
 class UniversalSessionClient:
@@ -198,6 +504,7 @@ class UniversalSessionClient:
                         if k.lower() not in ("content-length", "content-md5")}
 
         self.base_body = self.exchange.get("request_body", "")
+        self.base_body_b64 = self.exchange.get("request_body_b64", "")
 
         # Override cookies from the live session if available
         if "cookie_header" in self.raw:
@@ -209,6 +516,15 @@ class UniversalSessionClient:
             import urllib.parse
             parsed = urllib.parse.urlparse(self.url)
             self.headers["origin"] = f"{parsed.scheme}://{parsed.netloc}"
+
+        # Point 4: Resolve optional residential / SOCKS5 / HTTP egress proxy
+        try:
+            from multistep_replay import resolve_egress_proxy
+        except ImportError:
+            import pathlib as _pl
+            sys.path.insert(0, str(_pl.Path(__file__).resolve().parent))
+            from multistep_replay import resolve_egress_proxy
+        self.proxy: Optional[str] = resolve_egress_proxy(self.raw, self.raw.get("host"))
 
     # Three capture generations wrote three different shapes into state/secrets/. Reading only
     # the newest one meant an older file yielded base_body == "" -> a BODYLESS POST that often
@@ -257,6 +573,7 @@ class UniversalSessionClient:
             "method": cls._first(cand, cls._METHOD_KEYS) or "POST",
             "request_headers": headers,
             "request_body": cls._first(cand, cls._BODY_KEYS) or "",
+            "request_body_b64": cand.get("request_body_b64") or "",
         }
 
     @staticmethod
@@ -394,7 +711,6 @@ class UniversalSessionClient:
         """
         if "BardErrorInfo" not in (text or ""):
             return None
-        import re
         m = re.search(r"BardErrorInfo\"\s*,\s*\[\s*(\d+)", text)
         code = m.group(1) if m else "unknown"
         return (f"GOOGLE_REFUSED: BardErrorInfo {code} -- the session replied to earlier replays and "
@@ -491,7 +807,6 @@ class UniversalSessionClient:
 
     def _extract_response(self, response_text: str):
         """Return (assembled_text, error_message). Universal across SSE and whole-body JSON."""
-        import re
         text = self._strip_xssi((response_text or "").strip())
 
         # Checked before the generic paths: a Google body is JSON nested in a JSON string, so the
@@ -637,12 +952,16 @@ class UniversalSessionClient:
     # OmniRoute connections. Absorb the rotation and persist it instead.
     def _absorb_cookies(self, resp) -> int:
         rotated: Dict[str, str] = {}
+        resp_headers_merged: Dict[str, str] = {}
         for r in list(getattr(resp, "history", []) or []) + [resp]:
             for name, value in self._iter_set_cookies(r):
                 if name:
                     rotated[name] = value if value is not None else ""
-        if not rotated:
-            return 0
+            rh = getattr(r, "headers", None)
+            if rh and hasattr(rh, "items"):
+                for hk, hv in rh.items():
+                    if hk and hv:
+                        resp_headers_merged[str(hk).lower()] = str(hv)
 
         current = self.headers.get("cookie") or self.headers.get("Cookie") or ""
         jar: Dict[str, str] = {}
@@ -657,6 +976,7 @@ class UniversalSessionClient:
                 order.append(k)
             jar[k] = v.strip()
 
+        old_jar = dict(jar)
         changed = 0
         for k, v in rotated.items():
             if not v:                       # cleared by the provider -- honour the deletion
@@ -669,19 +989,51 @@ class UniversalSessionClient:
                     order.append(k)
                 jar[k] = v
                 changed += 1
+
+        # Point 1: Synchronize `Authorization: Bearer <jwt>` or `x-auth-token` when a backing
+        # session JWT cookie (Stytch, Clerk, NextAuth) or response auth header rotates.
+        new_auth_bearer: Optional[str] = None
+        for k, v in rotated.items():
+            if not v:
+                continue
+            old_val = old_jar.get(k)
+            # If the existing Authorization header held the exact old value of this cookie, or
+            # if this cookie is a recognized JWT session cookie and Authorization is Bearer:
+            for hk, hv in list(self.headers.items()):
+                if hk.lower() == "authorization" and isinstance(hv, str):
+                    if old_val and old_val in hv:
+                        self.headers[hk] = hv.replace(old_val, v)
+                        new_auth_bearer = self.headers[hk]
+                        changed += 1
+                    elif k.lower() in _JWT_COOKIE_NAMES and hv.lower().startswith("bearer "):
+                        candidate = f"{hv[:7]}{v}"
+                        if candidate != hv:
+                            self.headers[hk] = candidate
+                            new_auth_bearer = candidate
+                            changed += 1
+
+        # Also check explicit response token refresh headers (`x-auth-token`, `x-session-token`)
+        for hdr_tok_name in ("x-auth-token", "x-session-token", "x-access-token"):
+            if hdr_tok_name in resp_headers_merged:
+                fresh_tok = resp_headers_merged[hdr_tok_name]
+                for hk in list(self.headers.keys()):
+                    if hk.lower() == hdr_tok_name and self.headers[hk] != fresh_tok:
+                        self.headers[hk] = fresh_tok
+                        changed += 1
+
         if not changed:
             return 0
 
         merged = "; ".join(f"{k}={jar[k]}" for k in order if k in jar)
         self.headers["cookie"] = merged
         self.headers["Cookie"] = merged
-        self._persist_cookies(merged)
+        self._persist_cookies(merged, new_auth_bearer=new_auth_bearer)
         return changed
 
-    def _persist_cookies(self, merged: str) -> None:
+    def _persist_cookies(self, merged: str, new_auth_bearer: Optional[str] = None) -> None:
         """Write the rotated jar back so the NEXT process starts from the fresh one, not the capture.
 
-        Atomic (tmp + replace): a half-written secrets file would take a live provider off the pool.
+        Atomic (tmp + os.replace): a half-written secrets file would take a live provider off the pool.
         Writes to cookie_header because __init__ gives that key precedence over request_headers.
         Never logs or returns the value.
         """
@@ -696,10 +1048,21 @@ class UniversalSessionClient:
                 for k in list(hdrs):
                     if k.lower() == "cookie":
                         hdrs[k] = merged
+                    elif new_auth_bearer and k.lower() == "authorization":
+                        hdrs[k] = new_auth_bearer
+            # Also synchronize multi-leg `recorded_exchanges` headers if present
+            for ex in disk.get("recorded_exchanges") or []:
+                if isinstance(ex, dict) and isinstance(ex.get("request_headers"), dict):
+                    ex_hdrs = ex["request_headers"]
+                    for k in list(ex_hdrs):
+                        if k.lower() == "cookie":
+                            ex_hdrs[k] = merged
+                        elif new_auth_bearer and k.lower() == "authorization":
+                            ex_hdrs[k] = new_auth_bearer
             disk["cookieRotatedAt"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             tmp = self._src.with_name(self._src.name + ".tmp")
             tmp.write_text(json.dumps(disk, indent=2), encoding="utf-8")
-            tmp.replace(self._src)
+            os.replace(tmp, self._src)
         except Exception:
             pass   # a stale jar on disk is survivable; losing the answer we just got is not
 
@@ -732,7 +1095,7 @@ class UniversalSessionClient:
         exposing .status_code/.ok/.text/.cookies/.history/.raise_for_status().
         """
         if _HAVE_CURL_CFFI:
-            kwargs = {
+            kwargs: Dict[str, Any] = {
                 "headers": headers,
                 "timeout": timeout,
                 "impersonate": _IMPERSONATE,
@@ -743,35 +1106,62 @@ class UniversalSessionClient:
             }
             if body:
                 kwargs["content"] = body
+            if getattr(self, "proxy", None):
+                kwargs["proxy"] = self.proxy
             return curl_cffi.request(method, url, **kwargs)
 
         kwargs = {"headers": headers, "timeout": timeout}
         if body:
             kwargs["data"] = body
+        if getattr(self, "proxy", None):
+            kwargs["proxies"] = {"http": self.proxy, "https": self.proxy}
         return requests.request(method, url, **kwargs)
 
     def chat(self, messages: list, model: Optional[str] = None, **kw) -> Dict[str, Any]:
         if not messages:
             raise ChatError("NO_MESSAGES", "no messages provided")
-            
+
         new_prompt = messages[-1]["content"]
         # Recorded so _extract_response can tell a generated reply from the prompt echoed back.
         self._last_prompt = str(new_prompt)
 
-        # 1. Inject prompt using LLM
+        content_type = next(
+            (str(v) for k, v in self.headers.items() if k.lower() == "content-type"),
+            "",
+        )
+        is_binary_proto = (
+            bool(getattr(self, "base_body_b64", ""))
+            or any(tok in content_type.lower() for tok in ("protobuf", "grpc-web", "connect+proto", "octet-stream"))
+        )
+
+        # Point 5: Binary Protobuf / gRPC-Web / Connect Frame path
+        proto_body_bytes: Optional[bytes] = None
+        if is_binary_proto:
+            raw_proto = (
+                base64.b64decode(self.base_body_b64)
+                if getattr(self, "base_body_b64", "")
+                else (self.base_body.encode("latin1") if isinstance(self.base_body, str) else bytes(self.base_body or b""))
+            )
+            patched_proto, proto_hits = substitute_protobuf_bytes(raw_proto, new_prompt, content_type=content_type)
+            if proto_hits > 0:
+                proto_body_bytes = patched_proto
+
+        # 1. Inject prompt using string substitution ladder
         new_body_str = self._inject_prompt(new_prompt)
 
         # 1a. Pre-flight mutations: refresh client-generated identifiers that the server
-        # rejects if reused (e.g. Mistral's messageId UUID -> 409 on reuse). Not an adapter:
-        # the recorded request is still replayed as-is except for these fresh fields.
+        # rejects if reused (e.g. Mistral's messageId UUID -> 409 on reuse) and dynamic
+        # anti-replay headers (X-Timestamp, X-Nonce, X-Request-Id, ChatGLM X-Sign).
         try:
-            from multistep_replay import apply_preflight
+            from multistep_replay import apply_preflight, apply_dynamic_headers
         except ImportError:
             import pathlib as _pl, sys as _sys
             _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent))
-            from multistep_replay import apply_preflight
+            from multistep_replay import apply_preflight, apply_dynamic_headers
         import urllib.parse as _up
-        new_body_str = apply_preflight(_up.urlsplit(self.url).netloc, new_body_str)
+        netloc = _up.urlsplit(self.url).netloc
+        new_body_str = apply_preflight(netloc, new_body_str)
+        self.headers = apply_dynamic_headers(netloc, self.headers, new_body_str)
 
         # Monica: deterministic send-time surgery, BEFORE the sentinel check. The LLM
         # injector cannot be trusted for this shape and apply_preflight's unrelated body
@@ -817,7 +1207,7 @@ class UniversalSessionClient:
 
         # A recorded POST with no body is a broken capture, not a live session. Firing it
         # anyway often returns HTTP 200 from an error/landing page and reads as success.
-        if str(self.method).upper() in ("POST", "PUT", "PATCH") and not new_body_str:
+        if str(self.method).upper() in ("POST", "PUT", "PATCH") and not new_body_str and proto_body_bytes is None:
             raise ChatError(
                 "EMPTY_BODY",
                 f"capture for {self.raw.get('host')} has no replayable request "
@@ -827,15 +1217,24 @@ class UniversalSessionClient:
 
         # 1b. The sentinel must actually have been replaced, or we would send the recorded
         # probe prompt and log the model's answer to *that* as if it answered the caller.
+        # In multi-leg captures (e.g. ChatGPT prepare -> conversation, or generic 2-leg flows),
+        # Leg 1 may be a bootstrap request whose body does not contain the prompt while Leg 2 does.
         import urllib.parse
-        import json
+        followup_legs = _followup_legs_for(self.raw, new_prompt)
+        prompt_in_followup = any(
+            new_prompt in str(lg.get("request_body") or "")
+            or json.dumps(new_prompt)[1:-1] in str(lg.get("request_body") or "")
+            for lg in followup_legs
+        )
         prompt_found = (
+            proto_body_bytes is not None or
+            prompt_in_followup or
             new_prompt in new_body_str or
             urllib.parse.quote_plus(new_prompt) in new_body_str or
             urllib.parse.quote(new_prompt) in new_body_str or
             json.dumps(new_prompt)[1:-1] in new_body_str
         )
-        
+
         if new_body_str == self.base_body and not prompt_found:
             raise ChatError(
                 "SENTINEL_NOT_FOUND",
@@ -851,7 +1250,9 @@ class UniversalSessionClient:
                 target_url = _re.sub(r"/chat_conversations/[^/]+/completion", f"/chat_conversations/{_uuid.uuid4()}/completion", target_url)
             # (Monica's id/prompt surgery now happens deterministically before the
             # sentinel check -- see the api.monica.im branch above.)
-            body_bytes = new_body_str.encode("utf-8") if self.base_body else None
+            body_bytes = proto_body_bytes if proto_body_bytes is not None else (
+                new_body_str.encode("utf-8") if self.base_body else None
+            )
             import time as _time
             _send_started_ms = int(_time.time() * 1000)   # v0 poll cutoff: only newer messages count
             r = self._fire(self.method, target_url, self.headers, body_bytes, timeout=60)
@@ -863,23 +1264,24 @@ class UniversalSessionClient:
             if r.status_code == 200 and 'INVALID_POW_RESPONSE' in r.text:
                 print("GOT INVALID_POW_RESPONSE. Fetching challenge from endpoint...")
                 try:
-                    import json
                     # 1. Fetch the challenge payload
                     chal_url = "https://chat.deepseek.com/api/v0/chat/create_pow_challenge"
                     chal_payload = json.dumps({"target_path": "/api/v0/chat/completion"}).encode("utf-8")
-                    
+
                     # We must use the same headers (especially Authorization and cookies)
                     chal_headers = self.headers.copy()
                     chal_headers["content-type"] = "application/json"
-                    
+
                     chal_r = self._fire("POST", chal_url, chal_headers, chal_payload, timeout=30)
                     chal_r.raise_for_status()
-                    
+                    if chal_r.ok:
+                        self._absorb_cookies(chal_r)
+
                     chal_data = chal_r.json()
                     challenge_obj = chal_data.get("data", {}).get("biz_data", {}).get("challenge", {})
                     if not challenge_obj:
                         raise ChatError("POW_FAILED", "Could not parse challenge object from response")
-                    
+
                     # Normalize snake_case keys from the API to camelCase for the solver
                     # /create_pow_challenge returns expire_at / expire_after but the worker
                     # script (DeepSeek's own code) expects expireAt / expireAfter
@@ -887,15 +1289,15 @@ class UniversalSessionClient:
                         challenge_obj["expireAt"] = challenge_obj.pop("expire_at")
                     if "expire_after" in challenge_obj and "expireAfter" not in challenge_obj:
                         challenge_obj["expireAfter"] = challenge_obj.pop("expire_after")
-                    
+
                     # 2. Solve the challenge using our standalone Node.js solver
-                    import sys, pathlib
+                    import pathlib
                     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent / "adapters"))
                     from deepseek_adapter import solve_deepseek_pow
-                    
+
                     pow_response = solve_deepseek_pow(json.dumps(challenge_obj))
                     self.headers['x-ds-pow-response'] = pow_response
-                    
+
                     # 3. Re-fire the original completion request with the PoW header attached
                     r = self._fire(self.method, self.url, self.headers, body_bytes, timeout=60)
                 except Exception as e:
@@ -903,7 +1305,7 @@ class UniversalSessionClient:
 
             if r.ok:
                 self._absorb_cookies(r)
-            
+
             if r.status_code in (401, 403):
                 # Keep the provider's non-secret error body attached to the canonical exception.
                 # replay_check uses it to distinguish a named CAPTCHA/plan wall from a genuinely
@@ -918,7 +1320,7 @@ class UniversalSessionClient:
 
         except _TRANSPORT_EXC as e:
             raise ChatError("HTTP_ERROR", str(e))
-            
+
         # 2b. Multi-step providers: some return a small bootstrap JSON (stream_key /
         # conversation_id) and deliver the real answer on a second request. Detect and
         # follow up before ordinary extraction, which would score the bootstrap as the
@@ -929,7 +1331,11 @@ class UniversalSessionClient:
             import pathlib as _pl, sys as _sys
             _sys.path.insert(0, str(_pl.Path(__file__).resolve().parent))
             from multistep_replay import detect_bootstrap, run_followup
-        provider_key = detect_bootstrap(r.text, host=_up.urlsplit(self.url).netloc)
+        provider_key = detect_bootstrap(
+            r.text,
+            host=_up.urlsplit(self.url).netloc,
+            has_followup_legs=bool(followup_legs),
+        )
         if provider_key:
             # chat_id resolution: the send body is the authority (v0's chat_id names the
             # conversation its poll watches), but some captures carry it only in the URL
@@ -969,14 +1375,20 @@ class UniversalSessionClient:
                         break
             follow_text, follow_err = run_followup(
                 provider_key, r.text, self.headers,
-                self.raw.get("cookie_header", ""), timeout=90.0,
+                self.headers.get("Cookie") or self.raw.get("cookie_header", ""),
+                timeout=90.0,
                 chat_id=_chat_id, started_ms=_send_started_ms,
                 # Multi-exchange captures (recorded_exchanges, capture_sessions_cdp
                 # buffering): the follow-up replays the SECOND leg with values from the
                 # first response threaded forward. The leg-2 body gets the same sentinel
                 # substitution leg-1 got, so the caller's prompt -- not the recorded
                 # probe -- is what the pipeline answers.
-                leg2=_follow_leg)
+                leg2=_follow_leg,
+                legs=followup_legs,
+                proxy=getattr(self, "proxy", None),
+                cookie_absorber=self._absorb_cookies,
+                extractor=self._extract_response,
+            )
             if follow_text:
                 # The no-tool envelope is never the model's words (see unwrap_no_tool_text).
                 follow_text = unwrap_no_tool_text(follow_text) or follow_text
@@ -986,7 +1398,7 @@ class UniversalSessionClient:
                     "status": r.status_code,
                     "raw": r.text,
                 }
-            if provider_key == "v0.app" and follow_err:
+            if provider_key in ("v0.app", "generic_multistep") and follow_err:
                 # V0's bootstrap is only an acknowledgement. Returning it as the
                 # assistant answer would turn a dropped/failed submit into false
                 # capacity, so surface the follow-up failure instead.
@@ -1000,7 +1412,25 @@ class UniversalSessionClient:
             # follow-up failed: fall through to normal extraction so the bootstrap
             # is at least reported honestly rather than swallowed.
 
-        # 3. Extract final answer
+        # 3. Extract final answer (including binary Protobuf / gRPC-Web response extraction if applicable)
+        resp_ct = str(getattr(r, "headers", {}).get("content-type") or "").lower()
+        raw_resp_bytes = getattr(r, "content", None)
+        if isinstance(raw_resp_bytes, bytes) and raw_resp_bytes and (
+            any(tok in resp_ct for tok in ("protobuf", "grpc-web", "connect+proto", "octet-stream"))
+            or _is_grpc_web_framed(raw_resp_bytes)
+        ):
+            proto_strs = [s for s in extract_protobuf_strings(raw_resp_bytes) if not self._is_echo(s)]
+            if proto_strs:
+                assembled_proto = self._accumulate(proto_strs).strip()
+                if assembled_proto:
+                    assembled_proto = unwrap_no_tool_text(assembled_proto) or assembled_proto
+                    return {
+                        "text": assembled_proto,
+                        "label": "universal-adapter+protobuf",
+                        "status": r.status_code,
+                        "raw": assembled_proto,
+                    }
+
         final_text, err = self._extract_response(r.text)
         if not final_text and err:
             e = ChatError("UPSTREAM_ERROR", err)
