@@ -1,0 +1,14 @@
+{
+  "id": "kunaldas3104/omniroute-relay",
+  "title": "Omniroute relay",
+  "code_file": "omniroute-relay.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

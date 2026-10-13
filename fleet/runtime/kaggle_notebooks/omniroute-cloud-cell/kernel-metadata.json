@@ -1,0 +1,14 @@
+{
+  "id": "n42888/omniroute-cloud-cell-cpu-worker",
+  "title": "Omniroute cloud cell cpu worker",
+  "code_file": "omniroute-cloud-cell.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

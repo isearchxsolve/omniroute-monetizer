@@ -1,0 +1,7 @@
+name = "omniroute-relay"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+
+[[kv_namespaces]]
+binding = "LEDGER"
+id = "2f515e3ac11142f4a0f330dc802ed0a8"

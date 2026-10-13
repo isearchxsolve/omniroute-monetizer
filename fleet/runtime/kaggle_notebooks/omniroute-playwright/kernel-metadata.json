@@ -1,0 +1,14 @@
+{
+  "id": "isearchxsolve/omniroute-playwright-executor",
+  "title": "Omniroute playwright executor",
+  "code_file": "omniroute-playwright.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
