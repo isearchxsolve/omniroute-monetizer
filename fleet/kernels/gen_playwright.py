@@ -141,7 +141,14 @@ def handle_pw_task(order_text):
     max_bytes = min(int(spec.get("max_bytes") or 100000), 100000)
     wait_css = spec.get("wait_css")
     wait_ms = int(spec.get("wait_ms") or 0)
-    extracts = spec.get("extract") or []
+    raw_extract = spec.get("extract")
+    if isinstance(raw_extract, str):
+        # "title" -> extract <title> text; generic: string is used as both name and CSS selector
+        extracts = [{"name": raw_extract, "selector": raw_extract, "attr": "text"}]
+    elif isinstance(raw_extract, dict):
+        extracts = [raw_extract]
+    else:
+        extracts = raw_extract or []
     want_shot = bool(spec.get("screenshot"))
     hdrs = spec.get("headers") or {}
     door = resolve_door()
