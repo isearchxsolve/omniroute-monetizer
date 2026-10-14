@@ -345,10 +345,10 @@ def ensure_server():
             pass
         SERVER_PROC = None
     env = dict(os.environ)
-env["PYTHONPATH"] = REPO_DIR + os.pathsep + APP_DIR
-env["OMNIROUTE_BASE_URL"] = "http://127.0.0.1:8190/v1"
-env["INFERENCE_PROVIDER"] = "omniroute"
-env["AUTO_CREATE_SCHEMA"] = "true"  # ephemeral Kaggle DB: create_all on boot (app requires the flag)
+    env["PYTHONPATH"] = REPO_DIR + os.pathsep + APP_DIR
+    env["OMNIROUTE_BASE_URL"] = "http://127.0.0.1:8190/v1"
+    env["INFERENCE_PROVIDER"] = "omniroute"
+    env["AUTO_CREATE_SCHEMA"] = "true"  # ephemeral Kaggle DB: create_all on boot (app requires the flag)
     if SECRET_KEY:
         env["SECRET_KEY"] = SECRET_KEY
     SERVER_PROC = subprocess.Popen(["python", "-m", "uvicorn", "app.main:app",
@@ -514,6 +514,9 @@ def build_notebook(label, repo_dir, port, service, asset_key, gh_repo, gh_repo_p
                   .replace("__GH_REPO__", gh_repo)
                   .replace("__GH_REPO_PATH__", gh_repo_path)
                   .replace("__SECRET_KEY__", secret_key))
+    # HARD GATE: the generated cell must compile, or the kernel dies at papermill
+    # with IndentationError and a whole session is burned (2026-10-14 03:15 incident).
+    compile(supervisor, label + "-supervisor-cell", "exec")
     return make_notebook([
         make_cell([l + "\n" for l in supervisor.strip().split("\n")]),
     ])
