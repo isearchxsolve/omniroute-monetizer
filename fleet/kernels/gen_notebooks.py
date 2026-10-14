@@ -105,6 +105,25 @@ def pip_bg_running():
 # serialized pip: one attempt per lock slot; loop stays alive around it
 PIP_LOCK = threading.Lock()
 PIP_DONE = [False]
+FAIL_N = [0]
+
+def _strip_pins(lines):
+    # py3.13 wheel lottery: pins validated on py3.11 may have no cp313 wheels.
+    # Fallback pass keeps names (+extras like [bcrypt]) but drops version specifiers.
+    import re
+    out = []
+    for l in lines:
+        s = l.strip()
+        if not s or s.startswith("#") or s.startswith("-"):
+            continue
+        m = re.match(r"^([A-Za-z0-9_.\-]+)(\[[^\]]*\])?", s)
+        if not m:
+            continue
+        name = m.group(1)
+        if name.lower() in ("pyside6", "asyncpg"):
+            continue
+        out.append(name + (m.group(2) or ""))
+    return out
 
 def ensure_deps_serial():
     global DEPS_OK
@@ -120,30 +139,43 @@ def ensure_deps_serial():
                 req_txt = cand
                 break
         to_install = []
+        lines = []
         if req_txt:
-            filtered = [l for l in open(req_txt, encoding="utf-8", errors="ignore").read().splitlines()
-                        if l.strip() and not l.strip().startswith("#")
-                        and not l.strip().startswith("-r")
-                        and not l.strip().lower().startswith("asyncpg")
-                        and not l.strip().lower().startswith("pyside6")]
-            fpath = os.path.join(REPO_DIR, ".req_filtered.txt")
-            open(fpath, "w", encoding="utf-8").write("\n".join(filtered))
-            to_install.append("-r" + fpath)
-        to_install += ["asyncpg>=0.30.0", "slowapi", "email-validator", "aiosqlite"]
-        r = subprocess.run(["python", "-m", "pip", "install", "-q"] + to_install,
-                           capture_output=True, text=True, timeout=1800)
-        if r.returncode == 0:
+            lines = [l for l in open(req_txt, encoding="utf-8", errors="ignore").read().splitlines()
+                     if l.strip() and not l.strip().startswith("#")
+                     and not l.strip().startswith("-r")
+                     and not l.strip().lower().startswith("asyncpg")
+                     and not l.strip().lower().startswith("pyside6")]
+        # pass 1: exact pins (laptop-validated); pass 2: pins stripped for py3.13 wheels
+        fpath = os.path.join(REPO_DIR, ".req_filtered.txt")
+        r = None
+        for pi, plist in enumerate([lines, _strip_pins(lines)]):
+            open(fpath, "w", encoding="utf-8").write("\n".join(plist))
+            to_install = ["-r" + fpath, "asyncpg>=0.30.0", "slowapi", "email-validator", "aiosqlite"]
+            r = subprocess.run(["python", "-m", "pip", "install", "-q"] + to_install,
+                               capture_output=True, text=True, timeout=1800)
+            if r.returncode == 0:
+                if pi == 1:
+                    log("deps installed OK via unpinned fallback (pass 2)")
+                break
+        if r is not None and r.returncode == 0:
             DEPS_OK = True
             PIP_DONE[0] = True
             log("app dependencies installed OK")
             door_report(LABEL + " dependencies installed OK")
         else:
-            log("app dependency install failed: " + str((r.stderr or ""))[-140:])
-            door_report(LABEL + " dependency install failed: " + str((r.stderr or ""))[-200:])
+            FAIL_N[0] += 1
+            tail = str((r.stderr if r else ""))[-200:]
+            log("app dependency install failed: " + str(tail)[-140:])
+            # KV-write discipline: report first failure, then every 15th (retry loop must not burn quota)
+            if FAIL_N[0] == 1 or FAIL_N[0] % 15 == 0:
+                door_report(LABEL + " dependency install failed [" + str(FAIL_N[0]) + "]: " + tail)
             time.sleep(60)  # back off inside the lock slot; loop stays alive around it
     except Exception as e:
         log("pip exception: " + str(e)[:140])
-        door_report(LABEL + " pip exception: " + str(e)[:160])
+        FAIL_N[0] += 1
+        if FAIL_N[0] == 1 or FAIL_N[0] % 15 == 0:
+            door_report(LABEL + " pip exception [" + str(FAIL_N[0]) + "]: " + str(e)[:160])
         time.sleep(60)
     finally:
         PIP_LOCK.release()

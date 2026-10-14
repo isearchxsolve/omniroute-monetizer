@@ -1,16 +1,22 @@
 {
-  "id": "n42888/oiioii-kaggle-web",
-  "title": "Oiioii kaggle web",
-  "code_file": "oii oii-kaggle-web.ipynb",
-  "language": "python",
-  "kernel_type": "notebook",
-  "is_private": true,
-  "enable_gpu": false,
-  "enable_internet": true,
-  "dataset_sources": [
-    "healingsounds/cloudflared-offline"
-  ],
-  "competition_sources": [],
-  "kernel_sources": [],
-  "model_sources": []
+    "id":  "isearchxsolve/oiioii-kaggle-web",
+    "title":  "Oiioii kaggle web",
+    "code_file":  "oii oii-kaggle-web.ipynb",
+    "language":  "python",
+    "kernel_type":  "notebook",
+    "is_private":  true,
+    "enable_gpu":  false,
+    "enable_internet":  true,
+    "dataset_sources":  [
+                            "healingsounds/cloudflared-offline"
+                        ],
+    "competition_sources":  [
+
+                            ],
+    "kernel_sources":  [
+
+                       ],
+    "model_sources":  [
+
+                      ]
 }
