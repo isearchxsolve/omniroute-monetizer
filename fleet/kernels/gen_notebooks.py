@@ -345,9 +345,10 @@ def ensure_server():
             pass
         SERVER_PROC = None
     env = dict(os.environ)
-    env["PYTHONPATH"] = REPO_DIR + os.pathsep + APP_DIR
-    env["OMNIROUTE_BASE_URL"] = "http://127.0.0.1:8190/v1"
-    env["INFERENCE_PROVIDER"] = "omniroute"
+env["PYTHONPATH"] = REPO_DIR + os.pathsep + APP_DIR
+env["OMNIROUTE_BASE_URL"] = "http://127.0.0.1:8190/v1"
+env["INFERENCE_PROVIDER"] = "omniroute"
+env["AUTO_CREATE_SCHEMA"] = "true"  # ephemeral Kaggle DB: create_all on boot (app requires the flag)
     if SECRET_KEY:
         env["SECRET_KEY"] = SECRET_KEY
     SERVER_PROC = subprocess.Popen(["python", "-m", "uvicorn", "app.main:app",
