@@ -129,7 +129,7 @@ export default {
 
     if (path === "/health") {
       if (token !== TOKEN) return jsonResp({ ok: false, err: "bad token" }, 403);
-      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: 3,
+      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.1",
                         tools: ["web.execute", "web.result", "gateway"], ts: Date.now() });
     }
 
@@ -145,6 +145,14 @@ export default {
         }
         const body = String(data.body || "KILO").slice(0, 64);
         const text = String(data.text || "").slice(0, 20000);
+        // v3.1 quota guard: uncapped supervisor retry loops burned the day's KV quota
+        // (2026-10-13 22:10 IST incident). Drop uncapped retry-noise from TUNNELDBG;
+        // v3.3+ supervisors emit capped reports ("[N]") which pass through.
+        if (body === "TUNNELDBG" &&
+            /Failed building wheel|pip exception:|dependency install failed/.test(text) &&
+            !/\[\d+\]/.test(text)) {
+          return jsonResp({ ok: true, queued: -1, stored: false, filtered: "retry_noise" });
+        }
         const key = "ledger:" + body;
         let arr = [];
         try {
