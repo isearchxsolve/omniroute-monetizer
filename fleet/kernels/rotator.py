@@ -28,7 +28,10 @@ WINDOW_H = 12
 MARGIN_MIN = 45          # pre-rotate this many minutes before expiry
 POLL_S = 300             # 5 min cycle
 GH_REPO = "isearchxsolve/omniroute-monetizer"
-GH_TOKEN = "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"
+# GH token lives in the vault, never in the repo (rotate the old leaked one in history)
+GH_TOKEN = ""
+if (VAULT / "gh_token.txt").exists():
+    GH_TOKEN = (VAULT / "gh_token.txt").read_text(encoding="utf-8").strip()
 
 # account pool: name -> token (None = default ~/.kaggle/kaggle.json)
 ACCOUNTS = {
