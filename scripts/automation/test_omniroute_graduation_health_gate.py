@@ -112,6 +112,45 @@ def test_excluded_rows_stay_in_the_capability_inventory() -> None:
     assert inventory == {"mistral/devstral-2512", "cohere/embed-english-light-v3.0"}
 
 
+def test_instance_lock_refuses_a_second_live_run(tmp_path=None) -> None:
+    """Operator law 2026-10-15: one instance at a time on this machine."""
+    import pathlib
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        lock = pathlib.Path(td) / "omniroute_graduation.lock"
+        lock.write_text(str(__import__("os").getpid()), encoding="utf-8")  # this test process is alive
+        ok, msg = master.acquire_instance_lock(lock)
+        assert ok is False
+        assert "one instance at a time" in msg
+
+
+def test_instance_lock_takes_over_a_stale_owner() -> None:
+    import os
+    import pathlib
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        lock = pathlib.Path(td) / "omniroute_graduation.lock"
+        lock.write_text("999999", encoding="utf-8")  # dead pid: never on Windows
+        ok, msg = master.acquire_instance_lock(lock)
+        assert ok is True
+        assert lock.read_text(encoding="utf-8").strip() == str(os.getpid())
+        master.release_instance_lock(lock)
+        assert lock.exists() is False
+
+
+def test_instance_release_never_deletes_another_run_s_lock() -> None:
+    import pathlib
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        lock = pathlib.Path(td) / "omniroute_graduation.lock"
+        lock.write_text("424242", encoding="utf-8")
+        master.release_instance_lock(lock)
+        assert lock.exists() is True
+
+
 def main() -> None:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for test in tests:

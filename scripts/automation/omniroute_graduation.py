@@ -19,6 +19,8 @@ published management API and the two published inference faces only.
 from __future__ import annotations
 
 import argparse
+import atexit
+import ctypes
 import datetime as dt
 import json
 import os
@@ -39,6 +41,7 @@ ROOT = HERE.parents[1]
 STATE = ROOT / "state"
 RUN = STATE / "omniroute_graduation_run.json"
 ADMISSIONS = STATE / "omniroute_verified_routes.json"
+INSTANCE_LOCK = STATE / "omniroute_graduation.lock"
 VIDEO_REPORT = STATE / "video_provider_probe.json"
 OMNI = "http://127.0.0.1:20128"
 CONSUMER = "http://127.0.0.1:8190/v1"
@@ -84,6 +87,53 @@ def no_proxy_session() -> requests.Session:
     session = requests.Session()
     session.trust_env = False
     return session
+
+
+# --- Single-instance law (operator order 2026-10-15: "its my machine ... run one
+# instance at a time") -------------------------------------------------------
+# The gateway stall measured in #1945/#1947 hits hardest when several heavy runs
+# share this laptop. This guard makes a second graduation run refuse to start
+# instead of quietly doubling the load; a stale lock (owner process gone) is
+# taken over, so a crash never wedges the lane.
+def _pid_alive(pid: int) -> bool:
+    """Windows liveness probe. os.kill(pid, 0) is NOT safe here: on Windows any
+    signal other than the CTRL_* events terminates the target process."""
+    if pid <= 0:
+        return False
+    try:
+        k32 = ctypes.windll.kernel32
+        handle = k32.OpenProcess(0x1000, False, int(pid))  # PROCESS_QUERY_LIMITED_INFORMATION
+    except Exception:
+        return True  # cannot tell -- assume alive and refuse a second run (fail closed)
+    if not handle:
+        return False
+    k32.CloseHandle(handle)
+    return True
+
+
+def acquire_instance_lock(lock_path: pathlib.Path | None = None) -> tuple[bool, str]:
+    path = lock_path or INSTANCE_LOCK
+    if path.exists():
+        try:
+            other = int(path.read_text(encoding="utf-8").strip() or "0")
+        except (OSError, ValueError):
+            other = 0
+        if _pid_alive(other):
+            return False, (f"another omniroute_graduation.py run is live (pid {other}, lock "
+                           f"{path.name}); one instance at a time on this machine")
+        print(f"  stale instance lock (pid {other} is gone) -- taking over", flush=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(os.getpid()), encoding="utf-8")
+    return True, "acquired"
+
+
+def release_instance_lock(lock_path: pathlib.Path | None = None) -> None:
+    path = lock_path or INSTANCE_LOCK
+    try:
+        if path.exists() and path.read_text(encoding="utf-8").strip() == str(os.getpid()):
+            path.unlink()
+    except OSError:
+        pass
 
 
 # --- Gateway health gate (measured basis: worklog #1945, 2026-10-15) ---------
@@ -709,6 +759,12 @@ def main() -> int:
     ap.add_argument("--max-video-routes", type=int, default=0,
                     help="diagnostic video cap; 0 means every video registry route")
     args = ap.parse_args()
+    # One instance at a time on this machine (operator order 2026-10-15).
+    locked, lock_msg = acquire_instance_lock()
+    if not locked:
+        print(f"REFUSING to run: {lock_msg}", flush=True)
+        return 2
+    atexit.register(release_instance_lock)
     if args.e2e and not args.apply:
         ap.error("--apply is required with --e2e")
     if args.e2e and not args.confirm_video_spend and not args.chat_only:

@@ -17276,3 +17276,16 @@ The Law-3 sentinel is arithmetic (`41 + 17` -> `58`), so every counted row is a 
 **What this proves and what it does not.** Proven: the reproducibility blocker was the gateway stall, and a bounded wait plus a recorded window converts it from a poisoned measurement into a survivable one (73 -> 10 TRANSPORT, 11 -> 20 direct proofs on the identical route set). Not proven: the remaining failures are now cleanly separated and each needs its own lane - dead API keys (AUTH 59 rows across 27 active apikey connections), catalog rows the gateway cannot route (NOT_ROUTED 15), upstream refusals (ERROR 31), quota walls (13), and the response-shape/extraction class (EMPTY 7) which is the genuine capture-and-replay work item.
 
 **Next queued:** (1) envelope/SSE unwrap for the EMPTY class; (2) dead-key rotation for the 27 apikey connections through the seats - automation work, no operator hands; (3) NOT_ROUTED catalog-drift report so the plan stops advertising unroutable rows.
+﻿
+### [2026-10-15 12:46] #1948 - OPERATOR LAW: "its my machine, run one instance at a time" - single-instance lock implemented in the master and proven live (second run refused, exit 2)
+
+**Operator order:** one instance at a time on this machine. Cause accepted and consistent with the measurements: the two gateway stall windows recorded in #1947 (6004 ms and 6015 ms silent) both fell inside a window where the graduation sweep shared the laptop with the brother's seat harvest, four seat Chromes, the rig's own keepalive services, the awareness/watchdog/phone soldiers and the operator's own browser. The gateway is a single node process competing for the same CPU and memory as everything else; concurrent heavy instances are what push it under.
+
+**Implemented (house pattern, mirrored from `graduate_all_seats.py`):** `INSTANCE_LOCK = state/omniroute_graduation.lock`; `_pid_alive()` uses the Windows `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` probe (never `os.kill(pid, 0)`, which terminates processes on Windows); `acquire_instance_lock()` refuses when the recorded pid is alive and takes over when it is stale; `release_instance_lock()` deletes only its own pid's lock; `main()` acquires before any work and registers `atexit` release, so every return path is covered.
+
+**Proven live, not asserted.** With one `--plan` already running (pid 18736), a second invocation printed:
+`REFUSING to run: another omniroute_graduation.py run is live (pid 18736, lock omniroute_graduation.lock); one instance at a time on this machine` and exited **2**. After the first run completed, the lock was gone - no wedge left behind.
+
+**Verification:** additive suite `test_omniroute_graduation_health_gate.py` **11 passed** (8 gate/scope + 3 new single-instance: refuses a live owner, takes over a stale pid, never deletes another run's lock); untouched contract judge **6 passed**.
+
+**Scope of the law, as this session will hold it:** one heavy lane instance at a time - no graduation sweep while a capture/harvest sweep is live, and no two sweeps at once. The lock makes that mechanical for the graduation master; for the capture lane the discipline is the brother's and mine to keep by sight (checking for live capture processes and the seats' activity before firing), which is exactly what the #1947 pre-flight did.
