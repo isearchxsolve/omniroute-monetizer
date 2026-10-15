@@ -156,10 +156,33 @@ def classify_failure(status: int | None, body: Any, raw: str = "") -> str:
     return "ERROR"
 
 
+CATALOG_READ_TIMEOUT_S = 120
+CATALOG_READ_ATTEMPTS = 2
+
+
 def live_catalog(session: requests.Session) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Read the inference-plane model catalog.
+
+    Measured 2026-10-15 on the revived rig: a cold authenticated catalog rebuild
+    took 40.8 s and returned 9,540 models across 83 owners.  The previous 30 s
+    bound was shorter than that rebuild, so the master aborted with count=0 and
+    zero routes even though OmniRoute was healthy (management login OK, 115
+    connections).  A second attempt covers a rebuild that is slower still; the
+    bound is a measured value, never a guess.
+    """
     started = time.perf_counter()
+    response = None
+    last_exc: Exception | None = None
+    for _ in range(CATALOG_READ_ATTEMPTS):
+        try:
+            response = session.get(f"{OMNI}/v1/models", timeout=CATALOG_READ_TIMEOUT_S)
+            break
+        except requests.exceptions.RequestException as exc:
+            last_exc = exc
+            response = None
     try:
-        response = session.get(f"{OMNI}/v1/models", timeout=30)
+        if response is None:
+            raise last_exc if last_exc else RuntimeError("catalog read produced no response")
         payload = response.json() if response.ok else {}
         rows = [r for r in payload.get("data", []) if isinstance(r, dict) and r.get("id")]
         meta = {"http": response.status_code, "count": len(rows),
