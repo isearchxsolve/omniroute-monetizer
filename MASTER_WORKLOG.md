@@ -17319,3 +17319,34 @@ The Law-3 sentinel is arithmetic (`41 + 17` -> `58`), so every counted row is a 
 **Honest state of the chat lane after three operator corrections (chat only / no API / one instance):** 3 live chat providers with 6 admitted routes; 3 chat providers with dead OAuth sessions awaiting relight; 3 with upstream refusals or a quota wall. The API lane (83 providers) is out of scope by law and untouched.
 
 **Next queued:** relight the dead chat-lane seats (cline, kilocode, codex) through the lane's own re-auth path in automation's own profiles - chat lane, one instance, no API keys involved.
+﻿
+### [2026-10-15 17:47] #1951 - PARKED on operator order ("kill all process lets park it") - rig stopped and disabled back to its pre-revival state; house lifeline kept; one-command revive recorded
+
+**Operator order:** kill all processes, park it. Executed literally for everything this session started, and for nothing of the operator's.
+
+**Parked (verified):**
+- Automation seat Chromes: **62 + 62 processes killed** across `state/automation_profiles/{providers,niloy,seat2,seat3}` (the operator's own Chrome was never touched by any kill - the filter matched only `automation_profiles` command lines). Chrome process count on the box is now **0**.
+- Rig processes killed: session pool shim x2, chat pool server x2, video router trio (`video_jobs_face.py`/`video_router.py`), plus the last listener on :8189.
+- Services stopped **and returned to Disabled**: `OmniRoute` (Stopped/Disabled), `OmniRouteOAuthKeepAlive` (Stopped/Disabled).
+- All five keepalive tasks ended **and Disabled**: Rig Supervisor, Session Pool Shim, Video Router, OAuth KeepAlive, Copilot Bearer KeepAlive.
+- Ports now: **20128 closed, 8190 closed, 20130 closed, 8189 closed, 9222-9225 closed.**
+- Machine after the park: **CPU 100% -> 54%, RAM 72% -> 32%, free 4.4 GB -> 10.9 GB.**
+
+**Deliberately KEPT alive (house lifeline, not part of the park):** relay :8777 (UP), sudo-hands :8769 (UP), blink-guardian :8768 (UP), plus watchdog/awareness/phone-health soldiers. The wire survives, as the law requires.
+
+**One-command revive (for the next session - exact, verified commands):**
+```
+sc config OmniRoute start= auto ; sc start OmniRoute
+sc config OmniRouteOAuthKeepAlive start= auto ; sc start OmniRouteOAuthKeepAlive
+schtasks /change /tn "OmniRoute Rig Supervisor (keepalive)" /enable
+schtasks /change /tn "OmniRoute Session Pool Shim (keepalive)" /enable
+schtasks /change /tn "OmniRoute Video Router (keepalive)" /enable
+schtasks /change /tn "OmniRoute OAuth KeepAlive" /enable
+schtasks /run /tn "OmniRoute Session Pool Shim (keepalive)"
+# if the shim task still fails its 4 s bounded cleanup (known defect), launch it canonically:
+#   .venv\Scripts\pythonw.exe -u scripts\automation\session_pool_shim.py 8190   (cwd repo root, OMNI_VIDEO_CONFIRM_SPEND=1)
+```
+
+**State preserved across the park (nothing lost):** no-API chat lane = **6 admitted routes** (agy x2, antigravity x2, kiro x2, all computed `58` on both faces) in `state/omniroute_verified_routes.json`; the 10:35 baseline ledger kept at `state/baseline_20261015_a_omniroute_verified_routes.json`; gate/scope/lane law + single-instance lock in `omniroute_graduation.py` (additive suite 14 passed, untouched judge 6 passed); worklog #1942-#1951; commits through 8f646ce (live) and 937850b (lane mirror).
+
+**Where the work stopped, honestly:** the four dead chat seats (cline, kilocode, codex, grok-cli) cannot be revived by the refresh path - measured: `REFRESHED 8, FAILED 4` with "provider returned no new token" (cline, kilocode, grok-cli) and "refresh returned expired token metadata" (codex). Their OAuth refresh tokens died during the 22-day shutdown. Next step when unparked is therefore an interactive re-auth in automation's own seat profile - or a local token import: `~/.codex/auth.json` exists and was refreshed 2026-10-14 22:08, which is the one live no-browser source found for the codex seat. Not attempted: no token was read, injected, or fabricated in this entry.
