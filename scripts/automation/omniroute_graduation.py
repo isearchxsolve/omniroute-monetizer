@@ -404,7 +404,15 @@ def catalog_modality(row: dict[str, Any]) -> str:
     return "video_candidate" if is_non_chat(row) else "chat"
 
 
-def plan_from_catalog(catalog: list[dict[str, Any]], max_models: int = 0) -> list[dict[str, Any]]:
+def plan_from_catalog(catalog: list[dict[str, Any]], max_models: int = 0,
+                      allowed_providers: set[str] | None = None) -> list[dict[str, Any]]:
+    """Build the chat execution plan.
+
+    ``allowed_providers`` is the no-API lane law (operator 2026-10-15: "no api
+    only chat"): when a set is given, only those providers may enter the plan.
+    ``None`` keeps the historical all-chat behaviour, which is what the untouched
+    contract tests exercise.
+    """
     rows = []
     for item in catalog:
         model = str(item.get("id") or "")
@@ -416,6 +424,9 @@ def plan_from_catalog(catalog: list[dict[str, Any]], max_models: int = 0) -> lis
         if is_non_chat_endpoint(model):
             # Chat-only scope: embeddings, rerankers, audio, image and video
             # endpoints stay in the capability inventory, never in this plan.
+            continue
+        if allowed_providers is not None and owner not in allowed_providers:
+            # API-key lane: excluded by the operator's "no api only chat" law.
             continue
         rows.append({"provider": owner, "model": model,
                      "modelFamily": model_family(model), "catalogOwnedBy": owner})
@@ -557,6 +568,38 @@ def management_snapshot() -> dict[str, Any]:
         return {"auth": "ERROR", "connections": [], "error": f"{type(exc).__name__}: {exc}"[:220]}
 
 
+def chat_lane_providers() -> tuple[set[str] | None, dict[str, Any]]:
+    """The no-API chat lane (operator law 2026-10-15: "no api only chat").
+
+    Reads the provider registry and returns the providers whose connection is
+    NOT an API key - the captured web-session / OAuth chat lane this project
+    exists to graduate. Returns ``(None, meta)`` when the registry cannot be
+    read, so the caller can decide explicitly instead of silently widening the
+    plan; the live measurement on 2026-10-15 was 88 apikey vs 27 oauth
+    connections across 115 rows.
+    """
+    api = OmniRouteAPI(base_url=OMNI, password=get_password())
+    api.session.trust_env = False
+    try:
+        if not api.login():
+            return None, {"auth": "FAILED"}
+        connections = api.get_connections()
+        chat_lane: set[str] = set()
+        api_lane: set[str] = set()
+        for c in connections:
+            provider = str(c.get("provider") or "")
+            if not provider:
+                continue
+            if str(c.get("authType") or "").strip().lower() == "apikey":
+                api_lane.add(provider)
+            else:
+                chat_lane.add(provider)
+        return chat_lane, {"auth": "OK", "chatLaneProviders": len(chat_lane),
+                           "apiKeyProviders": len(api_lane)}
+    except Exception as exc:
+        return None, {"auth": "ERROR", "error": f"{type(exc).__name__}: {exc}"[:220]}
+
+
 def build_plan(*, include_management: bool = True) -> dict[str, Any]:
     catalog, catalog_meta = authenticated_live_catalog()
     # Connection metadata is useful for a read-only plan, but it is not a
@@ -565,24 +608,34 @@ def build_plan(*, include_management: bool = True) -> dict[str, Any]:
     # discovery has succeeded.
     management = management_snapshot() if include_management else {
         "auth": "SKIPPED_E2E_OPTIONAL_METADATA", "connections": []}
-    routes = plan_from_catalog(catalog)
+    chat_lane, lane_meta = chat_lane_providers()
+    routes = plan_from_catalog(catalog, allowed_providers=chat_lane)
     capability_rows = capability_inventory(catalog)
     planned = {(r["provider"], r["model"]) for r in routes}
     non_chat_rows = [r for r in capability_rows if (r["provider"], r["model"]) not in planned]
-    non_chat_providers = sorted({r["provider"] for r in non_chat_rows} - {r["provider"] for r in routes})
+    catalog_providers = {provider_name(i) for i in catalog}
+    excluded_api = sorted(catalog_providers - set(chat_lane)) if chat_lane is not None else []
+    non_chat_providers = sorted({r["provider"] for r in non_chat_rows} - {r["provider"] for r in routes}
+                                - set(excluded_api))
     return {"schemaVersion": 1, "generatedAt": now(),
             "mode": "omniroute_all_catalog_plan_no_inference", "endpoint": OMNI,
             "consumerContract": CONSUMER, "catalog": catalog_meta,
             "management": {k: v for k, v in management.items() if k != "connections"},
+            "authLane": {**lane_meta,
+                         "law": "no api only chat (operator 2026-10-15)",
+                         "includedProviders": sorted(chat_lane) if chat_lane is not None else [],
+                         "excludedApiKeyProviders": excluded_api},
             "chatScope": {
-                "policy": "chat-only providers and chat-completions endpoints (operator order 2026-10-15)",
+                "policy": ("chat-only providers, chat-completions endpoints, and no API-key lane "
+                           "(operator orders 2026-10-15)"),
                 "catalogChatProviders": len({r["provider"] for r in routes}),
                 "catalogChatRows": len(routes),
                 "excludedNonChatRows": len(non_chat_rows),
                 "excludedProvidersWithNoChatRow": non_chat_providers,
+                "excludedApiKeyProviders": len(excluded_api),
                 "note": ("excluded rows remain in providerModelCapabilityInventory; a provider with no chat row "
-                         "cannot contribute to this lane. Representative selection happens after this block, "
-                         "so the probed route count is plan.selection.probeRows."),
+                         "or an API-key connection cannot contribute to this lane. Representative selection "
+                         "happens after this block, so the probed route count is plan.selection.probeRows."),
             },
             "providers": dict(Counter(r["provider"] for r in routes)),
             "routes": routes,
@@ -774,8 +827,9 @@ def main() -> int:
     if args.e2e and not plan.get("routes"):
         ap.error("OmniRoute catalog returned no chat routes; service/catalog is unavailable, no probes started")
     if args.max_models_per_provider:
+        lane = set(plan.get("authLane", {}).get("includedProviders") or []) or None
         plan["routes"] = plan_from_catalog(
-            authenticated_live_catalog()[0], args.max_models_per_provider)
+            authenticated_live_catalog()[0], args.max_models_per_provider, allowed_providers=lane)
         plan["mode"] = "omniroute_capped_diagnostic_plan"
     if args.representative_per_family:
         plan["routes"] = representative_routes_by_family(list(plan["routes"]))

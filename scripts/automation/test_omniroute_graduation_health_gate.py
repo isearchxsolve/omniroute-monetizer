@@ -112,6 +112,28 @@ def test_excluded_rows_stay_in_the_capability_inventory() -> None:
     assert inventory == {"mistral/devstral-2512", "cohere/embed-english-light-v3.0"}
 
 
+def test_no_api_lane_drops_api_key_providers_when_a_lane_set_is_given() -> None:
+    """Operator law 2026-10-15: "no api only chat"."""
+    catalog = [
+        {"id": "openai/gpt-4.1", "owned_by": "openai"},          # apikey connection
+        {"id": "agy/claude-sonnet-4-6", "owned_by": "agy"},       # oauth chat lane
+        {"id": "kiro/qwen3-coder-next", "owned_by": "kiro"},      # oauth chat lane
+    ]
+    routes = master.plan_from_catalog(catalog, allowed_providers={"agy", "kiro"})
+    assert [(r["provider"], r["model"]) for r in routes] == [
+        ("agy", "agy/claude-sonnet-4-6"), ("kiro", "kiro/qwen3-coder-next")]
+
+
+def test_no_api_lane_leaves_no_trace_when_the_lane_is_empty() -> None:
+    catalog = [{"id": "openai/gpt-4.1", "owned_by": "openai"}]
+    assert master.plan_from_catalog(catalog, allowed_providers=set()) == []
+
+
+def test_default_plan_keeps_historical_behaviour_without_a_lane_set() -> None:
+    catalog = [{"id": "openai/gpt-4.1", "owned_by": "openai"}]
+    assert len(master.plan_from_catalog(catalog)) == 1
+
+
 def test_instance_lock_refuses_a_second_live_run(tmp_path=None) -> None:
     """Operator law 2026-10-15: one instance at a time on this machine."""
     import pathlib

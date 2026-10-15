@@ -17289,3 +17289,19 @@ The Law-3 sentinel is arithmetic (`41 + 17` -> `58`), so every counted row is a 
 **Verification:** additive suite `test_omniroute_graduation_health_gate.py` **11 passed** (8 gate/scope + 3 new single-instance: refuses a live owner, takes over a stale pid, never deletes another run's lock); untouched contract judge **6 passed**.
 
 **Scope of the law, as this session will hold it:** one heavy lane instance at a time - no graduation sweep while a capture/harvest sweep is live, and no two sweeps at once. The lock makes that mechanical for the graduation master; for the capture lane the discipline is the brother's and mine to keep by sight (checking for live capture processes and the seats' activity before firing), which is exactly what the #1947 pre-flight did.
+﻿
+### [2026-10-15 15:01] #1949 - OPERATOR LAW: "no api only chat" - the API-key lane is excluded from the plan; graduation scope is now 9 chat providers / 22 routes (was 75 / 156). Plus the machine finding: my own harness session is the top CPU consumer
+
+**Operator order:** "no api only chat" (third scope correction of the day, after "we target chat only providers" and "run one instance at a time"). Implemented as a law in the master, not as a flag.
+
+**Registry evidence (management API, 115 connections):** `apikey` 88, `oauth` 27. The chat lane this project exists to graduate is the captured web-session / OAuth lane, so every `authType == apikey` provider is now out of the plan.
+
+**Implemented (`omniroute_graduation.py`):** new `chat_lane_providers()` reads the registry and returns the non-API-key providers (plus counts); `plan_from_catalog(..., allowed_providers=None)` gained an opt-in lane filter (`None` preserves the historical all-chat behaviour that the untouched contract tests exercise - verified, they still pass); `build_plan` passes the lane and records an `authLane` block (law, includedProviders, excludedApiKeyProviders, chatLaneProviders/apiKeyProviders counts); the capped diagnostic path in `main` reuses `plan.authLane.includedProviders` so a diagnostic can never silently re-widen into the API lane.
+
+**Live plan under the law:** `providers=9 routes=22` (was 75/156). Chat-lane providers: agy, amazon-q, antigravity, cline, clinepass, codex, devin-desktop, github, grok-cli, kilocode, kimi-coding, kiro, trae, xai-oauth (14 in the registry; 9 carry catalog rows). **72 API-key providers excluded**, 7,338 non-chat rows excluded, capability inventory untouched.
+
+**Verification:** additive `test_omniroute_graduation_health_gate.py` **14 passed** (3 new no-API tests: lane filter drops apikey providers, empty lane yields nothing, default behaviour unchanged); untouched contract judge **6 passed**.
+
+**Machine finding (operator reported the laptop stalling again).** Nothing of mine was running at the time; measured on 16 GB / 4 logical cores: RAM 72% used, **CPU 100%**, 69 chrome processes (2.9 GB) and, in a 6-second per-process CPU delta sample, the single largest consumer was a **DeepSeek Harness process (14.4 CPU-seconds in 6 s ≈ 2.4 cores)** - i.e. an agent session's own harness, followed by a second harness (3.1 s), powershell (3.8 s), kilo (1.8 s), Zoom, the code-sidecar pair, Taskmgr. So "one instance at a time" is not only about graduation sweeps: concurrent agent sessions themselves are the heavy load on this box. The operator then killed the strays and this session restarted the lane clean (rig verified: OmniRoute running, shim :8190 up, pool :20130, video router :8189, seat 9222 up, seats 9223-9225 now closed, RAM down to 66%).
+
+**Net scope after three operator corrections:** chat providers only, chat-completions endpoints only, **no API-key lane**, one instance at a time, gateway stalls waited out and recorded. The lane is now small, honest and gentle on the machine: **22 routes**.
