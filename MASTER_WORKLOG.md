@@ -17252,3 +17252,27 @@ The Law-3 sentinel is arithmetic (`41 + 17` -> `58`), so every counted row is a 
 **Verification:** live install - new suite `test_omniroute_graduation_health_gate.py` **8 passed**; untouched contract judge **6 passed**; plan after tightening = **75 providers / 156 chat routes**, 906 non-chat rows excluded, dropped providers aihorde, comfyui, mixedbread, ollama-local, sdwebui, veoaifree-web. Workspace lane mirror: 6 + 8 = **14 passed**.
 
 **Next action:** re-fire the 156-route chat-only sweep with the gate armed, on the brother's freshly harvested sessions, in a quiet window - then report the delta against both #1943 (29/20) and #1945 (11/9) with the stall windows shown.
+﻿
+### [2026-10-15 12:27] #1947 - GATED chat-only run: 20 direct / 17 admitted (was 11/9 stalled, 29/20 all-scope). The health gate caught 2 stalls and cut TRANSPORT from 73 to 10 - the hypothesis is now proven by measurement
+
+**Run:** `omniroute_graduation.py --apply --e2e --chat-only --representative-per-family --fresh --with the new GatewayHealthGate --lanes 2` (156 chat-only routes, transcript `logs/grad_cycle_20261015_gated.log`). Result: `directLaw3=20 consumerLaw3=17` (exit 0).
+
+**The gate, doing exactly what it was built for:** `gatewayAtStart` = 200 in 17 ms; 13 health checks during the sweep; **2 stall windows recorded** - `vertex/gemini-omni-flash-preview` (gateway 6004 ms silent -> recovered 356 ms, waited 15 s) and `xai-oauth/grok-4.20-multi-agent-0309` (6015 ms -> 139 ms, waited 15 s). Both windows are in the run artifact; nothing was inferred after the fact.
+
+**Class-by-class, three runs, same rig:**
+
+| class | all-scope 10:19 | chat-only stalled | **chat-only gated** |
+|---|---|---|---|
+| DIRECT_LAW3_OK | 29 | 11 | **20** |
+| TRANSPORT | 12 | **73** | **10** |
+| AUTH | 59 | 38 | 59 |
+| ERROR | 81 | 26 | 31 |
+| EMPTY | 25 | 5 | 7 |
+| NOT_ROUTED | 15 | 5 | 15 |
+| WALL / SKIPPED / RATE | 1 / 10 / 4 | 1 / 1 / 0 | 5 / 8 / 1 |
+
+**Admissions: 17 entries.** Kept agy, antigravity, cloudflare-playground, devin-cli-agentic, groq, kiro, mistral, openadapter. **Gained cohere, duckduckgo-web, nvidia, perplexity-web** - two of those (perplexity-web, duckduckgo-web) are the brother's freshly harvested sessions from this morning, so his capture work converted directly into admitted supply. Still lost against the 10:35 baseline: aion (EMPTY), cline (AUTH), codex-app-server (ERROR), gemini-web (EMPTY), github (WALL), orcarouter (NOT_ROUTED - the provider itself moved), publicai (AUTH), sealion (AUTH) - and **not one of those is a gateway stall any more.**
+
+**What this proves and what it does not.** Proven: the reproducibility blocker was the gateway stall, and a bounded wait plus a recorded window converts it from a poisoned measurement into a survivable one (73 -> 10 TRANSPORT, 11 -> 20 direct proofs on the identical route set). Not proven: the remaining failures are now cleanly separated and each needs its own lane - dead API keys (AUTH 59 rows across 27 active apikey connections), catalog rows the gateway cannot route (NOT_ROUTED 15), upstream refusals (ERROR 31), quota walls (13), and the response-shape/extraction class (EMPTY 7) which is the genuine capture-and-replay work item.
+
+**Next queued:** (1) envelope/SSE unwrap for the EMPTY class; (2) dead-key rotation for the 27 apikey connections through the seats - automation work, no operator hands; (3) NOT_ROUTED catalog-drift report so the plan stops advertising unroutable rows.
