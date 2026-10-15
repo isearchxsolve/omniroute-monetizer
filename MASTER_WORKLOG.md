@@ -17234,3 +17234,21 @@ The Law-3 sentinel is arithmetic (`41 + 17` -> `58`), so every counted row is a 
 **Conclusion (supersedes the SSO/capture framing):** the graduation lane's reproducibility blocker is the gateway stall under wide provider sweeps. Neither the sessions nor the replay client were the reason this run scored 11 instead of 29.
 
 **Next engineering step queued (no operator hands needed):** a gateway health gate inside the master - probe `/healthz` every N providers; when it is slow or silent, pause with bounded backoff until it answers fast, and record each stall window (start, end, latency) inside the run artifact so a poisoned measurement is visible in the evidence instead of inferred afterwards. Plus tighten the scope tokens (i2v/t2v/animatediff and image-only providers).
+﻿
+### [2026-10-15 12:10] #1946 - Gateway health gate built before re-firing (operator: "you decide son"); chat-only scope tightened to its measured leftovers; 8 new tests added, untouched judge still 6/6
+
+**Decision and why:** the #1945 chat-only run scored 11/9 against a fresh-gateway baseline of 29/20 purely because the gateway went deaf mid-sweep (73 TRANSPORT rows). Re-firing without a gate would have repeated the same poisoned window, so the gate was built first - it is the difference between a measurement and a coin toss.
+
+**Built (`omniroute_graduation.py`):**
+- `gateway_health(session, timeout)` - one bounded `/healthz` read of the LOCAL gateway, never a provider call; returns ok/status/latencyMs and never raises.
+- `GatewayHealthGate` - `check()` plus `await_recovery(reason)`: when the gateway is silent it waits in `GATEWAY_STALL_PROBE_EVERY_S` (15 s) steps up to `GATEWAY_STALL_MAX_WAIT_S` (900 s), then either returns the recovered health or gives up explicitly. Every window is recorded: startedAt, endedAt, waitedSeconds, reason, gatewayAtStart, gatewayAtEnd, gaveUp.
+- Wired into the provider lane: a `TRANSPORT` verdict (including one that follows a RATE retry) now triggers `await_recovery` instead of racing on.
+- The run artifact now carries `gatewayAtStart`, `gatewayStalls` and `gatewayHealthChecks`, so a gateway stall appears IN THE EVIDENCE instead of being inferred after the fact.
+
+**Chat-only scope, tightened on the measured leftovers of #1945:** tokens added for i2v, t2v, image-to-video, text-to-video, animatediff, hunyuan-video, ltx-video, mochi, cogvideo, svd-, depth-anything, segment-anything, grounding-dino, yolo, clip, blip; plus an explicit `NON_CHAT_PROVIDERS` = aihorde, comfyui, sdwebui (their rows carry no modality token at all - "2DN", "Realistic Vision", "animatediff-webui" - and every row remains in the capability inventory). Providers with real chat rows (e.g. kie) are deliberately NOT listed.
+
+**My own new test caught my own gap:** `test_chat_only_scope_drops_video_and_image_leftovers` failed on first run because `jina-ai/jina-clip-v2` slipped through the `clip-vit` token; the token is now `clip` and the test passes. That is the test doing its job on the author, not a test edited to fit the code.
+
+**Verification:** live install - new suite `test_omniroute_graduation_health_gate.py` **8 passed**; untouched contract judge **6 passed**; plan after tightening = **75 providers / 156 chat routes**, 906 non-chat rows excluded, dropped providers aihorde, comfyui, mixedbread, ollama-local, sdwebui, veoaifree-web. Workspace lane mirror: 6 + 8 = **14 passed**.
+
+**Next action:** re-fire the 156-route chat-only sweep with the gate armed, on the brother's freshly harvested sessions, in a quiet window - then report the delta against both #1943 (29/20) and #1945 (11/9) with the stall windows shown.

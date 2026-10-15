@@ -86,6 +86,76 @@ def no_proxy_session() -> requests.Session:
     return session
 
 
+# --- Gateway health gate (measured basis: worklog #1945, 2026-10-15) ---------
+# Mid-sweep the local gateway went silent: /healthz answered nothing for 20.4 s,
+# /v1/models for 45.2 s, while the shim (:8190) stayed healthy at 0.96 s. 73 of
+# 151 rows then recorded TRANSPORT and eleven providers that had proven
+# DIRECT_LAW3_OK forty minutes earlier were lost. That is the gateway's own stall
+# (DEFERRED_ACTIONS section 1 / upstream #6408 class), so a sweep must WAIT IT OUT
+# instead of burning routes into timeouts - and must record the window so a
+# poisoned measurement is visible in the evidence rather than inferred later.
+GATEWAY_HEALTH_TIMEOUT_S = 6
+GATEWAY_STALL_MAX_WAIT_S = 900
+GATEWAY_STALL_PROBE_EVERY_S = 15
+
+
+def gateway_health(session: requests.Session, timeout: float = GATEWAY_HEALTH_TIMEOUT_S) -> dict[str, Any]:
+    """One bounded liveness read of the local gateway (never a provider call)."""
+    started = time.perf_counter()
+    try:
+        response = session.get(f"{OMNI}/healthz", timeout=timeout)
+        return {"ok": response.status_code == 200, "status": response.status_code,
+                "latencyMs": round((time.perf_counter() - started) * 1000)}
+    except Exception as exc:
+        return {"ok": False, "status": None,
+                "latencyMs": round((time.perf_counter() - started) * 1000),
+                "error": f"{type(exc).__name__}: {exc}"[:160]}
+
+
+class GatewayHealthGate:
+    """Pause a provider sweep while the gateway is stalled; record every window."""
+
+    def __init__(self, session: requests.Session, max_wait_s: float = GATEWAY_STALL_MAX_WAIT_S,
+                 probe_every_s: float = GATEWAY_STALL_PROBE_EVERY_S) -> None:
+        self.session = session
+        self.max_wait_s = max(0.0, float(max_wait_s))
+        self.probe_every_s = max(1.0, float(probe_every_s))
+        self.stalls: list[dict[str, Any]] = []
+        self.checks = 0
+        self._lock = threading.Lock()
+
+    def check(self) -> dict[str, Any]:
+        with self._lock:
+            self.checks += 1
+        return gateway_health(self.session)
+
+    def await_recovery(self, reason: str, sleep=time.sleep) -> dict[str, Any]:
+        """Block until the gateway answers 200 again, or the bound expires."""
+        first = self.check()
+        if first.get("ok"):
+            return first
+        started = now()
+        waited = 0.0
+        while waited < self.max_wait_s:
+            sleep(self.probe_every_s)
+            waited += self.probe_every_s
+            health = self.check()
+            if health.get("ok"):
+                self._record(started, waited, reason, first, health, gave_up=False)
+                return health
+        self._record(started, waited, reason, first, None, gave_up=True)
+        return {"ok": False, "status": None, "latencyMs": None, "gaveUp": True}
+
+    def _record(self, started: str, waited: float, reason: str, first: dict[str, Any],
+                recovered: dict[str, Any] | None, gave_up: bool) -> None:
+        with self._lock:
+            self.stalls.append({
+                "startedAt": started, "endedAt": now(), "waitedSeconds": round(waited, 1),
+                "reason": reason[:160], "gatewayAtStart": first,
+                "gatewayAtEnd": recovered, "gaveUp": gave_up,
+            })
+
+
 def consumer_auth_header() -> dict[str, str]:
     """Bearer for the :8190 tenant gate (hot-read map, worklog #1618).
 
@@ -244,7 +314,20 @@ NON_CHAT_ENDPOINT_TOKENS = (
     "diffusion", "stable-diffusion", "sdxl", "flux", "dall-e", "image",
     "midjourney", "imagen", "cosmos", "sora", "seedance", "hailuo",
     "minimax-video", "runway", "pika", "veo", "kling", "wan2", "luma",
+    # measured leftovers from the 2026-10-15 chat-only run (#1945):
+    "i2v", "t2v", "image-to-video", "text-to-video", "animatediff",
+    "hunyuan-video", "ltx-video", "mochi", "cogvideo", "svd-",
+    "depth-anything", "segment-anything", "grounding-dino", "yolo",
+    "clip", "blip",
 )
+
+# Providers whose catalog rows are generative image/audio endpoints by product,
+# verified against the 2026-10-15 catalog: their rows carry no modality token
+# (aihorde "2DN", "Realistic Vision"; comfyui "animatediff"; sdwebui
+# "animatediff-webui"), so no name rule can classify them. They contribute no
+# chat-completions endpoint to this lane; every row stays in the capability
+# inventory. Providers with real chat rows (e.g. kie) are deliberately absent.
+NON_CHAT_PROVIDERS = ("aihorde", "comfyui", "sdwebui")
 
 
 def is_non_chat_endpoint(model: str) -> bool:
@@ -277,6 +360,8 @@ def plan_from_catalog(catalog: list[dict[str, Any]], max_models: int = 0) -> lis
         model = str(item.get("id") or "")
         owner = provider_name(item)
         if not model or owner in {"combo", "session_pool", "unknown"} or is_non_chat(item):
+            continue
+        if owner in NON_CHAT_PROVIDERS:
             continue
         if is_non_chat_endpoint(model):
             # Chat-only scope: embeddings, rerankers, audio, image and video
@@ -497,6 +582,8 @@ def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float,
         by_provider[str(row["provider"])].append(row)
     write_lock = threading.Lock()
     request_gate = GlobalRequestGate(max_inflight=max_inflight, min_interval=min_interval)
+    gateway_gate = GatewayHealthGate(no_proxy_session())
+    gateway_at_start = gateway_gate.check()
 
     def record(result: dict[str, Any]) -> None:
         with write_lock:
@@ -517,11 +604,17 @@ def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float,
                 continue
             with request_gate:
                 result = direct_probe(session, route, timeout)
-            if result["directProof"] == "RATE":
+            if result["directProof"] == "TRANSPORT":
+                # A transport miss is the GATEWAY's stall, not the provider's
+                # (measured #1945): wait for it, bounded, and record the window.
+                gateway_gate.await_recovery(f"transport:{owner}/{route['model']}")
+            elif result["directProof"] == "RATE":
                 strikes += 1
                 time.sleep(min(30, strikes * 5))
                 with request_gate:
                     result = direct_probe(session, route, timeout)
+                if result["directProof"] == "TRANSPORT":
+                    gateway_gate.await_recovery(f"transport-after-rate:{owner}/{route['model']}")
             elif result["directProof"] == "DIRECT_LAW3_OK":
                 strikes = 0
             lane_results.append(result)
@@ -564,6 +657,9 @@ def run_chat_e2e(plan: dict[str, Any], timeout: float, consumer_timeout: float,
         matrix[r["provider"]][r["modelFamily"]] += 1
     return {"phase": "chat_direct_then_8190_consumer", "direct": results,
             "consumer": consumer, "admitted": admissions["entries"],
+            "gatewayAtStart": gateway_at_start,
+            "gatewayStalls": gateway_gate.stalls,
+            "gatewayHealthChecks": gateway_gate.checks,
             "providerModelFamilyCapacity": {p: dict(v) for p, v in sorted(matrix.items())},
             "counts": {"directLaw3": len(direct_ok), "consumerLaw3": len(admitted)}}
 
