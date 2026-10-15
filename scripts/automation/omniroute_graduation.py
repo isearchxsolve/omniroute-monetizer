@@ -230,6 +230,35 @@ def is_non_chat(row: dict[str, Any]) -> bool:
             ("/veo", "/wan", "/kling", "/luma", "text-to-video", "image-generation")))
 
 
+# Chat-only scope (operator order, 2026-10-15: "we target chat only providers").
+# A chat-completions lane must never send a chat payload to an endpoint that is
+# not a chat model: the 2026-10-15 live cycle measured 13 such rows returning
+# HTTP 400 (mistral-embed, cohere-embed-english-light-v3.0, nv-embedqa-e5-v5,
+# stable-audio-open, gemini native-audio, flux, Stable-Horde image rows).
+# Vendors keep every one of these rows in the capability inventory - this list
+# only decides which rows the CHAT execution plan may probe.
+NON_CHAT_ENDPOINT_TOKENS = (
+    "embed", "embedding", "rerank", "reranker", "bge-", "gte-", "e5-",
+    "tts", "text-to-speech", "speech", "whisper", "transcribe", "audio",
+    "voice", "realtime-audio", "moderation", "ocr", "upscale", "controlnet",
+    "diffusion", "stable-diffusion", "sdxl", "flux", "dall-e", "image",
+    "midjourney", "imagen", "cosmos", "sora", "seedance", "hailuo",
+    "minimax-video", "runway", "pika", "veo", "kling", "wan2", "luma",
+)
+
+
+def is_non_chat_endpoint(model: str) -> bool:
+    """True for model ids that are not chat-completions endpoints.
+
+    Multimodal chat models (``vision``, ``vl``, ``omni``) are deliberately NOT
+    matched: a vision-language model still answers a chat completion, and the
+    live cycle proved rows such as ``llama-3.2-11b-vision-instruct`` do reach
+    the chat transport.
+    """
+    low = str(model or "").lower()
+    return any(token in low for token in NON_CHAT_ENDPOINT_TOKENS)
+
+
 def catalog_modality(row: dict[str, Any]) -> str:
     """Classify a catalog row without erasing models from the capacity ledger.
 
@@ -248,6 +277,10 @@ def plan_from_catalog(catalog: list[dict[str, Any]], max_models: int = 0) -> lis
         model = str(item.get("id") or "")
         owner = provider_name(item)
         if not model or owner in {"combo", "session_pool", "unknown"} or is_non_chat(item):
+            continue
+        if is_non_chat_endpoint(model):
+            # Chat-only scope: embeddings, rerankers, audio, image and video
+            # endpoints stay in the capability inventory, never in this plan.
             continue
         rows.append({"provider": owner, "model": model,
                      "modelFamily": model_family(model), "catalogOwnedBy": owner})
@@ -399,10 +432,23 @@ def build_plan(*, include_management: bool = True) -> dict[str, Any]:
         "auth": "SKIPPED_E2E_OPTIONAL_METADATA", "connections": []}
     routes = plan_from_catalog(catalog)
     capability_rows = capability_inventory(catalog)
+    planned = {(r["provider"], r["model"]) for r in routes}
+    non_chat_rows = [r for r in capability_rows if (r["provider"], r["model"]) not in planned]
+    non_chat_providers = sorted({r["provider"] for r in non_chat_rows} - {r["provider"] for r in routes})
     return {"schemaVersion": 1, "generatedAt": now(),
             "mode": "omniroute_all_catalog_plan_no_inference", "endpoint": OMNI,
             "consumerContract": CONSUMER, "catalog": catalog_meta,
             "management": {k: v for k, v in management.items() if k != "connections"},
+            "chatScope": {
+                "policy": "chat-only providers and chat-completions endpoints (operator order 2026-10-15)",
+                "catalogChatProviders": len({r["provider"] for r in routes}),
+                "catalogChatRows": len(routes),
+                "excludedNonChatRows": len(non_chat_rows),
+                "excludedProvidersWithNoChatRow": non_chat_providers,
+                "note": ("excluded rows remain in providerModelCapabilityInventory; a provider with no chat row "
+                         "cannot contribute to this lane. Representative selection happens after this block, "
+                         "so the probed route count is plan.selection.probeRows."),
+            },
             "providers": dict(Counter(r["provider"] for r in routes)),
             "routes": routes,
             "providerModelCapabilityInventory": capability_rows,
