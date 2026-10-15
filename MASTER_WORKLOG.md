@@ -17305,3 +17305,17 @@ The Law-3 sentinel is arithmetic (`41 + 17` -> `58`), so every counted row is a 
 **Machine finding (operator reported the laptop stalling again).** Nothing of mine was running at the time; measured on 16 GB / 4 logical cores: RAM 72% used, **CPU 100%**, 69 chrome processes (2.9 GB) and, in a 6-second per-process CPU delta sample, the single largest consumer was a **DeepSeek Harness process (14.4 CPU-seconds in 6 s ≈ 2.4 cores)** - i.e. an agent session's own harness, followed by a second harness (3.1 s), powershell (3.8 s), kilo (1.8 s), Zoom, the code-sidecar pair, Taskmgr. So "one instance at a time" is not only about graduation sweeps: concurrent agent sessions themselves are the heavy load on this box. The operator then killed the strays and this session restarted the lane clean (rig verified: OmniRoute running, shim :8190 up, pool :20130, video router :8189, seat 9222 up, seats 9223-9225 now closed, RAM down to 66%).
 
 **Net scope after three operator corrections:** chat providers only, chat-completions endpoints only, **no API-key lane**, one instance at a time, gateway stalls waited out and recorded. The lane is now small, honest and gentle on the machine: **22 routes**.
+﻿
+### [2026-10-15 15:06] #1950 - No-API chat-lane sweep: 22 routes -> 7 computed direct proofs -> 6 consumer-admitted across 3 providers; ZERO gateway stalls at one lane (the machine law confirmed by measurement)
+
+**Run:** `--apply --e2e --chat-only --representative-per-family --fresh --lanes 1 --max-inflight 1 --min-interval 2.0` under the no-API law (9 providers / 22 routes), transcript `logs/grad_cycle_20261015_chatlane.log`. Result `directLaw3=7 consumerLaw3=6` (exit 0).
+
+**Admitted (all CONSUMER_LAW3_OK, computed `58` on both faces):** agy/claude-sonnet-4-6 (chat), agy/claude-opus-4-6-thinking (reasoning), antigravity/claude-sonnet-4-6 (chat), antigravity/claude-opus-4-6-thinking (reasoning), kiro/qwen3-coder-next (coding), kiro/no-think/claude-haiku-4.5 (reasoning). Three providers carry the whole no-API chat lane, and they are the strongest three in it.
+
+**Remaining rows, each with its measured cause:** AUTH 9 (cline 4, kilocode 4, codex 1 - all HTTP 401: OAuth sessions that expired during the 22-day shutdown; these are chat-lane connections, so relighting them is chat work, not API work), ERROR 3 (amazon-q 400, codex-auto-review 400, grok-cli 400 - upstream refusals), WALL 1 + SKIPPED_PROVIDER_WALL 2 (github, HTTP 466 quota wall - reported, never solved).
+
+**The machine law confirmed by measurement.** With one lane, one in-flight request and 2 s spacing the gateway stayed healthy the entire sweep: `gatewayAtStart` 200 in 28 ms, **1 health check, 0 stall windows**. Compare #1945/#1947 under parallel load: 20.4 s and 45.2 s of silence and 73 TRANSPORT rows. The operator's diagnosis - concurrent instances, not the providers - is now supported from both directions: stalls appear under load and vanish at one lane.
+
+**Honest state of the chat lane after three operator corrections (chat only / no API / one instance):** 3 live chat providers with 6 admitted routes; 3 chat providers with dead OAuth sessions awaiting relight; 3 with upstream refusals or a quota wall. The API lane (83 providers) is out of scope by law and untouched.
+
+**Next queued:** relight the dead chat-lane seats (cline, kilocode, codex) through the lane's own re-auth path in automation's own profiles - chat lane, one instance, no API keys involved.
