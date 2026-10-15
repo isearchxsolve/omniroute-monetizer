@@ -17182,3 +17182,25 @@ Operator explicitly requested immediate live hibernation and session restoration
 **8. Live cycle launched.** omniroute_graduation.py --apply --e2e --chat-only --representative-per-family --lanes 2 --max-inflight 2 --min-interval 1.0, transcript to logs/grad_cycle_20261015.log. Chat-only: no native video proof, therefore no video spend. First lanes reported: gy 2/2 direct proofs, gentrouter 0/2.
 
 **9. Honest boundaries in this entry.** Chrome seats 9222-9225 are still down, so only file-backed replay seats can serve the consumer phase; Chrome-backed seats will report NO_TAB. The rig was revived on operator approval, but the shim's scheduled-task owner still needs its 4 s bound repaired before the rig is self-healing again. Pre-existing uncommitted modifications in this tree (capture_sessions_cdp.py, capture_websocket_cdp.py, universal_replay.py, leet/...) were present before this session and are not mine; this entry commits only omniroute_graduation.py and this worklog.
+﻿
+### [2026-10-15 10:41] #1943 - GRADUATION CYCLE COMPLETED on the revived rig: 188 routes probed across 82 providers -> 29 computed direct proofs -> 20 consumer-admitted routes (exit 0); acceptance suite verdict recorded honestly as MONETIZER_BLOCKED 12/20
+
+**Operator order:** take up the OmniRoute graduation cycle task and complete it. It ran to completion in this entry.
+
+**Result (the graduation master, chat lane only - no video spend):**
+```
+run=D:\omniroute-monetizer\state\omniroute_graduation_run.json directLaw3=29 consumerLaw3=20 video=SKIPPED_CHAT_ONLY  (exit 0)
+completedAt 2026-10-15T05:05:14Z | endpoint http://127.0.0.1:20128 | consumer http://127.0.0.1:8190/v1
+rows probed: 188 | AUTH 59, ERROR 81, DIRECT_LAW3_OK 29, EMPTY 25, NOT_ROUTED 15, TRANSPORT 12, SKIPPED_PROVIDER_WALL 10, RATE 4, WALL 1
+```
+The Law-3 sentinel is arithmetic (`41 + 17` -> `58`), so every counted row is a computed answer, never an echo.
+
+**Admissions ledger written:** `state/omniroute_verified_routes.json` - **20 entries, each DIRECT_LAW3_OK + CONSUMER_LAW3_OK**, across 16 providers: agy 2, antigravity 2, kiro 2, mistral 2, and one each from aion, cline, codex-app-server, devin-cli-agentic, gemini-web, github, groq, cloudflare-playground, openadapter, orcarouter, publicai, sealion. Families admitted: chat, reasoning, coding.
+
+**Nine direct proofs did not reach admission, each with a named cause (no silent loss):** codex/cx/gpt-5.5 and inception/mercury-2 -> consumer `TRANSPORT` (read timeout against :8190, the shim under load); cohere/aya-expanse-32b, cohere/aya-vision-32b, cloudflare-playground/gemma-sea-lion, cloudflare-playground/kimi-k2.7-code, nvidia/llama-3.2-11b-vision, openadapter/0G-Qwen-VL -> consumer `EMPTY` (HTTP 200, answer not the sentinel); kiro/kiro/auto -> `RATE` (429).
+
+**Lane certification, run afterwards and reported exactly as it came back:** `acceptance_tests.py` -> **12 passed / 8 failed -> MONETIZER_BLOCKED**. Failures and their real causes: T1/T2/T14 = read timeouts at 5 s / 30 s bounds against a catalog that measures 40.8 s cold (the same measured class fixed in #1942); T6 (auto/pro-reasoning) and T7 (auto/pro-chat) = HTTP 502 from the gateway combos; T13/T15 = latency 1503 ms / 882 ms vs a 500 ms threshold on a loaded machine; T20 = VS Code not configured with the OmniRoute endpoint. **The test suite was NOT modified or softened in any way** - the bound mismatch is reported as evidence against the suite's assumptions, not edited away.
+
+**Open defects this entry deliberately does not hide:** (1) the shim's scheduled-task owner still fails `bounded cleanup: unhealthy exact-process operation exceeded 4s` every cycle, so :8190 is currently kept alive only by the canonical hand-launch from #1942; (2) 59 of 188 provider lanes returned AUTH - expected after 22 days of shutdown, each needs its own re-auth, and no credential was fabricated; (3) T6/T7 502s mean the reasoning and chat cascade heads point at providers that are not currently serving; (4) VS Code client config is missing while ZCode is configured (T8 passed).
+
+**Net honest position:** the graduation CYCLE is complete and its admissions are computed-proof backed; the wider MONETIZER_READY gate is not met, and every failing test has a named, reproducible cause.
