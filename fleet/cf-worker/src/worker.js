@@ -1,3 +1,4 @@
+export { WebJobCoordinator } from "./web_job_coordinator.js";
 // OMNIROUTE RELAY WORKER v3 -- permanent door + WEB-EXECUTE + PLAYWRIGHT + GATEWAY.
 // Token lives in Worker secret OMNIROUTE_TOKEN (rotatable without redeploy);
 // falls back to GOLD24 while secret is unset so legacy callers never break.
@@ -63,16 +64,35 @@ function publicCaptureTarget(value) {
   } catch { return false; }
 }
 
+async function coordinateJob(env, jid, action, data) {
+  if (!env.WEB_JOBS) throw new Error("web_job_coordinator_binding_required");
+  const stub = env.WEB_JOBS.get(env.WEB_JOBS.idFromName(jid));
+  return stub.fetch("https://coordinator/" + action, data === undefined ? {} : {
+    method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(data)
+  });
+}
+
+async function getWebJob(env, jid) {
+  const response = await coordinateJob(env, jid, "get");
+  if (response.ok) return response.json();
+  // Old jobs remain readable during the coordinated notebook upgrade.
+  const raw = await kvGet(env, "wx:" + jid);
+  return raw ? JSON.parse(raw) : null;
+}
+
 async function enqueueWebJob(env, job) {
+  job.spec._queue_generation = job.spec._queue_generation || 1;
+  const registered = await coordinateJob(env, job.job_id, "register", {job});
+  if (!registered.ok) return false;
   const pw = job.spec.mode === "playwright";
   const queueKey = pw ? "ledger:PLAYWRIGHT" : "ledger:WEBEXEC";
-  let orders;
-  try { orders = JSON.parse((await kvGet(env, queueKey)) || "[]"); }
-  catch { return false; }
-  // Persist the pending state before exposing work to an executor's job guard.
-  if (!await kvPut(env, "wx:" + job.job_id, JSON.stringify(job), 86400)) return false;
-  orders.push({ at: Date.now() / 1000, text: (pw ? "PW_EXECUTE:" : "WEB_EXECUTE:") + JSON.stringify({ ...job.spec, job_id: job.job_id }) });
-  return await kvPut(env, queueKey, JSON.stringify(orders.slice(-2000)));
+  // Durable queue append avoids concurrent KV read/modify/write losing new jobs.
+  const order = {at:Date.now()/1000,text:(pw ? "PW_EXECUTE:" : "WEB_EXECUTE:") + JSON.stringify({...job.spec,job_id:job.job_id})};
+  const queued = await coordinateJob(env,queueKey,"append",{order,dedupe:job.job_id+":"+job.spec._queue_generation});
+  if (!queued.ok) return false;
+  // KV is an optional mirror; the coordinator owns pending state and results.
+  await kvPut(env,"wx:"+job.job_id,JSON.stringify(job),86400);
+  return true;
 }
 
 function bytesToB64(bytes) {
@@ -153,7 +173,7 @@ export default {
 
     if (path === "/health") {
       if (token !== TOKEN) return jsonResp({ ok: false, err: "bad token" }, 403);
-      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.2.3-binary-gateway",
+      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.3.0-fenced-graduation",
                         tools: ["web.execute", "web.result", "gateway"], ts: Date.now() });
     }
 
@@ -232,6 +252,12 @@ export default {
         } catch {
           arr = [];
         }
+        if (["WEBEXEC","PLAYWRIGHT"].includes(body)) {
+          const response = await coordinateJob(env,key,"orders");
+          if (!response.ok) return response;
+          const current = (await response.json()).orders;
+          arr = [...arr, ...current];
+        }
         return jsonResp({ orders: arr.slice(-limit), count: arr.length });
       }
     }
@@ -296,6 +322,15 @@ export default {
       return jsonResp({ job_id: jid, mode: isPlaywright ? "playwright" : "fleet", status: spec.harvest ? "queued_cold_harvest" : "queued", stored: true });
     }
 
+    if (path === "/v1/tools/web.claim") {
+      if (token !== TOKEN) return jsonResp({ok:false,err:"bad token"},403);
+      if (request.method !== "POST") return jsonResp({ok:false,err:"POST required"},405);
+      let data;
+      try { data = await request.json(); } catch { return jsonResp({err:"bad json"},400); }
+      if (!/^wx_[a-f0-9]{12}$/.test(data.job_id || "")) return jsonResp({err:"invalid job_id"},400);
+      return coordinateJob(env, data.job_id, "claim", data);
+    }
+
     // ============ AGENT TOOL: web.result ============
     if (path === "/v1/tools/web.result") {
       if (token !== TOKEN) return jsonResp({ ok: false, err: "bad token" }, 403);
@@ -303,9 +338,11 @@ export default {
       if (request.method === "GET") {
         const jid = (url.searchParams.get("job_id") || "").slice(0, 40);
         if (!jid) return jsonResp({ ok: false, err: "job_id required" }, 400);
-        const raw = await kvGet(env, "wx:" + jid);
-        if (!raw) return jsonResp({ ok: false, err: "unknown job_id" }, 404);
-        return jsonResp(JSON.parse(raw));
+        const job = await getWebJob(env, jid);
+        if (!job) return jsonResp({ ok: false, err: "unknown job_id" }, 404);
+        // Lease tokens are sent only to the executor that successfully claims work.
+        const publicJob = {...job}; delete publicJob.lease;
+        return jsonResp(publicJob);
       }
 
       if (request.method === "POST") {
@@ -318,9 +355,11 @@ export default {
         }
         const jid = String(data.job_id || "").slice(0, 40);
         if (!jid) return jsonResp({ ok: false, err: "job_id required" }, 400);
-        const raw = await kvGet(env, "wx:" + jid);
-        if (!raw) return jsonResp({ ok: false, err: "unknown job_id" }, 404);
-        const job = JSON.parse(raw);
+        const job = await getWebJob(env, jid);
+        if (!job) return jsonResp({ ok: false, err: "unknown job_id" }, 404);
+        if (job.spec._queue_generation && (!job.lease || data._lease_token !== job.lease.token
+          || data._queue_generation !== job.spec._queue_generation || job.lease.expires_at <= Date.now()))
+          return jsonResp({ok:false,err:"stale_or_missing_execution_lease"},409);
         if (["done", "failed"].includes(job.status)) return jsonResp({ ok: true, job_id: jid, status: job.status, duplicate_result_ignored: true });
         if (job.spec.harvest && data.status === "done" && !data.graduated_capture) {
           return jsonResp({ ok: false, err: "graduation_proof_missing" }, 503);
@@ -352,14 +391,18 @@ export default {
             const previous = job.spec.capture_id;
             const next = /\.v\d+$/.test(previous) ? previous.replace(/\.v(\d+)$/, (_, n) => ".v" + (Number(n) + 1)) : previous + ".v2";
             job.spec = { ...job.spec, capture_id: next, replaces_capture_id: previous,
-              mode: "playwright", harvest: true, heal_attempts: (job.spec.heal_attempts || 0) + 1 };
+              mode: "playwright", harvest: true, heal_attempts: (job.spec.heal_attempts || 0) + 1,
+              _queue_generation: (job.spec._queue_generation || 0) + 1 };
             delete job.spec.capture_recipe;
             job.status = "healing_in_playwright";
+            const advance = await coordinateJob(env,jid,"update",{job,lease:data._lease_token,generation:data._queue_generation});
+            if (!advance.ok) return advance;
             if (!await enqueueWebJob(env, job)) return jsonResp({ ok: false, err: "healing_queue_write_failed" }, 503);
             return jsonResp({ ok: true, job_id: jid, status: job.status, stored: true });
           }
         }
         let graduated = null;
+        let captureToStore = null;
         if (data.graduated_capture) {
           const cap = data.graduated_capture;
           const allowed = cap.capture_id === job.spec.capture_id && validCaptureId(cap.capture_id)
@@ -368,8 +411,7 @@ export default {
             && ["wire_verified", "playwright"].includes(cap.execution_pin)
             && (cap.execution_pin !== "wire_verified" || (cap.verification === "shadow_curl_passed" && cap.shadow_proof?.status === "done" && cap.shadow_proof?.http_status === 200));
           if (!allowed) return jsonResp({ ok: false, err: "invalid_graduation_proof" }, 400);
-          if (!await kvPut(env, "capture:" + cap.capture_id, JSON.stringify(cap))) return jsonResp({ ok: false, err: "graduation_write_failed" }, 503);
-          if (job.spec.replaces_capture_id && !await kvPut(env, "capture:" + job.spec.replaces_capture_id, JSON.stringify(cap))) return jsonResp({ ok: false, err: "capture_alias_write_failed" }, 503);
+          captureToStore = cap;
           graduated = { capture_id: cap.capture_id, execution_pin: cap.execution_pin, verification: cap.verification };
         }
         const merged = {
@@ -384,6 +426,16 @@ export default {
           duration_ms: data.duration_ms || null,
           graduated_capture: graduated,
         };
+        if (job.spec._queue_generation) {
+          const accepted = await coordinateJob(env,jid,"update",{job:merged,lease:data._lease_token,generation:data._queue_generation});
+          if (!accepted.ok) return accepted;
+        }
+        if (captureToStore) {
+          if (!await kvPut(env,"capture:"+captureToStore.capture_id,JSON.stringify(captureToStore)))
+            return jsonResp({ok:false,err:"graduation_write_failed"},503);
+          if (job.spec.replaces_capture_id && !await kvPut(env,"capture:"+job.spec.replaces_capture_id,JSON.stringify(captureToStore)))
+            return jsonResp({ok:false,err:"capture_alias_write_failed"},503);
+        }
         const stored = await kvPut(env, "wx:" + jid, JSON.stringify(merged), 86400);
         return jsonResp({ ok: stored, job_id: jid, status: merged.status, stored }, stored ? 200 : 503);
       }

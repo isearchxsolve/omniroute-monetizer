@@ -156,6 +156,7 @@ def handle_pw_task(order_text):
     print(f"[PW] {url[:80]} job={jid} extracts={len(extracts)}", flush=True)
 
     def post_result(payload):
+        payload.update(_lease_token=spec.get("_lease_token"), _queue_generation=spec.get("_queue_generation"))
         try:
             req = urllib.request.Request(
                 f"{door}/v1/tools/web.result?token={TOK}",
@@ -295,9 +296,12 @@ while True:
             text = o.get("text", "")
             if "PW_EXECUTE:" in text:
                 try:
-                    if not queue_job_pending(text, "PW_EXECUTE:", resolve_door(), TOK):
-                        seen_orders.add(oid)
+                    claim = claim_queue_job(text, "PW_EXECUTE:", resolve_door(), TOK)
+                    if not claim.get("claimed"):
+                        if claim.get("reason") != "leased":
+                            seen_orders.add(oid)
                         continue
+                    text = "PW_EXECUTE:" + json.dumps(claim["spec"])
                 except Exception as ex:
                     print(f"[JOB-GATE] read failed: {type(ex).__name__}; retry next poll", flush=True)
                     continue
