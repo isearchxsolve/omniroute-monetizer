@@ -17556,3 +17556,19 @@ and the delivered film shows what that says: a **rain-wet stone courtyard with a
 **Rig:** shim parked after the run; 8190/20128/8189/20130 closed again.
 
 **Proven now (bounded):** graduated pool drives the product; real failover; screenplay-to-frame fidelity; durable resume; zero cost. **Still not proven:** customer login/entitlement/payment, retained download across a Kaggle rotation, Flow (owned executor) and Digen (verified zero) and RTST (expired) seats; **the ₹10,000 target remains unsecured.**
+﻿
+### [2026-10-17 13:16] #1975 - CORRECTION to #1973 (the film app IS version-controlled) + the day's film fixes committed into its real history; exact entry point for the customer face
+
+**Correction, recorded because the house does not keep a false statement standing.** #1973 reported that `D:\god_ai\oioi\oioi` is not a git repository and called that the sharpest risk in the tree. **That was wrong**: the check was run against the *parent* `D:\god_ai\oioi`, not the app root. The app root IS a repository - branch `master`, HEAD was `6e5f7501`, with a real history (`cff2de51` session backup, `94ed5ff7` security: source model discovery, `feb8d8f4` security: retire sibling harvest access, `cea675f1` security: block legacy registry in production). There is no preservation gap; the warning is withdrawn.
+
+**The day's film work is now committed into that history** (the same two fixes and the six tests that until now existed only as disk edits): `9775ea46` - "film: durable consumer video contract + screenplay-faithful planning", **3 files changed, 278 insertions(+), 6 deletions(-)**:
+- `backend/film_pipeline/clients.py` - statusUrl capture, durable `GET /v1/video/jobs/{id}` polling, `?job_key=` reconciliation, inline-first preserved, explicit no-record error, real `DELETE` cancel, capacity documented as route inventory;
+- `backend/film_pipeline/mock.py` - the deterministic planner now derives shot subjects from the `SCREENPLAY:` block that `shots.py` already sends;
+- `backend/tests/test_film_pipeline_video_durability.py` - six new durable-boundary tests.
+Pre-existing working-tree changes were left untouched; only these three paths were staged.
+
+**Customer-face entry point, located for the next unit:** the user-facing FastAPI app is `backend/app/main.py` (not `backend/main.py`, which does not exist; `film-kit-studio/backend/main.py` is a separate studio app and `unzipped_backup/` holds stale copies). The film pipeline itself is `backend/film_pipeline/` (orchestrator, clients, assembly, store, shots, mock, cli) and the Next customer frontend is `frontend/`.
+
+**What was NOT started, stated plainly:** the local login → request → progress → download round trip and the Kaggle-hosted frontend/API stand-up. This session slice reached its context limit immediately after the commit, and starting an API boot only to abandon it mid-flight would leave a half-running service - the exact sloppiness this lane's rules forbid. Nothing was left running: no shim, no API process, 8190/20128/8189/20130 all closed.
+
+**Exact next unit (cold start, no rediscovery needed):** (1) boot `backend/app/main.py` with the repo's own venv and SQLite (`aiosqlite` was added to requirements in `6e5f7501`) on a spare port, not 8190; (2) start the session-pool shim once on :8190 with a bounded clip cap; (3) drive one film through the HTTP API - request, poll progress, download the artifact - and capture the receipts; (4) only then move the same pair to a rotating Kaggle notebook and repeat the round trip there. The proven path underneath it (pool failover + screenplay fidelity + durable resume + zero cost) is already established by #1974.
