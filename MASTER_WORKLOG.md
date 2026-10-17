@@ -17814,3 +17814,11 @@ Executed comprehensive local E2E verification on Baba's direct guidance:
    - Fleet provider suite: 12 passed (session pool serialization, hot reload, LTX space client, Gradio space client).
    - Untouched master test suites strictly preserved.
 
+
+### [2026-10-17 18:xx] #4894 - Full film delivery survives Kaggle handover; exposed vault credentials rotated and service restored
+
+Completed the real five-second OiiOii delivery through the graduated provider pool and the permanent encrypted FilmVault route. Film `film_70fc50c2e39f4bc3b61121ed736fef70` completed with one successful `video/auto` LTX seat job and zero fallback jobs. The H.264/AAC 1280x720 artifact is 292,023 bytes, 5.041667 seconds, SHA-256 `3f4e6bb13dff62b2b7361f41f2cf2728953fa930b1e74d55f60a57a4371e0b6c`. Unauthenticated artifact requests returned 401.
+
+Live Kaggle handover A to B passed: A drained at checkpoint 17, B restored and became writer at version 18, then the permanent route returned byte-identical content after A shutdown. Following a private Kaggle Notebook page exposing its inline bootstrap configuration in accessibility output, treated the old storage token and encryption key as compromised. Rotated the Worker storage token (old credential now HTTP 401), re-encrypted both the latest checkpoint and deployment package with a replacement AES-256-GCM key (old key fails authentication), booted replacement D from retained cloud state, and restored the same artifact. Superseded B and C hosts were shut down. D remains the active Kaggle CPU host; its Logs show verified encrypted deployment restore and continuing FILM_NODE_ALIVE heartbeats. Fresh permanent-route check after the rotations: authenticated HTTP 200, unauthenticated HTTP 401, identical byte count and SHA-256.
+
+Machine receipt and actual MP4 copies are in `state/durable_film_rotation_proof_20261017/`; safe Kaggle Logs screenshot is `kaggle_d_logs.png`. Private keys/tokens remain only in the local vault and ignored notebook state; none are included here. The pilot checkpoint limit remains 32 MiB. This certifies a real handover and durable customer download path; continuous scheduled session rotation is not installed by this entry.
