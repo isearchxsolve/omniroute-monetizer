@@ -39,7 +39,7 @@ from chat_pool_server import (tool_instruction, parse_tool_call, looks_like_over
 from omniroute_api import extract_chat_content
 
 # Initialize global pool
-pool = SessionPool()
+pool = SessionPool(video_readiness=True)
 
 # Durable video-job ledger (worklog #1134): the receipt/idempotency/reconciliation contract.
 JOBS = VideoJobStore()
@@ -731,14 +731,16 @@ def _video_worker(job_id: str, messages: list, host: str = None,
     tries = len(pool.live(modality="video", host=host)) or 1
     last_err = "no dispatchable video session"
     attempts = []                                   # worklog #1137: never lose a failure reason
+    attempted_keys = set()
     for _ in range(tries):
         rec = JOBS.get(job_id)
         if rec is None or rec["status"] == "cancelled":
             return
-        res = pool.reserve(modality="video", host=host)
+        res = pool.reserve(modality="video", host=host, excluded_keys=attempted_keys)
         if res is None:
             break
         s, res_at = res
+        attempted_keys.add(s.key)
         JOBS.update(job_id, status="running", provider=s.host, session=s.key,
                     started=time.time(), progress=0.1)
         try:
@@ -754,7 +756,11 @@ def _video_worker(job_id: str, messages: list, host: str = None,
                 rec = JOBS.get(job_id)
                 if rec is None or rec["status"] == "cancelled":
                     return
-                r = s.chat(messages, model=model_override)
+                try:
+                    r = s.chat(messages, model=model_override)
+                finally:
+                    if pool.video_health:
+                        pool.video_health.invalidate(s)
             url = r.get("video_url") or r.get("text")
             if not (isinstance(url, str) and url.startswith(("http://", "https://"))):
                 raise ChatError("NO_VIDEO_URL", f"{s.host} returned no video URL")
@@ -828,7 +834,9 @@ class ShimHandler(BaseHTTPRequestHandler):
                     "id": f"{prefix}{s.host}/auto",
                     "object": "model",
                     "created": int(time.time()),
-                    "owned_by": "session_pool"
+                    "owned_by": "session_pool",
+                    **({"x_video_ready": True, "x_video_capacity": pool.video_health.check(s)}
+                       if s.modality == "video" and pool.video_health else {}),
                 })
             seat_ids = {m["id"] for m in models}
             upstream_models = omniroute.models()

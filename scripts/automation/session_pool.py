@@ -591,8 +591,10 @@ class PooledSession:
 class SessionPool:
     """Least-recently-used router with per-session cooldown and per-host serialization."""
 
-    def __init__(self, secrets: pathlib.Path = SECRETS, cooldown: float = DEFAULT_COOLDOWN):
+    def __init__(self, secrets: pathlib.Path = SECRETS, cooldown: float = DEFAULT_COOLDOWN, *, video_readiness: bool = False):
         self.secrets = secrets
+        from video_seat_health import VideoSeatHealth
+        self.video_health = VideoSeatHealth() if video_readiness else None
         self.cooldown = cooldown
         self._lock = threading.Lock()
         self._host_locks: Dict[str, threading.Lock] = {}
@@ -704,13 +706,16 @@ class SessionPool:
         return [s for s in self.sessions if s.dispatchable
                 and s.host not in self.quarantined
                 and (modality is None or s.modality == modality)
-                and (host is None or s.host == host)]
+                and (host is None or s.host == host)
+                and (s.modality != "video" or self.video_health is None
+                     or self.video_health.check(s)["ready"])]
 
     def _persist(self) -> None:
         _save_pool_state({s.key: s.last_used for s in self.sessions if s.last_used})
 
-    def pick(self, now: float, modality: Optional[str] = None, host: Optional[str] = None) -> Optional[PooledSession]:
-        cands = [s for s in self.live(modality, host) if s.cooldown_until <= now]
+    def pick(self, now: float, modality: Optional[str] = None, host: Optional[str] = None, *, excluded_keys=None) -> Optional[PooledSession]:
+        cands = [s for s in self.live(modality, host) if s.cooldown_until <= now
+                 and s.key not in (excluded_keys or ())]
         if not cands:
             return None
         # Stateless-first (worklog #1137): healthy browser-free seats before fragile Chrome
@@ -720,7 +725,7 @@ class SessionPool:
         return cands[0]
 
     def reserve(self, modality: Optional[str] = None,
-                host: Optional[str] = None) -> Optional[tuple]:
+                host: Optional[str] = None, *, excluded_keys=None) -> Optional[tuple]:
         """Atomically pick AND book the least-recently-used off-cooldown session.
 
         The old chat() called pick() OUTSIDE any lock: N concurrent consumers all read the same
@@ -732,7 +737,7 @@ class SessionPool:
         """
         with self._lock:
             now = time.time()
-            s = self.pick(now, modality, host)
+            s = self.pick(now, modality, host, excluded_keys=excluded_keys)
             if s is None:
                 return None
             s.last_used = now
