@@ -4,6 +4,28 @@ The owner selected the film-making product on 17 October 2026. No payment or
 revenue has been verified. The urgent INR10,000 target is not secured by these
 engineering checks.
 
+## Direction update — 2026-10-17 (operator)
+
+**The product's render path is the graduated video-provider pool**, consumed through
+`:8190/v1` (`video/auto`), which routes to the five ADMITTED seats in
+`state/pure_python_replay_registry.json` — not a locally hosted diffusion model. The
+CogVideoX-2b T4 clip recorded below remains **standalone supporting evidence** that
+GPU rendering was genuinely exercised; it is explicitly not OiiOii customer-workflow
+proof and must not become the production backend.
+
+Current graduated-pool readiness, read fresh on 2026-10-17 and bounded by what was
+actually observed:
+
+| Seat | Adapter | Current read-only result |
+|---|---|---|
+| Digen (`session_digen_ai`) | browser-independent replay | `balance_read_verified`, `data.remained=0`, `data.premiumRemained=0` — a verified zero, not a schema failure |
+| LTX (`session_ltx_space_public`) | public Gradio Space | `public_endpoint_read_verified`; `text_to_video` still exposes its 13 parameters |
+| RTST (`session_rtst_ai_seat2`) | RTST API adapter | `current_read_failed` → `SessionExpired` (HTTP 403 class) |
+| Flow (`…_p2`, `…_seat1`) | Chrome-bound adapter | `requires_owned_browser_executor`; no browser attached, no balance or render claim |
+
+No render has yet been submitted to any graduated provider through the consumer
+contract, so no provider-render receipt exists. ₹10,000 remains unsecured.
+
 ## Verified live
 
 - Permanent relay version `3.2.3-binary-gateway` is deployed.

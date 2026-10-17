@@ -5,6 +5,23 @@ is not required. This is a prepared deployment plan, not a completed paid launch
 The owner requested free options; no account, subscription or billing agreement
 has been created or accepted.
 
+## Direction update — 2026-10-17 (operator)
+
+**Rendering is supplied by the graduated video-provider pool, not by a newly
+downloaded model.** OiiOii's video work goes through the consumer contract at
+`:8190` (`video/auto`), which routes to the five ADMITTED video seats recorded in
+`state/pure_python_replay_registry.json` — Digen browser-independent replay, the
+RTST API adapter, the public LTX Gradio Space, and two Chrome-bound Google Flow
+seats. The standalone CogVideoX-2b T4 render documented below is **supporting GPU
+evidence only**: it is not the production backend and must never replace the
+graduated pool.
+
+Consequence for this plan: the rotating Kaggle notebook's job is (a) serve the real
+Next customer frontend and its FastAPI backend, (b) drive `VideoRouterClient` at
+`:8190/v1` for renders, and (c) assemble and encode the delivered clips. It does
+not need to host a diffusion model. GPU compute remains useful for the film
+assembly/encode stage and for finite, hardware-gated proofs.
+
 ## Compute layout, common to both options
 
 | Part | Location | Required behavior |
