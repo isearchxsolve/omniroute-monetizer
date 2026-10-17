@@ -1,3 +1,5 @@
+import { filmVaultRoute } from "./film_vault.js";
+export { FilmVault } from "./film_vault.js";
 export { WebJobCoordinator } from "./web_job_coordinator.js";
 // OMNIROUTE RELAY WORKER v3 -- permanent door + WEB-EXECUTE + PLAYWRIGHT + GATEWAY.
 // Token lives in Worker secret OMNIROUTE_TOKEN (rotatable without redeploy);
@@ -160,6 +162,8 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const token = url.searchParams.get("token") || "";
+    if (path.startsWith("/v1/film-vault/") || path === "/oiioii" || path.startsWith("/oiioii/"))
+      return filmVaultRoute(request,env,path);
 
     if (request.method === "OPTIONS") {
       return new Response(null, {

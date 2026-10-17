@@ -13,3 +13,11 @@ class_name = "WebJobCoordinator"
 [[migrations]]
 tag = "web-job-coordinator-v1"
 new_sqlite_classes = ["WebJobCoordinator"]
+
+[[durable_objects.bindings]]
+name = "FILM_VAULT"
+class_name = "FilmVault"
+
+[[migrations]]
+tag = "film-vault-v1"
+new_sqlite_classes = ["FilmVault"]
