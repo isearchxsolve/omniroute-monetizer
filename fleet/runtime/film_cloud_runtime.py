@@ -84,7 +84,16 @@ class DurableFilmHost:
     async def activate(self):
         if self.mode=='active':return
         # Lease FIRST: another writer cannot mutate while the latest checkpoint restores.
-        claim=await asyncio.to_thread(self.vault.call,'acquire',{'holder':self.holder})
+        claim=None
+        for attempt in range(25):
+            try:
+                claim=await asyncio.to_thread(self.vault.call,'acquire',{'holder':self.holder})
+                break
+            except Exception as exc:
+                if attempt<24 and ('writer_exists' in str(exc) or '409' in str(exc)):
+                    await asyncio.sleep(5)
+                    continue
+                raise
         self.lease=claim['lease']
         try:
             self.version=await asyncio.to_thread(self.vault.restore,self.root)
