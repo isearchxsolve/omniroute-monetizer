@@ -295,6 +295,27 @@ export default {
         if (!raw) return jsonResp({ ok: false, err: "unknown job_id" }, 404);
         const job = JSON.parse(raw);
         if (["done", "failed"].includes(job.status)) return jsonResp({ ok: true, job_id: jid, status: job.status, duplicate_result_ignored: true });
+        if (job.spec.harvest && data.status === "done" && !data.graduated_capture) {
+          return jsonResp({ ok: false, err: "graduation_proof_missing" }, 503);
+        }
+        if (job.spec.capture_recipe && data.status === "done") {
+          const sentinel = job.spec.capture_recipe.sentinel || {};
+          let pass = false;
+          try {
+            const decoded = atob(String(data.content_b64 || ""));
+            pass = data.http_status === sentinel.expect_status && decoded.length >= (sentinel.min_bytes || 1)
+              && (!sentinel.content_type || String(data.content_type).split(";")[0].trim() === sentinel.content_type);
+            if (sentinel.require_json_keys?.length) {
+              const obj = JSON.parse(new TextDecoder().decode(Uint8Array.from(decoded, ch => ch.charCodeAt(0))));
+              pass = pass && obj !== null && typeof obj === "object" && !Array.isArray(obj)
+                && sentinel.require_json_keys.every(key => Object.hasOwn(obj, key));
+            }
+          } catch { pass = false; }
+          if (!pass) {
+            data.status = "sentinel_failed";
+            data.error = "door_rejected_wire_sentinel";
+          }
+        }
         if (data.status === "sentinel_failed" && job.spec.capture_id) {
           if ((job.spec.heal_attempts || 0) >= 1) {
             data.status = "failed";
