@@ -17518,3 +17518,19 @@ i.e. the **DeterministicMockChatClient's generic boilerplate**. `--planner mock`
 **Rig handling.** The shim was parked immediately after the run; 8190/20128/8189/20130 are closed again. Receipt: `state/film_live_proof_20261017/receipt.json` (includes the discrepancy block, the content evidence, and the bounded proven/not-proven lists).
 
 **Unchanged boundaries.** No payment, no entitlement, no buyer; the ₹10,000 target remains unsecured. Flow seats still need an owned browser executor; Digen is at a verified zero; RTST is expired.
+﻿
+### [2026-10-17 12:48] #1973 - Operator question answered from seat evidence (pool vs pinned LTX) and the content defect FIXED: the deterministic planner now carries the screenplay into shot prompts
+
+**Operator question:** "why don't we use the graduated pool instead of ltx - any reason?" **Answer, from today's read-only seat evidence:** the pool is the correct production path (`video/auto`); LTX was pinned *only* because it was the single seat able to render today. Flow x2 `requires_owned_browser_executor` (an owned seat browser, never the operator's Chrome), Digen `balance_read_verified` with `remained=0` and `premiumRemained=0`, RTST `SessionExpired`, LTX `public_endpoint_read_verified` (zero credit). A `video/auto` submit today would walk the dead seats first, record their failures, and land on LTX anyway - burning latency and risking the shot dropping to the KenBurns fallback before reaching the live seat. Pinning is a *receipt* discipline (one accountable provider); the pool is the *product* path, and it needs seat-health gating so a dead seat is skipped rather than attempted.
+
+**The content defect, fixed at its real source (not worked around).** `film_pipeline/shots.py:365` already sends `SCREENPLAY: <script>` inside the planner request; `DeterministicMockChatClient` (`film_pipeline/mock.py`) ignored it and emitted the boilerplate "cinematic scene N, editorial beat M, <camera move>, stable protagonist, wardrobe, and lighting" - which is exactly what the provider rendered in #1972. The planner now extracts the screenplay from the request, splits it into sentence beats deterministically, and uses beat `(index-1) % len(beats)` as the shot subject while preserving the scene/beat numbering, the unique camera move per cut and the one-still-per-six-shots identity, so canonical render reuse is untouched.
+
+**Offline proof (no network):** for the courtyard script the planner now emits
+`cinematic scene 1, editorial beat 1, slow push in, A rain-wet stone courtyard at dawn.` and
+`cinematic scene 1, editorial beat 2, pan left, The camera pans slowly across the wet paving toward a lit arcade.`
+
+**Tests:** `tests/test_film_pipeline.py` + `tests/test_film_pipeline_video_durability.py` -> **38 passed**, fully green - including `test_transient_and_wall_failures_have_distinct_safe_states`, which had failed before the planner change and now passes without any test edit (noted honestly: the prompt/job-key change altered its timing path; the suite was never modified).
+
+**Preservation warning.** `D:\god_ai\oioi\oioi` is **not a git repository** (`git rev-parse` returns "not a git repository"), so this planner fix and the #1968 client fix live on disk only, with no version history. That is a real risk for the film app and should be addressed (initialise a repo or mirror the tree) before more live work.
+
+**Next single unit (needs the shim started once, ~10 minutes):** run one bounded film with `--video-model video/auto` (the pool, per the operator's preference) using a short script, then read `clip_jobs.provider` from the store to prove **which seat actually served**, check that the rendered frame matches the script, and confirm `credits_spent`. That closes both the content-fidelity gap and the pool-vs-pinned question in one receipt.
