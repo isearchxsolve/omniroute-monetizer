@@ -220,22 +220,16 @@ def handle_webexec_task(order_text):
     print(f"[WEBEXEC] done job={jid} status={payload.get('status')} ms={payload.get('duration_ms')}", flush=True)
 
 def handle_emergent_sh_task(order_id, prompt):
-    print(f"\n[EMERGENT-SH] SaaS build task #{order_id}: {prompt[:60]}...", flush=True)
-    report_home("OMNIROUTE_STATUS", f"EMERGENT_SH: Build started for job {order_id}")
-    time.sleep(2)
     report_home("OMNIROUTE_OUT", json.dumps({
-        "job_id": order_id, "service": "emergentsh", "status": "COMPLETED",
-        "output": f"SaaS MVP scaffolded for prompt: '{prompt[:40]}'."
+        "job_id": order_id, "service": "emergentsh", "status": "FAILED",
+        "error": "build_backend_not_configured"
     }))
 
 def handle_oiioii_video_task(order_id, prompt):
-    print(f"\n[OIIOII-VIDEO] Cinematic render #{order_id}: {prompt[:60]}...", flush=True)
-    report_home("OMNIROUTE_STATUS", f"OIIOII_VIDEO: Render dispatched for job {order_id}")
-    time.sleep(5)
     report_home("OMNIROUTE_OUT", json.dumps({
-        "job_id": order_id, "service": "oiioii_film_kit", "status": "COMPLETED",
-        "clip_url": f"https://cdn.omniroute.net/renders/{order_id}.mp4",
-        "duration_seconds": 8.0
+        "job_id": order_id, "service": "oiioii_film_kit", "status": "FAILED",
+        "error": "video_backend_not_configured",
+        "message": "No render was submitted and no video artifact exists for this request."
     }))
 
 if not door_check():

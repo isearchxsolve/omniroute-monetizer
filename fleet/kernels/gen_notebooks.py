@@ -270,19 +270,7 @@ def ensure_shim():
         SHIM_UP = shim_alive()
 
 class ShimHandler(BaseHTTPRequestHandler):
-    def _models(self):
-        data = json.dumps({"object": "list",
-                           "data": [{"id": "session-pool/auto", "object": "model",
-                                     "owned_by": "omniroute-session-pool"}]}).encode()
-        self.send_response(200)
-        self.send_header("content-type", "application/json")
-        self.send_header("content-length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
     def _relay(self):
-        if self.command == "GET" and self.path.split("?")[0] == "/v1/models":
-            self._models()
-            return
         length = int(self.headers.get("content-length") or 0)
         body = self.rfile.read(length) if length else None
         path = self.path + ("&" if "?" in self.path else "?") + "token=" + TOK
