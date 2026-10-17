@@ -732,14 +732,17 @@ def _video_worker(job_id: str, messages: list, host: str = None,
     last_err = "no dispatchable video session"
     attempts = []                                   # worklog #1137: never lose a failure reason
     attempted_keys = set()
+    health = getattr(pool, "video_health", None)
     for _ in range(tries):
         rec = JOBS.get(job_id)
         if rec is None or rec["status"] == "cancelled":
             return
-        res = pool.reserve(modality="video", host=host, excluded_keys=attempted_keys)
+        res = pool.reserve(modality="video", host=host)
         if res is None:
             break
         s, res_at = res
+        if s.key in attempted_keys:
+            continue  # Reserve interface stays stable; never spend twice on one seat.
         attempted_keys.add(s.key)
         JOBS.update(job_id, status="running", provider=s.host, session=s.key,
                     started=time.time(), progress=0.1)
@@ -759,8 +762,8 @@ def _video_worker(job_id: str, messages: list, host: str = None,
                 try:
                     r = s.chat(messages, model=model_override)
                 finally:
-                    if pool.video_health:
-                        pool.video_health.invalidate(s)
+                    if health:
+                        health.invalidate(s)
             url = r.get("video_url") or r.get("text")
             if not (isinstance(url, str) and url.startswith(("http://", "https://"))):
                 raise ChatError("NO_VIDEO_URL", f"{s.host} returned no video URL")

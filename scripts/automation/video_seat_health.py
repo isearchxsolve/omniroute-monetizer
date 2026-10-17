@@ -17,7 +17,11 @@ class VideoSeatHealth:
         self._lock = threading.RLock()
 
     def check(self, seat):
-        key = (str(seat.path), seat.path.stat().st_mtime_ns)
+        try:
+            key = (str(seat.path), seat.path.stat().st_mtime_ns)
+        except OSError:
+            return {"ready":False,"capacity_verified":False,"credits_remaining":None,
+                    "clips_remaining":None,"reason":"seat_file_unavailable","checked_at":time.time()}
         with self._lock:
             old = self._cache.get(key)
             if old and time.monotonic() - old[0] < self.ttl:
