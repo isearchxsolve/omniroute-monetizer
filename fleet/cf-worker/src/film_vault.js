@@ -107,6 +107,10 @@ export class FilmVault {
         const stored=await this.media.put(key,bytes,{httpMetadata:{contentType:"application/octet-stream"},customMetadata:{ciphertext_sha256:claimed}});
         return this.reply({stored:true,key:stored.key,size:stored.size,version:stored.version});
       }
+      if(request.method==="DELETE"){
+        await this.media.delete(key);
+        return this.reply({deleted:true,key});
+      }
       if(request.method!=="GET"&&request.method!=="HEAD")return this.reply({error:"method"},405);
       const object=await this.media.get(key);
       if(!object)return this.reply({error:"missing_media"},404);
