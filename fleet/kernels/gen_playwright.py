@@ -287,8 +287,16 @@ while True:
             oid = o.get("id") or str(hash(o.get("text", "")))
             if oid in seen_orders:
                 continue
-            seen_orders.add(oid)
             text = o.get("text", "")
+            if "PW_EXECUTE:" in text:
+                try:
+                    if not queue_job_pending(text, "PW_EXECUTE:", resolve_door(), TOK):
+                        seen_orders.add(oid)
+                        continue
+                except Exception as ex:
+                    print(f"[JOB-GATE] read failed: {type(ex).__name__}; retry next poll", flush=True)
+                    continue
+            seen_orders.add(oid)
             if "PW_EXECUTE:" in text:
                 t = threading.Thread(target=handle_pw_task, args=(text,), daemon=True)
                 t.start()
@@ -299,6 +307,9 @@ while True:
     beat += 1
     time.sleep(POLL_INTERVAL)
 '''
+
+from pathlib import Path
+MAIN_CODE = Path(__file__).with_name("queue_job_guard.py").read_text(encoding="utf-8") + "\n" + MAIN_CODE
 
 cells = [
     make_cell(INSTALL_CELL),
