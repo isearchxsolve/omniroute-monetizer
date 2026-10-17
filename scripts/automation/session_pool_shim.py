@@ -1137,7 +1137,8 @@ class ShimHandler(BaseHTTPRequestHandler):
                                # seat is also cooled down, so consecutive tool requests converge onto
                                # the seats that honour the contract instead of re-paying for the ones
                                # that do not.
-                               tries=TOOL_FAILOVER_TRIES if tools else CHAT_FAILOVER_TRIES)
+                               tries=TOOL_FAILOVER_TRIES if tools else CHAT_FAILOVER_TRIES,
+                               max_tokens=req.get("max_tokens"))
         except ChatError as e:
             # The merged gateway must remain useful when the free/session side is
             # temporarily exhausted.  Only unpinned auto routing may cross this

@@ -40,6 +40,39 @@ from veoaifree_chat_client import ChatError          # noqa: E402  (canonical ex
 from veo_session_replay import SessionExpired        # noqa: E402  (subclass of ChatError)
 
 
+_AUTO_WS_RE = re.compile(r"(suggest|autocomplete|typeahead|prediction|completions)", re.I)
+
+
+def _ws_sentinel_socket(payload):
+    """Return (url, blob) for the recorded_ws socket whose SENT frames carry the
+    sentinel, honouring BOTH capture schemas, else None.
+
+    Schema A (runner in-page hook): list of {url, sent, recv} socket records.
+    Schema B (capture_websocket_cdp 2026-10): ONE dict record with url,
+    handshake_headers, frames_sent, frames_received, sentinel_frame_index.
+    Found live: Perplexity's capture carries the sentinel in an AUTOCOMPLETE
+    socket (wss://suggest.perplexity.ai/suggest/ws) - the typed text feeds the
+    suggester, while the real model call is the HTTP POST whose body carries it
+    (dsl_query). Routing by 'a ws exists' alone was replaying the wrong
+    transport and reporting sentinel_not_found."""
+    ws = payload.get("recorded_ws")
+    if isinstance(ws, dict) and "frames_sent" in ws:
+        blob = json.dumps(ws.get("frames_sent") or [], default=str)
+        if ("Reply exactly one word: Omni" in blob
+                or "Reply exactly one word : Omni" in blob):
+            return str(ws.get("url") or ""), blob
+        return None
+    if isinstance(ws, list):
+        for rec in ws:
+            if not isinstance(rec, dict):
+                continue
+            blob = json.dumps(rec.get("sent") or rec, default=str)
+            if ("Reply exactly one word: Omni" in blob
+                    or "Reply exactly one word : Omni" in blob):
+                return str(rec.get("url") or ""), blob
+    return None
+
+
 def make_session_client(path):
     """Route a session file to its transport. HTTP is the default; a capture whose exchange
     left over a websocket (recorded_ws / transport marker) goes to the ws adapter."""
@@ -49,8 +82,14 @@ def make_session_client(path):
     except Exception:
         return UniversalSessionClient(path)
     if payload.get("transport") == "websocket" or payload.get("recorded_ws"):
-        from ws_replay import WebSocketSessionClient
-        return WebSocketSessionClient(path)
+        hit = _ws_sentinel_socket(payload)
+        if hit:
+            url, _blob = hit
+            if not _AUTO_WS_RE.search(url):
+                from ws_replay import WebSocketSessionClient
+                return WebSocketSessionClient(path)
+        # No sentinel-carrying model socket -> the sentinel lives in the HTTP
+        # exchange body; fall through to the HTTP adapter.
     return UniversalSessionClient(path)
 
 # The tool-contract no-tool envelope ({"tool": null, "text": ...}) is defined by

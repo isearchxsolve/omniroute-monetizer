@@ -248,11 +248,30 @@ def _chathub_preflight(body_str: str) -> str:
         return body_str
 
 
+def _groq_preflight(body_str: str) -> str:
+    """api.groq.com: ensure adequate token headroom for reasoning models and
+    enforce json_object response_format when prompt demands JSON."""
+    try:
+        body = json.loads(body_str)
+        if body.get("max_tokens") and body["max_tokens"] < 2048:
+            body["max_tokens"] = 2048
+        content = ""
+        for m in body.get("messages") or []:
+            if isinstance(m, dict) and m.get("content"):
+                content += " " + str(m["content"])
+        if any(tok in content.lower() for tok in ("json only", "return json", "json_object")):
+            body["response_format"] = {"type": "json_object"}
+        return json.dumps(body)
+    except Exception:
+        return body_str
+
+
 PREFLIGHT_REGISTRY: Dict[str, Callable[[str], str]] = {
     "chat.mistral.ai": _mistral_preflight,
     "claude.ai": _claude_preflight,
     "v0.app": _v0_preflight,
     "app.chathub.gg": _chathub_preflight,
+    "api.groq.com": _groq_preflight,
 }
 
 
