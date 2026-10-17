@@ -90,6 +90,9 @@ class DurableFilmHost:
             self.version=await asyncio.to_thread(self.vault.restore,self.root)
             if self.app is None:
                 from app.main import app
+                from fastapi.staticfiles import StaticFiles
+                frontend=Path(__file__).resolve().parent / "app/frontend/dist"
+                if frontend.is_dir():app.mount("/",StaticFiles(directory=str(frontend),html=True),name="frontend")
                 self.app=app
                 self.lifespan=app.router.lifespan_context(app)
                 await self.lifespan.__aenter__()

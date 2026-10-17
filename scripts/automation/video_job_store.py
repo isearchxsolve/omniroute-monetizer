@@ -24,7 +24,7 @@ import time
 import uuid
 from typing import Any, Dict, Optional, Tuple
 
-DEFAULT_PATH = pathlib.Path(__file__).resolve().parents[2] / "state" / "video_jobs_8190.json"
+DEFAULT_PATH = pathlib.Path(os.environ.get("OMNI_VIDEO_JOB_STORE") or (pathlib.Path(__file__).resolve().parents[2] / "state" / "video_jobs_8190.json"))
 
 
 class VideoJobStore:
