@@ -17611,3 +17611,17 @@ Pre-existing working-tree changes were left untouched; only these three paths we
 **What this closes and what it does not.** The engineering chain is now complete end to end: customer-facing API -> live graduated-provider render -> durable job -> materialize -> assemble -> retained object -> authenticated download. **Not proven:** a non-owner *customer* account path (this endpoint is superuser-only by design; customer admission is `/films/crew-admissions` with Director approval), payment/entitlement, the same round trip on a rotating Kaggle notebook, and pool seat-health gating. **₹10,000 remains unsecured.**
 
 **Rig:** API and shim parked; ports 8110, 8190, 20128 closed. Receipt: `state/api_e2e_20261018/receipt.json`.
+﻿
+### [2026-10-17 14:01] #1978 - Seat-health gating landed in the film app (dead seat parked + clip re-dispatched, not quarantined); pool failover path is now code, with the live re-proof as the next step
+
+**Why this was the next unit.** #1977 recorded the exact failure: the pool selected the Chrome-bound Flow seat, the remote job failed for lack of an owned browser executor, the clip was retried on the same route to `max_attempts` and then **quarantined**, and the film stayed `running` with a 404 artifact. A seat that needs a human or a capability cannot be healed by retrying it.
+
+**Change (`D:\god_ai\oioi\oioi`, commit `5209b192`, 2 files, 69 insertions).** `film_pipeline/orchestrator.py` gains `_seat_needs_human_or_capability(error)` (markers: NO_TAB / no open tab / requires_owned_browser_executor / no executor / insufficient / balance is too low / SessionExpired / no credits / quota) and a new branch in the tick failure path, ordered **before** the quarantine branch: such a failure now calls `store.mark_seat_unavailable(seat, provider, error)` and **re-dispatches the clip** (`defer(status="pending", seconds=0)`) while `attempts < max_attempts`; only when the bound is exhausted does it fall back locally (`mark_fallback_pending`). Transient and wall errors keep their existing behaviour, and the existing auth/wall branches are untouched.
+
+**Verification.** `py_compile` clean; classifier sanity on the six real strings (NO_TAB/executor/insufficient/SessionExpired -> True; wall text, 502 transient, empty -> False); film suites `tests/test_film_pipeline.py` + `tests/test_film_pipeline_video_durability.py` -> **38 passed**; the additive durability file now also carries two classifier tests (**8 passed**). The deeper tick behaviour (park -> re-dispatch on a different seat) is covered by reasoning and by the live failure it was written from, **not yet by a live run** - that is the immediate next step.
+
+**Immediate next step (no payment, one instance).** Start shim + API with `video/auto` (the pool, no pin), request one 5-second film, and confirm from the dedicated store that the Flow seat is parked and the clip is re-dispatched onto `lightricks-ltx…` and completes with a real artifact. That converts this commit from "code written from evidence" to "behaviour proven live".
+
+**Then the last engineering unit:** the same round trip on a rotating Kaggle notebook. It needs the notebook image to serve FastAPI + the film pipeline and reach the consumer shim; the Kaggle CLI path (tokens in `D:\anonym\vault\kaggle_token_*.txt`) is available without a browser, so that unit is executable but has not been started.
+
+**Rig:** nothing left running; 8110/8190/20128 were closed at the end of #1977 and no new service was started for this code-only unit. ₹10,000 still unsecured.
