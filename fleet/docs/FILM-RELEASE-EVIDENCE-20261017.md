@@ -6,7 +6,7 @@ engineering checks.
 
 ## Verified live
 
-- Permanent relay version `3.2.2-honest-film-gate` is deployed.
+- Permanent relay version `3.2.3-binary-gateway` is deployed.
 - Public JSON GET capture `github.cpython.metadata.20261017.v1` graduated from
   actual Kaggle Playwright observation to independent curl replay. Both returned
   HTTP200 and genuine `python/cpython` repository data. Native MCP status works.
@@ -19,12 +19,16 @@ engineering checks.
 - Private finite GPU render proof was pushed with an explicit2700s limit.
   Re-pulled metadata requests `NvidiaTeslaT4`; actual notebook logs separately
   report two TeslaT4 devices and a successful pre-install hardware gate.
-  The real model loaded and inference started. **An MP4 has not yet been verified.**
+  The model rendered a real silent6.125secondH264 MP4,720x480,49decoded frames at8fps,888842bytes. Actual inference took621.635seconds. Downloaded SHA256 matched the GPU receipt: `58e57e7360ee4c3b708f2ff9e427fca36999201839bfde4765c716ad8f896c43`. Independent local ffprobe confirmed the same media properties. Contact sheet inspected: coherent garden/camera scene; long-film quality, dialogue and customer delivery remain unverified.
 
 Local network receipts are under `state/`: `film_support_graduation_20261017.json`,
 `cloud8_warm_result_20261017.json`, `capture_mcp_live_20261017.json`,
 `film_gate_live_20261017.json`, and `film_product_preflight_20261017.json`.
 These are actual recorded responses, not sample payloads.
+
+The relay now streams binary media instead of corrupting it as UTF8 text. An actual public PNG failed the old isolated proxy (958bytes became1620) and passed the new proxy byte-for-byte. Customer authorization forwarding is implemented but awaits a real customer integration proof.
+
+See [Kaggle-first free hosting preparation](KAGGLE-OIIOII-FREE-HOSTING-PLAN-20261017.md).
 
 ## Paid release is blocked
 

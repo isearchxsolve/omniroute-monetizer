@@ -1,16 +1,17 @@
 """Download a finished private render and verify the actual MP4 against its receipt."""
-import hashlib, json, pathlib, subprocess
+import hashlib, json, os, pathlib, subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KERNEL = 'isearchxsolve/oiioii-real-render-proof'
 DEST = ROOT / 'state/film_render_output_20261017'
+env = {**os.environ, 'PYTHONUTF8': '1', 'PYTHONIOENCODING': 'utf-8'}
 status = subprocess.run(['kaggle', 'kernels', 'status', KERNEL], capture_output=True,
-                        text=True, timeout=40, check=True).stdout
+                        text=True, encoding='utf-8', env=env, timeout=40, check=True).stdout
 print(status.strip())
 if 'COMPLETE' not in status and 'ERROR' not in status:
     raise SystemExit('Render has not finished; no completion claimed.')
 DEST.mkdir(parents=True, exist_ok=True)
-subprocess.run(['kaggle', 'kernels', 'output', KERNEL, '-p', str(DEST)], check=True, timeout=180)
+subprocess.run(['kaggle', 'kernels', 'output', KERNEL, '-p', str(DEST)], env=env, check=True, timeout=180)
 receipts = list(DEST.rglob('receipt.json'))
 if len(receipts) != 1:
     raise RuntimeError('Expected exactly one genuine GPU receipt')
