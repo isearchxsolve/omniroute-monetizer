@@ -76,7 +76,7 @@ for side,mode in [('a','active'),('b','standby')]:
     nb={'nbformat':4,'nbformat_minor':4,'metadata':{'kernelspec':{'display_name':'Python 3','language':'python','name':'python3'},'accelerator':'none'},
         'cells':[{'cell_type':'code','execution_count':None,'metadata':{},'outputs':[],'source':code}]}
     (folder/'film.ipynb').write_text(json.dumps(nb),encoding='utf-8')
-    slug='oiioii-kaggle-web' if side=='a' else 'oiioii-kaggle-rotation-b'
+    slug='oiioii-durable-film-'+side
     metadata={'id':'isearchxsolve/'+slug,'title':'OiiOii durable film '+side.upper(),'code_file':'film.ipynb','language':'python','kernel_type':'notebook',
               'is_private':True,'enable_gpu':False,'enable_internet':True,'dataset_sources':[],'competition_sources':[],'kernel_sources':[],'model_sources':[]}
     (folder/'kernel-metadata.json').write_text(json.dumps(metadata),encoding='utf-8')

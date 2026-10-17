@@ -6,16 +6,21 @@ BASE=Path('/kaggle/working/oiioii-live')
 BASE.mkdir(exist_ok=True)
 # FILM_CONFIG is supplied by the private notebook generator, never by the repository.
 config=FILM_CONFIG
-DOOR=config['door'];HEAD={'Authorization':'Bearer '+config['storage_token']}
+DOOR=config['door'];HEAD={'Authorization':'Bearer '+config['storage_token'],'User-Agent':'omniroute-kaggle-worker'}
 
 def fetch(path):
     req=urllib.request.Request(DOOR+'/v1/film-vault/'+path,headers=HEAD)
-    return urllib.request.urlopen(req,timeout=45).read()
+    try:return urllib.request.urlopen(req,timeout=45).read()
+    except urllib.error.HTTPError as exc:
+        print('Actual storage fetch status',exc.code,'body',exc.read(300).decode('utf-8','replace'),flush=True)
+        raise
 
-subprocess.run([sys.executable,'-m','pip','install','-q','fastapi==0.109.0','uvicorn','pydantic==2.5.3',
-    'pydantic-settings==2.1.0','sqlalchemy==2.0.25','aiosqlite','slowapi','email-validator',
-    'python-multipart','python-dotenv','httpx==0.26.0','openai==1.12.0','groq','cohere',
-    'requests','cryptography','curl_cffi','selenium','websocket-client','pycryptodome'],check=True)
+print('Film bootstrap Python',sys.version.split()[0],flush=True)
+subprocess.run([sys.executable,'-m','pip','install','-q','--prefer-binary','--no-input','fastapi>=0.115,<1','uvicorn','pydantic>=2.10,<3',
+    'pydantic-settings>=2.6,<3','sqlalchemy>=2,<3','aiosqlite','slowapi','email-validator',
+    'python-multipart','python-dotenv','httpx>=0.27,<1','openai>=1.65,<3','groq','cohere',
+    'requests','cryptography','curl_cffi','selenium','websocket-client','pycryptodome'],check=True,timeout=240)
+print('Film bootstrap dependencies ready',flush=True)
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 state=json.loads(fetch('state'));manifest=state['deployment']
 parts=[]
@@ -35,9 +40,9 @@ print('Encrypted deployment verified and restored:',manifest['sha256'],flush=Tru
 front=BASE/'app/frontend'
 try:
     if shutil.which('npm'):
-        subprocess.run(['npm','install','--no-audit','--no-fund'],cwd=front,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
+        subprocess.run(['npm','install','--no-audit','--no-fund'],cwd=front,check=True,timeout=180,stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
         build_env={**os.environ,'VITE_API_URL':'/oiioii/api/v1'}
-        subprocess.run(['npm','run','build','--','--base=/oiioii/'],cwd=front,env=build_env,check=True,stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
+        subprocess.run(['npm','run','build','--','--base=/oiioii/'],cwd=front,env=build_env,check=True,timeout=120,stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
 except Exception as exc:print('Frontend build needs attention:',type(exc).__name__,flush=True)
 # The actual app and provider pool run on the same disposable node; persistent data
 # live in encrypted checkpoints owned by the permanent FilmVault.

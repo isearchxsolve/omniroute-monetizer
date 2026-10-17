@@ -6,7 +6,8 @@ export class FilmVault {
   constructor(ctx) {
     this.sql=ctx.storage.sql;
     this.sql.exec("CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY CHECK(id=1), body TEXT NOT NULL)");
-    this.sql.exec("CREATE TABLE IF NOT EXISTS blobs (sha TEXT PRIMARY KEY, payload BLOB NOT NULL)");
+    this.sql.exec("CREATE TABLE IF NOT EXISTS blobs (sha TEXT PRIMARY KEY, payload BLOB NOT NULL, created_at INTEGER)");
+    if (![...this.sql.exec("PRAGMA table_info(blobs)")].some(r=>r.name==="created_at"))this.sql.exec("ALTER TABLE blobs ADD COLUMN created_at INTEGER");
   }
   read(){const r=[...this.sql.exec("SELECT body FROM meta WHERE id=1")];return r.length?JSON.parse(r[0].body):{version:0};}
   write(s){this.sql.exec("INSERT INTO meta(id,body) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body",JSON.stringify(s));}
@@ -19,7 +20,7 @@ export class FilmVault {
     return bytes===m.bytes && bytes<=MAX_BYTES;
   }
   gc(s){const keep=new Set([s.deployment,s.checkpoint,s.previous].flatMap(m=>m?.parts||[]));
-    for(const row of this.sql.exec("SELECT sha FROM blobs"))if(!keep.has(row.sha))this.sql.exec("DELETE FROM blobs WHERE sha=?",row.sha);}
+    for(const row of this.sql.exec("SELECT sha FROM blobs WHERE created_at IS NULL OR created_at<?",Date.now()-3600000))if(!keep.has(row.sha))this.sql.exec("DELETE FROM blobs WHERE sha=?",row.sha);}
   async fetch(request){
     const path=new URL(request.url).pathname;
     if(path.startsWith("/blob/")){
@@ -27,7 +28,7 @@ export class FilmVault {
       if(request.method==="GET") {const r=[...this.sql.exec("SELECT payload FROM blobs WHERE sha=?",sha)];return r.length?new Response(r[0].payload,{headers:{"content-type":"application/octet-stream"}}):this.reply({error:"missing_blob"},404);}
       if(request.method!=="PUT")return this.reply({error:"method"},405);
       const b=await request.arrayBuffer();if(b.byteLength>262144 || await hash(b)!==sha)return this.reply({error:"invalid_blob"},400);
-      this.sql.exec("INSERT OR IGNORE INTO blobs(sha,payload) VALUES(?,?)",sha,b);return this.reply({stored:true});
+      this.sql.exec("INSERT OR IGNORE INTO blobs(sha,payload,created_at) VALUES(?,?,?)",sha,b,Date.now());return this.reply({stored:true});
     }
     const d=request.method==="POST"?await request.json():{};
     const s=this.read();

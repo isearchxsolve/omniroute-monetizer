@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 class FilmVaultClient:
     def __init__(self,door,token,key):
         self.door=door.rstrip('/')
-        self.headers={"Authorization":"Bearer "+token}
+        self.headers={"Authorization":"Bearer "+token,"User-Agent":"omniroute-kaggle-worker"}
         self.key=base64.urlsafe_b64decode(key)
         self.http=requests.Session()
     def call(self,action,data=None):
