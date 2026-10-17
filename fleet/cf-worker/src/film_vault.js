@@ -1,12 +1,21 @@
 // Private encrypted checkpoint storage. SQLite BLOBs are bounded to 256 KiB.
 // The ciphertext key never enters this service; manifests use optimistic versions.
+// Journal rows are separate from encrypted checkpoint bytes so a replacement host
+// can replay acknowledged mutations that followed the last bulk checkpoint.
 const MAX_BYTES=32*1024*1024;
 const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),b=>b.toString(16).padStart(2,"0")).join("");
+const ID=/^[A-Za-z0-9_.:-]{1,200}$/;
+const asId=value=>typeof value==="string"&&ID.test(value)?value:null;
+const asNonNegativeInt=value=>Number.isSafeInteger(value)&&value>=0?value:null;
 export class FilmVault {
   constructor(ctx) {
     this.sql=ctx.storage.sql;
     this.sql.exec("CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY CHECK(id=1), body TEXT NOT NULL)");
     this.sql.exec("CREATE TABLE IF NOT EXISTS blobs (sha TEXT PRIMARY KEY, payload BLOB NOT NULL, created_at INTEGER)");
+    this.sql.exec("CREATE TABLE IF NOT EXISTS film_journal_streams (project_id TEXT PRIMARY KEY, next_seq INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
+    this.sql.exec("CREATE TABLE IF NOT EXISTS film_journal_entities (project_id TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, version INTEGER NOT NULL, state TEXT NOT NULL, payload_json TEXT NOT NULL, last_seq INTEGER NOT NULL, PRIMARY KEY(project_id,entity_type,entity_id))");
+    this.sql.exec("CREATE TABLE IF NOT EXISTS film_journal_events (project_id TEXT NOT NULL, event_id TEXT NOT NULL, journal_seq INTEGER NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, attempt_id TEXT, expected_version INTEGER NOT NULL, new_version INTEGER NOT NULL, state TEXT NOT NULL, payload_json TEXT NOT NULL, request_hash TEXT NOT NULL, writer_epoch INTEGER NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(project_id,event_id), UNIQUE(project_id,journal_seq))");
+    this.sql.exec("CREATE TABLE IF NOT EXISTS film_journal_snapshots (project_id TEXT PRIMARY KEY, journal_seq INTEGER NOT NULL, checkpoint_version INTEGER NOT NULL, manifest_json TEXT NOT NULL, created_at INTEGER NOT NULL)");
     if (![...this.sql.exec("PRAGMA table_info(blobs)")].some(r=>r.name==="created_at"))this.sql.exec("ALTER TABLE blobs ADD COLUMN created_at INTEGER");
   }
   read(){const r=[...this.sql.exec("SELECT body FROM meta WHERE id=1")];return r.length?JSON.parse(r[0].body):{version:0};}
@@ -20,7 +29,62 @@ export class FilmVault {
     return bytes===m.bytes && bytes<=MAX_BYTES;
   }
   gc(s){const keep=new Set([s.deployment,s.checkpoint,s.previous].flatMap(m=>m?.parts||[]));
+    for(const row of this.sql.exec("SELECT manifest_json FROM film_journal_snapshots"))try{for(const part of JSON.parse(row.manifest_json).parts||[])keep.add(part);}catch{}
     for(const row of this.sql.exec("SELECT sha FROM blobs WHERE created_at IS NULL OR created_at<?",Date.now()-3600000))if(!keep.has(row.sha))this.sql.exec("DELETE FROM blobs WHERE sha=?",row.sha);}
+  journalPayload(value){
+    if(value===undefined)return null;
+    const encoded=JSON.stringify(value);
+    if(encoded===undefined||new TextEncoder().encode(encoded).byteLength>65536)return null;
+    return encoded;
+  }
+  journalCutovers(value){
+    if(!value||!Array.isArray(value.entries)||value.entries.length>100)return null;
+    const seen=new Set(),out=[];
+    for(const entry of value.entries){
+      const projectId=asId(entry?.project_id),seq=asNonNegativeInt(entry?.journal_seq);
+      if(!projectId||seq===null||seen.has(projectId))return null;
+      const stream=[...this.sql.exec("SELECT next_seq FROM film_journal_streams WHERE project_id=?",projectId)][0];
+      // next_seq is the next unused number, so this high-water mark exists.
+      if(!stream||seq>=stream.next_seq)return null;
+      const prior=[...this.sql.exec("SELECT journal_seq FROM film_journal_snapshots WHERE project_id=?",projectId)][0];
+      if(prior&&seq<prior.journal_seq)return null;
+      seen.add(projectId);out.push({project_id:projectId,journal_seq:seq});
+    }
+    return out;
+  }
+  async appendJournal(s,d){
+    if(!this.validLease(s,d))return this.reply({error:"writer_lease_invalid"},409);
+    const projectId=asId(d.project_id),eventId=asId(d.event_id),entityType=asId(d.entity_type),entityId=asId(d.entity_id);
+    const attemptId=d.attempt_id===undefined||d.attempt_id===null?null:asId(d.attempt_id);
+    const expectedVersion=asNonNegativeInt(d.expected_version),state=typeof d.state==="string"&&d.state.length>0&&d.state.length<=100?d.state:null;
+    const payloadJson=this.journalPayload(d.payload);
+    if(!projectId||!eventId||!entityType||!entityId||expectedVersion===null||!state||payloadJson===null||(d.attempt_id!=null&&!attemptId))return this.reply({error:"invalid_journal_event"},400);
+    const requestHash=await hash(new TextEncoder().encode(JSON.stringify({projectId,entityType,entityId,attemptId,expectedVersion,state,payloadJson})));
+    // No await follows: Durable Object SQLite applies this conditional sequence atomically.
+    const duplicate=[...this.sql.exec("SELECT request_hash,journal_seq,new_version FROM film_journal_events WHERE project_id=? AND event_id=?",projectId,eventId)][0];
+    if(duplicate){
+      if(duplicate.request_hash!==requestHash)return this.reply({error:"journal_idempotency_conflict"},409);
+      return this.reply({appended:false,idempotent:true,journal_seq:duplicate.journal_seq,entity_version:duplicate.new_version});
+    }
+    const current=[...this.sql.exec("SELECT version FROM film_journal_entities WHERE project_id=? AND entity_type=? AND entity_id=?",projectId,entityType,entityId)][0];
+    if((current?current.version:0)!==expectedVersion)return this.reply({error:"journal_entity_version_conflict",current_version:current?current.version:0},409);
+    let stream=[...this.sql.exec("SELECT next_seq FROM film_journal_streams WHERE project_id=?",projectId)][0];
+    if(!stream){this.sql.exec("INSERT INTO film_journal_streams(project_id,next_seq,updated_at) VALUES(?,?,?)",projectId,1,Date.now());stream={next_seq:1};}
+    const journalSeq=stream.next_seq,newVersion=expectedVersion+1,now=Date.now();
+    if(current)this.sql.exec("UPDATE film_journal_entities SET version=?,state=?,payload_json=?,last_seq=? WHERE project_id=? AND entity_type=? AND entity_id=? AND version=?",newVersion,state,payloadJson,journalSeq,projectId,entityType,entityId,expectedVersion);
+    else this.sql.exec("INSERT INTO film_journal_entities(project_id,entity_type,entity_id,version,state,payload_json,last_seq) VALUES(?,?,?,?,?,?,?)",projectId,entityType,entityId,newVersion,state,payloadJson,journalSeq);
+    this.sql.exec("INSERT INTO film_journal_events(project_id,event_id,journal_seq,entity_type,entity_id,attempt_id,expected_version,new_version,state,payload_json,request_hash,writer_epoch,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",projectId,eventId,journalSeq,entityType,entityId,attemptId,expectedVersion,newVersion,state,payloadJson,requestHash,s.lease.epoch,now);
+    this.sql.exec("UPDATE film_journal_streams SET next_seq=?,updated_at=? WHERE project_id=?",journalSeq+1,now,projectId);
+    return this.reply({appended:true,idempotent:false,journal_seq:journalSeq,entity_version:newVersion,writer_epoch:s.lease.epoch});
+  }
+  journalRecovery(d){
+    const projectId=asId(d.project_id);if(!projectId)return this.reply({error:"invalid_project"},400);
+    const snapshot=[...this.sql.exec("SELECT journal_seq,checkpoint_version,manifest_json,created_at FROM film_journal_snapshots WHERE project_id=?",projectId)][0]||null;
+    const after=snapshot?snapshot.journal_seq:0;
+    const events=[...this.sql.exec("SELECT event_id,journal_seq,entity_type,entity_id,attempt_id,expected_version,new_version,state,payload_json,writer_epoch,created_at FROM film_journal_events WHERE project_id=? AND journal_seq>? ORDER BY journal_seq LIMIT 1000",projectId,after)].map(row=>({...row,payload:JSON.parse(row.payload_json),payload_json:undefined}));
+    const stream=[...this.sql.exec("SELECT next_seq FROM film_journal_streams WHERE project_id=?",projectId)][0];
+    return this.reply({project_id:projectId,snapshot:snapshot?{journal_seq:snapshot.journal_seq,checkpoint_version:snapshot.checkpoint_version,manifest:JSON.parse(snapshot.manifest_json),created_at:snapshot.created_at}:null,events,latest_journal_seq:stream?stream.next_seq-1:0});
+  }
   async fetch(request){
     const path=new URL(request.url).pathname;
     if(path.startsWith("/blob/")){
@@ -38,8 +102,8 @@ export class FilmVault {
     if(path==="/acquire") {
       if(typeof d.holder!=="string"||!/^[a-zA-Z0-9_.-]{1,100}$/.test(d.holder))return this.reply({error:"invalid_holder"},400);
       if(s.lease&&s.lease.until>Date.now()&&s.lease.holder!==d.holder)return this.reply({error:"writer_exists"},409);
-      s.lease={holder:d.holder,token:crypto.randomUUID(),until:Date.now()+120000};this.write(s);
-      return this.reply({lease:s.lease.token,version:s.version});
+      s.lease={holder:d.holder,token:crypto.randomUUID(),epoch:(s.lease_epoch||0)+1,until:Date.now()+120000};s.lease_epoch=s.lease.epoch;this.write(s);
+      return this.reply({lease:s.lease.token,version:s.version,writer_epoch:s.lease.epoch});
     }
     if(path==="/renew"||path==="/release") {
       if(!this.validLease(s,d))return this.reply({error:"writer_lease_invalid"},409);
@@ -49,9 +113,15 @@ export class FilmVault {
     if(path==="/checkpoint"){
       if(!this.validLease(s,d)||d.expected_version!==s.version)return this.reply({error:"writer_or_version_conflict"},409);
       if(!this.manifest(d.manifest))return this.reply({error:"invalid_manifest"},400);
-      s.previous=s.checkpoint;s.checkpoint=d.manifest;s.version+=1;this.write(s);this.gc(s);
+      const cutovers=d.journal===undefined?[]:this.journalCutovers(d.journal);
+      if(cutovers===null)return this.reply({error:"invalid_journal_cutover"},400);
+      s.previous=s.checkpoint;s.checkpoint=d.manifest;s.version+=1;this.write(s);
+      for(const cutover of cutovers)this.sql.exec("INSERT INTO film_journal_snapshots(project_id,journal_seq,checkpoint_version,manifest_json,created_at) VALUES(?,?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET journal_seq=excluded.journal_seq,checkpoint_version=excluded.checkpoint_version,manifest_json=excluded.manifest_json,created_at=excluded.created_at",cutover.project_id,cutover.journal_seq,s.version,JSON.stringify(d.manifest),Date.now());
+      this.gc(s);
       return this.reply({stored:true,version:s.version});
     }
+    if(path==="/journal/append")return this.appendJournal(s,d);
+    if(path==="/journal/recovery")return this.journalRecovery(d);
     if(path==="/promote"){
       if(!s.lease||s.lease.until<=Date.now()||s.lease.holder!==d.holder||s.version!==d.version)return this.reply({error:"writer_or_version_conflict"},409);
       s.active={holder:d.holder,url:d.url,film_id:d.film_id,sha256:d.sha256,verified_at:Date.now()};this.write(s);return this.reply({promoted:true,version:s.version});
