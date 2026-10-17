@@ -6,6 +6,7 @@ import httpx
 from dotenv import dotenv_values
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'fleet/runtime'))
+sys.path.insert(0,str(ROOT/'fleet/tools'))
 from film_cloud_runtime import FilmVaultClient
 from door_client import request
 APP=Path(r'D:/god_ai/oioi/oioi')

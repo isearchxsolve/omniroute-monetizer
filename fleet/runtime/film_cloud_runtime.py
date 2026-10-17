@@ -152,6 +152,13 @@ class DurableFilmHost:
                         self.mode='draining'
                         self.version=await asyncio.to_thread(self.vault.checkpoint,self.root,self.holder,self.lease,self.version)
                         await asyncio.to_thread(self.vault.call,'release',{'holder':self.holder,'lease':self.lease})
+                    elif path=='/internal/shutdown':
+                        if self.mode=='active':
+                            self.mode='draining'
+                            self.version=await asyncio.to_thread(self.vault.checkpoint,self.root,self.holder,self.lease,self.version)
+                            await asyncio.to_thread(self.vault.call,'release',{'holder':self.holder,'lease':self.lease})
+                        asyncio.get_event_loop().call_later(0.5, os._exit, 0)
+                        return await self.respond(send,{'holder':self.holder,'mode':'shutting_down'})
                     return await self.respond(send,{'holder':self.holder,'mode':self.mode,'checkpoint_version':self.version})
                 except Exception as exc:
                     return await self.respond(send,{'error':type(exc).__name__},503)

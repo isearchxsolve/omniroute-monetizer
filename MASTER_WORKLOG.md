@@ -17749,3 +17749,23 @@ Tested the full pipeline locally on the laptop before remote packaging, on Baba'
 4. Groq preflight in fleet: In `scripts/automation/multistep_replay.py`, added `_groq_preflight` to `PREFLIGHT_REGISTRY`: guarantees minimum 2048 token headroom for reasoning models and enforces `"response_format": {"type": "json_object"}` when prompts request JSON. In `scripts/automation/session_pool_shim.py`, forwarded `max_tokens` from request to `pool.chat`.
 5. Local E2E verification: Executed complete local pipeline test with live Groq wire planning: film admitted (`film_baee6d35...`), target 5s, logical shots 1; ticked to `completed`; final delivery video probed via `ffprobe`: duration 5.023193s (meeting 5.0 ± 0.2s requirement), size 21,033 bytes.
 6. Test suites verified: `test_film_pipeline.py` (32 passed), `test_api_endpoints.py` (20 passed), `test_film_pipeline_video_durability.py` (8 passed), fleet pool serialization/hot-reload (3 passed), LTX/Gradio (9 passed). All unchanged master test suites intact.
+
+### [2026-10-17 17:48] #4893 - Full local frontend and backend E2E smoke tested; TypeScript compiler errors resolved; node shutdown endpoint added
+
+Executed comprehensive local E2E verification on Baba's direct guidance:
+1. Discovered and resolved all frontend TypeScript compiler errors that failed Kaggle container builds:
+   - In `frontend/src/lib/api.ts`: repaired unquoted broken regex literals (`/nim/models//load`, `/nim/models//unload`, `/videos/projects//download`) to valid template string paths.
+   - In `frontend/src/pages/Dashboard.tsx` & `Models.tsx`: replaced undefined `Cube` icon references with imported `Box` icon; typed implicit `any` callback parameters across project, script, and model maps; purged unused duplicate status/category helper declarations.
+   - In `frontend/src/components/layout/Sidebar.tsx` & `ScriptGenerator.tsx`: removed unused `useLocation` import and unused callbacks.
+   - In `frontend/src/hooks/useToast.ts`: added `open` and `onOpenChange` properties to `ToasterToast` type.
+   - In `frontend/src/pages/VideoGenerator.tsx`: purged write-only `videoId` and `taskId` state mutations.
+   - Verified local frontend build with `npm run build` (`tsc && vite build`): compiled 1830 modules in 31.12s with 0 errors, generating production assets in `dist/`.
+   - Committed frontend fixes to film repository (commit `f4c3f61f`).
+2. Added `/internal/shutdown` endpoint to `fleet/runtime/film_cloud_runtime.py`:
+   - Drains active writer leases and checkpoints state before scheduling `os._exit(0)`, allowing superseded nodes to gracefully release Kaggle batch CPU sessions without requiring manual intervention.
+   - Added `fleet/tools` to `sys.path` in `fleet/tools/prove_durable_film_rotation.py`.
+3. Verified full local regression suites:
+   - Backend pytest suite: 60 passed (32 pipeline, 20 API endpoints, 8 durability).
+   - Fleet provider suite: 12 passed (session pool serialization, hot reload, LTX space client, Gradio space client).
+   - Untouched master test suites strictly preserved.
+
