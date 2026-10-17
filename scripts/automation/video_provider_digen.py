@@ -77,6 +77,15 @@ class DigenProvider(vp.Provider):
         self._loaded = True
 
     def _get_balance(self) -> int:
+        """Read the spendable Digen credit balance, strictly.
+
+        Live schema verified 2026-10-17: ``data.remained`` (monthly free pool) and
+        ``data.premiumRemained`` (premium pool). The old parser read ``data.remain``
+        and defaulted a missing field to 0, which made a schema change
+        indistinguishable from a genuine zero balance - the worst possible
+        confusion for a spend gate. An absent field is now an explicit
+        schema error, never a verified zero.
+        """
         self._load_session()
         url = "https://api.digen.ai/v1/credit/remain"
         r = requests.get(url, headers=self._headers, timeout=10)
@@ -84,8 +93,22 @@ class DigenProvider(vp.Provider):
         res = r.json()
         if res.get("errCode") != 0:
             raise RuntimeError(f"credit/remain failed: {res}")
-        # Digen usually returns data.remain
-        return int(res.get("data", {}).get("remain", 0))
+        data = res.get("data")
+        if not isinstance(data, dict):
+            raise RuntimeError("credit/remain returned no data object")
+        fields = [k for k in ("remained", "premiumRemained") if k in data]
+        if not fields:
+            raise RuntimeError(
+                "credit/remain schema mismatch: expected data.remained/premiumRemained, "
+                f"got keys {sorted(data)[:8]}")
+        total = 0
+        for key in fields:
+            try:
+                total += int(data[key])
+            except (TypeError, ValueError):
+                raise RuntimeError(
+                    f"credit/remain {key} is not an integer: {type(data[key]).__name__}")
+        return total
 
     def normalise(self, req: dict) -> tuple[dict | None, str | None]:
         model = "digen"

@@ -80,15 +80,35 @@ class DigenSessionClient:
         self._headers["accept-encoding"] = "gzip, deflate"
 
     def capacity(self) -> int:
-        """Read-only clip capacity: credit/remain // est cost per clip. No spend."""
+        """Read-only clip capacity: credit/remain // est cost per clip. No spend.
+
+        The live schema (verified 2026-10-17) exposes ``data.remained`` and
+        ``data.premiumRemained``. A missing field is recorded in
+        ``last_capacity_error`` instead of being silently read as a verified
+        zero, so a schema drift cannot masquerade as "no credits left".
+        """
+        self.last_capacity_error = None
         try:
             r = requests.get("https://api.digen.ai/v1/credit/remain",
                              headers=self._headers, timeout=15)
             if r.status_code != 200:
+                self.last_capacity_error = f"http_{r.status_code}"
                 return 0
-            bal = (r.json().get("data") or {}).get("remained", 0)
-            return int(bal) // EST_COST_PER_CLIP
-        except requests.RequestException:
+            data = (r.json() or {}).get("data")
+            if not isinstance(data, dict):
+                self.last_capacity_error = "schema_missing:data"
+                return 0
+            fields = [k for k in ("remained", "premiumRemained") if k in data]
+            if not fields:
+                self.last_capacity_error = (
+                    "schema_missing:data.remained (keys=" + ",".join(sorted(data)[:6]) + ")")
+                return 0
+            bal = 0
+            for key in fields:
+                bal += int(data[key])
+            return bal // EST_COST_PER_CLIP
+        except (requests.RequestException, TypeError, ValueError) as error:
+            self.last_capacity_error = f"{type(error).__name__}: {error}"[:160]
             return 0
 
     def chat(self, messages: List[Dict[str, Any]], model: Optional[str] = None, **kw) -> Dict[str, Any]:
