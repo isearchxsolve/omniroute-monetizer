@@ -62,16 +62,19 @@ headers={'Authorization':'Bearer '+token}
 if 'film_id' not in data:
     payload={'script':'A copper lantern glows inside a rain-wet stone arcade at dawn. A slow camera pan reveals reflections on the paving. One uninterrupted five-second moving shot.',
              'target_seconds':5,'backend':'live','live':True,'max_clips':1,'seed':int(time.time()),'style':'cinematic'}
+    pending=OUT/'admission-request.json'
+    if pending.exists():payload=json.loads(pending.read_text())
+    else:pending.write_text(json.dumps(payload))
     r=client.post(a+'/api/v1/films/',json=payload,headers=headers)
     if r.status_code!=200:
-        data['admission_failure']={'http_status':r.status_code,'detail':r.json().get('detail')};save();raise RuntimeError('real film admission failed; private receipt retained')
+        data['admission_failure']={'http_status':r.status_code,'content_type':r.headers.get('content-type'),'body_prefix':r.text[:250]};save();raise RuntimeError('real film admission failed; private receipt retained')
     body=r.json();assert body.get('accepted'), 'real film not admitted'
     data['film_id']=body['film']['id'];save();print('Real live film admitted',data['film_id'],flush=True)
 fid=data['film_id']
 for _ in range(140):
     r=client.post(a+f'/api/v1/films/{fid}/tick',params={'live':'true','max_clips':1},headers=headers)
     if r.status_code!=200:
-        data['tick_failure']={'http_status':r.status_code,'detail':r.json().get('detail')};save();raise RuntimeError('actual live tick failed')
+        data['tick_failure']={'http_status':r.status_code,'content_type':r.headers.get('content-type'),'body_prefix':r.text[:250]};save();raise RuntimeError('actual live tick failed')
     status=client.get(a+f'/api/v1/films/{fid}',headers=headers);status.raise_for_status();film=status.json()
     data['film_status']=film['status'];data['cost']=film.get('cost');data['job_states']=film.get('job_states');save()
     print('Actual film status',film['status'],film.get('job_states'),flush=True)

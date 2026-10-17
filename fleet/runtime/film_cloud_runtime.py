@@ -136,6 +136,15 @@ class DurableFilmHost:
         if path.startswith('/internal/'):
             if headers.get(b'x-film-control',b'').decode()!=self.control_key:
                 return await self.respond(send,{'error':'unauthorized'},401)
+            if path=='/internal/diagnostics':
+                base=Path(__file__).resolve().parent
+                rows={}
+                for name in ('api.log','pool.log'):
+                    file=base/name
+                    text=file.read_text(errors='replace')[-12000:] if file.exists() else ''
+                    for secret in (self.control_key,base64.urlsafe_b64encode(self.vault.key).decode()):text=text.replace(secret,'[redacted]')
+                    rows[name]=text
+                return await self.respond(send,rows)
             async with self.lock:
                 try:
                     if path=='/internal/activate':await self.activate()
@@ -158,7 +167,12 @@ class DurableFilmHost:
                 self.mode='lease_lost';return await self.respond(send,{'error':'writer_lease_lost'},503)
             messages=[]
             async def collect(message):messages.append(message)
-            await self.app(scope,receive,collect)
+            try:
+                await self.app(scope,receive,collect)
+            except Exception as exc:
+                import traceback
+                traceback.print_exc()
+                return await self.respond(send,{'error':'application_execution_failed','error_type':type(exc).__name__},500)
             try:self.version=await asyncio.to_thread(self.vault.checkpoint,self.root,self.holder,self.lease,self.version)
             except Exception:return await self.respond(send,{'error':'durability_checkpoint_failed; operation outcome retained locally, reconcile before retry'},503)
             for message in messages:await send(message)

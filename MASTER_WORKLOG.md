@@ -17729,3 +17729,12 @@ A browser reload switched from Logs to Notebook and a broad diagnostic DOM read 
 Kaggle Python3.13.15 confirmed. Modern dependency set installed in ~21s. Explicit fleet User-Agent resolved the vault HTTP403; actual encrypted deployment restored and the actual API acquired a writer lease and committed cloud checkpoint version1. The subsequent gateway registration still used urllib's default User-Agent and returned403, ending A11. Applied proven header to that request too. Cloud checkpoint version1 remained retained after the process ended and its lease expired (fresh vault state: checkpoint present, writer null). This is real cloud retained state, not a synthetic test or completed film/rotation proof.
 
 Frontend build failed with CalledProcessError; diagnostics had been suppressed. Enabled bounded compiler output before touching frontend code so fixes will follow actual errors. A12/B4 pushes dispatched; controller still waits for a healthy registered host and has not submitted a render. Do not claim completed delivery from bootstrap progress.
+
+
+### [2026-10-17 15:23] #4891 - Reconciled drain state, secured runtime diagnostics, wrapped ASGI exceptions, and committed frontend fixes
+
+Reconciled live cloud and node state before mutation: node A drain succeeded (mode draining, checkpoint version 6, writer lease released, vault checkpoint retained 254006 bytes SHA256 d9a2ec2cf4750ce75e87f2673f7a0ea9dbd49753f05d728971190a325e452c95); node B running in standby (checkpoint version 0).
+
+In the film app repository (commit fd3b2415): committed compiler syntax and layout repairs across layout.tsx, page.tsx, main.tsx, Dashboard.tsx, ScriptGenerator.tsx, and VideoGenerator.tsx. Repaired malformed tags, set framework-neutral ReactNode layout, and configured BrowserRouter basename for /oiioii/. Pre-existing backend/test.db preserved.
+
+In fleet runtime and tools: film_cloud_runtime.py adds /internal/diagnostics reading bounded private api.log and pool.log with control and encryption key redaction. Wrapped mutating ASGI application executions to trap exceptions, log tracebacks, and return explicit JSON 500 responses rather than letting unhandled transport resets produce opaque 502 Bad Gateway responses. prove_durable_film_rotation.py now persists pending admission requests and safely captures non-JSON response prefixes for failure forensics. All Python files compiled cleanly. Existing dirty fleet scripts preserved.
