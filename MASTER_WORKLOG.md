@@ -17499,3 +17499,22 @@ Files: `state/film_render_output_20261017/ltx-consumer-proof/ltx-consumer-render
 **What this proves.** A graduated video provider - not a locally hosted model - rendered a real clip **through the product's own consumer contract**, and the durable asynchronous boundary rebuilt in #1968 carried it end to end: 202 receipt, durable job id, fresh-process polling, terminal success, real URL, verified bytes. This is the first provider-render receipt for OiiOii's intended path. The legacy fabricated-completion defect cannot be confused with this: the job's own durable record and the downloaded, hashed, decoded file are the evidence.
 
 **What remains unproven (unchanged, and not softened).** No OiiOii customer workflow (login → request → progress → retained download → rotation recovery); Flow seats still require an owned browser executor; Digen sits at a verified zero balance; RTST returns `SessionExpired`; no payment, no entitlement, no buyer conversion, and **the ₹10,000 target remains unsecured**.
+﻿
+### [2026-10-17 12:42] #1972 - First OiiOii FILM assembled from a genuine graduated-provider render (zero cost) - and an honest content defect found in the same run
+
+**What was done.** Rig verified dark; shim started once with `OMNI_VIDEO_CONFIRM_SPEND=1` for this bounded run; the product's own CLI executed `--backend live --live --max-clips 2 --planner mock --ticks 90 --tick-sleep 6` with the video route pinned to `video/lightricks-ltx-video-distilled.hf.space/auto`.
+
+**Result: the film pipeline works end to end on a real provider render.** Film `film_3291f75367ce40f281b2f9e0f0878dea` reached **status completed** with output
+`state/film_live_proof_20261017/artifacts/film_3291f75367ce40f281b2f9e0f0878dea/final/film.mp4` - **56,598 bytes, sha256 9ea557d44a269ebd11772780d1d24ef427f9c47a089c69c7c2b141dd4f08085c**, ffprobe **h264 1280x720 24 fps 46 frames, 1.940 s, plus AAC 44100 Hz stereo** (the Sound Director score muxed). Artifact chain verified independently: provider source clip **704x512 / 57 frames / 30,417 bytes** → materialized clip 1280x720 + aac (52,331) → segment = assembled (52,382) → film (56,598). Cost: **spent 0.0, reserved 0.0** - one free public LTX Space render.
+
+**Durability, proven on a real film.** The first CLI pass exhausted its tick budget while the render was still running (exit 1, job `running`). The film was then resumed from the **SQLite job store** - not resubmitted - with a second `run_until_idle` on the same film id, which polled the durable job to success, downloaded the delivered clip, materialized it, assembled the segment and finalized the film. That is the recovery path the brief listed as unproven; it now has a real receipt.
+
+**THE DEFECT I FOUND IN THE SAME RUN (reported, not hidden).** The film's content does not match the screenplay. The stored shot prompt - read from the `shots` table - is
+`cinematic scene 1, editorial beat 1, slow push in, stable protagonist, wardrobe, and lighting`
+i.e. the **DeterministicMockChatClient's generic boilerplate**. `--planner mock` never passes the screenplay into the video prompt, so LTX rendered exactly that generic instruction: the provider clip (and the final film) shows a shirtless male torso on a beige backdrop, not the rain-wet courtyard. The provider call, the durable job, the materialization, the scaling, the score mux and the assembly are all genuine; **the script is what was missing.** A film that is technically real but content-wrong must not be shipped as a script-driven product.
+
+**The fix, named and queued:** carry the screenplay into shot prompts - either run `--planner pool` (live planning through the :8190 chat face, which requires admitted chat seats) or extend the deterministic planner to derive shot prompts from the script text. Then re-run one bounded clip and verify the frame actually matches the script before any customer sees it.
+
+**Rig handling.** The shim was parked immediately after the run; 8190/20128/8189/20130 are closed again. Receipt: `state/film_live_proof_20261017/receipt.json` (includes the discrepancy block, the content evidence, and the bounded proven/not-proven lists).
+
+**Unchanged boundaries.** No payment, no entitlement, no buyer; the ₹10,000 target remains unsecured. Flow seats still need an owned browser executor; Digen is at a verified zero; RTST is expired.
