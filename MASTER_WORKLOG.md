@@ -17590,3 +17590,24 @@ Pre-existing working-tree changes were left untouched; only these three paths we
 **Rig.** Both processes parked after the run: uvicorn pid 4008 and shim pids 5232/20224 killed; ports 8110, 8190, 20128 closed. Nothing of mine left running.
 
 **What this unit genuinely adds:** the customer face boots from the authoritative tree, authenticates an owner, accepts a live film request over HTTP, advances it with ticks, completes it, retains the deliverable as a DB object, and serves it back with a matching sha256. That is the round trip's plumbing end to end - and the remaining gap is now a single, testable question about the render backend inside the API, not an unknown.
+﻿
+### [2026-10-17 13:53] #1977 - FULL END TO END PROVEN through the customer API with a LIVE graduated-provider render (zero cost): login -> live film -> progress -> completed -> retained object -> download, hash-consistent, content matches the script
+
+**Operator context:** "complete the engineering ... full end to end will complete in next two hours". This entry closes that unit.
+
+**First, the honest failure that taught the fix.** The first live attempt used `video/auto` and the API ran it with the correct live wiring, but the **pool selected `labs.google` (Flow) and the job failed** (no owned browser executor); the film stayed `running` and its artifact endpoint returned 404. The dedicated-store row proves it: `provider=labs.google, status=failed, attempts=2`. That is the seat-health problem named in #1973 - the pool needs gating so a dead seat cannot consume the shot. **Second, my own driver bug:** `tick` takes `backend/live/max_clips` as **query parameters**, and my earlier empty-body ticks silently defaulted to `mock` - which is why an earlier run "completed" in seconds with a 320x180 mock clip. The app was correct; the caller was wrong. Both facts are recorded because both matter to the next session.
+
+**The proven run.** API on `:8110` from `backend/app/main.py` with its own `FILM_PIPELINE_STORAGE_PATH`/`FILM_PIPELINE_OBJECT_STORE_PATH` (so the store contains only this run) and the video route pinned to `video/lightricks-ltx-video-distilled.hf.space/auto` - the pin is an explicit interim measure while Flow (no owned executor), Digen (verified zero) and RTST (expired) cannot serve.
+
+- `POST /api/v1/auth/login` -> 200; `POST /api/v1/films/` (live, max_clips=2, 5 s) -> 200, film `film_6a88ff76a59b469796f06d413db6ec67`
+- `POST /api/v1/films/{id}/tick?backend=live&live=true&max_clips=2` -> 200; status running -> **completed**
+- `GET /api/v1/films/{id}/artifact` -> **200, video/mp4, 148,552 bytes**, sha256 `2f29a8bb07113426d0caff59f47aa70af7a3d8284c4c586018ed0c48e1afa189`
+- the film row's `output_path` is `object://film-artifacts/sha256/2f/2f29a8bb...` and the downloaded bytes hash to exactly that - the deliverable really was retained in the app's object store and served back
+- **its own clip job: `provider=lightricks-ltx-video-distilled.hf.space, status=succeeded, attempts=1, is_fallback=0`**
+- ffprobe of the download: **h264 1280x720, 46 frames, 1.958 s + AAC 44.1 kHz stereo**
+- a three-frame contact sheet taken **from the downloaded API artifact** shows the rain-wet reflective arcade at dawn and the pan advancing toward the lit archway - the screenplay, not boilerplate
+- **cost: spent 0.0**, no payment
+
+**What this closes and what it does not.** The engineering chain is now complete end to end: customer-facing API -> live graduated-provider render -> durable job -> materialize -> assemble -> retained object -> authenticated download. **Not proven:** a non-owner *customer* account path (this endpoint is superuser-only by design; customer admission is `/films/crew-admissions` with Director approval), payment/entitlement, the same round trip on a rotating Kaggle notebook, and pool seat-health gating. **₹10,000 remains unsecured.**
+
+**Rig:** API and shim parked; ports 8110, 8190, 20128 closed. Receipt: `state/api_e2e_20261018/receipt.json`.
