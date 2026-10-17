@@ -17534,3 +17534,25 @@ i.e. the **DeterministicMockChatClient's generic boilerplate**. `--planner mock`
 **Preservation warning.** `D:\god_ai\oioi\oioi` is **not a git repository** (`git rev-parse` returns "not a git repository"), so this planner fix and the #1968 client fix live on disk only, with no version history. That is a real risk for the film app and should be addressed (initialise a repo or mirror the tree) before more live work.
 
 **Next single unit (needs the shim started once, ~10 minutes):** run one bounded film with `--video-model video/auto` (the pool, per the operator's preference) using a short script, then read `clip_jobs.provider` from the store to prove **which seat actually served**, check that the rendered frame matches the script, and confirm `credits_spent`. That closes both the content-fidelity gap and the pool-vs-pinned question in one receipt.
+﻿
+### [2026-10-17 13:05] #1974 - POOL RUN + SCRIPT FIDELITY PROVEN: ideo/auto drove OiiOii through a real failover (rtst.ai dead -> LTX served), the screenplay reached the provider, and the delivered frames match the written scene at zero cost
+
+**Operator instruction:** "D:\god_ai\oioi\oioi is the one ... fire" - run the pool path, not a pinned seat.
+
+**Run:** rig verified dark; shim started once (single instance, `OMNI_VIDEO_CONFIRM_SPEND=1`, bounded `max_clips=2`); the product CLI executed `--backend live --live --max-clips 2 --video-model video/auto --planner mock --ticks 100 --tick-sleep 6` against a fresh store (`state/film_pool_proof_20261017`).
+
+**Pool behaviour, recorded rather than assumed.** The pool selected **rtst.ai** first - a dead credential. The shim failed over inside the job and delivered from **lightricks-ltx-video-distilled.hf.space**; the film store's final record shows `provider=lightricks-ltx…`, `status=succeeded`, `attempts=1`, `is_fallback=0`, and the billing view attributes the job to that seat with `spent 0.0`. That is exactly the failover the operator asked about: the pool is usable, and a dead seat costs latency, not the shot.
+
+**Script fidelity - the defect from #1972 is closed.** The planner fix from #1973 carried the screenplay into the prompt; the store's shot row now reads
+`cinematic scene 1, editorial beat 1, slow push in, A rain-wet stone courtyard at dawn.`
+and the delivered film shows what that says: a **rain-wet stone courtyard with a lit arcade at dawn, wet paving reflecting the warm sky** (three-frame contact sheet n=4/22/40 inspected by the agent). The earlier boilerplate torso render is gone.
+
+**Artifact.** Film `film_73bdf27026c14cb8ad81774bfd405d53` -> `state/film_pool_proof_20261017/artifacts/…/final/film.mp4`: **93,357 bytes**, sha256 `a45b5152c7d803ec2a5c652aac00fa8f49ebf32bbd57664916f0c761cadca554`, ffprobe **h264 1280x720, 46 frames, 1.93986 s + AAC 44100 Hz stereo** (score muxed). Provider source clip 57,596 bytes.
+
+**Durability again, on the pool path.** The first CLI pass exhausted its 100-tick budget while the shim was failing over (exit 1, film `running`). The **same film** was resumed from the SQLite store - no resubmission, no second render - and completed. Two consecutive live runs have now survived a lost tick budget on the durable store.
+
+**Cost:** `spent 0.0`, `reserved 0.0`, no payment. Receipt: `state/film_pool_proof_20261017/receipt.json`.
+
+**Rig:** shim parked after the run; 8190/20128/8189/20130 closed again.
+
+**Proven now (bounded):** graduated pool drives the product; real failover; screenplay-to-frame fidelity; durable resume; zero cost. **Still not proven:** customer login/entitlement/payment, retained download across a Kaggle rotation, Flow (owned executor) and Digen (verified zero) and RTST (expired) seats; **the ₹10,000 target remains unsecured.**
