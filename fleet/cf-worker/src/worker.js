@@ -153,7 +153,7 @@ export default {
 
     if (path === "/health") {
       if (token !== TOKEN) return jsonResp({ ok: false, err: "bad token" }, 403);
-      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.2.2-honest-film-gate",
+      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.2.3-binary-gateway",
                         tools: ["web.execute", "web.result", "gateway"], ts: Date.now() });
     }
 
@@ -441,24 +441,40 @@ export default {
       const method = (url.searchParams.get("method") || request.method).toUpperCase();
       const t0 = Date.now();
       try {
-        const init = { method, redirect: "follow" };
+        const headers = new Headers();
+        for (const name of ["authorization", "cookie", "content-type", "accept", "range", "if-range", "if-none-match", "if-modified-since"]) {
+          const value = request.headers.get(name);
+          if (value !== null) headers.set(name, value);
+        }
+        const init = { method, redirect: "manual", headers };
         if (request.method === "POST" && !url.searchParams.get("method")) {
-          init.body = await request.text();
-          init.headers = { "content-type": request.headers.get("content-type") || "application/json" };
+          init.body = request.body;
         } else if (method !== "GET" && method !== "HEAD") {
           const bodyParam = url.searchParams.get("body");
-          if (bodyParam) { init.body = bodyParam; init.headers = { "content-type": "application/json" }; }
+          if (bodyParam) { init.body = bodyParam; headers.set("content-type", "application/json"); }
+          else if (request.method === method) init.body = request.body;
         }
         const resp = await fetch(target, init);
-        const text = await resp.text();
-        const capped = text.length > MAX_RESULT_BYTES ? text.slice(0, MAX_RESULT_BYTES) : text;
-        return new Response(capped, {
-          status: resp.status,
-          headers: { "content-type": resp.headers.get("content-type") || "text/plain",
-                     "x-omniroute-session": session.url.slice(0, 100),
-                     "x-omniroute-duration-ms": String(Date.now() - t0),
-                     "access-control-allow-origin": "*" },
+        const resultHeaders = new Headers({
+          "content-type": resp.headers.get("content-type") || "application/octet-stream",
+          "cache-control": resp.headers.get("cache-control") || "private, no-store",
+          "x-omniroute-duration-ms": String(Date.now() - t0),
+          "access-control-allow-origin": "*",
         });
+        for (const name of ["content-disposition", "content-range", "accept-ranges", "etag", "last-modified"]) {
+          const value = resp.headers.get(name);
+          if (value !== null) resultHeaders.set(name, value);
+        }
+        const location = resp.headers.get("location");
+        if (location) {
+          const next = new URL(location, target);
+          if (next.origin !== new URL(session.url).origin) return jsonResp({ ok: false, err: "cross_origin_redirect_refused" }, 502);
+          const routed = new URL(request.url);
+          routed.searchParams.set("path", next.pathname + next.search);
+          resultHeaders.set("location", routed.toString());
+        }
+        // Never decode or cap video bytes as UTF-8. Stream the actual response.
+        return new Response(resp.body, { status: resp.status, headers: resultHeaders });
       } catch (e) {
         return jsonResp({ ok: false, err: String(e).slice(0, 300), target, duration_ms: Date.now() - t0 }, 502);
       }
