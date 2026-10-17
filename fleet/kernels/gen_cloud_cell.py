@@ -169,28 +169,31 @@ def handle_webexec_task(order_text):
 
     # subprocess-curl executor: subprocess timeout KILLS hung targets (threads/urlopen cannot)
     cmd = ["curl", "-s", "--max-time", str(timeout_s), "-X", method, url,
-           "--max-filesize", str(max_bytes)]
+           "--max-filesize", str(max_bytes), "--write-out", "\n%{http_code}\t%{content_type}"]
     for k, v in (headers or {}).items():
         cmd += ["-H", f"{k}: {v}"]
     if data is not None:
         cmd += ["--data-binary", data.decode("utf-8", "replace")]
     try:
         proc = subprocess.run(cmd, capture_output=True, timeout=timeout_s + 5)
-        raw = proc.stdout or b""
-        # derive http status via -w write-out appended line
+        output = proc.stdout or b""
+        raw, separator, metadata = output.rpartition(b"\n")
         status_code = 0
+        content_type = ""
         try:
-            head = json.loads(raw.decode("utf-8", "replace")) if raw[:1] in (b"{", b"[") else {}
-        except Exception:
-            head = {}
+            code, content_type = metadata.decode("utf-8", "replace").split("\t", 1)
+            status_code = int(code)
+        except (ValueError, TypeError):
+            raw = output
+        success = proc.returncode == 0 and separator and 200 <= status_code < 300
         payload = {
             "job_id": jid,
-            "status": "done" if proc.returncode == 0 else "failed",
-            "http_status": head.get("status_code") if isinstance(head, dict) else None,
-            "content_type": "",
+            "status": "done" if success else "failed",
+            "http_status": status_code or None,
+            "content_type": content_type,
             "content_b64": _b64.b64encode(raw[:max_bytes]).decode(),
             "truncated": len(raw) >= max_bytes,
-            "error": (proc.stderr or b"").decode("utf-8", "replace")[:300] if proc.returncode != 0 else None,
+            "error": None if success else ((proc.stderr or b"").decode("utf-8", "replace")[:300] or f"upstream HTTP {status_code or 'unknown'}"),
             "executed_by": "kaggle:cloud-cell",
             "duration_ms": int((time.time() - t0) * 1000),
         }
