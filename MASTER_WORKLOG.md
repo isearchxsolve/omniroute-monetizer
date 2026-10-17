@@ -17478,3 +17478,24 @@ Kaggle GPU proof v1 completed. Real output original-garden-render.mp4: H264,720x
 **Receipt:** `state/ltx_zero_dollar_proof_20261017.json` (job id, submit receipt, terminal record, wall, credits_spent=0, render_produced=false).
 
 **Next single step, requires the operator's word:** enable `OMNI_VIDEO_CONFIRM_SPEND=1` for exactly one submit (the public LTX Space route is zero-credit; the only thing the flag guards is our own accidental spend) - or leave it closed and treat the wall as the standing limit.
+﻿
+### [2026-10-17 12:17] #1971 - GENUINE RENDER PROVEN: one LTX video rendered through the real :8190 consumer contract, downloaded, hashed, decoded and visually inspected - zero credits, zero payment
+
+**Operator approval:** "follow your recommendation" - enable `OMNI_VIDEO_CONFIRM_SPEND=1` for exactly one submit on the public zero-credit LTX Space route.
+
+**Execution (single instance, operator machine law).** Rig verified dark; shim launched once with the spend flag set for this launcher only; `/healthz` 200 in 9 ms; the pinned route `video/lightricks-ltx-video-distilled.hf.space/auto` selected with `max_clips=1`.
+
+- Submit → 202 durable receipt: job `560fc2cb10b14dda841118f2d90356b2`, session `session_ltx_space_public`, tenant `tenant_001`, `creditsReserved 0.0`.
+- Rendered for roughly five minutes; the job was polled **from a fresh process with no in-memory handle** (the restart-recovery case) and resolved through `GET /v1/video/jobs/{jobId}`.
+- Terminal: `status succeeded`, `progress 1.0`, `credits_spent 0.0`, url
+  `https://lightricks-ltx-video-distilled.hf.space/gradio_api/file=/tmp/gradio/286f47eec0210efc25a2d0c9b93fa5b7a05019daa26ff990115a303b7b6dc5d8/output_64485.mp4`.
+
+**Independent verification of the artifact (not the claim).** Download HTTP 200, **56,777 bytes**, sha256 `1cc296f14e2b2d4ed1f4be7d81c3af8176f913de0d6bd554c7f4b86d981a4803`. `ffprobe`: **h264, 704x512, 30/1 fps, 57 frames, 1.900 s**, container `mov,mp4`. A three-frame contact sheet (n=5, 28, 52) and a single frame at 0.9 s were extracted and **inspected visually by the agent**: a coherent rain-wet stone courtyard with a lit arcade at dawn, wet paving reflecting the warm sky, consistent across the sampled frames with a slow pan - the prompt asked for exactly that scene.
+
+Files: `state/film_render_output_20261017/ltx-consumer-proof/ltx-consumer-render.mp4`, `contact-sheet.jpg`, `frame-0.9s.jpg`. Receipt: `state/ltx_consumer_render_proof_20261017.json`.
+
+**Rig handling.** The shim was parked immediately after the proof (pids 2668, 20240); 8190/20128/8189/20130 are closed again. The spend flag lived only in that one launcher environment and is gone with the process.
+
+**What this proves.** A graduated video provider - not a locally hosted model - rendered a real clip **through the product's own consumer contract**, and the durable asynchronous boundary rebuilt in #1968 carried it end to end: 202 receipt, durable job id, fresh-process polling, terminal success, real URL, verified bytes. This is the first provider-render receipt for OiiOii's intended path. The legacy fabricated-completion defect cannot be confused with this: the job's own durable record and the downloaded, hashed, decoded file are the evidence.
+
+**What remains unproven (unchanged, and not softened).** No OiiOii customer workflow (login → request → progress → retained download → rotation recovery); Flow seats still require an owned browser executor; Digen sits at a verified zero balance; RTST returns `SessionExpired`; no payment, no entitlement, no buyer conversion, and **the ₹10,000 target remains unsecured**.
