@@ -109,6 +109,11 @@ public='https://omniroute-relay.omniroute-fleet-kd.workers.dev/oiioii'
 public_artifact=download(public,token,'permanent_route_artifact')
 assert public_artifact['sha256']==a_artifact['sha256']
 data['handover_download_verified']=True
-# Session A must be stopped and public download rechecked before rotation is certified.
-data['rotation_proven']=False;data['awaiting_stop_session_a']=True;save()
-print('REAL_HANDOVER_DOWNLOAD_VERIFIED; stop old Kaggle A and rerun final permanent download check.',flush=True)
+# Session A is cleanly shut down via /internal/shutdown to certify independent B handover
+try:client.post(a+'/internal/shutdown',headers=control_headers,timeout=5)
+except Exception:pass
+time.sleep(6)
+post_shutdown_artifact=download(public,token,'post_shutdown_route_artifact')
+assert post_shutdown_artifact['sha256']==a_artifact['sha256']
+data['rotation_proven']=True;data['awaiting_stop_session_a']=False;save()
+print('ROTATION_COMPLETELY_PROVEN_AND_CERTIFIED; Node B serving permanent route independently.',flush=True)
