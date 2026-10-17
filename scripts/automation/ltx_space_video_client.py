@@ -99,8 +99,15 @@ class LtxSpaceVideoClient:
         self.artifact_dir = Path(artifact_dir)
         self.confirm_spend = _truthy(os.environ.get("OMNI_VIDEO_CONFIRM_SPEND"))
 
-    def _data(self, prompt: str) -> list[Any]:
+    def _data(self, prompt: str, duration_seconds: Optional[int] = None) -> list[Any]:
         defaults = self._defaults
+        duration = _number(defaults.get("duration"), 2, 0.3, 8.5)
+        frames = _frames(defaults.get("frames"))
+        if duration_seconds is not None:
+            if not 1 <= float(duration_seconds) <= 8.5:
+                raise ChatError("DURATION_UNSUPPORTED", "LTX shot duration must be within 1 to 8.5 seconds")
+            duration = float(duration_seconds)
+            frames = _frames(round(duration * 24) + 1)
         return [
             prompt,
             str(defaults.get("negative_prompt") or DEFAULT_NEGATIVE),
@@ -109,8 +116,8 @@ class LtxSpaceVideoClient:
             _dimension(defaults.get("height"), 512),
             _dimension(defaults.get("width"), 704),
             "text-to-video",
-            _number(defaults.get("duration"), 2, 0.3, 8.5),
-            _frames(defaults.get("frames")),
+            duration,
+            frames,
             int(round(_number(defaults.get("seed"), 42, 0, 4_294_967_295))),
             defaults.get("randomize_seed") is not False,
             _number(defaults.get("guidance_scale"), 3, 1, 10),
@@ -131,6 +138,7 @@ class LtxSpaceVideoClient:
         self,
         messages: List[Dict[str, Any]],
         model: Optional[str] = None,
+        duration_seconds: Optional[int] = None,
         **_: Any,
     ) -> Dict[str, Any]:
         if not self.confirm_spend:
@@ -145,7 +153,7 @@ class LtxSpaceVideoClient:
         client = self._client_factory(self.base, timeout=self.timeout)
         try:
             terminal = client.submit_and_poll(
-                self.api_name, self._data(prompt), token=self._token
+                self.api_name, self._data(prompt, duration_seconds=duration_seconds), token=self._token
             )
             ref = find_file_ref(terminal.data, self.base)
             if ref is None:

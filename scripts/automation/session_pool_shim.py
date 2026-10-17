@@ -487,7 +487,7 @@ def _wants_strict_json(req: dict) -> bool:
     return False
 
 # {"<api_key>": "<tenant_name>", ...}. Presence of this file turns auth ON for every consumer.
-TENANT_MAP_PATH = pathlib.Path(r"D:\omniroute-monetizer\state\secrets\tenant_map.json")
+TENANT_MAP_PATH = pathlib.Path(__file__).resolve().parents[2] / "state" / "secrets" / "tenant_map.json"
 
 # ------------------------------------------------------------------ hot-add ----
 # One Chrome, infinite sites (worklog #1112): adding a provider must NOT require a shim
@@ -719,7 +719,7 @@ def _job_receipt(rec: dict, tenant: str) -> dict:
 
 
 def _video_worker(job_id: str, messages: list, host: str = None,
-                  model_override: str = None) -> None:
+                  model_override: str = None, video_context: dict = None) -> None:
     """Render one video job off the HTTP thread, updating the durable ledger as it goes.
 
     Seat selection uses the pool's own reserve() so LRU/cooldown/per-host-lock semantics are
@@ -760,7 +760,7 @@ def _video_worker(job_id: str, messages: list, host: str = None,
                 if rec is None or rec["status"] == "cancelled":
                     return
                 try:
-                    r = s.chat(messages, model=model_override)
+                    r = s.chat(messages, model=model_override, **(video_context or {}))
                 finally:
                     if health:
                         health.invalidate(s)
@@ -1105,7 +1105,7 @@ class ShimHandler(BaseHTTPRequestHandler):
                                        host=host_target, tenant=tenant)
             if created:
                 threading.Thread(target=_video_worker,
-                                 args=(rec["job_id"], messages, host_target),
+                                 args=(rec["job_id"], messages, host_target, None, {k:vmeta[k] for k in ("duration_seconds", "aspect_ratio", "seed", "image_refs") if k in vmeta}),
                                  daemon=True).start()
             self.send_response(200 if not created else 202)
             self.send_header("Content-Type", "application/json")

@@ -197,14 +197,14 @@ def wall_in_reply(text: Any) -> Optional[str]:
             return mark
     return None
 
-SECRETS = pathlib.Path(r"D:\omniroute-monetizer\state\secrets")
-REPLAY_GATE = pathlib.Path(r"D:\omniroute-monetizer\state\replay_check.json")
+SECRETS = pathlib.Path(__file__).resolve().parents[2] / "state" / "secrets"
+REPLAY_GATE = pathlib.Path(__file__).resolve().parents[2] / "state" / "replay_check.json"
 # Non-secret exact-file admission registry written by fleet_graduation.py.
-PURE_PYTHON_REGISTRY = pathlib.Path(r"D:\omniroute-monetizer\state\pure_python_replay_registry.json")
+PURE_PYTHON_REGISTRY = pathlib.Path(__file__).resolve().parents[2] / "state" / "pure_python_replay_registry.json"
 # last-used timestamps ONLY (no cookie, no header) so the cooldown spreads load across CLI runs too.
-POOL_STATE = pathlib.Path(r"D:\omniroute-monetizer\state\session_pool_state.json")
+POOL_STATE = pathlib.Path(__file__).resolve().parents[2] / "state" / "session_pool_state.json"
 # Hosts withheld from dispatch because OUR adapter is broken -- see _load_quarantine().
-POOL_QUARANTINE = pathlib.Path(r"D:\omniroute-monetizer\state\pool_quarantine.json")
+POOL_QUARANTINE = pathlib.Path(__file__).resolve().parents[2] / "state" / "pool_quarantine.json"
 
 # host substring -> proven replay client. One line per provider whose genuine shape is captured AND
 # verified end-to-end. Dirty-and-easy: add a line when a new provider (chat OR video) proves out.
