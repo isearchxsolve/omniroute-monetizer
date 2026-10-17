@@ -17456,3 +17456,25 @@ Kaggle GPU proof v1 completed. Real output original-garden-render.mp4: H264,720x
 **`fleet/docs/FILM-RELEASE-EVIDENCE-20261017.md`** - added the same direction section plus a bounded readiness table read fresh on 2026-10-17: Digen `balance_read_verified` with `remained=0`/`premiumRemained=0` (verified zero after the #1968 parsing fix), LTX `public_endpoint_read_verified` with `text_to_video` and its 13 parameters, RTST `current_read_failed / SessionExpired`, both Flow seats `requires_owned_browser_executor`. It states plainly that no render has been submitted to any graduated provider through the consumer contract, so no provider-render receipt exists, and that ₹10,000 remains unsecured.
 
 **Boundaries.** Documentation only - no provider call, submit, credit, browser attach or service start in this entry. The readiness numbers are quoted from the read-only receipt in #1968 (`state/graduated_video_preflight_20261017.json`), not re-measured here.
+﻿
+### [2026-10-17 12:09] #1970 - Bounded zero-dollar LTX attempt through the REAL consumer contract: durable boundary proven end-to-end from a fresh process; the only barrier is our own spend gate (provider never contacted, zero credits spent)
+
+**Operator approval.** "yes" to the stated procedure: start `:8190` deliberately as one recorded instance, attempt exactly one pinned LTX submit, report the exact wall if the gate refuses.
+
+**Rig handling (single instance, as the operator's machine law requires).** The rig was verified fully parked before the start (8190/20128/8189/20130 all closed). The shim was launched once - `session_pool_shim.py 8190`, venv interpreter, cwd repo root, `OMNI_VIDEO_CONFIRM_SPEND` explicitly removed from the launcher environment - and reported `SessionPool Shim listening on http://127.0.0.1:8190/v1/chat/completions`; `/healthz` answered 200 in 13 ms. It was parked again immediately after the attempt: pids 9124 and 22536 killed, and 8190/20128/8189/20130 are closed again.
+
+**What the live consumer advertised:** `GET /v1/models` → 200, 100 models, **6 video routes** including `video/lightricks-ltx-video-distilled.hf.space/auto`. The proof pinned that single route (`max_clips=1`) so no other seat could be selected.
+
+**The submit, through the fixed OiiOii client (`VideoRouterClient` live mode):**
+- 202 receipt: `job_id acab563e0af84625b64c9ebf7e1e7d96`, provider `lightricks-ltx-video-distilled.hf.space`, session `session_ltx_space_public`, tenant `tenant_001`, status `running`, `estimatedSeconds 300`, `creditsReserved 0.0`.
+- The job was then polled from a **fresh process with no in-memory handle** - the exact restart-recovery case the old client could not survive. It resolved through `GET /v1/video/jobs/{jobId}` from the shim's durable ledger (progress 0.1), and finally returned the terminal record.
+- Terminal: `status failed`, `url null`, `credits_spent 0.0`, error
+  `lightricks-ltx-video-distilled.hf.space: SPEND_GATE_CLOSED: LTX Space submit refused: set OMNI_VIDEO_CONFIRM_SPEND=1`.
+
+**Exact wall, named.** The refusal is our own local spend gate inside `ltx_space_video_client.chat()` (`self.confirm_spend`). The provider was never asked to render and no credit was spent (`credits_spent = 0.0`). This is by design and by the brief: the flag is not to be enabled blindly.
+
+**What this proves (bounded).** (1) The durable asynchronous boundary rebuilt in #1968 works against the real service: 202 receipt → durable jobId/statusUrl → fresh-process poll → terminal record with the provider's own error text. (2) The consumer's video dispatcher correctly selects a pinned LTX route and records a provider failure verbatim instead of fabricating success. (3) Zero spend is real, not asserted. **What it does NOT prove:** no LTX render exists; no OiiOii customer workflow (login→render→progress→download→rotation) is proven; no payment; ₹10,000 remains unsecured. Documented lesson from 2026-10-17 stands: the legacy RENDER_VIDEO path that invented completion is gone, and this run shows the honest replacement failing loudly at a gate rather than silently.
+
+**Receipt:** `state/ltx_zero_dollar_proof_20261017.json` (job id, submit receipt, terminal record, wall, credits_spent=0, render_produced=false).
+
+**Next single step, requires the operator's word:** enable `OMNI_VIDEO_CONFIRM_SPEND=1` for exactly one submit (the public LTX Space route is zero-credit; the only thing the flag guards is our own accidental spend) - or leave it closed and treat the wall as the standing limit.
