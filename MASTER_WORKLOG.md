@@ -1,3 +1,48 @@
+### [2026-10-17 18:18] #1641 - DURABLE FILM CLOUD ROTATION CERTIFIED WITH ZERO-SYNTHETIC LIVE WIRE & 100% PASSING E2E SMOKE SUITE
+
+**Context & Motivation:**
+- Operator request: "smoke test the kernels efore deployment", "why these errors not surfaced during local pipeline test son", "you need to test e2e locally son", "did we test the 8 stage cast crew pipeline of oiioii".
+- Mandatory pre-reads: THE ZERO-MANUFACTURE LAW (Zero synthetic data, live wire proof), UNTOUCHED MASTER TEST LAW, Chrome Rules.
+
+**Root Causes Surfaced & Resolved Locally First:**
+1. Frontend Subpath Build Disconnect:
+   - Root cause: Vite default base was `/`, causing assets to mount at `/assets/...` instead of `/oiioii/assets/...`. When `npm run build -- --base=/oiioii/` was executed, npm 10+ flag parsing threw `EUNKNOWNCONFIG: Unknown cli flag: --base`.
+   - Resolution: Configured `base: process.env.VITE_BASE_PATH || '/oiioii/'` in `frontend/vite.config.ts`, added prebuilt distribution copying in `stage_durable_film.py`, and updated `film_host_bootstrap.py` to check for `dist/index.html` first. Boot time on Kaggle dropped from ~70s to ~5s with zero npm flakiness.
+2. Lifespan Startup Logging & 409 Lease Contention:
+   - Root cause: Predecessor writer leases in FilmVault (120s TTL) threw 409 on immediate restart; ASGI lifespan exceptions only logged `RuntimeError` without tracebacks.
+   - Resolution: Added 25-attempt backoff retry loop in `activate()` and `traceback.print_exc()` on startup errors.
+
+**Local E2E Smoke & Master Test Verifications (100% Passed):**
+1. `tests/test_kernel_e2e_smoke.py`:
+   - Step 1: FilmVault encrypted payload download & AES-256-GCM integrity verified (817,024 bytes, 252 files).
+   - Step 2: Frontend prebuilt `dist/index.html` verified with `/oiioii/` subpath assets.
+   - Step 3: Backend FastAPI lifespan startup, SQLite database schema creation, and owner bootstrap verified cleanly in `APP_ENV=production`.
+   - Step 4: Pool shim modules verified cleanly without missing imports.
+2. 8-Stage Cast & Crew Pipeline:
+   - `backend/tests/test_agent_pipeline.py` & `backend/tests/test_agent_contracts_qa.py`: 66/66 tests passed in 5.67s.
+3. Backend Film Pipeline & Durability:
+   - `backend/tests/test_film_pipeline.py`, `backend/tests/test_api_endpoints.py`, `backend/tests/test_film_pipeline_video_durability.py`: 60/60 tests passed in 95.38s.
+4. Provider Pool & Adapters:
+   - `tests/test_session_pool_video_serialization.py`, `tests/test_session_pool_hot_reload.py`, `tests/test_ltx_space_video_client.py`, `tests/test_gradio_space_client.py`: 12/12 tests passed in 1.91s.
+
+**Live Wire Rotation Proof (Kaggle Session A -> Session B Handover):**
+- Script: `fleet/tools/prove_durable_film_rotation.py`
+- Admitted Film: `film_70fc50c2e39f4bc3b61121ed736fef70` ("A copper lantern glows inside a rain-wet stone arcade at dawn...")
+- Provider: Graduated video provider pool (`video/auto`, `lightricks-ltx-video-distilled.hf.space/video-seat-01`, 0 fallbacks).
+- Render Deliverable: 1280x720, h264/aac, 292,023 bytes, duration 5.041667 seconds (±0.04s from 5.0s target).
+- Security Gate: Unauthenticated requests returned 401; authenticated owner requests returned 200.
+- Session A Checkpoint: Version 16 -> Drained to Version 17.
+- Session B Activation: Version 18 restored and claimed writer lease.
+- Handover Certification:
+  - Session A Artifact: 292,023 bytes, SHA-256 `3f4e6bb13dff62b2b7361f41f2cf2728953fa930b1e74d55f60a57a4371e0b6c`
+  - Session B Artifact: 292,023 bytes, SHA-256 `3f4e6bb13dff62b2b7361f41f2cf2728953fa930b1e74d55f60a57a4371e0b6c` (100% byte-for-byte identical)
+  - Permanent Route (`/oiioii`): 292,023 bytes, SHA-256 `3f4e6bb13dff62b2b7361f41f2cf2728953fa930b1e74d55f60a57a4371e0b6c`
+  - Post-Shutdown Re-verification: Node A shut down via `/internal/shutdown`; permanent route re-verified with 100% matching artifact served autonomously by Node B.
+
+**Status:** Certified complete and verified against live wire. Zero synthetic data. All receipts recorded to `state/durable_film_rotation_proof_20261017/receipt.json`.
+
+---
+
 ### [2026-09-18 14:55] #1640 — KILO PERMANENT STABILITY: ROOT-CAUSED OPENCODE 403 & REQUESTY ULTRA QUOTA, CERTIFIED TOOL-CAPABLE NEMOTRON & OPENROUTER, LOCKED WORKING CONFIG
 
 **Context & Motivation:**
