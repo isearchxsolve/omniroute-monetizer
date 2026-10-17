@@ -332,10 +332,11 @@ export default {
             const decoded = atob(String(data.content_b64 || ""));
             pass = data.http_status === sentinel.expect_status && decoded.length >= (sentinel.min_bytes || 1)
               && (!sentinel.content_type || String(data.content_type).split(";")[0].trim() === sentinel.content_type);
-            if (sentinel.require_json_keys?.length) {
+            if (sentinel.require_json_keys?.length || sentinel.content_type === "application/json") {
               const obj = JSON.parse(new TextDecoder().decode(Uint8Array.from(decoded, ch => ch.charCodeAt(0))));
               pass = pass && obj !== null && typeof obj === "object" && !Array.isArray(obj)
-                && sentinel.require_json_keys.every(key => Object.hasOwn(obj, key));
+                && (sentinel.require_json_keys || []).every(key => Object.hasOwn(obj, key))
+                && !(obj.error || obj.errors || obj.success === false || obj.login_required);
             }
           } catch { pass = false; }
           if (!pass) {

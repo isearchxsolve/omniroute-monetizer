@@ -24,10 +24,12 @@ def replay_public_capture(recipe, timeout_s=25):
     sentinel = recipe.get('sentinel') or {}
     passed = proc.returncode == 0 and status == sentinel.get('expect_status') and len(raw) >= sentinel.get('min_bytes', 1)
     keys = sentinel.get('require_json_keys') or []
-    if keys:
+    if keys or sentinel.get("content_type") == "application/json":
         try:
             obj = json.loads(raw)
-            passed = passed and isinstance(obj, dict) and all(key in obj for key in keys)
+            passed = (passed and isinstance(obj, dict) and all(key in obj for key in keys)
+                      and not (obj.get("error") or obj.get("errors")
+                               or obj.get("success") is False or obj.get("login_required")))
         except (ValueError, UnicodeError):
             passed = False
     expected_type = sentinel.get('content_type')
