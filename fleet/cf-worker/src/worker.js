@@ -51,6 +51,22 @@ function jobId() {
   return "wx_" + crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 }
 
+function validCaptureId(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_.-]{1,160}$/.test(value);
+}
+
+async function enqueueWebJob(env, job) {
+  const pw = job.spec.mode === "playwright";
+  const queueKey = pw ? "ledger:PLAYWRIGHT" : "ledger:WEBEXEC";
+  let orders;
+  try { orders = JSON.parse((await kvGet(env, queueKey)) || "[]"); }
+  catch { return false; }
+  // Persist the pending state before exposing work to an executor's job guard.
+  if (!await kvPut(env, "wx:" + job.job_id, JSON.stringify(job), 86400)) return false;
+  orders.push({ at: Date.now() / 1000, text: (pw ? "PW_EXECUTE:" : "WEB_EXECUTE:") + JSON.stringify({ ...job.spec, job_id: job.job_id }) });
+  return await kvPut(env, queueKey, JSON.stringify(orders.slice(-2000)));
+}
+
 function bytesToB64(bytes) {
   let bin = "";
   const CH = 32768;
@@ -129,8 +145,25 @@ export default {
 
     if (path === "/health") {
       if (token !== TOKEN) return jsonResp({ ok: false, err: "bad token" }, 403);
-      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.1",
+      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.2-public-capture",
                         tools: ["web.execute", "web.result", "gateway"], ts: Date.now() });
+    }
+
+    if (path === "/v1/captures/status") {
+      if (token !== TOKEN) return jsonResp({ ok: false, err: "bad token" }, 403);
+      if (request.method !== "GET") return jsonResp({ ok: false, err: "GET required" }, 405);
+      const id = url.searchParams.get("capture_id");
+      if (!validCaptureId(id)) return jsonResp({ ok: false, err: "invalid capture_id" }, 400);
+      const raw = await kvGet(env, "capture:" + id);
+      if (!raw) return jsonResp({ ok: true, exists_in_kv: false, requested_id: id });
+      let cap;
+      try { cap = JSON.parse(raw); } catch { return jsonResp({ ok: false, err: "invalid stored capture" }, 500); }
+      const target = new URL(cap.request.url);
+      return jsonResp({ ok: true, exists_in_kv: true, requested_id: id,
+        active_version_id: cap.capture_id, execution_pin: cap.execution_pin,
+        verification: cap.verification, synthesized_at: cap.synthesized_at,
+        target_method: cap.request.method, target_url: target.origin + target.pathname,
+        sentinel: cap.sentinel, shadow_proof: cap.shadow_proof });
     }
 
     if (path === "/say") {
@@ -192,6 +225,25 @@ export default {
       } catch {
         return jsonResp({ ok: false, err: "bad json" }, 400);
       }
+      if (spec.capture_id !== undefined) {
+        if (!validCaptureId(spec.capture_id)) return jsonResp({ ok: false, err: "invalid capture_id" }, 400);
+        const raw = await kvGet(env, "capture:" + spec.capture_id);
+        if (raw) {
+          let cap;
+          try { cap = JSON.parse(raw); } catch { return jsonResp({ ok: false, err: "invalid stored capture" }, 500); }
+          spec.url = cap.request.url;
+          if (cap.execution_pin === "wire_verified") {
+            spec.capture_recipe = cap;
+            spec.mode = "fleet";
+          } else {
+            spec.harvest = true;
+            spec.mode = "playwright";
+          }
+        } else {
+          spec.harvest = true;
+          spec.mode = "playwright";
+        }
+      }
       if (!spec.url || !/^https?:\/\//.test(spec.url)) {
         return jsonResp({ ok: false, err: "url required (http/https)" }, 400);
       }
@@ -209,22 +261,12 @@ export default {
       }
 
       // fleet / playwright path: queue to Kaggle via ledger, store pending job
-      const queueKey = isPlaywright ? "ledger:PLAYWRIGHT" : "ledger:WEBEXEC";
-      let arr = [];
-      try {
-        arr = JSON.parse((await kvGet(env, queueKey)) || "[]");
-      } catch {
-        arr = [];
-      }
-      arr.push({ at: Date.now() / 1000, text: (isPlaywright ? "PW_EXECUTE:" : "WEB_EXECUTE:") + JSON.stringify({ job_id: jid, ...spec }) });
-      if (arr.length > 2000) arr = arr.slice(-2000);
-      const q_ok = await kvPut(env, queueKey, JSON.stringify(arr));
-      const j_ok = await kvPut(env, "wx:" + jid, JSON.stringify(job), 86400);
-      if (!q_ok) {
+      const queued = await enqueueWebJob(env, job);
+      if (!queued) {
         // queue write failed (daily KV limit) -> honest error, agent falls back to edge
         return jsonResp({ ok: false, err: "queue_write_failed", job_id: jid, hint: "use edge path or retry" }, 503);
       }
-      return jsonResp({ job_id: jid, mode: isPlaywright ? "playwright" : "fleet", status: "queued", stored: j_ok });
+      return jsonResp({ job_id: jid, mode: isPlaywright ? "playwright" : "fleet", status: spec.harvest ? "queued_cold_harvest" : "queued", stored: true });
     }
 
     // ============ AGENT TOOL: web.result ============
@@ -252,6 +294,34 @@ export default {
         const raw = await kvGet(env, "wx:" + jid);
         if (!raw) return jsonResp({ ok: false, err: "unknown job_id" }, 404);
         const job = JSON.parse(raw);
+        if (["done", "failed"].includes(job.status)) return jsonResp({ ok: true, job_id: jid, status: job.status, duplicate_result_ignored: true });
+        if (data.status === "sentinel_failed" && job.spec.capture_id) {
+          if ((job.spec.heal_attempts || 0) >= 1) {
+            data.status = "failed";
+            data.error = "capture_healing_limit_reached";
+          } else {
+            const previous = job.spec.capture_id;
+            const next = /\.v\d+$/.test(previous) ? previous.replace(/\.v(\d+)$/, (_, n) => ".v" + (Number(n) + 1)) : previous + ".v2";
+            job.spec = { ...job.spec, capture_id: next, replaces_capture_id: previous,
+              mode: "playwright", harvest: true, heal_attempts: (job.spec.heal_attempts || 0) + 1 };
+            delete job.spec.capture_recipe;
+            job.status = "healing_in_playwright";
+            if (!await enqueueWebJob(env, job)) return jsonResp({ ok: false, err: "healing_queue_write_failed" }, 503);
+            return jsonResp({ ok: true, job_id: jid, status: job.status, stored: true });
+          }
+        }
+        let graduated = null;
+        if (data.graduated_capture) {
+          const cap = data.graduated_capture;
+          const allowed = cap.capture_id === job.spec.capture_id && validCaptureId(cap.capture_id)
+            && cap.authenticated === false && cap.request?.method === "GET"
+            && ["wire_verified", "playwright"].includes(cap.execution_pin)
+            && (cap.execution_pin !== "wire_verified" || (cap.verification === "shadow_curl_passed" && cap.shadow_proof?.status === "done" && cap.shadow_proof?.http_status === 200));
+          if (!allowed) return jsonResp({ ok: false, err: "invalid_graduation_proof" }, 400);
+          if (!await kvPut(env, "capture:" + cap.capture_id, JSON.stringify(cap))) return jsonResp({ ok: false, err: "graduation_write_failed" }, 503);
+          if (job.spec.replaces_capture_id && !await kvPut(env, "capture:" + job.spec.replaces_capture_id, JSON.stringify(cap))) return jsonResp({ ok: false, err: "capture_alias_write_failed" }, 503);
+          graduated = { capture_id: cap.capture_id, execution_pin: cap.execution_pin, verification: cap.verification };
+        }
         const merged = {
           ...job,
           status: data.status || "done",
@@ -262,9 +332,10 @@ export default {
           error: data.error || null,
           executed_by: data.executed_by || "kaggle",
           duration_ms: data.duration_ms || null,
+          graduated_capture: graduated,
         };
-        await kvPut(env, "wx:" + jid, JSON.stringify(merged), 86400);
-        return jsonResp({ ok: true, job_id: jid, status: merged.status, degraded: "result_may_not_persist" });
+        const stored = await kvPut(env, "wx:" + jid, JSON.stringify(merged), 86400);
+        return jsonResp({ ok: stored, job_id: jid, status: merged.status, stored }, stored ? 200 : 503);
       }
     }
 

@@ -200,6 +200,8 @@ def handle_pw_task(order_text):
                     "final_url": page.url,
                     "title": page.title(),
                 }
+                if spec.get("harvest"):
+                    out["_graduated_capture"] = graduate_public_capture(resp, spec["capture_id"], timeout_s)
                 if extracts:
                     ext = {}
                     for e in extracts:
@@ -250,9 +252,10 @@ def handle_pw_task(order_text):
     try:
         th = threading.Thread(target=lambda: None)  # keep API shape stable
         res = run_browser()
+        graduated = res.pop("_graduated_capture", None)
         payload = {
             "job_id": jid,
-            "status": "done",
+            "status": "done" if 200 <= (res.get("http_status") or 0) < 300 else "failed",
             "mode": "playwright",
             "http_status": res.get("http_status"),
             "content_type": "application/json",
@@ -262,6 +265,8 @@ def handle_pw_task(order_text):
             "executed_by": "kaggle:playwright",
             "duration_ms": int((time.time() - t0) * 1000),
         }
+        if graduated:
+            payload["graduated_capture"] = graduated
     except Exception as e:
         payload = {
             "job_id": jid, "status": "failed", "mode": "playwright",
@@ -310,6 +315,7 @@ while True:
 
 from pathlib import Path
 MAIN_CODE = Path(__file__).with_name("queue_job_guard.py").read_text(encoding="utf-8") + "\n" + MAIN_CODE
+MAIN_CODE = Path(__file__).with_name("public_capture_graduation.py").read_text(encoding="utf-8") + "\n" + MAIN_CODE
 
 cells = [
     make_cell(INSTALL_CELL),

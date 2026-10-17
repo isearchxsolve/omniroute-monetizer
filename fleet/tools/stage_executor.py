@@ -3,6 +3,7 @@ import ast,json,pathlib,sys
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 stage=ROOT/'state'/'recovery_20261017_staged'
 guard=(ROOT/'fleet/kernels/queue_job_guard.py').read_text(encoding='utf-8')
+graduation=(ROOT/'fleet/kernels/public_capture_graduation.py').read_text(encoding='utf-8')
 items={'cloud':('gen_cloud_cell.py','omniroute-cloud-cell','omniroute-cloud-cell-cpu-worker'),'playwright':('gen_playwright.py','omniroute-playwright','omniroute-playwright-executor')}
 for name in sys.argv[1:] or items:
  gen,dirname,slug=items[name]
@@ -12,7 +13,7 @@ for name in sys.argv[1:] or items:
   if isinstance(node,ast.Assign) and isinstance(node.value,(ast.Constant,ast.List)):
    for target in node.targets:
     if isinstance(target,ast.Name) and target.id in ('MAIN_CODE','INSTALL_CELL'):values[target.id]=ast.literal_eval(node.value)
- code=guard+'\n'+values['MAIN_CODE']
+ code=graduation+'\n'+guard+'\n'+values['MAIN_CODE']
  compile(code,gen,'exec')
  cells=[]
  for source in ([values['INSTALL_CELL']] if values.get('INSTALL_CELL') else [])+[[code]]:

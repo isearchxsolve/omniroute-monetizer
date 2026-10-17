@@ -159,6 +159,12 @@ def handle_webexec_task(order_text):
             report_home("WEBEXEC_ERR", f"RESULT-POST-FAIL {payload.get('job_id')} err={type(e).__name__}: {str(e)[:100]}")
             print(f"[WEBEXEC] result post failed: {e}", flush=True)
 
+    if spec.get("capture_recipe"):
+        payload = replay_public_capture(spec["capture_recipe"], timeout_s)
+        payload.update(job_id=jid, executed_by="kaggle:cloud-cell", duration_ms=int((time.time()-t0)*1000))
+        post_result(payload)
+        return
+
     if not url:
         post_result({"job_id": jid, "status": "failed", "error": "no url", "executed_by": "kaggle"})
         return
@@ -286,6 +292,8 @@ while True:
 
 from pathlib import Path
 MAIN_CODE = Path(__file__).with_name("queue_job_guard.py").read_text(encoding="utf-8") + "\n" + MAIN_CODE
+
+MAIN_CODE = Path(__file__).with_name("public_capture_graduation.py").read_text(encoding="utf-8") + "\n" + MAIN_CODE
 
 cells = [
     make_cell(["# OmniRoute Cloud Cell -- CPU infinite runway\n", MAIN_CODE]),

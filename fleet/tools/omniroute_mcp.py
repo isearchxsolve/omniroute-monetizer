@@ -94,6 +94,19 @@ TOOLS = [
     }
 ]
 
+TOOLS.extend([
+    {"name": "capture_submit", "description": "Submit a public GET capture for live Kaggle browser-to-curl graduation, or replay a previously graduated capture. Authentication is not captured into KV.",
+     "inputSchema": {"type": "object", "properties": {"capture_id": {"type": "string"}, "url": {"type": "string"}, "timeout_s": {"type": "integer", "default": 25}}, "required": ["capture_id"]}},
+    {"name": "capture_status", "description": "Read genuine stored graduation metadata, without executing a job or returning credentials.",
+     "inputSchema": {"type": "object", "properties": {"capture_id": {"type": "string"}}, "required": ["capture_id"]}},
+])
+
+def handle_cloud_capture(name, args):
+    from door_client import request
+    if name == "capture_status":
+        return request('/v1/captures/status', params={'capture_id': args['capture_id']})
+    return request('/v1/tools/web.execute', {key: args[key] for key in ('capture_id', 'url', 'timeout_s') if key in args})
+
 def handle_web_execute(args: dict) -> dict:
     url = args.get("url")
     method = (args.get("method") or "GET").upper()
@@ -175,7 +188,7 @@ def process_message(msg: dict):
                 },
                 "serverInfo": {
                     "name": "omniroute-agent-internet",
-                    "version": "1.0.0"
+                    "version": "3.2.0-public-capture"
                 }
             }
         }
@@ -201,6 +214,11 @@ def process_message(msg: dict):
             res = handle_web_result(t_args)
         elif t_name == "capture_execute":
             res = handle_capture_execute(t_args)
+        elif t_name in ("capture_submit", "capture_status"):
+            try:
+                res = handle_cloud_capture(t_name, t_args)
+            except Exception as error:
+                res = {"status": "failed", "error": type(error).__name__}
         else:
             return {
                 "jsonrpc": "2.0",
