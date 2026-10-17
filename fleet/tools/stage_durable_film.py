@@ -17,6 +17,7 @@ for name in paths:
     if not file.is_file() or any(x in Path(name).parts for x in ('tests','__pycache__','node_modules','storage','.venv')):continue
     if file.suffix in ('.db','.sqlite3','.mp4','.mp3','.png','.jpg','.jpeg','.wav','.zip') or file.name.startswith('.env'):continue
     dest=stage/'app'/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(file,dest)
+if (APP/'frontend/dist').is_dir():shutil.copytree(APP/'frontend/dist',stage/'app/frontend/dist',dirs_exist_ok=True)
 pending=['session_pool_shim'];seen=set()
 while pending:
     name=pending.pop()

@@ -131,7 +131,8 @@ class DurableFilmHost:
                         self.heartbeat_task=asyncio.create_task(self.heartbeat())
                         await send({'type':'lifespan.startup.complete'})
                     except Exception as exc:
-                        await send({'type':'lifespan.startup.failed','message':type(exc).__name__})
+                        import traceback; traceback.print_exc()
+                        await send({'type':'lifespan.startup.failed','message':f'{type(exc).__name__}: {exc}'})
                 elif message['type']=='lifespan.shutdown':
                     if self.heartbeat_task:self.heartbeat_task.cancel()
                     if self.mode=='active':

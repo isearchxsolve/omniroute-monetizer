@@ -38,15 +38,18 @@ with tarfile.open(fileobj=io.BytesIO(plain),mode='r:gz') as archive:
     archive.extractall(BASE,filter='data')
 print('Encrypted deployment verified and restored:',manifest['sha256'],flush=True)
 front=BASE/'app/frontend'
-try:
-    if shutil.which('npm'):
-        subprocess.run(['npm','install','--no-audit','--no-fund'],cwd=front,check=True,timeout=180,stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
-        build_env={**os.environ,'VITE_API_URL':'/oiioii/api/v1'}
-        build=subprocess.run(['npm','run','build','--','--base=/oiioii/'],cwd=front,env=build_env,timeout=120,capture_output=True,text=True)
-        if build.returncode:
-            print('Actual frontend build errors:',(build.stdout+build.stderr)[-2500:],flush=True)
-            raise RuntimeError('frontend build failed')
-except Exception as exc:print('Frontend build needs attention:',type(exc).__name__,flush=True)
+if (front/'dist/index.html').exists():
+    print('Frontend pre-built distribution verified in deployment payload',flush=True)
+else:
+    try:
+        if shutil.which('npm'):
+            subprocess.run(['npm','install','--no-audit','--no-fund'],cwd=front,check=True,timeout=180,stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
+            build_env={**os.environ,'VITE_API_URL':'/oiioii/api/v1','VITE_BASE_PATH':'/oiioii/'}
+            build=subprocess.run(['npm','run','build'],cwd=front,env=build_env,timeout=120,capture_output=True,text=True)
+            if build.returncode:
+                print('Actual frontend build errors:',(build.stdout+build.stderr)[-2500:],flush=True)
+                raise RuntimeError('frontend build failed')
+    except Exception as exc:print('Frontend build needs attention:',type(exc).__name__,flush=True)
 # The actual app and provider pool run on the same disposable node; persistent data
 # live in encrypted checkpoints owned by the permanent FilmVault.
 private=json.loads((BASE/'private-config.json').read_text())
