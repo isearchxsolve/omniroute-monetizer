@@ -55,6 +55,14 @@ function validCaptureId(value) {
   return typeof value === "string" && /^[A-Za-z0-9_.-]{1,160}$/.test(value);
 }
 
+function publicCaptureTarget(value) {
+  try {
+    const target = new URL(value);
+    return target.protocol === "https:" && !target.username && !target.password
+      && !Array.from(target.searchParams.keys()).some(key => /token|secret|password|key|session|auth/i.test(key));
+  } catch { return false; }
+}
+
 async function enqueueWebJob(env, job) {
   const pw = job.spec.mode === "playwright";
   const queueKey = pw ? "ledger:PLAYWRIGHT" : "ledger:WEBEXEC";
@@ -145,7 +153,7 @@ export default {
 
     if (path === "/health") {
       if (token !== TOKEN) return jsonResp({ ok: false, err: "bad token" }, 403);
-      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.2-public-capture",
+      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.2.1-public-capture",
                         tools: ["web.execute", "web.result", "gateway"], ts: Date.now() });
     }
 
@@ -163,6 +171,7 @@ export default {
         active_version_id: cap.capture_id, execution_pin: cap.execution_pin,
         verification: cap.verification, synthesized_at: cap.synthesized_at,
         target_method: cap.request.method, target_url: target.origin + target.pathname,
+        observed_body_sha256: cap.observed_body_sha256,
         sentinel: cap.sentinel, shadow_proof: cap.shadow_proof });
     }
 
@@ -227,6 +236,10 @@ export default {
       }
       if (spec.capture_id !== undefined) {
         if (!validCaptureId(spec.capture_id)) return jsonResp({ ok: false, err: "invalid capture_id" }, 400);
+        if ((spec.method || "GET").toUpperCase() !== "GET" || spec.cookies
+          || Object.keys(spec.headers || {}).some(key => /authorization|cookie|token|secret|api.key/i.test(key))) {
+          return jsonResp({ ok: false, err: "capture_contract_public_get_only" }, 400);
+        }
         const raw = await kvGet(env, "capture:" + spec.capture_id);
         if (raw) {
           let cap;
@@ -243,6 +256,7 @@ export default {
           spec.harvest = true;
           spec.mode = "playwright";
         }
+        if (!publicCaptureTarget(spec.url)) return jsonResp({ ok: false, err: "public_https_capture_url_required" }, 400);
       }
       if (!spec.url || !/^https?:\/\//.test(spec.url)) {
         return jsonResp({ ok: false, err: "url required (http/https)" }, 400);
@@ -336,6 +350,7 @@ export default {
           const cap = data.graduated_capture;
           const allowed = cap.capture_id === job.spec.capture_id && validCaptureId(cap.capture_id)
             && cap.authenticated === false && cap.request?.method === "GET"
+            && publicCaptureTarget(cap.request.url) && !cap.request.cookies && !Object.keys(cap.request.headers || {}).length
             && ["wire_verified", "playwright"].includes(cap.execution_pin)
             && (cap.execution_pin !== "wire_verified" || (cap.verification === "shadow_curl_passed" && cap.shadow_proof?.status === "done" && cap.shadow_proof?.http_status === 200));
           if (!allowed) return jsonResp({ ok: false, err: "invalid_graduation_proof" }, 400);
