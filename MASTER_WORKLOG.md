@@ -17854,3 +17854,12 @@ Used the earned, real 292,023-byte post-credential-rotation MP4 as the sole pilo
 ### [2026-10-18 IST] #4898 - R2 readiness checked read-only; Cloudflare account has not enabled R2
 
 Ran the read-only `wrangler r2 bucket list` against the already-authenticated Cloudflare account used by the FilmVault Worker. Cloudflare returned API error 10042: “Please enable R2 through the Cloudflare Dashboard.” No bucket exists, no object was uploaded, no provider account was changed, and no credential was printed. The code is ready to use a private R2-compatible bucket once the account owner enables R2 and supplies the bucket endpoint and scoped access credentials through the existing private vault/config path. This is the concrete external-account activation boundary; implementation can continue locally without it, but no honest remote-storage receipt is possible before it is enabled.
+
+
+### [2026-10-18 IST] #4899 - R2 activated and private bucket created; Worker ciphertext binding prepared
+
+Baba enabled R2 in the Cloudflare Dashboard. Read-only listing first returned no buckets, then the authenticated Wrangler account created the private Standard-class bucket `oiioii-private-media`; a follow-up listing confirmed its creation timestamp. No film or plaintext media has been uploaded in this step.
+
+Added the `FILM_MEDIA` R2 binding to the FilmVault Worker configuration. The Durable Object now serves a narrowly validated `media/<key-version>/<object-id>/chunks/<index>.bin` namespace under the existing storage-token gate. It accepts only 1-byte through 8 MiB-plus-tag ciphertext chunks whose caller-supplied SHA-256 matches the calculated digest, stores no customer bearer token, preserves the ciphertext digest as private R2 metadata, and returns ciphertext only to authenticated callers. The OiiOii backend adds `FilmVaultPrivateBlobStore`, allowing disposable Kaggle hosts to use this narrow Worker credential instead of broad R2 access credentials.
+
+Verified the route contract against the earned post-rotation MP4 with an in-memory R2 binding: authenticated PUT and GET returned the exact original bytes and the expected digest metadata (`FilmVault R2 media route contract: PASS`). Worker ES-module syntax, backend Python compilation, and both repository diff checks passed. This is still a local binding contract until the committed Worker is deployed and a real encrypted chunk reaches R2.

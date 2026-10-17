@@ -7,9 +7,11 @@ const hash=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest("SH
 const ID=/^[A-Za-z0-9_.:-]{1,200}$/;
 const asId=value=>typeof value==="string"&&ID.test(value)?value:null;
 const asNonNegativeInt=value=>Number.isSafeInteger(value)&&value>=0?value:null;
+const MEDIA_KEY=/^media\/[A-Za-z0-9._-]{1,100}\/[a-f0-9]{32}\/chunks\/[0-9]{8}\.bin$/;
 export class FilmVault {
-  constructor(ctx) {
+  constructor(ctx,env) {
     this.sql=ctx.storage.sql;
+    this.media=env.FILM_MEDIA;
     this.sql.exec("CREATE TABLE IF NOT EXISTS meta (id INTEGER PRIMARY KEY CHECK(id=1), body TEXT NOT NULL)");
     this.sql.exec("CREATE TABLE IF NOT EXISTS blobs (sha TEXT PRIMARY KEY, payload BLOB NOT NULL, created_at INTEGER)");
     this.sql.exec("CREATE TABLE IF NOT EXISTS film_journal_streams (project_id TEXT PRIMARY KEY, next_seq INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
@@ -93,6 +95,25 @@ export class FilmVault {
       if(request.method!=="PUT")return this.reply({error:"method"},405);
       const b=await request.arrayBuffer();if(b.byteLength>262144 || await hash(b)!==sha)return this.reply({error:"invalid_blob"},400);
       this.sql.exec("INSERT OR IGNORE INTO blobs(sha,payload,created_at) VALUES(?,?,?)",sha,b,Date.now());return this.reply({stored:true});
+    }
+    if(path.startsWith("/media/")){
+      const key=path.slice(1);
+      if(!MEDIA_KEY.test(key))return this.reply({error:"invalid_media_key"},400);
+      if(!this.media)return this.reply({error:"media_storage_unavailable"},503);
+      if(request.method==="PUT"){
+        const claimed=request.headers.get("x-ciphertext-sha256")||"";
+        const bytes=await request.arrayBuffer();
+        if(bytes.byteLength===0||bytes.byteLength>8*1024*1024+16||!/^[a-f0-9]{64}$/.test(claimed)||await hash(bytes)!==claimed)return this.reply({error:"invalid_media_ciphertext"},400);
+        const stored=await this.media.put(key,bytes,{httpMetadata:{contentType:"application/octet-stream"},customMetadata:{ciphertext_sha256:claimed}});
+        return this.reply({stored:true,key:stored.key,size:stored.size,version:stored.version});
+      }
+      if(request.method!=="GET"&&request.method!=="HEAD")return this.reply({error:"method"},405);
+      const object=await this.media.get(key);
+      if(!object)return this.reply({error:"missing_media"},404);
+      const digest=object.customMetadata?.ciphertext_sha256||"";
+      if(!/^[a-f0-9]{64}$/.test(digest))return this.reply({error:"media_metadata_invalid"},502);
+      const headers=new Headers({"content-type":"application/octet-stream","content-length":String(object.size),"x-ciphertext-sha256":digest,"etag":object.httpEtag});
+      return new Response(request.method==="HEAD"?null:object.body,{headers});
     }
     const d=request.method==="POST"?await request.json():{};
     const s=this.read();

@@ -18,6 +18,10 @@ new_sqlite_classes = ["WebJobCoordinator"]
 name = "FILM_VAULT"
 class_name = "FilmVault"
 
+[[r2_buckets]]
+binding = "FILM_MEDIA"
+bucket_name = "oiioii-private-media"
+
 [[migrations]]
 tag = "film-vault-v1"
 new_sqlite_classes = ["FilmVault"]
