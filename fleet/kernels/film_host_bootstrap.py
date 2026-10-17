@@ -42,7 +42,10 @@ try:
     if shutil.which('npm'):
         subprocess.run(['npm','install','--no-audit','--no-fund'],cwd=front,check=True,timeout=180,stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
         build_env={**os.environ,'VITE_API_URL':'/oiioii/api/v1'}
-        subprocess.run(['npm','run','build','--','--base=/oiioii/'],cwd=front,env=build_env,check=True,timeout=120,stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
+        build=subprocess.run(['npm','run','build','--','--base=/oiioii/'],cwd=front,env=build_env,timeout=120,capture_output=True,text=True)
+        if build.returncode:
+            print('Actual frontend build errors:',(build.stdout+build.stderr)[-2500:],flush=True)
+            raise RuntimeError('frontend build failed')
 except Exception as exc:print('Frontend build needs attention:',type(exc).__name__,flush=True)
 # The actual app and provider pool run on the same disposable node; persistent data
 # live in encrypted checkpoints owned by the permanent FilmVault.
@@ -81,7 +84,7 @@ while True:
         print('Actual pool exited; diagnostics:',(BASE/'pool.log').read_text(errors='replace')[-1200:],flush=True)
         raise RuntimeError('actual graduated pool exited')
     payload=json.dumps({'service':'oiioii-'+config['holder'],'url':url,'meta':{'holder':config['holder'],'mode':config['mode']}}).encode()
-    req=urllib.request.Request(DOOR+'/v1/gateway/register?token='+config['relay_token'],data=payload,headers={'Content-Type':'application/json'})
+    req=urllib.request.Request(DOOR+'/v1/gateway/register?token='+config['relay_token'],data=payload,headers={'Content-Type':'application/json','User-Agent':'omniroute-kaggle-worker'})
     urllib.request.urlopen(req,timeout=30).read()
     print('FILM_NODE_ALIVE',config['holder'],flush=True)
     time.sleep(60)
