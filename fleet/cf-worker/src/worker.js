@@ -153,7 +153,7 @@ export default {
 
     if (path === "/health") {
       if (token !== TOKEN) return jsonResp({ ok: false, err: "bad token" }, 403);
-      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.2.1-public-capture",
+      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.2.2-honest-film-gate",
                         tools: ["web.execute", "web.result", "gateway"], ts: Date.now() });
     }
 
@@ -187,6 +187,19 @@ export default {
         }
         const body = String(data.body || "KILO").slice(0, 64);
         const text = String(data.text || "").slice(0, 20000);
+        // These legacy CPU handlers never rendered or built anything. Refuse
+        // dispatch and their claimed successes even while an old kernel runs.
+        if (/BUILD_SAAS:|RENDER_VIDEO:/.test(text)) {
+          return jsonResp({ ok: false, stored: false, err: "legacy_build_render_backend_retired" }, 503);
+        }
+        if (body === "OMNIROUTE_OUT") {
+          let output;
+          try { output = JSON.parse(text); } catch { output = null; }
+          if (["oiioii_film_kit", "emergentsh"].includes(output?.service)
+              && output?.status === "COMPLETED") {
+            return jsonResp({ ok: false, stored: false, err: "legacy_completion_has_no_artifact_proof" }, 422);
+          }
+        }
         // v3.1 quota guard: uncapped supervisor retry loops burned the day's KV quota
         // (2026-10-13 22:10 IST incident). Drop uncapped retry-noise from TUNNELDBG;
         // v3.3+ supervisors emit capped reports ("[N]") which pass through.
