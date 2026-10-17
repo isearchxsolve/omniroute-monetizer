@@ -51,7 +51,27 @@ class FilmVaultClient:
                 if target not in path.parents or member.issym() or member.islnk() or not(member.isfile() or member.isdir()):
                     raise ValueError('unsafe_checkpoint_entry')
             archive.extractall(target,filter='data')
-    def checkpoint(self,root,holder,lease,version):
+    def append_journal(self,*,holder,lease,project_id,event_id,entity_type,entity_id,expected_version,state,payload,attempt_id=None):
+        """Durably append one acknowledged film mutation before its HTTP response.
+
+        ``event_id`` belongs to the caller's durable request/transition identity.  It
+        must be reused after a lost response; the FilmVault returns the original
+        sequence for the same event and rejects a different event under that ID.
+        """
+        body={'holder':holder,'lease':lease,'project_id':project_id,'event_id':event_id,
+              'entity_type':entity_type,'entity_id':entity_id,'expected_version':expected_version,
+              'state':state,'payload':payload}
+        if attempt_id is not None:body['attempt_id']=attempt_id
+        return self.call('journal/append',body)
+    def journal_recovery(self,project_id):
+        """Return the exact checkpoint pointer plus later ordered events for one film.
+
+        Applying returned events is deliberately the application's responsibility:
+        only its persisted state machine can decide whether a replayed transition is
+        already reflected in its local database.
+        """
+        return self.call('journal/recovery',{'project_id':project_id})
+    def checkpoint(self,root,holder,lease,version,journal_cutovers=None):
         root=Path(root)
         with tempfile.TemporaryDirectory(prefix='oiioii-checkpoint-') as tmp:
             stage=Path(tmp)/'data';stage.mkdir()
@@ -69,7 +89,9 @@ class FilmVaultClient:
                 for path in stage.rglob('*'):
                     if path.is_file():archive.add(path,arcname=str(path.relative_to(stage)),recursive=False)
             manifest=self.upload(self.encrypt(output.getvalue()))
-        return self.call('checkpoint',{'holder':holder,'lease':lease,'expected_version':version,'manifest':manifest})['version']
+        payload={'holder':holder,'lease':lease,'expected_version':version,'manifest':manifest}
+        if journal_cutovers is not None:payload['journal']={'entries':journal_cutovers}
+        return self.call('checkpoint',payload)['version']
     def restore(self,target):
         state=self.call('state')
         if state.get('checkpoint'):
