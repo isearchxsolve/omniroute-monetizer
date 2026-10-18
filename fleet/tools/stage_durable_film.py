@@ -1,12 +1,21 @@
 """Package actual app, admitted seats and retained state into encrypted deployment."""
 from __future__ import annotations
-import ast,io,json,re,shutil,sqlite3,subprocess,sys,tarfile,time
+import ast,base64,io,json,os,re,shutil,sqlite3,subprocess,sys,tarfile,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 APP=Path(r'D:/god_ai/oioi/oioi')
 sys.path.insert(0,str(ROOT/'fleet/runtime'))
 from film_cloud_runtime import FilmVaultClient
-vault_config=json.loads(Path(r'D:/anonym/vault/oiioii-film-cloud.json').read_text())
+vault_path=Path(r'D:/anonym/vault/oiioii-film-cloud.json')
+vault_config=json.loads(vault_path.read_text())
+# Checkpoint encryption and film-media encryption have distinct purposes.  Create
+# the media root once in the local vault; its standard-base64 representation is
+# accepted by the application config without ever entering the repository.
+if not vault_config.get('media_master_key_b64'):
+    vault_config['media_master_key_b64']=base64.b64encode(os.urandom(32)).decode('ascii')
+    temporary=vault_path.with_name(vault_path.name+'.tmp')
+    temporary.write_text(json.dumps(vault_config),encoding='utf-8')
+    os.replace(temporary,vault_path)
 DOOR='https://omniroute-relay.omniroute-fleet-kd.workers.dev'
 client=FilmVaultClient(DOOR,vault_config['storage_token'],vault_config['encryption_key'])
 stage=ROOT/'state/durable_film_deployment_20261017';stage.mkdir(exist_ok=True)
@@ -54,6 +63,13 @@ from pathlib import Path
 from film_cloud_runtime import FilmVaultClient,DurableFilmHost
 root=Path(__file__).resolve().parent
 c=json.loads(os.environ['FILM_CLOUD_CONFIG'])
+# The public FastAPI route can only use the encrypted FilmVault backend when all
+# values are injected from this private notebook configuration before app import.
+os.environ.update({'FILM_PIPELINE_ARTIFACT_BACKEND':'film_vault',
+                   'FILM_VAULT_DOOR':c['door'],
+                   'FILM_STORAGE_TOKEN':c['storage_token'],
+                   'FILM_PIPELINE_MEDIA_MASTER_KEY_B64':c['media_master_key_b64'],
+                   'FILM_PIPELINE_MEDIA_KEY_VERSION':'v1'})
 vault=FilmVaultClient(c['door'],c['storage_token'],c['encryption_key'])
 app=DurableFilmHost(root/'data',c['holder'],vault,c['storage_token'],c['mode'])
 """,encoding='utf-8')

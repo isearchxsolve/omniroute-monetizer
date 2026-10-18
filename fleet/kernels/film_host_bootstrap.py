@@ -60,6 +60,12 @@ env={**os.environ,'PYTHONPATH':str(BASE/'app/backend')+os.pathsep+str(BASE),
     'OMNI_CONSUMER_API_KEY':private['consumer_key'],'OMNI_VIDEO_CONFIRM_SPEND':'1','OMNI_VIDEO_MAX_SPEND':'0',
     'OMNI_VIDEO_JOB_STORE':str(BASE/'data/video_jobs.json'),'APP_ENV':'production','DEBUG':'false',
     'OIOI_SINGLE_NODE_MODE':'true','FILM_CLOUD_CONFIG':json.dumps(config),'PYTHONUNBUFFERED':'1'}
+# These values are held only in FILM_CONFIG inside the private notebook.  The
+# backend is imported after this environment is passed to serve_film, so a
+# disposable host cannot silently archive customer films to local-only storage.
+for name in ('media_master_key_b64',):
+    if not config.get(name):
+        raise RuntimeError('private FilmVault media configuration is incomplete')
 # Real API and pool subprocess output goes to private local files, never a public notebook.
 shim_log=(BASE/'pool.log').open('ab')
 shim=subprocess.Popen([sys.executable,str(BASE/'pool/scripts/automation/session_pool_shim.py'),'8190'],env=env,stdout=shim_log,stderr=subprocess.STDOUT)
