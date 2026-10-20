@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import pathlib
 import sys
 import time
@@ -516,6 +517,7 @@ def main() -> int:
         time.sleep(2)
 
     report = {"generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "attemptId": os.environ.get("OMNI_GRADUATION_ATTEMPT_ID", ""),
               "port": args.port, "budgetPerHost": args.budget,
               "evidenceOnly": True, "capturesOrGraduates": False,
               "consumerContractUntouched": "http://127.0.0.1:8190/v1",

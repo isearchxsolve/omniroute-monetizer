@@ -25,7 +25,9 @@ No cookie, token or nonce is printed -- only the host, the verdict, and a short 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import pathlib
 import re
 import sys
@@ -212,6 +214,8 @@ def classify(text: str, status: int | None, err: str | None, expect: str = "58")
 
 def replay(path: pathlib.Path, prompt: str, expect: str) -> dict[str, Any]:
     row: dict[str, Any] = {"file": path.name}
+    attempt_id = os.environ.get("OMNI_GRADUATION_ATTEMPT_ID", "")
+    row["attemptId"] = attempt_id
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (ValueError, OSError) as e:
@@ -219,6 +223,7 @@ def replay(path: pathlib.Path, prompt: str, expect: str) -> dict[str, Any]:
         return row
 
     row["host"] = payload.get("host") or "?"
+    row["inputArtifactSha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
     rec = payload.get("recorded_exchange") or {}
     row["recordedUrl"] = str(rec.get("url") or "")[:120]
     row["bodyBytes"] = len(str(rec.get("request_body") or ""))
@@ -262,6 +267,11 @@ def replay(path: pathlib.Path, prompt: str, expect: str) -> dict[str, Any]:
     row["latencyMs"] = round((time.perf_counter() - started) * 1000)
     row["verdict"] = verdict
     row["detail"] = detail
+    # Bind the actual post-execution artifact: clients may legitimately rotate cookies.
+    # This metadata is local evidence, never a substitute for a provider answer.
+    row["artifactSha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    row["verification"] = {"version": "terminal-exact-v1", "prompt": prompt,
+                           "expected": expect, "exactAnswer": verdict == "REPLAY_OK" and text.strip() == expect}
     return row
 
 

@@ -33,11 +33,16 @@ declared video seat without re-driving chat tabs or re-spending chat probes.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import hashlib
 import json
 import os
 import pathlib
+import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -59,6 +64,79 @@ SCRATCH = STATE / "scratch"
 VERIFY_PROMPT = "Reply with only the number: 41 + 17"
 VERIFY_EXPECT = "58"
 VIDEO_PROOF_PROMPT = "A five second abstract blue-and-gold ocean wave, no text."
+ATTEMPTS = STATE / "graduation_attempts"
+
+
+def checked_proof(path: pathlib.Path, artifact: pathlib.Path, attempt_id: str) -> dict[str, Any]:
+    """Fail closed on legacy, stale, foreign, mutated or merely labelled evidence."""
+    data = read_json(path, {})
+    rows = data.get("results", []) if isinstance(data, dict) else []
+    if len(rows) != 1 or not isinstance(rows[0], dict):
+        raise RuntimeError("NO_EXACT_VERDICT")
+    row = rows[0]
+    raw = read_json(artifact, {})
+    if not isinstance(raw, dict):
+        raise RuntimeError("INVALID_ARTIFACT_SCHEMA")
+    verification = row.get("verification") or {}
+    if not isinstance(verification, dict):
+        raise RuntimeError("INVALID_VERIFICATION_SCHEMA")
+    if not attempt_id or row.get("attemptId") != attempt_id:
+        raise RuntimeError("PROOF_ATTEMPT_MISMATCH")
+    if row.get("file") != artifact.name or row.get("host") != raw.get("host"):
+        raise RuntimeError("PROOF_ARTIFACT_IDENTITY_MISMATCH")
+    if row.get("artifactSha256") != hashlib.sha256(artifact.read_bytes()).hexdigest():
+        raise RuntimeError("PROOF_ARTIFACT_CHANGED")
+    if (row.get("verdict") != "REPLAY_OK" or verification.get("version") != "terminal-exact-v1"
+            or verification.get("exactAnswer") is not True
+            or verification.get("prompt") != VERIFY_PROMPT or verification.get("expected") != VERIFY_EXPECT):
+        raise RuntimeError("TERMINAL_EXACT_ANSWER_NOT_PROVEN")
+    return row
+
+
+def attempt_environment(attempt_id: str) -> dict[str, str]:
+    return {**os.environ, "OMNI_GRADUATION_ATTEMPT_ID": attempt_id,
+            "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}
+
+
+def save_attempt(attempt_id: str, **fields: Any) -> None:
+    """A separate receipt per attempt; no provider bodies or credentials."""
+    if not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
+        raise RuntimeError("INVALID_ATTEMPT_ID")
+    path = ATTEMPTS / f"{attempt_id}.json"
+    current = read_json(path, {})
+    events = current.get("events", []) + [{"stage": fields.get("stage"), "state": fields.get("state"),
+                                           "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}]
+    atomic_json(path, {**current, **fields, "attemptId": attempt_id,
+                       "events": events,
+                       "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+
+
+@contextlib.contextmanager
+def controller_lock():
+    """OS-held lock releases on crash; no PID guesses, process killing or stale takeover."""
+    path = STATE / "fleet_graduation.owner.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+b") as handle:
+        if path.stat().st_size == 0:
+            handle.write(b"0"); handle.flush()
+        handle.seek(0)
+        try:
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise SystemExit("another graduation controller owns this run") from exc
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 sys.path.insert(0, str(HERE))
 from pure_python_registry import (  # noqa: E402
@@ -235,13 +313,24 @@ def verify_and_admit(session_path: pathlib.Path) -> None:
     problem = admission_problem(raw)
     if problem:
         raise SystemExit(f"refusing pure-Python admission: {problem}")
-    report = SCRATCH / f"fleet_graduation_{session_path.stem}.json"
+    attempt_id = uuid.uuid4().hex
+    report = ATTEMPTS / f"{attempt_id}.replay.json"
+    save_attempt(attempt_id, stage="replay", state="RUNNING", sessionFile=session_path.name)
     cmd = [sys.executable, str(HERE / "replay_check.py"), "--only", session_path.name,
            "--prompt", VERIFY_PROMPT, "--expect", VERIFY_EXPECT, "--out", str(report)]
-    completed = subprocess.run(cmd, cwd=ROOT, check=False)
-    verdict, detail = read_single_verdict(report)
-    if completed.returncode != 0 or verdict != "REPLAY_OK":
-        raise SystemExit(f"not admitted: {verdict or 'NO_VERDICT'} {detail}")
+    rc = run_bounded_child(cmd, timeout=180, env=attempt_environment(attempt_id))
+    if rc != 0:
+        save_attempt(attempt_id, stage="replay", state="BLOCKED", reason="CHILD_FAILED_OR_TIMED_OUT")
+        raise SystemExit("not admitted: replay child failed or timed out")
+    try:
+        proof = checked_proof(report, session_path, attempt_id)
+    except RuntimeError as exc:
+        save_attempt(attempt_id, stage="replay", state="BLOCKED", reason=str(exc))
+        raise SystemExit(f"not admitted: {exc}") from exc
+    verdict = proof["verdict"]
+    # Replay clients can persist rotated credentials. Never overwrite those with
+    # the pre-call snapshot while adding admission metadata.
+    raw = read_json(session_path, {})
     # Promotion is a state transition after, never before, the exact-file proof.
     raw["runtime"] = "replay"
     # A staged artifact carries status.alive=False (pending_replay_verification), which
@@ -259,6 +348,8 @@ def verify_and_admit(session_path: pathlib.Path) -> None:
         "expect": VERIFY_EXPECT,
         "verdict": verdict,
         "report": str(report.relative_to(ROOT)),
+        "attemptId": attempt_id,
+        "artifactSha256": proof["artifactSha256"],
     }
     atomic_json(session_path, raw)
     registry = load_registry()
@@ -269,6 +360,8 @@ def verify_and_admit(session_path: pathlib.Path) -> None:
                       "report": str(report.relative_to(ROOT)),
                   })
     write_registry(registry)
+    save_attempt(attempt_id, stage="pool_admission", state="ADMITTED_CONSUMER_NOT_YET_PROVEN",
+                 artifactSha256=proof["artifactSha256"], report=str(report.relative_to(ROOT)))
     print(f"ADMITTED {entry['sessionFile']} -> {entry['adapter']} (shim hot-reloads; no restart)")
 
 
@@ -276,25 +369,31 @@ def capture_chat(port: int, site: str) -> None:
     """Delegate exactly one guarded capture/replay unit; promotion remains explicit."""
     cmd = [sys.executable, str(HERE / "tab_graduation_sweep.py"), "--port", str(port),
            "--execute", "--site", site]
-    rc = subprocess.run(cmd, cwd=ROOT, check=False).returncode
+    rc = run_bounded_child(cmd, timeout=300)
     if rc:
         raise SystemExit(f"capture unit failed with exit code {rc}; no promotion performed")
     print("capture/replay unit completed. Inspect the exact new session file, then run --apply --verify-and-admit.")
 
 
-def _admit_from_existing_proof(path: pathlib.Path, proof: pathlib.Path) -> str:
+def _admit_from_existing_proof(path: pathlib.Path, proof: pathlib.Path, attempt_id: str = "") -> str:
     """Promote a fresh capture using its existing one-request scratch verdict."""
     raw = read_json(path, {})
-    verdict, detail = read_single_verdict(proof)
-    if not isinstance(raw, dict) or verdict != "REPLAY_OK":
-        raise RuntimeError(f"proof not promotable: {verdict or 'NO_VERDICT'} {detail}")
+    evidence = checked_proof(proof, path, attempt_id)
+    verdict = evidence["verdict"]
+    # Preserve checked evidence before another unit replaces the scratch report.
+    retained = ATTEMPTS / f"{attempt_id}.replay.json"
+    atomic_json(retained, read_json(proof, {}))
+    proof = retained
     problem = admission_problem(raw)
     if problem:
         raise RuntimeError(problem)
     raw["runtime"] = "replay"
+    if raw.get("status", {}).get("alive") is False:
+        raw["status"] = {**raw["status"], "alive": True, "reason": "exact_attempt_replay_verified"}
     raw["graduation"] = {"kind": "pure_python_replay", "verifiedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                           "prompt": VERIFY_PROMPT, "expect": VERIFY_EXPECT, "verdict": verdict,
-                          "report": str(proof.relative_to(ROOT))}
+                          "report": str(proof.relative_to(ROOT)), "attemptId": attempt_id,
+                          "artifactSha256": evidence["artifactSha256"]}
     atomic_json(path, raw)
     registry = load_registry()
     entry = admit(registry, session_file=path.name, host=str(raw.get("host") or ""), modality="chat",
@@ -314,14 +413,49 @@ def _is_video_url(value: Any) -> bool:
     return isinstance(value, str) and value.startswith(("https://", "http://"))
 
 
-def run_bounded_child(command: list[str], timeout: float) -> int | None:
+def verify_media_delivery(url: str) -> dict[str, Any]:
+    """Verify actual bounded delivery and video decoding metadata, never just a URL."""
+    probe = shutil.which("ffprobe")
+    if not probe or not _is_video_url(url):
+        raise RuntimeError("MEDIA_VERIFIER_OR_URL_UNAVAILABLE")
+    digest, size, deadline = hashlib.sha256(), 0, time.monotonic() + 60
+    with tempfile.TemporaryDirectory(prefix="graduation-media-") as directory:
+        path = pathlib.Path(directory) / "artifact"
+        with urllib.request.urlopen(url, timeout=15) as response, path.open("wb") as output:
+            if response.status != 200:
+                raise RuntimeError("MEDIA_DOWNLOAD_NOT_SUCCESSFUL")
+            while True:
+                chunk = response.read(65536)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > 64 * 1024 * 1024 or time.monotonic() > deadline:
+                    raise RuntimeError("MEDIA_DELIVERY_LIMIT_EXCEEDED")
+                output.write(chunk); digest.update(chunk)
+        completed = subprocess.run([probe, "-v", "error", "-show_streams", "-show_format", "-of", "json", str(path)],
+                                   capture_output=True, encoding="utf-8", errors="replace", timeout=20, check=False)
+        try:
+            metadata = json.loads(completed.stdout)
+            duration = float(metadata.get("format", {}).get("duration", 0))
+        except (ValueError, AttributeError):
+            raise RuntimeError("MEDIA_METADATA_INVALID") from None
+        video = any(stream.get("codec_type") == "video" and stream.get("width", 0) > 0
+                    and stream.get("height", 0) > 0 for stream in metadata.get("streams", []) if isinstance(stream, dict))
+        if completed.returncode or not video or not (0 < duration < float("inf")):
+            raise RuntimeError("DELIVERED_VIDEO_NOT_VERIFIED")
+    return {"sha256": digest.hexdigest(), "bytes": size, "durationSeconds": duration,
+            "videoStreamVerified": True}
+
+
+def run_bounded_child(command: list[str], timeout: float, env: dict[str, str] | None = None) -> int | None:
     """Run one generated child command; on timeout stop *only that child tree*.
 
     ``fleet_sso_blueprint`` has its own deadline, but the parent is the final
     safety owner.  Without this second deadline a wedged CDP child can strand
     the all-profile master before it has persisted a terminal seat row.
     """
-    proc = subprocess.Popen(command, cwd=ROOT)
+    proc = subprocess.Popen(command, cwd=ROOT,
+                            env=env or {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"})
     try:
         return proc.wait(timeout=max(1.0, timeout))
     except subprocess.TimeoutExpired:
@@ -359,7 +493,7 @@ def _video_python_client(path: pathlib.Path, raw: dict[str, Any]) -> Any:
     raise RuntimeError("no captured video job and no registered pure-Python video API adapter")
 
 
-def verify_video_and_admit(path: pathlib.Path) -> dict[str, Any]:
+def verify_video_and_admit(path: pathlib.Path, attempt_id: str | None = None) -> dict[str, Any]:
     """Spend one bounded Python render and admit the exact file only on URL proof."""
     raw = read_json(path, {})
     if not isinstance(raw, dict):
@@ -372,12 +506,17 @@ def verify_video_and_admit(path: pathlib.Path) -> dict[str, Any]:
     job = raw.get("recorded_job")
     if isinstance(job, dict) and job.get("result_correlated") is not True:
         raise RuntimeError("capture lacks correlated submit-poll-result proof")
+    if not shutil.which("ffprobe"):
+        raise RuntimeError("MEDIA_VERIFIER_UNAVAILABLE_BEFORE_RENDER")
     result = _video_python_client(path, raw).chat([
         {"role": "user", "content": VIDEO_PROOF_PROMPT},
     ])
     video_url = result.get("text") if isinstance(result, dict) else None
     if not _is_video_url(video_url):
         raise RuntimeError("Python video adapter returned no result URL")
+    media = verify_media_delivery(video_url)
+    raw = read_json(path, {})
+    attempt_id = attempt_id or uuid.uuid4().hex
     raw["runtime"] = "replay"
     raw["graduation"] = {
         "kind": "pure_python_video_submit_poll_result",
@@ -385,13 +524,15 @@ def verify_video_and_admit(path: pathlib.Path) -> dict[str, Any]:
         "prompt": VIDEO_PROOF_PROMPT,
         "resultUrlObserved": True,
         "adapter": pure_python_adapter(raw),
+        "mediaProof": media,
+        "attemptId": attempt_id,
     }
     atomic_json(path, raw)
     registry = load_registry()
     entry = admit(registry, session_file=path.name, host=str(raw.get("host") or ""), modality="video",
                   adapter=str(pure_python_adapter(raw)), verification={
                       "kind": "Python submit-poll-result", "resultUrlObserved": True,
-                      "prompt": VIDEO_PROOF_PROMPT,
+                      "prompt": VIDEO_PROOF_PROMPT, "mediaProof": media,
                   })
     write_registry(registry)
     return {"sessionFile": path.name, "host": entry["host"], "adapter": entry["adapter"],
@@ -399,13 +540,30 @@ def verify_video_and_admit(path: pathlib.Path) -> dict[str, Any]:
 
 
 def capture_and_graduate_video(account: dict[str, Any], job_wait: float, sso_budget: float) -> dict[str, Any]:
+    attempt_id = uuid.uuid4().hex
+    save_attempt(attempt_id, stage="login", state="RUNNING", host=str(account["host"]),
+                 profile=str(account["profile"]), seat=str(account["label"]))
+    try:
+        row = _capture_and_graduate_video(account, job_wait, sso_budget, attempt_id)
+    except Exception as exc:
+        save_attempt(attempt_id, stage="video_cycle", state="BLOCKED", reason=type(exc).__name__)
+        raise
+    row["attemptId"] = attempt_id
+    save_attempt(attempt_id, stage="pool_admission", state=row["state"],
+                 sessionFile=row.get("sessionFile"), reason="CONSUMER_NOT_YET_PROVEN")
+    return row
+
+
+def _capture_and_graduate_video(account: dict[str, Any], job_wait: float, sso_budget: float,
+                                attempt_id: str) -> dict[str, Any]:
     """One seat: exact-host SSO -> project -> capture -> Python render -> admission."""
     host, label = str(account["host"]), str(account["label"])
     path = _video_session_path(host, label)
     sso_command = [sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port",
                    str(account["port"]), "--drive", "--include-video", "--host-exact", host,
                    "--budget", str(sso_budget)]
-    sso_rc = run_bounded_child(sso_command, timeout=max(30.0, sso_budget + 30.0))
+    sso_rc = run_bounded_child(sso_command, timeout=max(30.0, sso_budget + 30.0),
+                               env=attempt_environment(attempt_id))
     if sso_rc is None:
         return {"profile": account["profile"], "port": account["port"], "label": label,
                 "provider": account["provider"], "host": host, "ssoRc": "PARENT_TIMEOUT",
@@ -415,10 +573,11 @@ def capture_and_graduate_video(account: dict[str, Any], job_wait: float, sso_bud
                 "provider": account["provider"], "host": host, "ssoRc": sso_rc,
                 "state": "NOT_ADMITTED", "detail": "bounded video SSO recovery failed; capture not attempted"}
     started = time.time()
+    save_attempt(attempt_id, stage="capture", state="RUNNING")
     cmd = [sys.executable, str(HERE / "capture_video_job_cdp.py"), "--port", str(account["port"]),
            "--match", str(account["url"]), "--url", str(account["url"]), "--host", host,
            "--seat", label, "--job-wait", str(job_wait)]
-    rc = run_bounded_child(cmd, timeout=max(60.0, job_wait + 90.0))
+    rc = run_bounded_child(cmd, timeout=max(60.0, job_wait + 90.0), env=attempt_environment(attempt_id))
     row: dict[str, Any] = {"profile": account["profile"], "port": account["port"], "label": label,
                            "provider": account["provider"], "host": host, "ssoRc": sso_rc, "captureRc": rc,
                            "state": "NOT_ADMITTED"}
@@ -430,7 +589,8 @@ def capture_and_graduate_video(account: dict[str, Any], job_wait: float, sso_bud
         row["detail"] = "video capture left no fresh correlated session artifact"
         return row
     try:
-        row.update(verify_video_and_admit(path))
+        save_attempt(attempt_id, stage="replay", state="RUNNING")
+        row.update(verify_video_and_admit(path, attempt_id))
     except Exception as exc:
         row["detail"] = f"{type(exc).__name__}: {exc}"[:260]
     return row
@@ -472,6 +632,14 @@ def consumer_video_probe(host: str, timeout: float = 1900.0) -> dict[str, Any]:
             row.update(state="CONSUMER_E2E_PROVEN", resultUrlObserved=_is_video_url(url), pollHttp=status)
             if not row["resultUrlObserved"]:
                 row["state"] = "CONSUMER_RESULT_URL_MISSING"
+            else:
+                try:
+                    row["mediaProof"] = verify_media_delivery(url)
+                    row["attributionVerified"] = body.get("provider") == host and bool(body.get("session"))
+                    if not row["attributionVerified"]:
+                        row["state"] = "CONSUMER_ATTRIBUTION_NOT_PROVEN"
+                except Exception as exc:
+                    row.update(state="CONSUMER_MEDIA_NOT_PROVEN", reason=type(exc).__name__)
             return row
         if state in {"failed", "cancelled", "canceled"}:
             row.update(state="CONSUMER_FAILED", pollHttp=status, detail=str(body.get("error") or state)[:180])
@@ -481,7 +649,7 @@ def consumer_video_probe(host: str, timeout: float = 1900.0) -> dict[str, Any]:
     return row
 
 
-def consumer_chat_probe(host: str) -> dict[str, Any]:
+def consumer_chat_probe(host: str, session_file: str | None = None) -> dict[str, Any]:
     """Pinned OpenAI-compatible Law-3 proof through the actual consumer face."""
     status, body = _http_json("http://127.0.0.1:8190/v1/chat/completions", {
         "model": f"{host}/auto",
@@ -492,9 +660,15 @@ def consumer_chat_probe(host: str) -> dict[str, Any]:
         content = str(body["choices"][0]["message"]["content"])
     except (KeyError, IndexError, TypeError):
         pass
+    actual_session = str(body.get("session") or "")
+    attributed = body.get("provider") == host and bool(actual_session)
+    if session_file is not None:
+        attributed = attributed and actual_session == pathlib.Path(session_file).stem
     return {"host": host, "model": f"{host}/auto", "http": status,
-            "state": "CONSUMER_E2E_PROVEN" if status == 200 and content.strip() == VERIFY_EXPECT
-            else "CONSUMER_NOT_PROVEN", "computedAnswerObserved": content.strip() == VERIFY_EXPECT}
+            "sessionFile": session_file, "actualProvider": body.get("provider"), "actualSession": actual_session,
+            "state": "CONSUMER_E2E_PROVEN" if status == 200 and content.strip() == VERIFY_EXPECT and attributed
+            else "CONSUMER_NOT_PROVEN", "computedAnswerObserved": content.strip() == VERIFY_EXPECT,
+            "attributionVerified": attributed}
 
 
 def e2e_chat_consumer_proofs() -> None:
@@ -503,10 +677,28 @@ def e2e_chat_consumer_proofs() -> None:
     if not isinstance(run, dict):
         run = {}
     registry = load_registry()
-    hosts = sorted({str(e.get("host") or "") for e in registry.get("entries", [])
-                    if isinstance(e, dict) and e.get("state") == "ADMITTED"
-                    and e.get("modality") == "chat" and e.get("host")})
-    run["consumerProofs"] = [consumer_chat_probe(host) for host in hosts]
+    attempted_files = {str(item.get("sessionFile") or "") for profile in run.get("profiles", [])
+                       for item in profile.get("captures", []) if isinstance(item, dict)
+                       and item.get("state") == "ADMITTED_TO_8190_PURE_PYTHON"}
+    run["consumerProofs"] = []
+    for entry in registry.get("entries", []):
+        if not isinstance(entry, dict) or entry.get("state") != "ADMITTED" or entry.get("modality") != "chat":
+            continue
+        host, name = str(entry.get("host") or ""), str(entry.get("sessionFile") or "")
+        if not host or not name or name not in attempted_files:
+            continue
+        raw = read_json(SECRETS / name, {})
+        attempt_id = raw.get("graduation", {}).get("attemptId")
+        try:
+            proof = consumer_chat_probe(host, name)
+        except Exception as exc:
+            proof = {"host": host, "sessionFile": name, "state": "CONSUMER_TRANSPORT_FAILED",
+                     "reason": type(exc).__name__}
+        proof["attemptId"] = attempt_id
+        if attempt_id:
+            save_attempt(attempt_id, stage="consumer", state=proof["state"], consumerProof=proof)
+        run["consumerProofs"].append(proof)
+        atomic_json(E2E_RUN, run)
     atomic_json(E2E_RUN, run)
 
 
@@ -552,7 +744,11 @@ def e2e_video_apply(job_wait: float, sso_budget: float, selected_labels: set[str
     for host in sorted({str(r["host"]) for r in run["seats"]
                         if r.get("state") == "ADMITTED_TO_8190_PURE_PYTHON" and str(r.get("host") or "")
                         not in attempted_hosts}):
-        run["consumerProofs"].append(consumer_video_probe(host))
+        try:
+            proof = consumer_video_probe(host)
+        except Exception as exc:
+            proof = {"host": host, "state": "CONSUMER_TRANSPORT_FAILED", "reason": type(exc).__name__}
+        run["consumerProofs"].append(proof)
         atomic_json(E2E_VIDEO_RUN, run)
     print(f"all-profile video E2E complete: {E2E_VIDEO_RUN.name}")
 
@@ -604,27 +800,66 @@ def e2e_chat_apply(sso_budget: float, capture_wait: float, limit: int) -> None:
         # hydration) must NEVER cause a silent skip. The state machine is
         # probe-first: signed-in rows terminate as EXISTING_ACCOUNT without
         # a single click, so driving them is safe and honest.
-        subprocess.run([sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port", str(port)], cwd=ROOT, check=False)
-        plan = read_json(STATE / f"fleet_blueprint_plan_{port}.json", {})
+        plan_path = STATE / f"fleet_blueprint_plan_{port}.json"
+        plan_path.unlink(missing_ok=True)
+        rc = run_bounded_child([sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port", str(port)],
+                               timeout=max(120, sso_budget + 30))
+        plan = read_json(plan_path, {})
+        if rc != 0 or not isinstance(plan, dict) or not isinstance(plan.get("hosts"), list):
+            unit.update(state="BLOCKED", failedStage="login", reason="FRESH_PLAN_NOT_PROVEN")
+            run["profiles"].append(unit); atomic_json(E2E_RUN, run)
+            continue
+        attempts: dict[str, str] = {}
+        failed_hosts: set[str] = set()
         for row in plan.get("hosts", []) if isinstance(plan, dict) else []:
+            if not isinstance(row, dict):
+                continue
+            host = str(row.get("host") or "")
+            if host:
+                attempts[host] = uuid.uuid4().hex
+                save_attempt(attempts[host], stage="login", state="OBSERVED", host=host,
+                             profile=profile, port=port)
             if row.get("host") and row.get("signedOut") is not False:
-                host = str(row["host"])
-                rc = subprocess.run([sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port", str(port),
-                                     "--drive", "--host-exact", host, "--budget", str(sso_budget)], cwd=ROOT, check=False).returncode
+                sso_report = STATE / f"fleet_blueprint_report_{port}.json"
+                sso_report.unlink(missing_ok=True)
+                rc = run_bounded_child([sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port", str(port),
+                                        "--drive", "--host-exact", host, "--budget", str(sso_budget)],
+                                       timeout=max(30, sso_budget + 30), env=attempt_environment(attempts[host]))
                 unit["sso"].append({"host": host, "rc": rc,
-                                    "probe": str(row.get("signedOut"))})
+                                    "attemptId": attempts[host], "probe": str(row.get("signedOut"))})
+                report = read_json(sso_report, {})
+                results = report.get("results", []) if isinstance(report, dict) else []
+                outcomes = [r for r in results if isinstance(r, dict) and r.get("host") == host]
+                ready = (isinstance(report, dict) and report.get("attemptId") == attempts[host] and len(outcomes) == 1
+                         and outcomes[0].get("state") == "EXISTING_ACCOUNT"
+                         and not str(outcomes[0].get("detail", "")).startswith("skipped by knowledge table"))
+                if rc != 0 or not ready:
+                    failed_hosts.add(host)
+                    unit["sso"][-1]["state"] = "BLOCKED"
+                    save_attempt(attempts[host], stage="login", state="BLOCKED", reason="AUTH_READINESS_NOT_PROVEN")
+                else:
+                    save_attempt(attempts[host], stage="login", state="SURFACE_READY_IDENTITY_NOT_VERIFIED")
         # The harness is the navigation + bounded-SSO layer for tabs that are
         # authenticated but not yet sitting on a capture surface.  Its default
         # post-apply readiness audit is load-bearing: without it a just-signed-
         # in site remains stale SKIP_NOT_AUTHENTICATED in the next manifest.
-        harness_rc = subprocess.run([sys.executable, str(HERE / "harness_all_tabs.py"), "--port", str(port),
+        harness_rc = run_bounded_child([sys.executable, str(HERE / "harness_all_tabs.py"), "--port", str(port),
                                      "--apply", "--wait", "10", "--budget", str(max(120, int(sso_budget)))],
-                                    cwd=ROOT, check=False).returncode
+                                      timeout=max(180, sso_budget + 90))
         unit["harnessRc"] = harness_rc
+        if harness_rc != 0:
+            unit.update(state="BLOCKED", failedStage="login", reason="READINESS_CHILD_FAILED_OR_TIMED_OUT")
+            run["profiles"].append(unit); atomic_json(E2E_RUN, run)
+            continue
         manifest_path = STATE / f"fleet_e2e_manifest_{port}.json"
-        subprocess.run([sys.executable, str(HERE / "tab_graduation_sweep.py"), "--port", str(port),
-                        "--json", str(manifest_path)], cwd=ROOT, check=False)
+        manifest_path.unlink(missing_ok=True)
+        rc = run_bounded_child([sys.executable, str(HERE / "tab_graduation_sweep.py"), "--port", str(port),
+                               "--json", str(manifest_path)], timeout=180)
         manifest = read_json(manifest_path, {})
+        if rc != 0 or not isinstance(manifest, dict) or not isinstance(manifest.get("tabs"), list):
+            unit.update(state="BLOCKED", failedStage="capture", reason="FRESH_MANIFEST_NOT_PROVEN")
+            run["profiles"].append(unit); atomic_json(E2E_RUN, run)
+            continue
         seen: set[str] = set()
         for tab in manifest.get("tabs", []) if isinstance(manifest, dict) else []:
             if left <= 0 or tab.get("classification") != "ELIGIBLE_CAPTURE":
@@ -632,19 +867,32 @@ def e2e_chat_apply(sso_budget: float, capture_wait: float, limit: int) -> None:
             site = str(tab.get("knownSite") or "")
             if not site or site in seen:
                 continue
+            host = str(tab.get("host") or urllib.parse.urlparse(str(tab.get("url") or tab.get("tabUrl") or "")).hostname or "")
+            if host in failed_hosts:
+                continue
+            attempt_id = attempts.pop(host, None) or uuid.uuid4().hex
             seen.add(site); started = time.time()
-            rc = subprocess.run([sys.executable, str(HERE / "tab_graduation_sweep.py"), "--port", str(port),
-                                 "--execute", "--site", site, "--wait", str(capture_wait)], cwd=ROOT, check=False).returncode
+            proof_path = scratch_report(site)
+            proof_path.unlink(missing_ok=True)
+            save_attempt(attempt_id, stage="capture", state="RUNNING", site=site, host=host,
+                         profile=profile, port=port)
+            rc = run_bounded_child([sys.executable, str(HERE / "tab_graduation_sweep.py"), "--port", str(port),
+                                   "--execute", "--site", site, "--wait", str(capture_wait)],
+                                  timeout=max(240, capture_wait + 180), env=attempt_environment(attempt_id))
             expected = SECRETS / f"session_{session_slug(site)}.json"
-            item = {"site": site, "captureRc": rc, "state": "NOT_ADMITTED"}
-            if rc == 0 and expected.exists() and expected.stat().st_mtime >= started - 2:
+            item = {"site": site, "attemptId": attempt_id, "captureRc": rc, "state": "NOT_ADMITTED"}
+            fresh_capture = rc == 0 and expected.exists() and expected.stat().st_mtime >= started - 2
+            if fresh_capture:
                 try:
                     item.update(state="ADMITTED_TO_8190_PURE_PYTHON", sessionFile=expected.name,
-                                adapter=_admit_from_existing_proof(expected, scratch_report(site)))
+                                adapter=_admit_from_existing_proof(expected, proof_path, attempt_id))
                 except Exception as exc:
                     item["detail"] = f"{type(exc).__name__}: {exc}"[:220]
             else:
                 item["detail"] = "capture did not leave a fresh exact session artifact"
+            save_attempt(attempt_id, stage="pool_admission" if item["state"] == "ADMITTED_TO_8190_PURE_PYTHON" else ("replay" if fresh_capture else "capture"),
+                         state=item["state"], sessionFile=expected.name,
+                         reason=item.get("detail", "CONSUMER_NOT_YET_PROVEN"))
             unit["captures"].append(item); left -= 1
             atomic_json(E2E_RUN, {**run, "profiles": run["profiles"] + [unit]})
             time.sleep(4)
@@ -659,13 +907,17 @@ def recover_sso(port: int, host: str, budget: float) -> None:
         raise SystemExit("--recover-sso requires one bare exact host, for example chat.qwen.ai")
     cmd = [sys.executable, str(HERE / "fleet_sso_blueprint.py"), "--port", str(port),
            "--drive", "--host-exact", exact, "--budget", str(budget)]
-    rc = subprocess.run(cmd, cwd=ROOT, check=False).returncode
+    try:
+        rc = subprocess.run(cmd, cwd=ROOT, check=False, timeout=max(30, budget + 30),
+                            env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}).returncode
+    except subprocess.TimeoutExpired as exc:
+        raise SystemExit("SSO recovery timed out; no capture or promotion performed") from exc
     if rc:
         raise SystemExit(f"SSO recovery unit failed with exit code {rc}; no capture or promotion performed")
     print("SSO recovery completed as surface evidence only. Run a separate guarded capture unit after reviewing its report.")
 
 
-def main() -> int:
+def _main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--apply", action="store_true", help="required before any provider request or session-file mutation")
     group = ap.add_mutually_exclusive_group()
@@ -711,6 +963,7 @@ def main() -> int:
               f"ports={[x['port'] for x in plan['fleet']]}")
     elif args.e2e_chat:
         e2e_chat_apply(args.sso_budget, args.capture_wait, args.limit)
+        e2e_chat_consumer_proofs()
     elif args.e2e_video:
         e2e_video_only_apply(args.video_job_wait, args.sso_budget, set(args.video_label))
     elif args.e2e:
@@ -722,7 +975,30 @@ def main() -> int:
           f"admittedChatFiles={summary['admittedChatFiles']}; "
           f"admittedVideoFiles={summary['admittedVideoFiles']}; "
           f"admittedSessionFiles={summary['admittedSessionFiles']}; states={summary['byState']}")
+    if args.e2e_chat or args.e2e:
+        run = read_json(E2E_RUN, {})
+        profiles = run.get("profiles", [])
+        proofs = run.get("consumerProofs", [])
+        if (not proofs or any(p.get("state") == "BLOCKED" for p in profiles)
+                or any(s.get("state") == "BLOCKED" for p in profiles for s in p.get("sso", []))
+                or any(item.get("state") != "ADMITTED_TO_8190_PURE_PYTHON"
+                       for p in profiles for item in p.get("captures", []))
+                or any(proof.get("state") != "CONSUMER_E2E_PROVEN" for proof in proofs)):
+            return 1
+    if args.e2e_video or args.e2e:
+        run = read_json(E2E_VIDEO_RUN, {})
+        if (not run.get("consumerProofs")
+                or any(row.get("state") != "ADMITTED_TO_8190_PURE_PYTHON" for row in run.get("seats", []))
+                or any(row.get("state") != "CONSUMER_E2E_PROVEN" for row in run.get("consumerProofs", []))):
+            return 1
     return 0
+
+
+def main() -> int:
+    if "--apply" in sys.argv[1:]:
+        with controller_lock():
+            return _main()
+    return _main()
 
 
 if __name__ == "__main__":
