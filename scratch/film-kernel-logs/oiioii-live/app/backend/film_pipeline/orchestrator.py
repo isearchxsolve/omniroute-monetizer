@@ -1,0 +1,726 @@
+"""Admission-controlled, durable asynchronous film scheduler.
+
+The scheduler treats the async video router as a quality layer, never as a condition
+for completing an edit. A router capacity wall produces a locally rendered Ken Burns
+slot with the same timing and timeline placement as a remote motion clip.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import shutil
+from collections import defaultdict
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional
+
+from studio_pipeline import media
+
+from .assembly import (
+    ClipMaterializer,
+    FallbackMaterialization,
+    FallbackClipMaterializer,
+    HttpClipMaterializer,
+    IncrementalAssembler,
+    KenBurnsFallbackMaterializer,
+)
+from .clients import ChatPoolClient, VideoRouterClient
+from .models import VideoAuthError, VideoNoCapacity, VideoSubmissionUnknown, VideoTransientError, VideoWallError
+from .shots import enrich_bible_references, normalize_character_refs, ShotListPlanner, job_key_for_shot, request_key_for_film
+from .store import FilmJobStore
+
+
+AdmissionMode = Literal["refuse", "waves"]
+logger = logging.getLogger(__name__)
+
+
+_SEAT_CAPABILITY_FAILURE_MARKERS = (
+    "no_tab", "no open tab", "no owned browser", "requires_owned_browser",
+    "owned browser executor", "no executor", "not configured", "insufficient",
+    "balance is too low", "session expired", "sessionexpired", "no credits", "quota",
+)
+
+
+def _seat_needs_human_or_capability(error: Optional[str]) -> bool:
+    """True when retrying the same seat cannot help: it needs a human or a capability.
+
+    Measured 2026-10-18: a live film's clip was placed on the Chrome-bound Flow seat,
+    the remote job failed with an executor/no-tab-class error, was retried on the same
+    route up to ``max_attempts`` and then quarantined - leaving the film ``running``
+    with no deliverable. A seat that needs an owned browser tab, a funded balance or a
+    fresh credential must be parked (``store.mark_seat_unavailable``) and the clip
+    re-dispatched so the graduated pool can place it on a live seat.
+    """
+    low = str(error or "").lower()
+    if not low:
+        return False
+    return any(marker in low for marker in _SEAT_CAPABILITY_FAILURE_MARKERS)
+
+
+@dataclass(frozen=True)
+class FilmRequest:
+    script: str
+    target_seconds: int = 180
+    aspect_ratio: str = "16:9"
+    style: str = "cinematic"
+    image_refs: List[str] = field(default_factory=list)
+    #: Approved character sheets/portraits, relayed to every generated shot.
+    character_refs: Dict[str, Any] = field(default_factory=dict)
+    seed: Optional[int] = 20_260_826
+    bible: Optional[Dict[str, Any]] = None
+    admission_mode: AdmissionMode = "refuse"
+    #: Explicit hard cap for router submissions in live mode, not local fallback shots.
+    max_clips: Optional[int] = None
+    #: The normal mode: a complete MP4 never depends on provider capacity.
+    allow_fallback: bool = True
+    #: Sound Director music is muxed into the final MP4.
+    with_audio: bool = True
+    #: Slate clips preserve timing but need explicit quality approval at finalization.
+    allow_slates: bool = False
+    slate_fraction_limit: float = 0.05
+    #: A user identifier scopes API idempotency so equal customer briefs never
+    #: replay or disclose the same durable film graph across tenants.
+    tenant_scope: Optional[str] = None
+
+
+class FilmOrchestrator:
+    """The consumption-layer scheduler; safe to reconstruct after a process restart."""
+
+    _TERMINAL_FILM_STATES = {
+        "completed", "failed", "assembly_error", "refused_capacity", "refused_safety_cap",
+    }
+
+    def __init__(
+        self,
+        *,
+        store: FilmJobStore,
+        chat: ChatPoolClient,
+        video: VideoRouterClient,
+        artifact_root: Path | str,
+        materializer: Optional[ClipMaterializer] = None,
+        fallback_materializer: Optional[FallbackClipMaterializer] = None,
+        per_provider_cap: int = 4,
+        per_seat_cap: int = 1,
+        max_attempts: int = 3,
+        poll_interval_seconds: float = 5.0,
+        segment_size: int = 60,
+        materialize_concurrency: int = 4,
+        fallback_concurrency: int = 4,
+        submit_concurrency: int = 16,
+        execution_backend: Literal["mock", "live"] = "mock",
+        live: bool = False,
+        max_clips: Optional[int] = None,
+        artifact_quota_bytes: Optional[int] = None,
+    ) -> None:
+        self.store = store
+        self.chat = chat
+        self.video = video
+        self.planner = ShotListPlanner(chat)
+        self.materializer = materializer or HttpClipMaterializer()
+        self.fallback_materializer = fallback_materializer or KenBurnsFallbackMaterializer()
+        self.assembler = IncrementalAssembler(store, artifact_root, segment_size=segment_size)
+        # Breadth, not provider depth: one in-flight job per provider/seat by default.
+        self.per_provider_cap = max(1, int(per_provider_cap))
+        self.per_seat_cap = max(1, int(per_seat_cap))
+        self.max_attempts = max(1, int(max_attempts))
+        self.poll_interval_seconds = max(5.0, float(poll_interval_seconds))
+        self.materialize_concurrency = max(1, int(materialize_concurrency))
+        self.fallback_concurrency = max(1, int(fallback_concurrency))
+        self.submit_concurrency = max(1, int(submit_concurrency))
+        self.execution_backend = execution_backend
+        self.live_max_clips = int(max_clips or 0)
+        self.artifact_quota_bytes = max(
+            # Platform allocation is intentionally below the 10 GiB combined
+            # consumer cap; EmergentSH receives its own bounded allocation.
+            1, int(artifact_quota_bytes or os.getenv("FILM_ARTIFACT_QUOTA_BYTES", str(6 * 1024 * 1024 * 1024)))
+        )
+        if self.execution_backend == "live" and (not live or self.live_max_clips <= 0):
+            raise ValueError("live video requires explicit live=True and a positive max_clips safety cap")
+
+    async def aclose(self) -> None:
+        await self.chat.aclose()
+        await self.video.aclose()
+
+    @staticmethod
+    def _backoff(attempts: int) -> float:
+        return min(15 * 60.0, 5.0 * (2 ** max(0, attempts - 1)))
+
+    async def _configure_soundtrack(self, film: Dict[str, Any], *, enabled: bool = True) -> None:
+        """Attach durable Sound Director narration, Foley, and music to final assembly.
+
+        The audio plan lives in the persisted film bible, not a process-local legacy
+        pipeline response.  Consequently a new worker reconstructs the same artifact
+        locations after a crash.  All three local paths work without a media provider:
+        Windows SAPI (or silence) for voice, FFmpeg generated Foley, and an FFmpeg
+        procedural score.  The score loops at mux time rather than rendering a full
+        long-form source track up front.
+        """
+        self.assembler.narration = None
+        self.assembler.effects = None
+        if not enabled:
+            self.assembler.music = None
+            return
+        audio_dir = self.assembler.root / str(film["id"]) / "audio"
+        bible = film.get("bible") if isinstance(film.get("bible"), dict) else {}
+        sound_plan = bible.get("soundPlan") if isinstance(bible.get("soundPlan"), dict) else {}
+        narration_text = str(sound_plan.get("voiceOver") or "").strip()
+        effect_events = sound_plan.get("effects") if isinstance(sound_plan.get("effects"), list) else []
+        narration = audio_dir / "sound_director_narration.m4a"
+        effects = audio_dir / "sound_director_sfx.m4a"
+        music = audio_dir / "sound_director_score.m4a"
+        if narration_text:
+            if not narration.exists() or narration.stat().st_size < 1024:
+                try:
+                    await media.synthesize_narration(
+                        narration_text,
+                        narration,
+                        workdir=audio_dir / "narration_work",
+                        # A durable local fallback must not leak screenplay text to a
+                        # keyless public TTS endpoint just because a production has no
+                        # paid voice provider configured.
+                        prefer_network=False,
+                        fallback_duration=min(20.0, max(2.0, float(film.get("target_seconds") or 5))),
+                    )
+                except Exception:
+                    await media.synthesize_silence(
+                        narration,
+                        duration=min(20.0, max(2.0, float(film.get("target_seconds") or 5))),
+                    )
+            self.assembler.narration = narration
+        if effect_events:
+            if not effects.exists() or effects.stat().st_size < 1024:
+                try:
+                    await media.synthesize_sfx_track(
+                        effect_events,
+                        effects,
+                        duration=max(1.0, float(film.get("target_seconds") or 1)),
+                    )
+                except Exception:
+                    # Sound effects may be richer in a live production, but lack of a
+                    # local Foley filter must not drop the complete, audible music bed.
+                    await media.synthesize_silence(
+                        effects,
+                        duration=max(1.0, float(film.get("target_seconds") or 1)),
+                    )
+            self.assembler.effects = effects
+        if not music.exists() or music.stat().st_size < 1024:
+            duration = min(120.0, max(12.0, float(film.get("target_seconds") or 12)))
+            try:
+                await media.synthesize_music_bed(music, duration=duration)
+            except Exception:
+                # A valid audio stream is part of the deliverable even on an unusual
+                # FFmpeg build that lacks a score filter used by the richer path.
+                await media.synthesize_silence(music, duration=max(2.0, min(8.0, duration)))
+        self.assembler.music = music
+
+    async def _archive_completed_film(self, film_id: str, final: Path) -> None:
+        """Retain a compressed final delivery in SQLite and remove transient work files."""
+        owner_id = self.store.film_owner(film_id)
+        if not owner_id:
+            return
+        existing = self.store.artifact_for_film(film_id)
+        if existing:
+            self.store.set_film_status(film_id, "completed", output_path=str(existing["storage_uri"]))
+            return
+        film = self.store.get_film(film_id) or {}
+        actual = await media.probe_duration(final)
+        target = float(film.get("target_seconds") or 0)
+        if actual is None or (target > 0 and abs(actual - target) > 0.2):
+            self.store.set_film_status(film_id, "delivery_duration_mismatch", error=f"delivery {actual}s does not meet requested {target}s")
+            return
+        delivery = final.with_name("film.delivery.mp4")
+        original_bytes = final.stat().st_size
+        try:
+            compact = await media.compress_delivery_film(final, delivery)
+            payload = await asyncio.to_thread(compact.read_bytes)
+            artifact = self.store.retain_artifact(
+                film_id=film_id, owner_id=owner_id, payload=payload, original_bytes=original_bytes,
+                quota_bytes=self.artifact_quota_bytes,
+            )
+            self.store.set_film_status(film_id, "completed", output_path=str(artifact["storage_uri"]))
+        except Exception as exc:
+            # Never discard a valid local final if archive capacity/encoding fails.
+            self.store.set_film_status(film_id, "archive_pending", error=f"artifact archive pending: {type(exc).__name__}: {exc}")
+            return
+        film_dir = self.assembler.root / film_id
+        try:
+            await asyncio.to_thread(shutil.rmtree, film_dir)
+        except OSError:
+            logger.warning("completed film %s was archived but temporary work cleanup failed", film_id)
+
+    async def request_film(self, request: FilmRequest) -> Dict[str, Any]:
+        """Plan and persist an idempotent graph, recovering a zero-shot crash replay."""
+        if not request.script.strip():
+            raise ValueError("script must not be empty")
+        target_seconds = max(5, int(request.target_seconds))
+        if self.execution_backend == "live" and request.max_clips is None:
+            raise ValueError("live film requests require a positive per-request max_clips cap")
+        if self.execution_backend == "live" and int(request.max_clips or 0) > self.live_max_clips:
+            raise ValueError("request max_clips exceeds this live orchestrator's explicit safety cap")
+
+        supplied_character_refs = normalize_character_refs(request.character_refs) if request.character_refs else None
+        stable_input_bible = enrich_bible_references(
+            request.bible or {"style": request.style, "imageRefs": request.image_refs},
+            supplied_character_refs,
+        )
+        request_key = request_key_for_film(
+            script=request.script, target_seconds=target_seconds, aspect_ratio=request.aspect_ratio,
+            bible=stable_input_bible, seed=request.seed, tenant_scope=request.tenant_scope,
+        )
+        existing = self.store.get_film_by_request_key(request_key)
+        if existing is not None and int(existing["logical_shots"]) > 0:
+            self.store.set_slate_policy(
+                existing["id"], fraction_limit=request.slate_fraction_limit,
+                allow_slates=request.allow_slates,
+            )
+            existing = self.store.get_film(existing["id"]) or existing
+            if request.allow_slates and existing["status"] == "quality_blocked_slates":
+                self.store.set_film_status(existing["id"], "admitted", error=None)
+                existing = self.store.get_film(existing["id"]) or existing
+            await self._configure_soundtrack(existing, enabled=request.with_audio)
+            return {"film": self.store.summary(existing["id"]), "idempotent_replay": True}
+
+        # A zero-shot film is the old crash window between create_film and graph insert.
+        bible = (existing or {}).get("bible") or request.bible
+        if not bible:
+            bible = await self.planner.create_bible(
+                request.script, style=request.style, image_refs=request.image_refs,
+                character_refs=request.character_refs,
+            )
+        else:
+            bible = enrich_bible_references(bible, supplied_character_refs)
+        shots = await self.planner.decompose(
+            request.script, target_seconds=target_seconds, bible=bible, seed=request.seed
+        )
+        canonical = {
+            shot.canonical_index if shot.canonical_index is not None else shot.index: shot
+            for shot in shots
+        }
+        required = len(canonical)
+
+        capacity_error: Optional[str] = None
+        try:
+            capacity = await self.video.capacity()
+            capacity_verified = getattr(capacity, "capacity_verified", True)
+            available = capacity.total_clips_available if capacity_verified else 0
+        except VideoTransientError as exc:
+            # A capacity endpoint outage must not discard a no-credit fallback film.
+            available = 0
+            capacity_verified = False
+            capacity_error = str(exc)
+
+        motion_limit = int(request.max_clips or 0) if self.execution_backend == "live" else 0
+        if not request.allow_fallback and request.max_clips is not None and required > max(0, int(request.max_clips)):
+            film = self.store.create_film(
+                request_key=request_key, script=request.script, target_seconds=target_seconds,
+                aspect_ratio=request.aspect_ratio, bible=bible, status="refused_safety_cap",
+                admission_mode=request.admission_mode, capacity_at_admission=available,
+                motion_clip_limit=motion_limit, slate_fraction_limit=request.slate_fraction_limit,
+                allow_slates=request.allow_slates,
+            )
+            self.store.set_film_status(
+                film["id"], "refused_safety_cap",
+                error=f"motion safety cap is {int(request.max_clips)} clips but plan requires {required} unique clips",
+            )
+            return {
+                "film": self.store.summary(film["id"]), "accepted": False,
+                "required_unique_clips": required, "max_clips": int(request.max_clips),
+                "shortfall": required - int(request.max_clips),
+            }
+
+        # Fallback makes lack of router capacity a quality decision, not a refusal.
+        status = "admitted" if request.allow_fallback or (capacity_verified and available >= required) else (
+            "wave_scheduled" if request.admission_mode == "waves" else "refused_capacity"
+        )
+        film = self.store.create_film(
+            request_key=request_key, script=request.script, target_seconds=target_seconds,
+            aspect_ratio=request.aspect_ratio, bible=bible, status=status, admission_mode=request.admission_mode,
+            capacity_at_admission=available, motion_clip_limit=motion_limit,
+            slate_fraction_limit=request.slate_fraction_limit, allow_slates=request.allow_slates,
+        )
+        if int(film["logical_shots"]):
+            await self._configure_soundtrack(film, enabled=request.with_audio)
+            return {"film": self.store.summary(film["id"]), "idempotent_replay": True}
+
+        shortfall = max(0, required - available)
+        if status == "refused_capacity":
+            self.store.set_film_status(
+                film["id"], status,
+                error=f"capacity shortfall: requires {required} unique clips; {available} available; shortfall {shortfall}",
+            )
+            return {
+                "film": self.store.summary(film["id"]), "accepted": False, "required_unique_clips": required,
+                "available_clips": available if capacity_verified else None,
+                "capacity_verified": capacity_verified, "shortfall": shortfall if capacity_verified else None,
+            }
+
+        job_keys = {index: job_key_for_shot(shot, canonical_index=index) for index, shot in canonical.items()}
+        self.store.add_shots_and_jobs(film["id"], shots, aspect_ratio=request.aspect_ratio, job_keys=job_keys)
+        self.store.set_film_status(film["id"], "admitted", error=None)
+        film = self.store.get_film(film["id"]) or film
+        await self._configure_soundtrack(film, enabled=request.with_audio)
+        return {
+            "film": self.store.summary(film["id"]), "accepted": True,
+            "required_unique_clips": required, "logical_shots": len(shots),
+            "available_clips": available if capacity_verified else None,
+                "capacity_verified": capacity_verified, "shortfall": shortfall if capacity_verified else None,
+            "motion_clip_limit": motion_limit or None,
+            "fallback_enabled": bool(request.allow_fallback),
+            "slate_fraction_limit": min(1.0, max(0.0, float(request.slate_fraction_limit))),
+            "allow_slates": bool(request.allow_slates),
+            "capacity_strategy": "hybrid_fallback" if request.allow_fallback else request.admission_mode,
+            **({"capacity_error": capacity_error} if capacity_error else {}),
+        }
+
+    def _choose_seat(
+        self,
+        capacity: Any,
+        *,
+        remaining: Dict[str, int],
+        scheduled_provider: Dict[str, int],
+        scheduled_seat: Dict[tuple[str, str], int],
+    ) -> Optional[Any]:
+        unavailable = self.store.unavailable_seats()
+        choices = []
+        for seat in capacity.seats:
+            available = remaining.get(seat.seat, seat.clips_remaining)
+            key = (seat.provider, seat.seat)
+            if available <= 0 or key in unavailable:
+                continue
+            if self.store.provider_inflight(seat.provider) + scheduled_provider[seat.provider] >= self.per_provider_cap:
+                continue
+            if self.store.jobs_using_seat(seat.provider, seat.seat) + scheduled_seat[key] >= self.per_seat_cap:
+                continue
+            choices.append(seat)
+        choices.sort(
+            key=lambda s: (
+                self.store.jobs_using_seat(s.provider, s.seat) + scheduled_seat[(s.provider, s.seat)],
+                -remaining.get(s.seat, s.clips_remaining), s.provider, s.seat,
+            )
+        )
+        return choices[0] if choices else None
+
+    async def _materialize_completed(self, film_id: str, counts: Dict[str, int]) -> None:
+        semaphore = asyncio.Semaphore(self.materialize_concurrency)
+
+        async def one(job: Dict[str, Any]) -> None:
+            async with semaphore:
+                try:
+                    await self.assembler.materialize_job(film_id, job, self.materializer)
+                    counts["materialized"] += 1
+                except Exception as exc:
+                    self.store.defer(
+                        job["job_key"], status="succeeded", seconds=0,
+                        error=f"local materialization pending: {type(exc).__name__}: {exc}",
+                    )
+                    counts["materialization_errors"] += 1
+
+        await asyncio.gather(*(one(job) for job in self.store.jobs_needing_materialization(film_id)))
+
+    async def _materialize_fallbacks(self, film_id: str, counts: Dict[str, int]) -> None:
+        """Render keyless MP4s in the exact canonical slots router clips would use."""
+        semaphore = asyncio.Semaphore(self.fallback_concurrency)
+
+        async def one(job: Dict[str, Any]) -> None:
+            async with semaphore:
+                shot = self.store.shot_for_job(film_id, str(job["job_key"]))
+                if shot is None:
+                    self.store.quarantine(str(job["job_key"]), "fallback has no logical shot")
+                    counts["quarantined"] += 1
+                    return
+                destination = self.assembler.clip_path(film_id, str(job["job_key"]))
+                try:
+                    if await media.is_playable(destination):
+                        self.store.mark_fallback_success(
+                            str(job["job_key"]), str(destination),
+                            kind=str(job.get("fallback_kind") or "kenburns"),
+                            detail=job.get("fallback_detail"),
+                        )
+                    else:
+                        result = await self.fallback_materializer.materialize_fallback(
+                            prompt=str(shot["prompt"]), image_refs=list(shot["image_refs"]), seed=shot.get("seed"),
+                            continuity=dict(shot.get("continuity") or {}), destination=destination,
+                            duration_seconds=int(shot["duration_seconds"]), aspect_ratio=str(job["aspect_ratio"]),
+                        )
+                        # Compatibility for third-party test materializers that predate
+                        # the explicit fidelity result. Such a materializer is never
+                        # silently counted as a real slate.
+                        if isinstance(result, FallbackMaterialization):
+                            path, kind, detail = result.path, result.kind, result.detail
+                        else:
+                            path, kind, detail = result, "kenburns", None
+                        if not await media.is_playable(path):
+                            raise media.MediaError(f"fallback clip is not playable: {path}")
+                        self.store.mark_fallback_success(
+                            str(job["job_key"]), str(path), kind=kind, detail=detail,
+                        )
+                        if kind == "slate":
+                            counts["fallback_slates"] += 1
+                            quality = self.store.fallback_quality(film_id)
+                            logger.warning(
+                                "film %s fallback slate count %s/%s (%.2f%%): %s",
+                                film_id, quality["slate_logical_shots"], quality["logical_shots"],
+                                100 * float(quality["slate_fraction"]), detail or "no detail",
+                            )
+                    counts["fallback_materialized"] += 1
+                except Exception as exc:
+                    self.store.defer(
+                        str(job["job_key"]), status="fallback_pending", seconds=15,
+                        error=f"fallback materialization pending: {type(exc).__name__}: {exc}",
+                    )
+                    counts["fallback_errors"] += 1
+
+        await asyncio.gather(*(one(job) for job in self.store.fallback_jobs(film_id)))
+
+    def _fail_if_terminal_jobs(self, film_id: str, counts: Dict[str, int]) -> bool:
+        failures = self.store.terminal_failures(film_id)
+        if not failures:
+            return False
+        first = failures[0]
+        self.store.set_film_status(
+            film_id, "failed",
+            error=f"terminal clip failure {first['job_key']}: {first.get('last_error') or first['status']}",
+        )
+        counts["failed"] += 1
+        return True
+
+    async def _submit_claimed(
+        self,
+        claimed: Dict[str, Any],
+        *,
+        allow_fallback: bool,
+        counts: Dict[str, int],
+    ) -> None:
+        """POST only after the durable exclusive claim has committed."""
+        key = str(claimed["job_key"])
+        try:
+            submitted = await self.video.submit(
+                job_key=key, prompt=str(claimed["prompt"]), duration_seconds=int(claimed["duration_seconds"]),
+                image_refs=list(claimed["image_refs"]), aspect_ratio=str(claimed["aspect_ratio"]),
+                seed=claimed.get("seed"),
+            )
+            self.store.mark_submitted(
+                key, remote_job_id=submitted.job_id, provider=submitted.provider,
+                seat=claimed.get("seat"), credits_reserved=submitted.credits_reserved,
+                router_session=submitted.session, router_tenant=submitted.tenant,
+            )
+            if submitted.status in {"succeeded", "failed"}:
+                # The :8190 bridge may complete a render inline. Its receipt must
+                # be durable before this client instance is closed (as happens for
+                # ordinary API tick requests), rather than relying on `_inline_jobs`.
+                self.store.mark_poll(
+                    key, status=submitted.status, provider=submitted.provider, url=submitted.url,
+                    error=submitted.error, credits_spent=submitted.credits_spent,
+                )
+            if submitted.status == "failed" and self.execution_backend == "live":
+                self.store.mark_fallback_pending(key, f"terminal provider receipt: {submitted.error or 'failed'}")
+                counts["fallback_terminal"] += 1
+            counts["submitted"] += 1
+        except VideoSubmissionUnknown as exc:
+            # A timeout after a POST is not retry-safe under the new consumer API:
+            # it may have rendered and spent upstream even without a local receipt.
+            # Preserve the exact durable job key for reconciliation and never make a
+            # second paid request automatically.
+            self.store.quarantine(key, str(exc))
+            counts["submission_unknown"] += 1
+        except VideoNoCapacity as exc:
+            if allow_fallback:
+                self.store.mark_fallback_pending(key, f"capacity: {exc}")
+                counts["fallback_capacity"] += 1
+            else:
+                self.store.defer(key, status="parked_capacity", seconds=exc.retry_after_seconds, error=str(exc))
+                counts["parked_capacity"] += 1
+        except VideoTransientError as exc:
+            if allow_fallback and "safety cap" in str(exc).lower():
+                self.store.mark_fallback_pending(key, f"motion budget: {exc}")
+                counts["fallback_budget"] += 1
+                return
+            attempts = int(claimed["attempts"])
+            if attempts >= self.max_attempts:
+                self.store.quarantine(key, str(exc))
+                counts["quarantined"] += 1
+            else:
+                self.store.defer(key, status="retry_wait", seconds=self._backoff(attempts), error=str(exc))
+                counts["retrying"] += 1
+
+    async def tick(self, film_id: str) -> Dict[str, Any]:
+        """Advance one bounded, restart-safe scheduling pass for a film."""
+        film = self.store.get_film(film_id)
+        if not film:
+            raise KeyError(f"film {film_id} does not exist")
+        # The persisted motion cap distinguishes authorized live work from mock plans.
+        # Never let a caller replace an admitted live render with development output.
+        if int(film.get("motion_clip_limit") or 0) > 0 and self.execution_backend != "live":
+            raise ValueError("live film requires the live execution backend")
+        if film["status"] in self._TERMINAL_FILM_STATES:
+            return {"film": self.store.summary(film_id), "actions": {"terminal": 1}}
+        if film["status"] == "quality_blocked_slates" and not bool(film.get("allow_slates")):
+            return {"film": self.store.summary(film_id), "actions": {"quality_blocked_slates": 1}}
+
+        motion_limit = int(film.get("motion_clip_limit") or 0)
+        if self.execution_backend == "live" and motion_limit <= 0:
+            raise ValueError("refusing live tick: film has no persisted motion safety cap")
+        counts: Dict[str, int] = defaultdict(int)
+        counts["recovered_claims"] = self.store.recover_stale_claims(film_id)
+        await self._configure_soundtrack(film, enabled=True)
+
+        # Poll existing router work first. Store enforces the frozen >=5 s/job interval.
+        for job in self.store.due_polls(film_id, poll_interval_seconds=self.poll_interval_seconds):
+            try:
+                remote = await self.video.get_job(str(job["remote_job_id"]))
+                counts["polled"] += 1
+                self.store.mark_poll(
+                    job["job_key"], status=remote.status, provider=remote.provider, url=remote.url,
+                    error=remote.error, credits_spent=remote.credits_spent,
+                )
+                if remote.status != "failed":
+                    continue
+                error_type = self.video.terminal_exception(remote.error)
+                if isinstance(error_type, VideoWallError):
+                    self.store.mark_fallback_pending(job["job_key"], f"wall: {remote.error or 'provider wall'}")
+                    counts["fallback_wall"] += 1
+                elif isinstance(error_type, VideoAuthError):
+                    # The frozen contract has no seat hint/reassign operation for a
+                    # stable failed jobKey. Park only this local seat and complete the
+                    # slot locally; a true retry-on-another-seat needs that contract add.
+                    self.store.mark_seat_unavailable(str(job.get("seat") or ""), remote.provider, remote.error or "")
+                    self.store.mark_fallback_pending(job["job_key"], f"auth seat unavailable: {remote.error or 'unknown'}")
+                    counts["fallback_auth"] += 1
+                elif _seat_needs_human_or_capability(remote.error):
+                    # Readiness filtering and safe failover belong to the router.
+                    # A completed failure cannot be replayed as a fresh render.
+                    seat = str(job.get("seat") or "")
+                    self.store.mark_seat_unavailable(seat, remote.provider or "", remote.error or "")
+                    # A stable job key returns the same failed durable receipt.
+                    # Parking a local seat cannot reassign it at the router.
+                    self.store.mark_fallback_pending(
+                        job["job_key"], f"seat unavailable: {remote.error or 'unknown'}")
+                    counts["fallback_seat"] += 1
+                elif self.execution_backend == "live":
+                    self.store.mark_fallback_pending(
+                        job["job_key"], f"terminal provider job: {remote.error or 'failed'}")
+                    counts["fallback_terminal"] += 1
+                elif int(job["attempts"]) >= self.max_attempts:
+                    self.store.quarantine(job["job_key"], remote.error or "repeated terminal failure")
+                    counts["quarantined"] += 1
+                else:
+                    self.store.defer(
+                        job["job_key"], status="retry_wait", seconds=self._backoff(int(job["attempts"])),
+                        error=remote.error or "transient remote failure",
+                    )
+                    counts["retrying"] += 1
+            except VideoTransientError as exc:
+                # A failed GET says nothing about the remote render. Never spend an
+                # attempt or blindly re-POST a still-running job.
+                self.store.note_poll_transport_error(job["job_key"], str(exc))
+                counts["poll_errors"] += 1
+
+        await self._materialize_completed(film_id, counts)
+
+        capacity = None
+        try:
+            capacity = await self.video.capacity()
+        except VideoTransientError:
+            # Capacity is advisory; completed and fallback materialisation can proceed.
+            counts["capacity_errors"] += 1
+
+        if capacity is not None:
+            remaining = {seat.seat: seat.clips_remaining for seat in capacity.seats}
+            scheduled_provider: Dict[str, int] = defaultdict(int)
+            scheduled_seat: Dict[tuple[str, str], int] = defaultdict(int)
+            remaining_motion = max(0, motion_limit - self.store.remote_submission_count(film_id)) if motion_limit else None
+            claimed_jobs: List[Dict[str, Any]] = []
+
+            # Claim all permitted work before awaiting any POST. This is the atomic
+            # double-charge boundary and lets independent provider lanes submit together.
+            for job in self.store.due_jobs(film_id, limit=10_000):
+                if remaining_motion is not None and remaining_motion <= 0:
+                    self.store.mark_fallback_pending(job["job_key"], "motion safety budget exhausted")
+                    counts["fallback_budget"] += 1
+                    continue
+                seat = self._choose_seat(
+                    capacity, remaining=remaining, scheduled_provider=scheduled_provider,
+                    scheduled_seat=scheduled_seat,
+                )
+                if seat is None:
+                    if any(value > 0 for value in remaining.values()):
+                        counts["concurrency_limited"] += 1
+                        break
+                    self.store.mark_fallback_pending(job["job_key"], "capacity: no eligible video seat")
+                    counts["fallback_capacity"] += 1
+                    continue
+                claimed = self.store.claim_for_submit(job["job_key"], provider=seat.provider, seat=seat.seat)
+                if claimed is None:
+                    continue
+                remaining[seat.seat] = max(0, remaining.get(seat.seat, 0) - 1)
+                scheduled_provider[seat.provider] += 1
+                scheduled_seat[(seat.provider, seat.seat)] += 1
+                if remaining_motion is not None:
+                    remaining_motion -= 1
+                claimed_jobs.append(claimed)
+                if len(claimed_jobs) >= self.submit_concurrency:
+                    break
+
+            await asyncio.gather(
+                *(self._submit_claimed(job, allow_fallback=True, counts=counts) for job in claimed_jobs)
+            )
+
+        await self._materialize_fallbacks(film_id, counts)
+        await self._materialize_completed(film_id, counts)
+        if self._fail_if_terminal_jobs(film_id, counts):
+            return {"film": self.store.summary(film_id), "actions": dict(counts)}
+
+        try:
+            jobs = self.store.jobs_for_film(film_id)
+            all_jobs_resolved = bool(jobs) and all(job["status"] == "succeeded" for job in jobs)
+            quality = self.store.fallback_quality(film_id)
+            slate_limit = min(1.0, max(0.0, float(film.get("slate_fraction_limit") or 0.05)))
+            slate_blocked = (
+                all_jobs_resolved and not bool(film.get("allow_slates"))
+                and float(quality["slate_fraction"]) > slate_limit
+            )
+            final = await self.assembler.assemble_available(film_id, allow_finalize=not slate_blocked)
+            if slate_blocked:
+                self.store.set_film_status(
+                    film_id, "quality_blocked_slates",
+                    error=(
+                        f"refusing final MP4: {quality['slate_logical_shots']}/{quality['logical_shots']} "
+                        f"logical shots are slates ({100 * float(quality['slate_fraction']):.2f}%), "
+                        f"above the {100 * slate_limit:.2f}% threshold; rerun with allow_slates=True to approve"
+                    ),
+                )
+                counts["quality_blocked_slates"] += 1
+                logger.error(
+                    "film %s finalization blocked: %s/%s slate logical shots exceeds %.2f%%",
+                    film_id, quality["slate_logical_shots"], quality["logical_shots"], 100 * slate_limit,
+                )
+            elif final:
+                await self._archive_completed_film(film_id, final)
+                counts["finalized"] += 1
+            elif self.store.get_film(film_id)["status"] not in self._TERMINAL_FILM_STATES:
+                self.store.set_film_status(film_id, "running")
+        except Exception as exc:
+            self.store.set_film_status(film_id, "assembly_error", error=f"{type(exc).__name__}: {exc}")
+            counts["assembly_errors"] += 1
+        return {"film": self.store.summary(film_id), "actions": dict(counts)}
+
+    async def run_until_idle(
+        self,
+        film_id: str,
+        *,
+        max_ticks: int = 100,
+        sleep_seconds: float = 5.0,
+    ) -> Dict[str, Any]:
+        """Bounded operator/test helper; production calls ``tick`` from a worker."""
+        latest: Dict[str, Any] = {}
+        active = {"pending", "submitting", "queued", "running", "retry_wait", "parked_capacity", "fallback_pending"}
+        for _ in range(max(1, int(max_ticks))):
+            latest = await self.tick(film_id)
+            states = latest["film"]["job_states"]
+            if latest["film"]["status"] in self._TERMINAL_FILM_STATES:
+                return latest
+            if not any(state in states for state in active):
+                return latest
+            await asyncio.sleep(max(0.0, sleep_seconds))
+        return latest

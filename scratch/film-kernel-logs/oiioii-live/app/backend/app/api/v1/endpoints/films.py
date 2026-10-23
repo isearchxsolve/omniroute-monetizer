@@ -1,0 +1,373 @@
+"""HTTP entrypoints for the durable film consumption pipeline.
+
+These endpoints default to in-process mock video + mock chat.  Live mode is rejected
+unless the caller supplies both safety switches; no endpoint can create an unbounded
+live fan-out.
+"""
+from __future__ import annotations
+
+import os
+import asyncio
+from pathlib import Path
+from typing import Any, Dict, Literal, Optional
+from urllib.parse import urlparse
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel, Field
+
+from film_pipeline.assembly import HttpClipMaterializer, SyntheticClipMaterializer
+from film_pipeline.clients import ChatPoolClient, VideoRouterClient
+from film_pipeline.crew import CrewHandoffError, admit_approved_crew_film
+from film_pipeline.mock import DeterministicMockChatClient, MockVideoBackend
+from film_pipeline.orchestrator import FilmOrchestrator, FilmRequest
+from film_pipeline.store import FilmJobStore
+from app.api.v1.dependencies.auth import get_current_user
+from app.models.user import User
+from app.core.config import settings
+from app.services.orchestrator import AnimationAgentOrchestrator
+
+router = APIRouter()
+
+
+class FilmCreateRequest(BaseModel):
+    script: str = Field(min_length=1)
+    target_seconds: int = Field(default=180, ge=5)
+    aspect_ratio: str = "16:9"
+    style: str = "cinematic"
+    image_refs: list[str] = Field(default_factory=list)
+    character_refs: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Approved character sheet/portrait URLs keyed by character name.",
+    )
+    seed: Optional[int] = 20_260_826
+    bible: Optional[Dict[str, Any]] = None
+    admission_mode: Literal["refuse", "waves"] = "refuse"
+    backend: Literal["mock", "live"] = "mock"
+    live: bool = False
+    max_clips: int = Field(default=0, ge=0)
+    allow_slates: bool = False
+    slate_fraction_limit: float = Field(default=0.05, ge=0.0, le=1.0)
+
+
+class CrewFilmAdmissionRequest(BaseModel):
+    """A Director-approved seven-stage package ready for durable local admission.
+
+    This endpoint intentionally has no ``backend``/``live`` switches. It only creates
+    the durable plan using the zero-credit in-process service; scheduling paid motion
+    remains the separately gated durable film API operation.
+    """
+    crew_outputs: Dict[str, Any]
+    target_seconds: Optional[int] = Field(default=None, ge=5)
+    aspect_ratio: str = "16:9"
+    image_refs: list[str] = Field(default_factory=list)
+    character_refs: Dict[str, Any] = Field(default_factory=dict)
+
+
+class CrewRunRequest(BaseModel):
+    """Customer brief for the one approved seven-stage planning path."""
+
+    idea: str = Field(min_length=1, max_length=20_000)
+    target_seconds: int = Field(default=180, ge=5, le=1_800)
+    style: str = Field(default="cinematic", min_length=1, max_length=200)
+    aspect_ratio: str = Field(default="16:9")
+    image_refs: list[str] = Field(default_factory=list)
+    character_refs: Dict[str, Any] = Field(default_factory=dict)
+
+
+def _approved_https_refs(values: list[str] | Dict[str, Any]) -> list[str] | Dict[str, list[str]]:
+    """Accept only provider-safe approved references; never fetch caller URLs here."""
+    from film_pipeline.shots import normalize_character_refs
+
+    if isinstance(values, dict):
+        normalized = normalize_character_refs(values)
+        candidates = [url for urls in normalized.values() for url in urls]
+    else:
+        normalized = None
+        candidates = values
+    if len(candidates) > 32:
+        raise ValueError("at most 32 approved image references may be attached to one film")
+    for raw in candidates:
+        parsed = urlparse(str(raw))
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("approved image references must be absolute HTTPS URLs")
+    return normalized if normalized is not None else [str(value) for value in candidates]
+
+
+class _ServicePool:
+    def __init__(self) -> None:
+        configured_storage_path = os.getenv("FILM_PIPELINE_STORAGE_PATH")
+        root = Path(configured_storage_path or "./storage/film_pipeline").resolve()
+        self.root = root
+        storage_mode = os.getenv("PLATFORM_ARTIFACT_STORAGE_MODE", "single_node").strip().lower()
+        if storage_mode not in {"single_node", "shared_filesystem"}:
+            raise RuntimeError("PLATFORM_ARTIFACT_STORAGE_MODE must be single_node or shared_filesystem")
+        object_root = os.getenv("FILM_PIPELINE_OBJECT_STORE_PATH")
+        if storage_mode == "shared_filesystem":
+            shared_root = os.getenv("PLATFORM_ARTIFACT_SHARED_ROOT", "").strip()
+            if not shared_root:
+                raise RuntimeError("PLATFORM_ARTIFACT_SHARED_ROOT is required for shared_filesystem storage")
+            object_root = str(Path(shared_root) / "oioi-films")
+        elif not object_root and os.name == "nt" and not configured_storage_path:
+            object_root = r"D:\oioi-data\object-store\oioi-films"
+        self.store = FilmJobStore(root / "film_jobs.sqlite3", object_root=object_root)
+        self.mock_backend = MockVideoBackend()
+        self._mock: Optional[FilmOrchestrator] = None
+        self._live: Optional[FilmOrchestrator] = None
+        # This is intentionally process-local: the single-node profile requires
+        # one Uvicorn worker. Durable job claims still guard clip-level replay.
+        self.single_node_tick_lock = asyncio.Lock()
+
+    def get(self, backend: str, *, max_clips: int = 0) -> FilmOrchestrator:
+        if backend == "mock":
+            if self._mock is None:
+                video_http = httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=self.mock_backend.app), base_url="http://mock-video"
+                )
+                self._mock = FilmOrchestrator(
+                    store=self.store, chat=DeterministicMockChatClient(),
+                    video=VideoRouterClient(client=video_http), artifact_root=self.root / "artifacts",
+                    materializer=SyntheticClipMaterializer(), segment_size=2,
+                )
+            return self._mock
+        # A live instance is intentionally not cached: the per-invocation cap is part
+        # of the authorization to spend and must not leak from an earlier request.
+        return FilmOrchestrator(
+            store=self.store,
+            chat=ChatPoolClient(os.getenv("FILM_PIPELINE_CONSUMER_BASE_URL", "http://127.0.0.1:8190")),
+            video=VideoRouterClient(
+                os.getenv("FILM_PIPELINE_CONSUMER_BASE_URL", "http://127.0.0.1:8190"),
+                mode="live", live=True, max_clips=max_clips,
+                video_model=os.getenv("FILM_PIPELINE_VIDEO_MODEL", "video/auto"),
+            ),
+            artifact_root=self.root / "artifacts", materializer=HttpClipMaterializer(),
+            per_provider_cap=1 if settings.SINGLE_NODE_MODE else 4,
+            per_seat_cap=1,
+            submit_concurrency=1 if settings.SINGLE_NODE_MODE else 24,
+            materialize_concurrency=1 if settings.SINGLE_NODE_MODE else 4,
+            fallback_concurrency=1 if settings.SINGLE_NODE_MODE else 4,
+            execution_backend="live", live=True, max_clips=max_clips,
+        )
+
+
+_services = _ServicePool()
+
+
+def _production_runtime() -> bool:
+    """Read deployment mode at request time so tests and hot config agree."""
+
+    return os.getenv("APP_ENV", settings.APP_ENV).strip().lower() in {"production", "prod"}
+
+
+def _reject_mock_in_production(backend: str) -> None:
+    if backend == "mock" and _production_runtime():
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "mock_backend_disabled_in_production",
+                "replacement": "/api/v1/films/crew-runs",
+                "message": "Customer production work must use the canonical consumer gateway; mock execution is development-only.",
+            },
+        )
+
+
+def _ensure_film_access(film_id: str, user: User) -> None:
+    owner_id = _services.store.film_owner(film_id)
+    if owner_id is None:
+        # Pre-SaaS local artifacts have no tenant owner and are intentionally not
+        # surfaced to customers. The owner can inspect/migrate them out of band.
+        raise HTTPException(status_code=404, detail="film not found")
+    if owner_id != user.id and not user.is_superuser:
+        raise HTTPException(status_code=404, detail="film not found")
+
+
+@router.post("/")
+async def create_film(request: FilmCreateRequest, user: User = Depends(get_current_user)):
+    # Customer productions must carry the Director-approved seven-stage handoff.
+    # This lower-level endpoint remains an owner-only operational/test escape hatch.
+    if not user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="customer film admission requires /films/crew-admissions with Director approval",
+        )
+    _reject_mock_in_production(request.backend)
+    if request.backend == "live" and (not request.live or request.max_clips <= 0):
+        raise HTTPException(
+            status_code=400,
+            detail="live generation requires both live=true and a positive max_clips safety cap",
+        )
+    orchestrator = _services.get(request.backend, max_clips=request.max_clips)
+    try:
+        result = await orchestrator.request_film(FilmRequest(
+            script=request.script, target_seconds=request.target_seconds, aspect_ratio=request.aspect_ratio,
+            style=request.style, image_refs=request.image_refs, character_refs=request.character_refs,
+            seed=request.seed, bible=request.bible,
+            admission_mode=request.admission_mode,
+            max_clips=request.max_clips if request.backend == "live" else None,
+            allow_slates=request.allow_slates,
+            slate_fraction_limit=request.slate_fraction_limit,
+            tenant_scope=user.id,
+        ))
+        film_id = str((result.get("film") or {}).get("id") or "")
+        if not film_id or not _services.store.claim_film_owner(film_id, user.id):
+            raise HTTPException(status_code=409, detail="film belongs to another account")
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"film planning/admission failed: {type(exc).__name__}: {exc}") from exc
+    finally:
+        if request.backend == "live":
+            await orchestrator.aclose()
+
+
+@router.post("/crew-admissions")
+async def admit_crew_film(request: CrewFilmAdmissionRequest, user: User = Depends(get_current_user)):
+    """Persist an approved crew package without contacting a generation provider."""
+    try:
+        image_refs = _approved_https_refs(request.image_refs)
+        character_refs = _approved_https_refs(request.character_refs)
+        result = await admit_approved_crew_film(
+            _services.get("mock"),
+            request.crew_outputs,
+            target_seconds=request.target_seconds,
+            aspect_ratio=request.aspect_ratio,
+            image_refs=image_refs,
+            character_refs=character_refs,
+            tenant_scope=user.id,
+        )
+        film_id = str(((result.get("admission") or {}).get("film") or {}).get("id") or "")
+        if not film_id or not _services.store.claim_film_owner(film_id, user.id):
+            raise HTTPException(status_code=409, detail="film belongs to another account")
+        return result
+    except (CrewHandoffError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"crew film admission failed: {type(exc).__name__}: {exc}") from exc
+
+
+@router.post("/crew-runs")
+async def run_and_admit_crew_film(request: CrewRunRequest, user: User = Depends(get_current_user)):
+    """Run the complete creative crew through :8190 and durably admit its film.
+
+    This replaces the frontend-visible project pipeline. No in-process
+    ProviderRegistry, direct upstream key, or native video adapter participates
+    in this customer request. Motion scheduling stays the separately explicit
+    durable ``/tick`` operation.
+    """
+    try:
+        image_refs = _approved_https_refs(request.image_refs)
+        character_refs = _approved_https_refs(request.character_refs)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    chat = ChatPoolClient(os.getenv("FILM_PIPELINE_CONSUMER_BASE_URL", "http://127.0.0.1:8190"))
+    crew = AnimationAgentOrchestrator(
+        # This instance admits the durable plan only. Rendering occurs only if
+        # the authenticated caller later ticks the returned film ID.
+        film_orchestrator=_services.get("mock"),
+        chat_client=chat,
+    )
+    try:
+        crew_outputs = await crew.run_pipeline(
+            prompt=request.idea,
+            duration=request.target_seconds,
+            style=request.style,
+            project_id=f"film-crew-{user.id}",
+            image_refs=image_refs,
+            character_refs=character_refs,
+        )
+        handoff = crew_outputs.get("film_handoff") or {}
+        admission = handoff.get("admission") if isinstance(handoff, dict) else None
+        film_id = str(((admission or {}).get("film") or {}).get("id") or "")
+        if not film_id:
+            raise CrewHandoffError(str(handoff.get("detail") or "Director did not admit a film"))
+        if not _services.store.claim_film_owner(film_id, user.id):
+            raise HTTPException(status_code=409, detail="film belongs to another account")
+        return {
+            "film_id": film_id,
+            "crew": crew_outputs,
+            "admission": admission,
+            "directorApproved": True,
+            "transport": "http://127.0.0.1:8190/v1",
+        }
+    except CrewHandoffError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"canonical crew execution failed: {type(exc).__name__}: {exc}") from exc
+    finally:
+        await chat.aclose()
+
+
+@router.get("/{film_id}")
+async def get_film(film_id: str, user: User = Depends(get_current_user)):
+    try:
+        _ensure_film_access(film_id, user)
+        return _services.store.summary(film_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/{film_id}/artifact")
+async def get_film_artifact(film_id: str, user: User = Depends(get_current_user)):
+    """Return the owner-authorized compressed final from the managed object store."""
+    _ensure_film_access(film_id, user)
+    artifact = _services.store.artifact_for_film(film_id)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="archived film artifact not found")
+    managed = _services.store.artifact_path(str(artifact["id"]))
+    if managed is not None:
+        metadata, path = managed
+        return FileResponse(path, media_type=str(metadata["content_type"]), headers={"ETag": str(metadata["sha256"]), "Cache-Control": "private, max-age=3600"})
+    payload = _services.store.artifact_payload(str(artifact["id"]))
+    if payload is None:
+        raise HTTPException(status_code=404, detail="archived film artifact not found")
+    metadata, blob = payload
+    return Response(
+        content=blob, media_type=str(metadata["content_type"]),
+        headers={
+            "Content-Length": str(metadata["stored_bytes"]),
+            "ETag": str(metadata["sha256"]),
+            "Cache-Control": "private, max-age=3600",
+        },
+    )
+
+
+@router.post("/{film_id}/tick")
+async def tick_film(
+    film_id: str,
+    backend: Optional[Literal["mock", "live"]] = None,
+    live: bool = False,
+    max_clips: int = 0,
+    user: User = Depends(get_current_user),
+):
+    if backend is not None:
+        _reject_mock_in_production(backend)
+    _ensure_film_access(film_id, user)
+    film = _services.store.get_film(film_id)
+    persisted_backend = "live" if int((film or {}).get("motion_clip_limit") or 0) > 0 else "mock"
+    backend = backend or persisted_backend
+    if backend != persisted_backend:
+        raise HTTPException(status_code=409, detail="film execution backend cannot be changed by a tick")
+    _reject_mock_in_production(backend)
+    if backend == "live" and (not live or max_clips <= 0):
+        raise HTTPException(status_code=400, detail="live scheduling requires live=true and a positive max_clips safety cap")
+    orchestrator = _services.get(backend, max_clips=max_clips)
+    try:
+        _ensure_film_access(film_id, user)
+        if settings.SINGLE_NODE_MODE and _services.single_node_tick_lock.locked():
+            raise HTTPException(status_code=409, detail="single-node film worker is busy; retry this durable job shortly")
+        if settings.SINGLE_NODE_MODE:
+            async with _services.single_node_tick_lock:
+                return await orchestrator.tick(film_id)
+        return await orchestrator.tick(film_id)
+    except HTTPException:
+        raise
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"film scheduler tick failed: {type(exc).__name__}: {exc}") from exc
+    finally:
+        if backend == "live":
+            await orchestrator.aclose()

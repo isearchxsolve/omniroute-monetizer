@@ -1,0 +1,13 @@
+[14/26] session_google_gemini_web_niloy.json => python : not admitted: AUTH auth refused (401) -- cookie alone is not enough
+[15/26] session_inner_ai_web.json => python : not admitted: NO_ANSWER 200 but the extracted reply is not only '58': http_error: http error 402:
+[16/26] session_microsoft_copilot_web.json => python : not admitted: NO_ANSWER 200 but the extracted reply is not only '58': no recorded_exchange found for
+[17/26] session_perplexity-auth.json => ADMITTED session_perplexity-auth.json -> ws_replay.WebSocketSessionClient (shim hot-reloads; no restart)
+[18/26] session_perplexity-ws-auth.json => ADMITTED session_perplexity-ws-auth.json -> ws_replay.WebSocketSessionClient (shim hot-reloads; no restart)
+[19/26] session_perplexity-ws.json => python : not admitted: NO_ANSWER 200 but the extracted reply is not only '58': sign up and repeat your request.
+[20/26] session_sambanova_cloud_chat.json => python : not admitted: AUTH auth refused (401) -- cookie alone is not enough
+[21/26] session_sambanova_cloud_chat_niloy.json => python : not admitted: AUTH auth refused (401) -- cookie alone is not enough
+[22/26] session_tencent_yuanbao.json => python : not admitted: AUTH auth refused (401) -- cookie alone is not enough
+[23/26] session_v0_by_vercel_(v0_app).json => python : not admitted: AUTH auth refused (401) -- cookie alone is not enough
+[24/26] session_v0_by_vercel_niloy.json => python : not admitted: BAD_FILE V0 replay adapter could not derive a conversation id from the capture
+[25/26] session_veoaifree.json => python : not admitted: AUTH auth refused (403) -- cookie alone is not enough
+[26/26] session_veoaifree_chat_web.json => python : not admitted: AUTH auth refused (200) -- cookie alone is not enough

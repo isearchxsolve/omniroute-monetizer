@@ -55,6 +55,10 @@ import pathlib
 import time
 import urllib.parse
 import urllib.request
+
+# Localhost CDP: never through a proxy (env proxies poison 127.0.0.1 - 2026-10-13 lesson).
+CDP_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -550,7 +554,7 @@ def capture_payload(hits: list[dict], cookie_header: str, site: str,
 
 def targets(port: int) -> list[dict]:
     assert_safe_cdp_port(port)
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=10) as r:
+    with CDP_OPENER.open(f"http://127.0.0.1:{port}/json/list", timeout=10) as r:
         data = json.loads(r.read().decode("utf-8", "replace"))
     return [t for t in data if t.get("type") == "page" and t.get("webSocketDebuggerUrl")]
 
@@ -601,14 +605,14 @@ def open_tab(port: int, url: str) -> dict | None:
     try:
         req = urllib.request.Request(f"http://127.0.0.1:{port}/json/new?{urllib.parse.quote(url, safe=':/?=&')}",
                                      method="PUT")
-        with urllib.request.urlopen(req, timeout=15) as r:
+        with CDP_OPENER.open(req, timeout=15) as r:
             t = json.loads(r.read().decode("utf-8", "replace"))
         if t.get("webSocketDebuggerUrl"):
             return t
     except Exception:
         pass
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=8) as r:
+        with CDP_OPENER.open(f"http://127.0.0.1:{port}/json/version", timeout=8) as r:
             ws_url = json.loads(r.read().decode("utf-8", "replace"))["webSocketDebuggerUrl"]
         b = CDP(ws_url)
         try:

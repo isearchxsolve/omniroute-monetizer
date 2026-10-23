@@ -1,0 +1,24 @@
+{
+ "jobs": [
+  {
+   "job_id": "36386e20996a4266b7617c2d9acffb25",
+   "job_key": "3f325a2b9a532defcf9a5de3ce43121f6fd56d3441a6e4c6d9b53e5a892acf1b",
+   "status": "succeeded",
+   "provider": "lightricks-ltx-video-distilled.hf.space",
+   "session": "session_ltx_space_public",
+   "tenant": "tenant_001",
+   "model": "video/auto/auto",
+   "host": null,
+   "prompt": "A copper lantern glows inside a rain-wet stone arcade at dawn, a slow camera pan reveals reflections on the paving, warm glow from lantern, soft dawn light filtering through the arcade, realistic atmospheric five-second shot",
+   "url": "https://lightricks-ltx-video-distilled.hf.space/gradio_api/file=/tmp/gradio/46e1f14e3b2541340b13193737a260b7f79d9476dd7b30d18d7efe4e24194adf/output_64485.mp4",
+   "error": null,
+   "progress": 1.0,
+   "credits_spent": 0.0,
+   "created": 1792241138.000616,
+   "updated": 1792241161.9035394,
+   "started": 1792241138.0022259,
+   "finished": 1792241161.9035208,
+   "attempts": []
+  }
+ ]
+}

@@ -38,6 +38,10 @@ import pathlib
 import time
 import urllib.parse
 import urllib.request
+
+# Localhost CDP: never through a proxy (env proxies poison 127.0.0.1 - 2026-10-13 lesson).
+CDP_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 from typing import Any
 
 from capture_sessions_cdp import (CDP, CDPError, JS_FOCUS_COMPOSER, JS_PAGE_TEXT, JS_READ_ACTIVE,
@@ -60,7 +64,7 @@ def _strip_query(url: str) -> str:
 def _activate(port: int, target_id: str) -> bool:
     """Wake a discarded tab. Same pattern as capture_video_job_cdp._activate."""
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/activate/{target_id}", timeout=8):
+        with CDP_OPENER.open(f"http://127.0.0.1:{port}/json/activate/{target_id}", timeout=8):
             return True
     except Exception:
         return False

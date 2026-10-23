@@ -1,0 +1,1109 @@
+"""Multi-step replay: providers whose answer arrives on a SECOND request after a bootstrap POST.
+
+Pattern (Felo, Mistral, and similar):
+  1. POST the recorded exchange with the sentinel swapped for the caller's prompt.
+     The provider returns a small JSON bootstrap: {"stream_key": "...", "message_id": "...", ...}
+  2. GET a stream/poll endpoint using a value from the bootstrap (stream_key, task_id, etc.)
+     with the same Authorization header. The answer arrives as SSE or chunked JSON.
+
+This module implements step 2 for each known provider shape, plus a generalized N-leg
+recorded_exchanges threading engine (`generic_multistep_followup`). It is called by
+universal_replay.py when the bootstrap response is detected, and by replay_check.py
+so these providers are scored correctly instead of being misclassified as SINGLE_USE.
+
+Law 4 still holds: the recorded POST is replayed byte-for-byte with one substitution.
+The second request is a deterministic follow-up using values from the first response.
+"""
+import hashlib
+import json
+import os
+import re
+import time
+import uuid
+from typing import Any, Callable, Dict, Optional, Tuple
+
+import requests
+
+# --- Browser-impersonation transport (same rationale as universal_replay.py) ---
+# The follow-up GET is fingerprinted exactly like the bootstrap POST; a plain
+# requests client can pass step 1 and still be rejected on step 2.
+try:
+    import curl_cffi
+    from curl_cffi.requests import exceptions as _cc_exc
+    _HAVE_CURL_CFFI = True
+    _STREAM_EXC = (_cc_exc.RequestException, requests.exceptions.RequestException)
+except ImportError:
+    curl_cffi = None
+    _HAVE_CURL_CFFI = False
+    _STREAM_EXC = (requests.exceptions.RequestException,)
+
+_IMPERSONATE = "chrome"
+
+
+def resolve_egress_proxy(raw: Optional[Dict[str, Any]] = None, host: Optional[str] = None) -> Optional[str]:
+    """Resolve optional residential / SOCKS5 / HTTP egress proxy for ASN-sensitive targets.
+
+    Priority order:
+      1. Explicit per-seat blueprint key: `raw["proxy"]` or `raw["egress_proxy"]`
+      2. Host-specific environment variable: `OMNIROUTE_PROXY_<HOST_SLUG>` (e.g. OMNIROUTE_PROXY_CLAUDE_AI)
+      3. Global environment variable: `OMNIROUTE_PROXY` or `OMNIROUTE_HTTPS_PROXY` or `OMNIROUTE_SOCKS_PROXY`
+
+    When routed through curl_cffi (`impersonate="chrome"`), the BoringSSL TLS ClientHello
+    (JA3/JA4) and HTTP/2 ALPN handshake occur inside the proxy tunnel to the origin, combining
+    residential ASN reputation with Chrome's exact TLS fingerprint.
+    """
+    if isinstance(raw, dict):
+        p = raw.get("proxy") or raw.get("egress_proxy")
+        if isinstance(p, str) and p.strip():
+            return p.strip()
+    if host:
+        slug = re.sub(r"[^A-Za-z0-9]+", "_", host).strip("_").upper()
+        if slug:
+            env_host = os.environ.get(f"OMNIROUTE_PROXY_{slug}", "").strip()
+            if env_host:
+                return env_host
+    for env_key in ("OMNIROUTE_PROXY", "OMNIROUTE_HTTPS_PROXY", "OMNIROUTE_SOCKS_PROXY"):
+        val = os.environ.get(env_key, "").strip()
+        if val:
+            return val
+    return None
+
+
+def _stream_get(url: str, headers: Dict[str, str], timeout: float, proxy: Optional[str] = None):
+    """GET a streaming endpoint through the impersonation transport."""
+    if _HAVE_CURL_CFFI:
+        kwargs: Dict[str, Any] = {
+            "headers": headers,
+            "timeout": timeout,
+            "impersonate": _IMPERSONATE,
+            "default_headers": False,
+            "stream": True,
+        }
+        if proxy:
+            kwargs["proxy"] = proxy
+        return curl_cffi.request("GET", url, **kwargs)
+    req_kwargs: Dict[str, Any] = {"headers": headers, "timeout": timeout, "stream": True}
+    if proxy:
+        req_kwargs["proxies"] = {"http": proxy, "https": proxy}
+    return requests.get(url, **req_kwargs)
+
+
+def _iter_text_chunks(r):
+    """Decoded text chunks from either transport's streamed response.
+
+    curl_cffi's iter_content does NOT support decode_unicode=True (it raises
+    NotImplementedError), and chunk_size is ignored. So for curl_cffi we iterate
+    raw byte chunks and decode them ourselves. requests supports decode_unicode.
+    """
+    if _HAVE_CURL_CFFI and isinstance(r, curl_cffi.requests.Response):
+        for chunk in r.iter_content():
+            yield chunk.decode("utf-8", "replace") if isinstance(chunk, bytes) else chunk
+        return
+    try:
+        for chunk in r.iter_content(chunk_size=None, decode_unicode=True):
+            yield chunk
+    except (TypeError, NotImplementedError):
+        for chunk in r.iter_content():
+            yield chunk.decode("utf-8", "replace") if isinstance(chunk, bytes) else chunk
+
+
+# ---------------------------------------------------------------------------
+# Pre-flight body & dynamic header mutations: fields that must be fresh on
+# every replay (Point 2: Polymorphic Dynamic Crypto / Nonce / Timestamp).
+# These are NOT adapters (Law 4 holds — the recorded request is still replayed
+# byte-for-byte except for the sentinel swap); they refresh client-generated
+# identifiers that the server rejects if reused.
+# ---------------------------------------------------------------------------
+
+_HEX32_RE = re.compile(r"^[0-9a-fA-F]{32}$")
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def _fresh_like(old_val: str) -> str:
+    """Mint a fresh UUID/nonce preserving the exact format of the recorded value."""
+    s = str(old_val or "").strip()
+    if _HEX32_RE.match(s):
+        return uuid.uuid4().hex
+    if _UUID_RE.match(s):
+        return str(uuid.uuid4())
+    return uuid.uuid4().hex if len(s) == 32 else str(uuid.uuid4())
+
+
+def _chatglm_sign(timestamp_s: str, nonce: str, secret: str = "8a1317a7468aa3ad86e997d08f3f31cb") -> str:
+    """Compute ChatGLM web request signature (`X-Sign`) from timestamp + nonce."""
+    raw = f"{timestamp_s}-{nonce}-{secret}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+
+def apply_dynamic_headers(host: str, headers: Dict[str, str], body_str: str = "") -> Dict[str, str]:
+    """Refresh per-request anti-replay headers (timestamps, nonces, request IDs, X-Sign).
+
+    Preserves byte-for-byte static headers while preventing replay-deduplication 400/403s
+    on endpoints that check X-Timestamp, X-Nonce, X-Request-Id, or ChatGLM X-Sign.
+    """
+    out = dict(headers)
+    now_s = str(int(time.time()))
+    now_ms = str(int(time.time() * 1000))
+
+    ts_key = None
+    nonce_key = None
+    sign_key = None
+
+    for k, v in list(out.items()):
+        kl = k.lower()
+        vs = str(v or "").strip()
+        if kl in ("x-request-id", "x-client-request-id", "x-correlation-id", "x-trace-id", "request-id"):
+            out[k] = _fresh_like(vs)
+        elif kl in ("x-nonce", "nonce"):
+            nonce_key = k
+            out[k] = _fresh_like(vs)
+        elif kl in ("x-timestamp", "timestamp"):
+            ts_key = k
+            if vs.isdigit() and len(vs) >= 12:
+                out[k] = now_ms
+            else:
+                out[k] = now_s
+        elif kl == "x-sign":
+            sign_key = k
+
+    if sign_key and (ts_key or nonce_key or "chatglm" in (host or "").lower()):
+        t_val = out.get(ts_key, now_s) if ts_key else now_s
+        n_val = out.get(nonce_key, uuid.uuid4().hex) if nonce_key else uuid.uuid4().hex
+        if ts_key is None:
+            out["X-Timestamp"] = t_val
+        if nonce_key is None:
+            out["X-Nonce"] = n_val
+        out[sign_key] = _chatglm_sign(t_val, n_val)
+
+    return out
+
+
+def _mistral_preflight(body_str: str) -> str:
+    """Mistral Le Chat: messageId is a client-generated UUID that must be unique
+    per message. Reusing the recorded one gives 409 'message with the same id
+    already exists'. Mint a fresh one."""
+    try:
+        body = json.loads(body_str)
+        if "messageId" in body:
+            body["messageId"] = str(uuid.uuid4())
+        return json.dumps(body)
+    except Exception:
+        return body_str
+
+
+def _claude_preflight(body_str: str) -> str:
+    """Claude Official Web: turn_message_uuids and completion_request_id are
+    client-generated UUIDs that must be unique per turn. Reusing the recorded ones
+    gives 409 'duplicate_human_message_uuid'. Mint fresh UUIDs."""
+    try:
+        body = json.loads(body_str)
+        if "turn_message_uuids" in body and isinstance(body["turn_message_uuids"], dict):
+            body["turn_message_uuids"]["human_message_uuid"] = str(uuid.uuid4())
+            body["turn_message_uuids"]["assistant_message_uuid"] = str(uuid.uuid4())
+        if "completion_request_id" in body:
+            body["completion_request_id"] = str(uuid.uuid4())
+        return json.dumps(body)
+    except Exception:
+        return body_str
+
+
+def _v0_preflight(body_str: str) -> str:
+    """v0.app: message_id is a client-generated UUID that must be unique per send.
+    Re-sending the recorded one re-answers an already-answered message: the send
+    'succeeds' (the 2-byte ok ack) but no NEW assistant message ever appears and the
+    poll times out with the caller's prompt scored against the old ack. Mint a fresh
+    one. chat_id is deliberately KEPT -- it names the conversation the poll watches,
+    and v0_followup polls that exact chat for a message newer than our send."""
+    try:
+        body = json.loads(body_str)
+        # The telemetry leg uses snake_case, while the real `/chat/api/chat`
+        # submit uses camelCase. Both are client-generated and must be fresh.
+        for key in ("message_id", "messageId"):
+            if key in body:
+                body[key] = str(uuid.uuid4())
+        return json.dumps(body)
+    except Exception:
+        return body_str
+
+
+def _chathub_preflight(body_str: str) -> str:
+    """app.chathub.gg: conversationId, streamId, threadId and messages[].id are ALL
+    client-minted UUIDs per send (measured 2026-09-01). Re-sending the recorded ones
+    hits 409 {"error":"This resumable chat stream ID belongs to a different request",
+    "code":"stream_request_conflict"} -- the resumable stream was already consumed by
+    the original send. Mint a fresh set, exactly as Chrome's own client does."""
+    try:
+        body = json.loads(body_str)
+        changed = False
+        for key in ("conversationId", "streamId", "threadId"):
+            if key in body:
+                body[key] = str(uuid.uuid4())
+                changed = True
+        for msg in body.get("messages") or []:
+            if isinstance(msg, dict) and "id" in msg:
+                msg["id"] = str(uuid.uuid4())
+                changed = True
+        return json.dumps(body) if changed else body_str
+    except Exception:
+        return body_str
+
+
+def _groq_preflight(body_str: str) -> str:
+    """api.groq.com: ensure adequate token headroom for reasoning models and
+    enforce json_object response_format when prompt demands JSON."""
+    try:
+        body = json.loads(body_str)
+        if body.get("max_tokens") and body["max_tokens"] < 2048:
+            body["max_tokens"] = 2048
+        content = ""
+        for m in body.get("messages") or []:
+            if isinstance(m, dict) and m.get("content"):
+                content += " " + str(m["content"])
+        if any(tok in content.lower() for tok in ("json only", "return json", "json_object")):
+            body["response_format"] = {"type": "json_object"}
+        return json.dumps(body)
+    except Exception:
+        return body_str
+
+
+PREFLIGHT_REGISTRY: Dict[str, Callable[[str], str]] = {
+    "chat.mistral.ai": _mistral_preflight,
+    "claude.ai": _claude_preflight,
+    "v0.app": _v0_preflight,
+    "app.chathub.gg": _chathub_preflight,
+    "api.groq.com": _groq_preflight,
+}
+
+
+def apply_preflight(host: str, body_str: str) -> str:
+    """Apply any registered pre-flight mutation for this host."""
+    fn = PREFLIGHT_REGISTRY.get(host)
+    if fn:
+        return fn(body_str)
+    return body_str
+
+
+# ---------------------------------------------------------------------------
+# Generalized N-Leg Dynamic ID Extraction & Threading (Point 3)
+# ---------------------------------------------------------------------------
+
+_BOOTSTRAP_ID_KEYS = (
+    "conduit_token", "conduitToken",
+    "stream_key", "streamKey",
+    "conversation_id", "conversationId",
+    "chat_id", "chatId",
+    "session_id", "sessionId",
+    "thread_id", "threadId",
+    "message_id", "messageId",
+    "task_id", "taskId",
+    "token", "id",
+)
+
+# Map header names (lowercased) to the canonical token key they consume
+_HEADER_TOKEN_MAP = {
+    "x-conduit-token": ("conduit_token", "conduitToken", "token"),
+    "x-conversation-id": ("conversation_id", "conversationId", "id"),
+    "x-session-id": ("session_id", "sessionId", "id"),
+    "x-chat-id": ("chat_id", "chatId", "id"),
+    "x-thread-id": ("thread_id", "threadId", "id"),
+    "x-stream-key": ("stream_key", "streamKey"),
+}
+
+
+def extract_bootstrap_tokens(bootstrap_body: str) -> Dict[str, str]:
+    """Recursively extract dynamic session/conversation/message/stream identifiers
+    from a Leg-1 JSON response so they can be threaded into Leg 2+."""
+    tokens: Dict[str, str] = {}
+    if not bootstrap_body:
+        return tokens
+    try:
+        data = json.loads(bootstrap_body)
+    except Exception:
+        return tokens
+
+    def _walk(node: Any, depth: int = 0) -> None:
+        if depth > 5 or not isinstance(node, dict):
+            return
+        for k, v in node.items():
+            if k in _BOOTSTRAP_ID_KEYS and isinstance(v, (str, int)) and str(v).strip():
+                # Keep top-most match for each key
+                tokens.setdefault(k, str(v).strip())
+            elif isinstance(v, dict):
+                _walk(v, depth + 1)
+            elif isinstance(v, list):
+                for item in v[:5]:
+                    if isinstance(item, dict):
+                        _walk(item, depth + 1)
+
+    _walk(data)
+    return tokens
+
+
+def thread_bootstrap_into_leg(
+    leg: Dict[str, Any],
+    tokens: Dict[str, str],
+    old_tokens: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """Thread extracted dynamic IDs from Leg 1 into Leg 2's URL, headers, and JSON/form body."""
+    out = dict(leg)
+    url = str(out.get("url") or "")
+    headers = dict(out.get("request_headers") or {})
+    body_str = str(out.get("request_body") or "")
+
+    # 1. Value-to-value replacement when the recorded Leg 1 response tokens are known
+    if old_tokens:
+        for k, old_val in old_tokens.items():
+            new_val = tokens.get(k)
+            if old_val and new_val and old_val != new_val and len(old_val) >= 6:
+                url = url.replace(old_val, new_val)
+                body_str = body_str.replace(old_val, new_val)
+                for hk, hv in list(headers.items()):
+                    if isinstance(hv, str) and old_val in hv:
+                        headers[hk] = hv.replace(old_val, new_val)
+
+    # 2. Header key matching (e.g. x-conduit-token, x-conversation-id, x-session-id)
+    for hk in list(headers.keys()):
+        hkl = hk.lower()
+        cand_keys = _HEADER_TOKEN_MAP.get(hkl)
+        if cand_keys:
+            for ck in cand_keys:
+                if ck in tokens:
+                    headers[hk] = tokens[ck]
+                    break
+
+    # 3. Query-string parameter threading in URL (e.g. ?conversation_id=... or ?chatId=...)
+    for tk, tv in tokens.items():
+        if tk == "id":
+            continue
+        url = re.sub(
+            rf"([?&]{re.escape(tk)}=)[^&#\s]+",
+            rf"\g<1>{tv}",
+            url,
+        )
+
+    # 4. JSON body field threading for matching ID keys (excluding generic "id" unless top-level match)
+    if body_str.lstrip().startswith("{"):
+        try:
+            bobj = json.loads(body_str)
+            if isinstance(bobj, dict):
+                mutated = False
+                # Alias groups so snake_case in bootstrap can populate camelCase in Leg 2 or vice versa
+                alias_groups = [
+                    ("conversation_id", "conversationId"),
+                    ("chat_id", "chatId"),
+                    ("session_id", "sessionId"),
+                    ("thread_id", "threadId"),
+                    ("message_id", "messageId"),
+                    ("stream_key", "streamKey"),
+                    ("task_id", "taskId"),
+                    ("conduit_token", "conduitToken"),
+                ]
+                expanded = dict(tokens)
+                for a, b in alias_groups:
+                    if a in expanded and b not in expanded:
+                        expanded[b] = expanded[a]
+                    elif b in expanded and a not in expanded:
+                        expanded[a] = expanded[b]
+
+                def _patch_dict(d: Dict[str, Any], depth: int = 0) -> None:
+                    nonlocal mutated
+                    if depth > 4:
+                        return
+                    for k in list(d.keys()):
+                        if k in expanded and k != "id" and isinstance(d[k], (str, int, type(None))):
+                            if str(d[k] or "") != expanded[k]:
+                                d[k] = expanded[k]
+                                mutated = True
+                        elif isinstance(d[k], dict):
+                            _patch_dict(d[k], depth + 1)
+
+                _patch_dict(bobj)
+                if mutated:
+                    body_str = json.dumps(bobj)
+        except Exception:
+            pass
+
+    out["url"] = url
+    out["request_headers"] = headers
+    out["request_body"] = body_str
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Felo: POST -> bootstrap {stream_key} -> GET /api/message/v1/stream/{key}
+# ---------------------------------------------------------------------------
+
+def felo_followup(
+    bootstrap_body: str,
+    recorded_headers: Dict[str, str],
+    cookie_header: str,
+    timeout: float = 60.0,
+    proxy: Optional[str] = None,
+    cookie_absorber: Optional[Callable[[Any], Any]] = None,
+    **_extra,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Given the bootstrap response body, fetch the answer from the Felo stream.
+
+    Returns (answer_text, error). Exactly one is non-None.
+    """
+    try:
+        boot = json.loads(bootstrap_body)
+    except Exception:
+        return None, "FELLO_BOOTSTRAP_NOT_JSON"
+
+    stream_key = boot.get("stream_key") or boot.get("message_id")
+    if not stream_key:
+        return None, "FELLO_NO_STREAM_KEY"
+
+    auth = recorded_headers.get("Authorization") or recorded_headers.get("authorization") or ""
+    url = f"https://felo.ai/api/message/v1/stream/{stream_key}?offset=0"
+    headers = {
+        "Accept": "text/event-stream",
+        "Authorization": auth,
+        "Referer": "https://felo.ai/",
+        "User-Agent": recorded_headers.get("User-Agent", "Mozilla/5.0"),
+    }
+
+    try:
+        r = _stream_get(url, headers, timeout, proxy=proxy)
+    except _STREAM_EXC as e:
+        return None, f"FELLO_STREAM_HTTP: {e}"
+
+    if r.status_code != 200:
+        return None, f"FELLO_STREAM_{r.status_code}"
+    if cookie_absorber:
+        try:
+            cookie_absorber(r)
+        except Exception:
+            pass
+
+    # Parse SSE events, accumulate answer text
+    answer_parts: list[str] = []
+    start = time.time()
+    buf = ""
+    for chunk in _iter_text_chunks(r):
+        buf += chunk
+        while "\n\n" in buf:
+            event_block, buf = buf.split("\n\n", 1)
+            for line in event_block.split("\n"):
+                if not line.startswith("data:"):
+                    continue
+                try:
+                    data = json.loads(line[5:].strip())
+                except Exception:
+                    continue
+                content_str = data.get("content", "")
+                if not content_str:
+                    continue
+                try:
+                    content = json.loads(content_str)
+                except Exception:
+                    continue
+                cdata = content.get("data", {})
+                if isinstance(cdata, dict):
+                    ctype = content.get("type", "")
+                    text = cdata.get("text", "")
+                    if text and ctype == "message" and cdata.get("status") not in ("initializing",):
+                        answer_parts.append(text)
+                    inner = cdata.get("data", {})
+                    if isinstance(inner, dict):
+                        t2 = inner.get("text", "") or inner.get("content", "")
+                        if t2:
+                            answer_parts.append(t2)
+        if time.time() - start > timeout:
+            break
+
+    answer = "".join(answer_parts).strip()
+    if not answer:
+        return None, "FELLO_STREAM_EMPTY"
+    return answer, None
+
+
+# ---------------------------------------------------------------------------
+# Mistral: POST -> bootstrap -> second stream (tRPC-style numbered chunks)
+# ---------------------------------------------------------------------------
+
+def mistral_followup(
+    bootstrap_body: str,
+    recorded_headers: Dict[str, str],
+    cookie_header: str,
+    timeout: float = 60.0,
+    proxy: Optional[str] = None,
+    cookie_absorber: Optional[Callable[[Any], Any]] = None,
+    **_extra,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Mistral Le Chat: the POST returns a bootstrap; the answer arrives on a
+    second SSE stream at a conversation-specific URL. The bootstrap body contains
+    the conversation_id needed to construct the stream URL."""
+    try:
+        boot = json.loads(bootstrap_body)
+    except Exception:
+        return None, "MISTRAL_BOOTSTRAP_NOT_JSON"
+
+    # Mistral's bootstrap typically contains a message or conversation reference
+    # The stream URL pattern: /api/chat/{conversation_id}/stream
+    conv_id = boot.get("conversation_id") or boot.get("id") or ""
+    if not conv_id:
+        # Try to extract from the response structure
+        for key in ("message", "data"):
+            sub = boot.get(key)
+            if isinstance(sub, dict):
+                conv_id = sub.get("conversation_id") or sub.get("id") or ""
+                if conv_id:
+                    break
+    if not conv_id:
+        return None, "MISTRAL_NO_CONV_ID"
+
+    auth = recorded_headers.get("Authorization") or recorded_headers.get("authorization") or ""
+    url = f"https://chat.mistral.ai/api/chat/{conv_id}/stream"
+    headers = {
+        "Accept": "text/event-stream",
+        "Authorization": auth,
+        "Cookie": cookie_header,
+        "Referer": "https://chat.mistral.ai/",
+        "User-Agent": recorded_headers.get("User-Agent", "Mozilla/5.0"),
+    }
+
+    try:
+        r = _stream_get(url, headers, timeout, proxy=proxy)
+    except _STREAM_EXC as e:
+        return None, f"MISTRAL_STREAM_HTTP: {e}"
+
+    if r.status_code != 200:
+        return None, f"MISTRAL_STREAM_{r.status_code}"
+    if cookie_absorber:
+        try:
+            cookie_absorber(r)
+        except Exception:
+            pass
+
+    # Mistral uses tRPC-style numbered chunks: "15:{json}"
+    answer_parts: list[str] = []
+    start = time.time()
+    for chunk in _iter_text_chunks(r):
+        # Look for JSON payloads in the stream
+        for m in re.finditer(r'\{[^{}]*"content"\s*:\s*"((?:[^"\\]|\\.)*)"', chunk):
+            answer_parts.append(m.group(1))
+        if time.time() - start > timeout:
+            break
+
+    answer = "".join(answer_parts).strip()
+    if not answer:
+        return None, "MISTRAL_STREAM_EMPTY"
+    return answer, None
+
+
+# ---------------------------------------------------------------------------
+# Mistral tRPC JSON-patch stream parser (response-shape handler, not an adapter)
+# ---------------------------------------------------------------------------
+
+def looks_like_trpc_stream(text: str) -> bool:
+    """True when the body is a tRPC/React-Query numbered-line stream: lines like
+    `15:{...json...}` or `8:null`. Mistral Le Chat answers the POST itself in this
+    shape, so it must be parsed as a response envelope, not a bootstrap."""
+    if not text:
+        return False
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return False
+    pat = re.compile(r"^\d+:(\{.*\}|null|\[.*\])$")
+    hits = sum(1 for ln in lines if pat.match(ln.strip()))
+    return hits >= 1 and hits >= len(lines) // 2
+
+
+def mistral_patch_stream_parse(raw_body: str) -> Optional[str]:
+    """Parse Mistral Le Chat's JSON-patch SSE stream into the final answer text.
+
+    Stream lines look like:
+      15:{"json":{"type":"message","messageId":"...","patches":[
+            {"op":"replace","path":"/contentChunks","value":[{"type":"text","text":"5"}]},
+            {"op":"append","path":"/contentChunks/0/text","value":"8"}]}}
+
+    We accumulate text per messageId: 'replace' on /contentChunks resets it,
+    'append' on /contentChunks/N/text extends it. The assistant answer is the
+    message whose generationStatus reaches 'success' (or the fullest one).
+    """
+    texts: Dict[str, list] = {}
+    done: Dict[str, bool] = {}
+    for line in raw_body.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        m = re.match(r"^\d+:(.*)$", line)
+        payload = m.group(1) if m else line
+        if payload == "null" or not payload.startswith("{"):
+            continue
+        try:
+            ev = json.loads(payload)
+        except Exception:
+            continue
+        j = ev.get("json") or {}
+        if j.get("type") != "message":
+            continue
+        mid = j.get("messageId") or "?"
+        for patch in j.get("patches") or []:
+            op = patch.get("op")
+            path = patch.get("path") or ""
+            val = patch.get("value")
+            if op == "replace" and path == "/contentChunks" and isinstance(val, list):
+                texts[mid] = []
+                for chunk in val:
+                    if isinstance(chunk, dict) and chunk.get("type") == "text":
+                        texts[mid].append(chunk.get("text") or "")
+            elif op == "append" and re.match(r"^/contentChunks/\d+/text$", path) and isinstance(val, str):
+                texts.setdefault(mid, []).append(val)
+            elif op == "replace" and path == "/generationStatus" and val == "success":
+                done[mid] = True
+    candidates = [(mid, "".join(parts)) for mid, parts in texts.items() if "".join(parts).strip()]
+    if not candidates:
+        return None
+    for mid, txt in candidates:
+        if done.get(mid):
+            return txt.strip()
+    candidates.sort(key=lambda x: len(x[1]), reverse=True)
+    return candidates[0][1].strip() or None
+
+
+# ---------------------------------------------------------------------------
+# V0 (v0.app): POST /chat/api/send -> tiny "ok" ack -> poll
+# GET /api/chat/chat/latest?chatId=...&lastSyncedAt=... until an assistant
+# message newer than our send appears. Discovered by two-way sniff of the live
+# tab (2026-08-30): Chrome does exactly this after every send.
+# ---------------------------------------------------------------------------
+
+def _v0_text_from_node(node) -> str:
+    """Pull text out of v0's message-binary-format: nested tuples like
+    ["p", {}, ["text", {}, "58"]] -- collect the 3rd element of every
+    ["text", {}, <string>] node, recursively. Tolerates plain-text shapes."""
+    if isinstance(node, str):
+        return ""
+    if isinstance(node, list):
+        if len(node) >= 3 and node[0] == "text" and isinstance(node[2], str):
+            return node[2]
+        return "".join(_v0_text_from_node(child) for child in node)
+    if isinstance(node, dict):
+        if node.get("type") == "text" and isinstance(node.get("text"), str):
+            return node["text"]
+        return "".join(_v0_text_from_node(v) for v in node.values())
+    return ""
+
+
+def v0_followup(
+    bootstrap_body: str,
+    recorded_headers: Dict[str, str],
+    cookie_header: str,
+    timeout: float = 90.0,
+    chat_id: str = None,
+    started_ms: int = None,
+    leg2: Optional[Dict[str, Any]] = None,
+    proxy: Optional[str] = None,
+    cookie_absorber: Optional[Callable[[Any], Any]] = None,
+    **_extra,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Replay V0's real chat-submit leg, then poll for the assistant message.
+
+    Returns (answer_text, error). Exactly one is non-None. Stale answers are
+    rejected by createdAt: only messages created after started_ms (the send
+    fire time) count, so a failed send can never score the OLD recorded reply.
+    """
+    # The first `/chat/api/send` request is a 2-byte acknowledgement.  Buffered
+    # captures also contain the final `/chat/api/chat` request that actually creates
+    # the message. Re-send that leg with the caller's prompt and a fresh messageId
+    # before polling; otherwise the endpoint can only ever return the old `ok` ack.
+    if leg2 and leg2.get("url"):
+        body_str = apply_preflight("v0.app", str(leg2.get("request_body") or ""))
+        if not body_str:
+            return None, "V0_EMPTY_CHAT_SUBMIT"
+        headers = {}
+        for key, value in (leg2.get("request_headers") or {}).items():
+            if str(key).startswith(":"):
+                continue
+            if str(key).lower() in ("content-length", "content-md5"):
+                continue
+            headers[str(key)] = str(value)
+        if cookie_header and not any(k.lower() == "cookie" for k in headers):
+            headers["Cookie"] = cookie_header
+        try:
+            if _HAVE_CURL_CFFI:
+                kwargs: Dict[str, Any] = {
+                    "headers": headers,
+                    "content": body_str.encode("utf-8"),
+                    "timeout": 60.0,
+                    "impersonate": _IMPERSONATE,
+                    "default_headers": False,
+                    "allow_redirects": True,
+                }
+                if proxy:
+                    kwargs["proxy"] = proxy
+                submit = curl_cffi.request("POST", str(leg2["url"]), **kwargs)
+            else:
+                req_kw: Dict[str, Any] = {
+                    "headers": headers,
+                    "data": body_str.encode("utf-8"),
+                    "timeout": 60.0,
+                }
+                if proxy:
+                    req_kw["proxies"] = {"http": proxy, "https": proxy}
+                submit = requests.post(str(leg2["url"]), **req_kw)
+        except _STREAM_EXC as exc:
+            return None, f"V0_CHAT_SUBMIT_HTTP: {exc}"
+        if submit.status_code != 200:
+            return None, f"V0_CHAT_SUBMIT_{submit.status_code}: {submit.text[:120]}"
+        if cookie_absorber:
+            try:
+                cookie_absorber(submit)
+            except Exception:
+                pass
+
+    if not chat_id:
+        return None, "V0_NO_CHAT_ID"
+    started_ms = started_ms or int(time.time() * 1000)
+    cutoff_ms = started_ms - 5000          # 5s slack for clock jitter
+    url = f"https://v0.app/api/chat/chat/latest?chatId={chat_id}&lastSyncedAt={started_ms}"
+    headers = {
+        "Accept": "application/json",
+        "Cookie": cookie_header,
+        "Referer": f"https://v0.app/chat/{chat_id}",
+        "User-Agent": recorded_headers.get("User-Agent", "Mozilla/5.0"),
+    }
+    deadline = time.time() + timeout
+    last_err: Optional[str] = None
+    while time.time() < deadline:
+        try:
+            r = _stream_get(url, headers, timeout=15, proxy=proxy)
+        except _STREAM_EXC as e:
+            last_err = f"V0_POLL_HTTP: {e}"
+            time.sleep(3)
+            continue
+        if r.status_code != 200:
+            last_err = f"V0_POLL_{r.status_code}"
+            time.sleep(3)
+            continue
+        if cookie_absorber:
+            try:
+                cookie_absorber(r)
+            except Exception:
+                pass
+        try:
+            body = json.loads(r.text)
+        except Exception:
+            last_err = "V0_POLL_NOT_JSON"
+            time.sleep(3)
+            continue
+        value = (body or {}).get("value") or {}
+        for m in reversed(value.get("newMessages") or []):
+            if not isinstance(m, dict) or m.get("role") != "assistant":
+                continue
+            created = str(m.get("createdAt") or "")
+            try:
+                from datetime import datetime
+                created_ms = int(datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp() * 1000)
+            except Exception:
+                created_ms = 0
+            if created_ms and created_ms < cutoff_ms:
+                continue                       # pre-dates our send -- stale, keep polling
+            if m.get("isContentLoading") or m.get("streaming"):
+                time.sleep(3)                  # still generating
+                break
+            text = _v0_text_from_node(m.get("content") or {}).strip()
+            if text:
+                return text, None
+        time.sleep(3)
+    return None, last_err or "V0_NO_NEW_MESSAGE"
+
+
+# ---------------------------------------------------------------------------
+# ChatGPT free web: POST /backend-api/f/conversation/prepare -> {"status":"ok",
+# "conduit_token": <fresh 60s JWT>} -> POST /backend-api/f/conversation carrying
+# the conduit in the x-conduit-token header. Both legs captured by the buffered
+# multi-exchange capture (recorded_exchanges, worklog #1438/#1439); prepare is
+# verified live to mint a NEW token on every re-send, so the recorded leg-2
+# x-conduit-token is replaced with the fresh one and the conversation body has
+# the sentinel swapped. Leg-1's own response is the bootstrap; leg-2's response
+# carries the answer stream.
+# ---------------------------------------------------------------------------
+
+def chatgpt_followup(
+    bootstrap_body: str,
+    recorded_headers: Dict[str, str],
+    cookie_header: str,
+    timeout: float = 60.0,
+    leg2: Optional[Dict[str, Any]] = None,
+    chat_id: Optional[str] = None,
+    started_ms: Optional[int] = None,
+    proxy: Optional[str] = None,
+    cookie_absorber: Optional[Callable[[Any], Any]] = None,
+    **_extra,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Run leg-2 (POST /backend-api/f/conversation) with the fresh conduit token.
+
+    `leg2` is the second entry of the capture's recorded_exchanges: its url, headers
+    and request_body. The recorded x-conduit-token (60s TTL, long since dead) is
+    swapped for the fresh one minted by the leg-1 prepare re-send. chat_id/started_ms
+    are accepted-and-ignored so the shared run_followup kwargs pass-through reaches
+    this handler without its TypeError fallback stripping leg2."""
+    if not leg2 or not leg2.get("url"):
+        return None, "CHATGPT_NO_LEG2_IN_CAPTURE"
+    try:
+        boot = json.loads(bootstrap_body)
+    except Exception:
+        return None, "CHATGPT_BOOTSTRAP_NOT_JSON"
+    fresh = boot.get("conduit_token") or ""
+    if not fresh:
+        return None, "CHATGPT_NO_FRESH_CONDUIT"
+    headers = {k: v for k, v in (leg2.get("request_headers") or {}).items()}
+    if not any(k.lower() == "x-conduit-token" for k in headers):
+        return None, "CHATGPT_LEG2_NO_CONDUIT_HEADER"
+    for k in list(headers):
+        if k.lower() == "x-conduit-token":
+            headers[k] = fresh
+    # The sentinel swap already ran over the whole multi-exchange body set; leg2's
+    # request_body arrives here already carrying the caller's prompt.
+    body = (leg2.get("request_body") or "").encode("utf-8")
+    if _HAVE_CURL_CFFI:
+        kwargs: Dict[str, Any] = {
+            "headers": headers,
+            "data": body,
+            "timeout": timeout,
+            "impersonate": _IMPERSONATE,
+            "default_headers": False,
+        }
+        if proxy:
+            kwargs["proxy"] = proxy
+        r = curl_cffi.request("POST", leg2["url"], **kwargs)
+    else:
+        req_kw: Dict[str, Any] = {"headers": headers, "data": body, "timeout": timeout}
+        if proxy:
+            req_kw["proxies"] = {"http": proxy, "https": proxy}
+        r = requests.post(leg2["url"], **req_kw)
+    if r.status_code != 200:
+        return None, f"CHATGPT_LEG2_{r.status_code}: {r.text[:120]}"
+    if cookie_absorber:
+        try:
+            cookie_absorber(r)
+        except Exception:
+            pass
+    assembled = _chatgpt_v_protocol_assemble(r.text)
+    if assembled:
+        return assembled, None
+    return None, f"CHATGPT_LEG2_NO_ANSWER: {r.text[:120]}"
+
+
+def _chatgpt_v_protocol_assemble(raw: str) -> Optional[str]:
+    """Assemble the answer from ChatGPT free-web's SSE v-protocol stream.
+
+    Pinned from live frames 2026-09-01 (state/replay_raw/chatgpt_leg2_*.txt):
+      * `data: "v1"` opens the stream; `data: [DONE]` closes it;
+      * dict frames carry either a full message state in {"v": {...message...}} or a
+        JSON-patch list in {"o": "patch", "v": [ops]};
+      * the model text is the ops' "v" string on /message/content/parts/0 ("append"
+        adds a delta, "add"/"replace" reset it);
+      * `message_stream_complete` terminates.
+    Returning raw SSE as the answer is refused upstream (unusable_reply), so this
+    assembler is the only path that can produce a legal consumer reply.
+    """
+    texts: list[str] = []
+    for line in (raw or "").split("\n"):
+        s = line.strip()
+        if not s.startswith("data: "):
+            continue
+        payload = s[6:]
+        if payload in ("[DONE]", '"v1"'):
+            continue
+        try:
+            d = json.loads(payload)
+        except Exception:
+            continue
+        if not isinstance(d, dict):
+            continue
+        if d.get("type") == "message_stream_complete":
+            break
+        ops = None
+        if isinstance(d.get("v"), list):
+            ops = d["v"]                       # {"o":"patch","v":[ops]}
+        elif isinstance(d.get("p"), str) and isinstance(d.get("v"), list):
+            ops = d["v"]
+        for op in ops or []:
+            if (isinstance(op, dict) and str(op.get("p") or "") == "/message/content/parts/0"
+                    and isinstance(op.get("v"), str)):
+                if op.get("o") == "append":
+                    texts.append(op["v"])
+                elif op.get("o") in ("add", "replace"):
+                    texts = [op["v"]]
+        v = d.get("v")
+        if isinstance(v, dict):
+            msg = v.get("message") or v
+            content = (msg.get("content") or {}) if isinstance(msg, dict) else {}
+            parts = content.get("parts")
+            if isinstance(parts, list) and parts and isinstance(parts[0], str):
+                if msg.get("status") == "in_progress" or not parts[0]:
+                    texts = [parts[0]] if parts[0] else texts
+                elif parts[0]:
+                    texts = [parts[0]]         # full state replaces accumulation
+    return "".join(texts).strip() or None
+
+
+# ---------------------------------------------------------------------------
+# Generic Multi-Step Followup (Point 3: Generalized 2-Leg / N-Leg Threading)
+# ---------------------------------------------------------------------------
+
+def generic_multistep_followup(
+    bootstrap_body: str,
+    recorded_headers: Dict[str, str],
+    cookie_header: str,
+    timeout: float = 60.0,
+    leg2: Optional[Dict[str, Any]] = None,
+    legs: Optional[list] = None,
+    proxy: Optional[str] = None,
+    cookie_absorber: Optional[Callable[[Any], Any]] = None,
+    extractor: Optional[Callable[[str], Tuple[str, Optional[str]]]] = None,
+    **_extra,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Execute a generalized 2-leg or N-leg recorded_exchanges sequence.
+
+    Extracts dynamic IDs (`conversation_id`, `session_id`, `chat_id`, `message_id`,
+    `stream_key`, `conduit_token`, `token`) from the bootstrap response of Leg 1 and
+    threads them into Leg 2 (and any subsequent legs in `legs`), absorbing rotated
+    cookies at every step.
+    """
+    seq = list(legs) if legs else ([leg2] if leg2 else [])
+    seq = [item for item in seq if isinstance(item, dict) and item.get("url")]
+    if not seq:
+        return None, "GENERIC_MULTISTEP_NO_LEG2"
+
+    tokens = extract_bootstrap_tokens(bootstrap_body)
+    last_resp_text = bootstrap_body
+    last_status = 200
+
+    import urllib.parse as _up
+
+    for idx, raw_leg in enumerate(seq):
+        old_tokens = extract_bootstrap_tokens(str(raw_leg.get("prev_response_body") or ""))
+        threaded = thread_bootstrap_into_leg(raw_leg, tokens, old_tokens=old_tokens)
+        target_url = str(threaded.get("url") or "")
+        method = str(threaded.get("method") or "POST").upper()
+        host = _up.urlsplit(target_url).netloc
+
+        body_str = apply_preflight(host, str(threaded.get("request_body") or ""))
+        headers: Dict[str, str] = {}
+        for k, v in (threaded.get("request_headers") or recorded_headers or {}).items():
+            if str(k).startswith(":") or str(k).lower() in ("content-length", "content-md5"):
+                continue
+            headers[str(k)] = str(v)
+        if cookie_header and not any(k.lower() == "cookie" for k in headers):
+            headers["Cookie"] = cookie_header
+        headers = apply_dynamic_headers(host, headers, body_str)
+
+        body_bytes = body_str.encode("utf-8") if (body_str and method in ("POST", "PUT", "PATCH")) else None
+        try:
+            if _HAVE_CURL_CFFI:
+                kw: Dict[str, Any] = {
+                    "headers": headers,
+                    "timeout": timeout,
+                    "impersonate": _IMPERSONATE,
+                    "default_headers": False,
+                    "allow_redirects": True,
+                }
+                if body_bytes:
+                    kw["content"] = body_bytes
+                if proxy:
+                    kw["proxy"] = proxy
+                r = curl_cffi.request(method, target_url, **kw)
+            else:
+                req_kw: Dict[str, Any] = {"headers": headers, "timeout": timeout}
+                if body_bytes:
+                    req_kw["data"] = body_bytes
+                if proxy:
+                    req_kw["proxies"] = {"http": proxy, "https": proxy}
+                r = requests.request(method, target_url, **req_kw)
+        except _STREAM_EXC as exc:
+            return None, f"GENERIC_LEG{idx + 2}_HTTP: {exc}"
+
+        last_status = r.status_code
+        last_resp_text = r.text or ""
+        if r.ok and cookie_absorber:
+            try:
+                cookie_absorber(r)
+            except Exception:
+                pass
+        if r.status_code != 200:
+            return None, f"GENERIC_LEG{idx + 2}_{r.status_code}: {last_resp_text[:120]}"
+
+        # Merge any newly minted tokens for subsequent legs in an N-leg chain
+        new_toks = extract_bootstrap_tokens(last_resp_text)
+        tokens.update(new_toks)
+
+    if extractor is not None:
+        assembled, err = extractor(last_resp_text)
+        if assembled:
+            return assembled, None
+        return None, err or f"GENERIC_MULTISTEP_NO_ANSWER ({last_status})"
+
+    return (last_resp_text.strip() or None), (None if last_resp_text.strip() else "GENERIC_MULTISTEP_EMPTY")
+
+
+# ---------------------------------------------------------------------------
+# Registry: host -> followup function
+# ---------------------------------------------------------------------------
+
+FOLLOWUP_REGISTRY: Dict[str, Any] = {
+    "felo.ai": felo_followup,
+    "chat.mistral.ai": mistral_followup,
+    "v0.app": v0_followup,
+    "chatgpt.com": chatgpt_followup,
+    "generic_multistep": generic_multistep_followup,
+}
+
+
+def detect_bootstrap(body: str, host: str = None, has_followup_legs: bool = False) -> Optional[str]:
+    """Detect if a response body is a bootstrap (small JSON with stream/task keys).
+    Returns the provider key if recognized, else None."""
+    if host and "v0.app" in host and len(body) <= 64 and body.strip().strip('"').lower() == "ok":
+        return "v0.app"                        # 2-byte ack -- the answer arrives on the poll
+    if host and "chatgpt.com" in host and len(body) < 2000:
+        try:
+            d = json.loads(body)
+            if isinstance(d, dict) and d.get("status") == "ok" and "conduit_token" in d:
+                return "chatgpt.com"
+        except Exception:
+            pass
+    if len(body) > 2000:
+        return None
+    try:
+        d = json.loads(body)
+    except Exception:
+        return None
+    if not isinstance(d, dict):
+        return None
+    # Felo bootstrap signature
+    if "stream_key" in d and "task_id" in d:
+        return "felo.ai"
+    # Mistral bootstrap signature
+    if ("conversation_id" in d or ("message" in d and isinstance(d.get("message"), dict))) and (
+        not host or "mistral" in host
+    ):
+        return "chat.mistral.ai"
+    # Generic multi-step bootstrap: when the capture has recorded_exchanges (2+ legs)
+    # and Leg 1 returned a small JSON containing a dynamic session/conversation/stream token
+    if has_followup_legs and extract_bootstrap_tokens(body):
+        return "generic_multistep"
+    return None
+
+
+def run_followup(
+    provider_key: str,
+    bootstrap_body: str,
+    recorded_headers: Dict[str, str],
+    cookie_header: str,
+    timeout: float = 60.0,
+    **extra,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Dispatch to the appropriate followup handler (extra kwargs passed through)."""
+    fn = FOLLOWUP_REGISTRY.get(provider_key)
+    if not fn:
+        return None, f"NO_FOLLOWUP_FOR_{provider_key}"
+    try:
+        return fn(bootstrap_body, recorded_headers, cookie_header, timeout, **extra)
+    except TypeError:
+        # handler predates the extra kwargs
+        return fn(bootstrap_body, recorded_headers, cookie_header, timeout)

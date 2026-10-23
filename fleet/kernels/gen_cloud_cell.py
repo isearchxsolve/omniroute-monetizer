@@ -241,9 +241,11 @@ else:
 
 seen_orders = set()
 beat = 0
+door_fail_streak = [0]
 while True:
     try:
         orders = fetch_orders()
+        door_fail_streak[0] = 0
         for o in orders:
             oid = o.get("id") or str(hash(o.get("text", "")))
             if oid in seen_orders:
@@ -283,6 +285,16 @@ while True:
         if beat % 60 == 0:
             print(f"[HEARTBEAT] beat={beat} door={ACTIVE_DOOR}", flush=True)
     except Exception as ex:
+        # DNS watchdog law (same as web supervisors): Kaggle egress DNS dies while the
+        # session keeps RUNNING — a phantom cell is worse than a dead one. 12 consecutive
+        # door failures (~3 min at 15s poll) -> exit so the rotator revives on a fresh
+        # account (fresh DNS lottery). The door itself must be down 3 straight minutes
+        # to false-trigger; CF availability makes that acceptable churn.
+        door_fail_streak[0] += 1
+        if door_fail_streak[0] >= 12:
+            print("[WATCHDOG] door unreachable 12 consecutive polls, exiting for rotation", flush=True)
+            report_home("KILO", "CLOUD CELL WATCHDOG EXIT (door unreachable)")
+            os._exit(1)
         print(f"[LOOP-ERR] {ex}", flush=True)
     beat += 1
     time.sleep(POLL_INTERVAL)
@@ -290,7 +302,6 @@ while True:
 
 from pathlib import Path
 MAIN_CODE = Path(__file__).with_name("queue_job_guard.py").read_text(encoding="utf-8") + "\n" + MAIN_CODE
-
 MAIN_CODE = Path(__file__).with_name("public_capture_graduation.py").read_text(encoding="utf-8") + "\n" + MAIN_CODE
 
 cells = [
