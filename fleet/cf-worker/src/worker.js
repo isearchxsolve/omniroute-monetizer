@@ -14,7 +14,7 @@ export { WebJobCoordinator } from "./web_job_coordinator.js";
 //   POST /v1/gateway/register?token=           -> kernel registers live session {service,url,meta} (TTL 1800s)
 //   GET  /v1/gateway?token=                    -> live session pool (all services)
 //   ANY  /v1/gateway/route?token=&service=X&path=/... -> proxy through to a live session
-// Storage: KV "LEDGER" — ledger:{body} for queues, wx:{job_id} tool jobs, gw:{service} session pool.
+// Storage: Durable Object orders serialize ledger:{body}; KV remains for wx:{job_id} mirrors and gw:{service}.
 
 const DEFAULT_TOKEN = "GOLD24";
 const MAX_RESULT_BYTES = 100000;   // KV result cap (base64)
@@ -31,23 +31,36 @@ function b64encode(str) {
   return btoa(unescape(encodeURIComponent(str)));
 }
 
-// KV writes are rate-limited (free tier 1k/day). A failed write must NEVER kill a request.
-async function kvPut(env, key, value, ttl) {
+// Preserve detailed KV status for callers that still use the eventually-consistent KV namespace.
+async function kvPutDetailed(env, key, value, ttl) {
   try {
     const opts = ttl ? { expirationTtl: ttl } : undefined;
     await env.LEDGER.put(key, value, opts);
-    return true;
+    return { stored: true };
   } catch (e) {
-    return false;
+    const message = String(e?.message || e);
+    return {
+      stored: false,
+      degraded: /quota|limit/i.test(message) ? "kv_write_limit" : "kv_write_failed",
+    };
+  }
+}
+
+async function kvPut(env, key, value, ttl) {
+  return (await kvPutDetailed(env, key, value, ttl)).stored;
+}
+
+async function kvGetDetailed(env, key) {
+  try {
+    return { ok: true, value: await env.LEDGER.get(key) };
+  } catch {
+    return { ok: false, value: null };
   }
 }
 
 async function kvGet(env, key) {
-  try {
-    return await env.LEDGER.get(key);
-  } catch {
-    return null;
-  }
+  const result = await kvGetDetailed(env, key);
+  return result.ok ? result.value : null;
 }
 
 function jobId() {
@@ -72,6 +85,36 @@ async function coordinateJob(env, jid, action, data) {
   return stub.fetch("https://coordinator/" + action, data === undefined ? {} : {
     method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(data)
   });
+}
+
+async function ensureLedgerInitialized(env, body) {
+  const key = "ledger:" + body;
+  if (!env.WEB_JOBS) return {ok:false,status:503,err:"ledger_coordinator_binding_required"};
+  try {
+    const statusResponse = await coordinateJob(env,key,"ledger/status");
+    if (!statusResponse.ok) return {ok:false,status:503,err:"ledger_coordinator_unavailable"};
+    const status = await statusResponse.json();
+    if (status.initialized === true) return {ok:true,key};
+
+    // Import the existing KV ledger once. KV is a compatibility source only;
+    // all new ledger records go to the strongly consistent coordinator.
+    const legacyRead = await kvGetDetailed(env,key);
+    if (!legacyRead.ok) return {ok:false,status:503,err:"kv_read_failed"};
+    let records;
+    try { records = JSON.parse(legacyRead.value || "[]"); }
+    catch { return {ok:false,status:500,err:"invalid_stored_ledger"}; }
+    if (!Array.isArray(records)) return {ok:false,status:500,err:"invalid_stored_ledger"};
+    if (records.length > 2000) records = records.slice(-2000);
+
+    const initializeResponse = await coordinateJob(env,key,"ledger/initialize",{records});
+    if (!initializeResponse.ok) return {ok:false,status:503,err:"ledger_initialization_failed"};
+    const initialized = await initializeResponse.json();
+    if (initialized.stored !== true || initialized.initialized !== true)
+      return {ok:false,status:503,err:"ledger_initialization_failed"};
+    return {ok:true,key};
+  } catch {
+    return {ok:false,status:503,err:"ledger_coordinator_unavailable"};
+  }
 }
 
 async function getWebJob(env, jid) {
@@ -177,7 +220,7 @@ export default {
 
     if (path === "/health") {
       if (token !== TOKEN) return jsonResp({ ok: false, err: "bad token" }, 403);
-      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.3.0-fenced-graduation",
+      return jsonResp({ ok: true, service: "omniroute-relay-worker", version: "3.4.1-serialized-ledger",
                         tools: ["web.execute", "web.result", "gateway"], ts: Date.now() });
     }
 
@@ -232,34 +275,47 @@ export default {
             !/\[\d+\]/.test(text)) {
           return jsonResp({ ok: true, queued: -1, stored: false, filtered: "retry_noise" });
         }
-        const key = "ledger:" + body;
-        let arr = [];
+        const ready = await ensureLedgerInitialized(env,body);
+        if (!ready.ok)
+          return jsonResp({ok:false,queued:null,stored:false,degraded:ready.err},ready.status);
         try {
-          arr = JSON.parse((await kvGet(env, key)) || "[]");
+          const writeResponse = await coordinateJob(env,ready.key,"ledger/append",{
+            dedupe:"say:" + crypto.randomUUID(),
+            order:{at:Date.now()/1000,text},
+          });
+          if (!writeResponse.ok)
+            return jsonResp({ok:false,queued:null,stored:false,degraded:"ledger_write_failed"},503);
+          const write = await writeResponse.json();
+          if (write.stored !== true)
+            return jsonResp({ok:false,queued:write.queued ?? null,stored:false,degraded:write.err || "ledger_write_failed"},503);
+          return jsonResp({ok:true,queued:write.queued,stored:true});
         } catch {
-          arr = [];
+          return jsonResp({ok:false,queued:null,stored:false,degraded:"ledger_write_failed"},503);
         }
-        arr.push({ at: Date.now() / 1000, text });
-        if (arr.length > 2000) arr = arr.slice(-2000);
-        const stored = await kvPut(env, key, JSON.stringify(arr));
-        return jsonResp({ ok: true, queued: arr.length, stored,
-                          degraded: !stored ? "kv_write_limit" : undefined });
       }
 
       if (request.method === "GET") {
         const body = (url.searchParams.get("body") || "KILO").slice(0, 64);
         const limit = Math.min(parseInt(url.searchParams.get("limit") || "20", 10) || 20, 200);
-        const key = "ledger:" + body;
-        let arr = [];
-        try {
-          arr = JSON.parse((await kvGet(env, key)) || "[]");
-        } catch {
-          arr = [];
-        }
+        const ready = await ensureLedgerInitialized(env,body);
+        if (!ready.ok) return jsonResp({ok:false,err:ready.err},ready.status);
+        let ledgerResponse;
+        try { ledgerResponse = await coordinateJob(env,ready.key,"ledger/orders"); }
+        catch { return jsonResp({ok:false,err:"ledger_coordinator_unavailable"},503); }
+        if (!ledgerResponse.ok) return jsonResp({ok:false,err:"ledger_read_failed"},503);
+        let ledger;
+        try { ledger = await ledgerResponse.json(); }
+        catch { return jsonResp({ok:false,err:"invalid_ledger_response"},500); }
+        if (!Array.isArray(ledger.orders)) return jsonResp({ok:false,err:"invalid_ledger_response"},500);
+        let arr = ledger.orders;
         if (["WEBEXEC","PLAYWRIGHT"].includes(body)) {
-          const response = await coordinateJob(env,key,"orders");
-          if (!response.ok) return response;
-          const current = (await response.json()).orders;
+          let response;
+          try { response = await coordinateJob(env,ready.key,"orders"); }
+          catch { return jsonResp({ok:false,err:"ledger_queue_unavailable"},503); }
+          if (!response.ok) return jsonResp({ok:false,err:"ledger_queue_unavailable"},503);
+          const queue = await response.json();
+          if (!Array.isArray(queue.orders)) return jsonResp({ok:false,err:"invalid_ledger_queue"},500);
+          const current = queue.orders;
           arr = [...arr, ...current];
         }
         return jsonResp({ orders: arr.slice(-limit), count: arr.length });

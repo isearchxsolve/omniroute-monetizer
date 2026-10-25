@@ -66,7 +66,7 @@ One notebook cell. NOTHING blocks before telemetry. Order inside the loop:
 2. **DNS watchdog:** 12 consecutive failed `/health` probes (~3 min) → `os._exit(1)` → rotator revives on a fresh account (fresh DNS lottery). Kaggle egress is proxy-based: when DNS dies, NOTHING reaches the door — IP-pin is laptop-only.
 3. **Zip discipline:** Python-made zips only (forward slashes); kernel sanitizer normalizes entry paths anyway (Windows `Compress-Archive` backslash entries = silent no-directory extraction).
 4. **py3.13:** filter `asyncpg` pins (no 3.13 wheels → build fails → aborts whole `-r` install); install `asyncpg>=0.30`.
-5. **Door writes can silently fail:** `/say` returns `ok:true,stored:false` when KV write fails. Treat `stored:false` as failure upstream.
+5. **Door writes must be receipt-checked:** `/say` appends each channel through the SQLite-backed `WEB_JOBS` Durable Object, which serializes concurrent writes. On first access it imports that channel's existing KV history; a failed import/read or durable write returns non-2xx with `stored:false`. Clients must require `stored:true`; HTTP 200 alone is not a persistence receipt. KV is no longer the write path for `/say`.
 
 ## 6. SESSION-POOL SHIM (the inference gateway consumer contract)
 
